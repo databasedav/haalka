@@ -79,10 +79,6 @@ fn sync_component_task_wrapper<T: Component>(component_signal: impl Signal<Item 
 
 // TODO: macro to only impl for the node bundles
 impl<NodeType: Default + Bundle> Node<NodeType> {
-    fn new() -> Self {
-        default()
-    }
-
     fn on_hovered_change(mut self, handler: impl FnMut(bool) + 'static + Send + Sync) -> Self {
         self.hoverable = Some(Hoverable(Box::new(handler)));
         self
@@ -166,8 +162,8 @@ impl<NodeType: Default + Bundle> Node<NodeType> {
 }
 
 impl Node<TextBundle> {
-    fn text(mut self, text_signal: impl Signal<Item = String> + 'static + Send + Sync) -> Self {
-        self.task_wrappers.push(sync_component_task_wrapper(text_signal.map(|text| Text::from_section(text, default()))));
+    fn text(mut self, text_signal: impl Signal<Item = Text> + 'static + Send + Sync) -> Self {
+        self.task_wrappers.push(sync_component_task_wrapper(text_signal));
         self
     }
 }
@@ -253,19 +249,23 @@ fn main() {
                 .background_color(background_color)
                 .border_color(border_color)
             };
-            let text_node = {
-                TextBundle::from_section(
-                    String::new(),
-                    TextStyle {
-                        font_size: 40.0,
-                        color: Color::rgb(0.9, 0.9, 0.9),
-                        ..default()
-                    },
-                )
+            let text_style = {
+                TextStyle {
+                    font_size: 40.0,
+                    color: Color::rgb(0.9, 0.9, 0.9),
+                    ..default()
+                }
             };
+            let text_node = TextBundle::from_section(String::new(), text_style.clone());
             root_node = {
                 root_node
-                .child(always(Some(button_node.child(always(Some(Node::from(text_node).text(text)))))))
+                .child(always(Some(
+                    button_node
+                    .child(always(Some(
+                        Node::from(text_node)
+                        .text(text.map(move |text| Text::from_section(text, text_style.clone())))
+                    )))
+                )))
             };
             root_node.spawn(world);
 		})
