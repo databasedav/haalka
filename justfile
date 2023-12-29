@@ -1,2 +1,2 @@
-example *extras:
-    cargo run {{ extras }}
+example name:
+    cargo run --example {{ name }}
