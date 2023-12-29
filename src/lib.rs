@@ -1,7 +1,7 @@
 use std::{future::Future, marker::PhantomData, mem};
 use bevy::{
     prelude::*,
-    tasks::{AsyncComputeTaskPool, Task},
+    tasks::{AsyncComputeTaskPool, Task}, ui::{FocusPolicy, widget::{TextFlags, UiImageSize}, ContentSize}, text::TextLayoutInfo,
 };
 use futures_signals::{signal::{Mutable, Signal, SignalExt}, signal_vec::{SignalVec, SignalVecExt, VecDiff, MutableVec}};
 use bevy_async_ecs::*;
@@ -33,7 +33,121 @@ impl<T: Bundle + Default> From<T> for Node<T> {
     }
 }
 
-// TODO: macro to only impl for the node bundles ?
+macro_rules! impl_node_methods {
+    ($($node_type:ty => [$($field:ident: $field_type:ty),* $(,)?]),+ $(,)?) => {
+        $(
+            impl Node<$node_type> {
+                $(
+                    pub fn $field(self, $field: impl Signal<Item = $field_type> + 'static + Send + Sync) -> Self {
+                        self.component_signal($field)
+                    }
+                )*
+            }
+        )*
+    };
+}
+
+impl_node_methods! {
+    NodeBundle => [
+        node: bevy::ui::Node,
+        style: Style,
+        background_color: BackgroundColor,
+        border_color: BorderColor,
+        focus_policy: FocusPolicy,
+        transform: Transform,
+        global_transform: GlobalTransform,
+        visibility: Visibility,
+        inherited_visibility: InheritedVisibility,
+        view_visibility: ViewVisibility,
+        z_index: ZIndex,
+    ],
+    ImageBundle => [
+        node: bevy::ui::Node,
+        style: Style,
+        calculated_size: ContentSize,
+        background_color: BackgroundColor,
+        image: UiImage,
+        image_size: UiImageSize,
+        focus_policy: FocusPolicy,
+        transform: Transform,
+        global_transform: GlobalTransform,
+        visibility: Visibility,
+        inherited_visibility: InheritedVisibility,
+        view_visibility: ViewVisibility,
+        z_index: ZIndex,
+    ],
+    AtlasImageBundle => [
+        node: bevy::ui::Node,
+        style: Style,
+        calculated_size: ContentSize,
+        background_color: BackgroundColor,
+        texture_atlas: Handle<TextureAtlas>,
+        texture_atlas_image: UiTextureAtlasImage,
+        focus_policy: FocusPolicy,
+        image_size: UiImageSize,
+        transform: Transform,
+        global_transform: GlobalTransform,
+        visibility: Visibility,
+        inherited_visibility: InheritedVisibility,
+        view_visibility: ViewVisibility,
+        z_index: ZIndex,
+    ],
+    TextBundle => [
+        node: bevy::ui::Node,
+        style: Style,
+        text: Text,
+        text_layout_info: TextLayoutInfo,
+        text_flags: TextFlags,
+        calculated_size: ContentSize,
+        focus_policy: FocusPolicy,
+        transform: Transform,
+        global_transform: GlobalTransform,
+        visibility: Visibility,
+        inherited_visibility: InheritedVisibility,
+        view_visibility: ViewVisibility,
+        z_index: ZIndex,
+        background_color: BackgroundColor,
+    ],
+    ButtonBundle => [
+        node: bevy::ui::Node,
+        button: Button,
+        style: Style,
+        interaction: Interaction,
+        focus_policy: FocusPolicy,
+        background_color: BackgroundColor,
+        border_color: BorderColor,
+        image: UiImage,
+        transform: Transform,
+        global_transform: GlobalTransform,
+        visibility: Visibility,
+        inherited_visibility: InheritedVisibility,
+        view_visibility: ViewVisibility,
+        z_index: ZIndex,
+    ],
+    // TODO: macros don't play nice with generics
+    // MaterialNodeBundle<M: UiMaterial> => [
+    //     node: bevy::ui::Node,
+    //     style: Style,
+    //     focus_policy: FocusPolicy,
+    //     transform: Transform,
+    //     global_transform: GlobalTransform,
+    //     visibility: Visibility,
+    //     inherited_visibility: InheritedVisibility,
+    //     view_visibility: ViewVisibility,
+    //     z_index: ZIndex,
+    // ],
+}
+
+impl Node<ButtonBundle> {
+    pub fn on_hovered_change(self, handler: impl FnMut(bool) + 'static + Send + Sync) -> Self {
+        self.insert(Hoverable(Box::new(handler)))
+    }
+
+    pub fn on_press(self, handler: impl FnMut(bool) + 'static + Send + Sync) -> Self {
+        self.insert(Pressable(Box::new(handler)))
+    }
+}
+
 impl<NodeType: Default + Bundle> Node<NodeType> {
     pub fn new() -> Node<NodeBundle> {
         Node::from(NodeBundle::default())
@@ -72,18 +186,8 @@ impl<NodeType: Default + Bundle> Node<NodeType> {
         })
     }
 
-    pub fn border_color(mut self, border_color_signal: impl Signal<Item = BorderColor> + 'static + Send + Sync) -> Self {
-        self.task_wrappers.push(sync_component_task_wrapper(border_color_signal));
-        self
-    }
-
-    pub fn background_color(mut self, background_color_signal: impl Signal<Item = BackgroundColor> + 'static + Send + Sync) -> Self {
-        self.task_wrappers.push(Box::new(sync_component_task_wrapper(background_color_signal)));
-        self
-    }
-
-    pub fn z_index(mut self, z_index_signal: impl Signal<Item = ZIndex> + 'static + Send + Sync) -> Self {
-        self.task_wrappers.push(Box::new(sync_component_task_wrapper(z_index_signal)));
+    pub fn component_signal(mut self, component_signal: impl Signal<Item = impl Component> + 'static + Send + Sync) -> Self {
+        self.task_wrappers.push(Box::new(sync_component_task_wrapper(component_signal)));
         self
     }
 
@@ -402,6 +506,15 @@ impl<NodeType: Default + Bundle> Node<NodeType> {
     }
 }
 
+#[derive(Component)]
+struct Hoverable(Box<dyn FnMut(bool) + 'static + Send + Sync>);
+
+#[derive(Component)]
+struct Pressable(Box<dyn FnMut(bool) + 'static + Send + Sync>);
+
+#[derive(Component)]
+struct TaskHolder(Vec<Task<()>>);
+
 fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> Task<T> {
     AsyncComputeTaskPool::get().spawn(future)
 }
@@ -409,13 +522,13 @@ fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) ->
 async fn sync_component<T: Component>(async_world: AsyncWorld, entity: Entity, component_signal: impl Signal<Item = T> + 'static + Send + Sync) {
     // TODO: need partial_eq derivations for all the node related components to minimize updates
     component_signal.for_each(|value| {
-        spawn(clone!((async_world) async move {
+        clone!((async_world) async move {
             async_world.apply(move |world: &mut World| {
                 if let Some(mut entity) = world.get_entity_mut(entity) {
                     entity.insert(value);
                 }
             }).await;
-        }))
+        })
     }).await;
 }
 
@@ -443,32 +556,6 @@ fn offset(i: usize, contiguous_child_block_populations: &MutableVec<usize>) -> M
     spawn(updater).detach();  // future dropped when all node tasks are  // TODO: confirm
     offset
 }
-
-impl Node<ButtonBundle> {
-    pub fn on_hovered_change(mut self, handler: impl FnMut(bool) + 'static + Send + Sync) -> Self {
-        self.insert(Hoverable(Box::new(handler)))
-    }
-
-    pub fn on_press(mut self, handler: impl FnMut(bool) + 'static + Send + Sync) -> Self {
-        self.insert(Pressable(Box::new(handler)))
-    }
-}
-
-impl Node<TextBundle> {
-    pub fn text(mut self, text_signal: impl Signal<Item = Text> + 'static + Send + Sync) -> Self {
-        self.task_wrappers.push(sync_component_task_wrapper(text_signal));
-        self
-    }
-}
-
-#[derive(Component)]
-struct Hoverable(Box<dyn FnMut(bool) + 'static + Send + Sync>);
-
-#[derive(Component)]
-struct Pressable(Box<dyn FnMut(bool) + 'static + Send + Sync>);
-
-#[derive(Component)]
-struct TaskHolder(Vec<Task<()>>);
 
 // TODO: separate utilites like moonzoon (.take() copy)
 fn mutable_take<T: Default>(mutable: &Mutable<T>) -> T {
