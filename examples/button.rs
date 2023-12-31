@@ -14,7 +14,7 @@ const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
 const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
 
-fn button(font: Handle<Font>) -> haalka::Node<ButtonBundle> {
+fn button(font: Handle<Font>) -> haalka::NodeBuilder<ButtonBundle> {
     let hovered = Mutable::new(false);
     let pressed = Mutable::new(false);
     let pressed_hovered_broadcaster = map_ref! {
@@ -49,7 +49,7 @@ fn button(font: Handle<Font>) -> haalka::Node<ButtonBundle> {
         })
         .map(BackgroundColor)
     };
-    let button_node = haalka::Node::from(ButtonBundle {
+    let button_node = haalka::NodeBuilder::from(ButtonBundle {
         style: Style {
             width: Val::Px(150.0),
             height: Val::Px(65.0),
@@ -58,8 +58,6 @@ fn button(font: Handle<Font>) -> haalka::Node<ButtonBundle> {
             align_items: AlignItems::Center,
             ..default()
         },
-        border_color: BorderColor(Color::BLACK),
-        background_color: NORMAL_BUTTON.into(),
         ..default()
     });
     button_node
@@ -68,17 +66,9 @@ fn button(font: Handle<Font>) -> haalka::Node<ButtonBundle> {
     .border_color(border_color_signal)
     .background_color(background_color_signal)
     .child({
-        let text_node = haalka::Node::from(TextBundle::from_section(
-            "Button",
-            TextStyle {
-                font,
-                font_size: 40.0,
-                color: Color::rgb(0.9, 0.9, 0.9),
-            },
-        ));
         let text_signal = {
             pressed_hovered_broadcaster.signal()
-            .map(move |(pressed, hovered)| {
+            .map(|(pressed, hovered)| {
                 if pressed {
                     "Press"
                 } else if hovered {
@@ -88,9 +78,10 @@ fn button(font: Handle<Font>) -> haalka::Node<ButtonBundle> {
                 }
                 .to_string()
             })
-            .map(|string| {
+            .map(move |string| {
                 let text_style = {
                     TextStyle {
+                        font: font.clone(),
                         font_size: 40.0,
                         color: Color::rgb(0.9, 0.9, 0.9),
                         ..default()
@@ -99,8 +90,7 @@ fn button(font: Handle<Font>) -> haalka::Node<ButtonBundle> {
                 Text::from_section(string, text_style)
             })
         };
-        text_node
-        .text(text_signal)
+        haalka::NodeBuilder::new_text().text(text_signal)
     })
 }
 
@@ -109,7 +99,7 @@ fn setup(mut commands: Commands) {
 }
 
 fn insert_ui_root(world: &mut World) {
-    let root_node = haalka::Node::from(NodeBundle {
+    let root_node = haalka::NodeBuilder::from(NodeBundle {
         style: Style {
             width: Val::Percent(100.0),
             height: Val::Percent(100.0),

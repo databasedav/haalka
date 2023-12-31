@@ -9,7 +9,8 @@ bevy = "0.12.1"
 bevy-async-ecs = "0.3.0"
 enclose = "1.1.8"
 futures-signals = "0.3.33"
-
+futures-util = { version = "0.3.30", features = ["sink"] }
+futures_signals_ext = { git = "https://github.com/MoonZoon/MoonZoon", rev = "4bf101bd5ace83281bf570cc6fb601d1ad608a75" }
 
 [[example]]
 name = "button"
