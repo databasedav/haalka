@@ -7,6 +7,7 @@ use futures_signals::{signal::{Mutable, Signal, SignalExt}, signal_vec::{SignalV
 use bevy_async_ecs::*;
 pub use enclose::enclose as clone;
 use futures_signals_ext::MutableExt;
+use paste::paste;
 
 
 // static ASYNC_WORLD: OnceLock<AsyncWorld> = OnceLock::new();
@@ -36,127 +37,21 @@ impl<T: Bundle> From<T> for NodeBuilder<T> {
     }
 }
 
-macro_rules! impl_node_methods {
-    ($($node_type:ty => [$($field:ident: $field_type:ty),* $(,)?]),+ $(,)?) => {
-        $(
-            impl El<$node_type> {
-                $(
-                    pub fn $field(self, $field: impl Signal<Item = $field_type> + Send + Sync + 'static) -> Self {
-                        self.component_signal($field)
-                    }
-                )*
-            }
-        )*
-    };
-}
-
-impl_node_methods! {
-    NodeBundle => [
-        node: bevy::ui::Node,
-        style: Style,
-        background_color: BackgroundColor,
-        border_color: BorderColor,
-        focus_policy: FocusPolicy,
-        transform: Transform,
-        global_transform: GlobalTransform,
-        visibility: Visibility,
-        inherited_visibility: InheritedVisibility,
-        view_visibility: ViewVisibility,
-        z_index: ZIndex,
-    ],
-    ImageBundle => [
-        node: bevy::ui::Node,
-        style: Style,
-        calculated_size: ContentSize,
-        background_color: BackgroundColor,
-        image: UiImage,
-        image_size: UiImageSize,
-        focus_policy: FocusPolicy,
-        transform: Transform,
-        global_transform: GlobalTransform,
-        visibility: Visibility,
-        inherited_visibility: InheritedVisibility,
-        view_visibility: ViewVisibility,
-        z_index: ZIndex,
-    ],
-    AtlasImageBundle => [
-        node: bevy::ui::Node,
-        style: Style,
-        calculated_size: ContentSize,
-        background_color: BackgroundColor,
-        texture_atlas: Handle<TextureAtlas>,
-        texture_atlas_image: UiTextureAtlasImage,
-        focus_policy: FocusPolicy,
-        image_size: UiImageSize,
-        transform: Transform,
-        global_transform: GlobalTransform,
-        visibility: Visibility,
-        inherited_visibility: InheritedVisibility,
-        view_visibility: ViewVisibility,
-        z_index: ZIndex,
-    ],
-    TextBundle => [
-        node: bevy::ui::Node,
-        style: Style,
-        text: Text,
-        text_layout_info: TextLayoutInfo,
-        text_flags: TextFlags,
-        calculated_size: ContentSize,
-        focus_policy: FocusPolicy,
-        transform: Transform,
-        global_transform: GlobalTransform,
-        visibility: Visibility,
-        inherited_visibility: InheritedVisibility,
-        view_visibility: ViewVisibility,
-        z_index: ZIndex,
-        background_color: BackgroundColor,
-    ],
-    ButtonBundle => [
-        node: bevy::ui::Node,
-        button: Button,
-        style: Style,
-        interaction: Interaction,
-        focus_policy: FocusPolicy,
-        background_color: BackgroundColor,
-        border_color: BorderColor,
-        image: UiImage,
-        transform: Transform,
-        global_transform: GlobalTransform,
-        visibility: Visibility,
-        inherited_visibility: InheritedVisibility,
-        view_visibility: ViewVisibility,
-        z_index: ZIndex,
-    ],
-    // TODO: macros don't play nice with generics
-    // MaterialNodeBundle<M: UiMaterial> => [
-    //     node: bevy::ui::Node,
-    //     style: Style,
-    //     focus_policy: FocusPolicy,
-    //     transform: Transform,
-    //     global_transform: GlobalTransform,
-    //     visibility: Visibility,
-    //     inherited_visibility: InheritedVisibility,
-    //     view_visibility: ViewVisibility,
-    //     z_index: ZIndex,
-    // ],
-}
-
 impl<NodeType: Bundle> NodeBuilder<NodeType> {
     pub fn on_spawn(mut self, on_spawn: impl FnOnce(&mut World, Entity) + Send + Sync + 'static) -> Self {
         self.on_spawns.push(Box::new(on_spawn));
         self
     }
 
-    pub fn insert<T: Bundle>(self, bundle: T) -> Self {
-        self.on_spawn(|world: &mut World, entity: Entity| {
-            if let Some(mut entity) = world.get_entity_mut(entity) {
-                entity.insert(bundle);
-            }
-        })
-    }
-
-    pub fn component_signal(mut self, component_signal: impl Signal<Item = impl Component> + Send + Sync + 'static) -> Self {
-        self.task_wrappers.push(Box::new(sync_component_task_wrapper(component_signal)));
+    pub fn on_signal<T, Fut: Future<Output = ()> + Send>(mut self, signal: impl Signal<Item = T> + Send + Sync + 'static, mut f: impl FnMut(AsyncWorld, Entity, T) -> Fut + Send + Sync + 'static) -> Self {
+        self.task_wrappers.push(Box::new(move |async_world: AsyncWorld, entity: Entity| {
+            spawn(async move {
+                signal.for_each(move |value| {
+                    f(async_world.clone(), entity, value)
+                })
+                .await;
+            })
+        }));
         self
     }
 
@@ -493,20 +388,16 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         Self(None)
     }
 
-    fn update_node_builder(mut self, updater: impl FnOnce(NodeBuilder<NodeType>) -> NodeBuilder<NodeType>) -> Self {
+    pub fn update_node_builder(mut self, updater: impl FnOnce(NodeBuilder<NodeType>) -> NodeBuilder<NodeType>) -> Self {
         self.0 = Some(updater(self.0.unwrap()));
         self
     }
 
-    fn on_spawn(self, on_spawn: impl FnOnce(&mut World, Entity) + Send + Sync + 'static) -> Self {
-        self.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn))
+    pub fn into_node_builder(self) -> NodeBuilder<NodeType> {
+        self.0.unwrap()
     }
 
-    fn insert<T: Bundle>(self, bundle: T) -> Self {
-        self.update_node_builder(|node_builder| node_builder.insert(bundle))
-    }
-
-    fn child<IOE: IntoOptionElement>(self, child_option: IOE) -> Self
+    pub fn child<IOE: IntoOptionElement>(self, child_option: IOE) -> Self
     where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
     {
         if let Some(child) = child_option.into_option_element() {
@@ -515,7 +406,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         self
     }
 
-    fn child_signal<IOE: IntoOptionElement>(self, child_option_signal: impl Signal<Item = IOE> + Send + Sync + 'static) -> Self
+    pub fn child_signal<IOE: IntoOptionElement>(self, child_option_signal: impl Signal<Item = IOE> + Send + Sync + 'static) -> Self
     where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
     {
         self.update_node_builder(|node_builder| {
@@ -527,7 +418,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         )})
     }
 
-    fn children<IOE: IntoOptionElement, I: IntoIterator<Item = IOE>>(self, children_options: I) -> Self
+    pub fn children<IOE: IntoOptionElement, I: IntoIterator<Item = IOE>>(self, children_options: I) -> Self
     where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle, I::IntoIter: Send + Sync + 'static
     {
         self.update_node_builder(|node_builder| {
@@ -539,7 +430,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         })
     }
 
-    fn children_signal_vec<IOE: IntoOptionElement>(self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + Sync + 'static) -> Self
+    pub fn children_signal_vec<IOE: IntoOptionElement>(self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + Sync + 'static) -> Self
     where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
     {
         self.update_node_builder(|node_builder| {
@@ -551,16 +442,60 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         })
     }
 
-    fn component_signal(self, component_signal: impl Signal<Item = impl Component> + 'static + Send + Sync) -> Self {
-        self.update_node_builder(|node_builder| node_builder.component_signal(component_signal))
+    pub fn on_spawn(self, on_spawn: impl FnOnce(&mut World, Entity) + Send + Sync + 'static) -> Self {
+        self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn)))
     }
 
-    fn spawn(self, world: &mut World) -> Entity {
-        self.into_node_builder().spawn(world)
+    pub fn on_signal<T, Fut: Future<Output = ()> + Send>(self, signal: impl Signal<Item = T> + Send + Sync + 'static, f: impl FnMut(AsyncWorld, Entity, T) -> Fut + Send + Sync + 'static) -> Self {
+        self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.on_signal(signal, f)))
     }
 
-    fn into_node_builder(self) -> NodeBuilder<NodeType> {
-        self.0.unwrap()
+    pub fn with_entity(self, f: impl FnOnce(&mut EntityWorldMut) + Send + Sync + 'static) -> Self {
+        self.on_spawn(move |world, entity| {
+            if let Some(mut entity) = world.get_entity_mut(entity) {
+                f(&mut entity);
+            }
+        })
+    }
+
+    pub fn insert<T: Bundle>(self, bundle: T) -> Self {
+        self.with_entity(|entity| {
+            entity.insert(bundle);
+        })
+    }
+
+    pub fn update_component<C: Component>(self, mut f: impl FnMut(&mut C) + Send + Sync + 'static) -> Self {
+        self.on_spawn(move |world, entity| {
+            if let Some(mut entity) = world.get_entity_mut(entity) {
+                if let Some(mut component) = entity.get_mut::<C>() {
+                    f(&mut component);
+                }
+            }
+        })
+    }
+
+    pub fn signal_with_entity<C: Component, T: Send + 'static>(
+        self,
+        signal: impl Signal<Item = T> + 'static + Send + Sync,
+        f: impl FnMut(&mut EntityWorldMut, T) + Clone + Send + Sync + 'static,
+    ) -> Self {
+        self.on_signal(signal, move |async_world, entity, value| {
+            clone!((mut f) async move {
+                async_world.apply(move |world: &mut World| {
+                    if let Some(mut entity) = world.get_entity_mut(entity) {
+                        f(&mut entity, value);
+                    }
+                })
+                .await;
+            })
+        })
+    }
+
+    pub fn component_signal<C: Component>(self, component_signal: impl Signal<Item = C> + 'static + Send + Sync) -> Self {
+        // TODO: need partial_eq derivations for all the node related components to minimize updates with .dedupe
+        self.signal_with_entity::<C, C>(component_signal, move |entity, value| {
+            entity.insert(value);
+        })
     }
 }
 
@@ -626,9 +561,9 @@ pub trait RawElWrapper: Sized {
     }
 }
 
-impl<NodeType: Bundle> Element for RawHaalkaEl<NodeType> {
+impl<NodeType: Bundle> RawElWrapper for RawHaalkaEl<NodeType> {
     type NodeType = NodeType;
-    fn into_raw(self) -> Self {
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
         self
     }
 }
@@ -667,7 +602,7 @@ impl<NodeType: Bundle + Default> El<NodeType> {
 impl<NodeType: Bundle> RawElWrapper for El<NodeType> {
     type NodeType = NodeType;
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
-        &mut self.0
+        self.0.raw_el_mut()
     }
 }
 
@@ -758,7 +693,7 @@ impl<NodeType: Bundle> Column<NodeType> {
 impl<NodeType: Bundle> RawElWrapper for Column<NodeType> {
     type NodeType = NodeType;
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
-        &mut self.0
+        self.0.raw_el_mut()
     }
 }
 
@@ -819,7 +754,7 @@ impl<NodeType: Bundle> Row<NodeType> {
 impl<NodeType: Bundle> RawElWrapper for Row<NodeType> {
     type NodeType = NodeType;
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
-        &mut self.0
+        self.0.raw_el_mut()
     }
 }
 
@@ -881,68 +816,161 @@ impl<NodeType: Bundle> Stack<NodeType> {
 impl<NodeType: Bundle> RawElWrapper for Stack<NodeType> {
     type NodeType = NodeType;
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
-        &mut self.0
+        self.0.raw_el_mut()
     }
 }
 
-pub trait OnSpawnable: RawElWrapper + Sized {
-    fn on_spawn(self, on_spawn: impl FnOnce(&mut World, Entity) + Send + Sync + 'static) -> Self {
-        self.update_raw_el(|raw_el| raw_el.on_spawn(on_spawn))
-    }
-}
-
-impl<NodeType: Bundle> OnSpawnable for El<NodeType> {}
-impl<NodeType: Bundle> OnSpawnable for Column<NodeType> {}
-impl<NodeType: Bundle> OnSpawnable for Row<NodeType> {}
-impl<NodeType: Bundle> OnSpawnable for Stack<NodeType> {}
-
-pub trait Insertable: RawElWrapper + Sized {
-    fn insert<T: Bundle>(self, bundle: T) -> Self {
-        self.update_raw_el(|raw_el| raw_el.insert(bundle))
-    }
-}
-
-impl<NodeType: Bundle> Insertable for El<NodeType> {}
-impl<NodeType: Bundle> Insertable for Column<NodeType> {}
-impl<NodeType: Bundle> Insertable for Row<NodeType> {}
-impl<NodeType: Bundle> Insertable for Stack<NodeType> {}
-
-pub trait MouseInteractionAware: RawElWrapper + Sized {
+pub trait MouseInteractionAware: RawElWrapper {
     fn on_hovered_change(self, handler: impl FnMut(bool) + 'static + Send + Sync) -> Self {
-        self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.insert(Hoverable(Box::new(handler)))))
+        self.update_raw_el(|raw_el| raw_el.insert(Hoverable(Box::new(handler))))
     }
 
     fn on_press(self, handler: impl FnMut(bool) + 'static + Send + Sync) -> Self {
-        self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.insert(Pressable(Box::new(handler)))))
+        self.update_raw_el(|raw_el| raw_el.insert(Pressable(Box::new(handler))))
     }
 }
 
+impl MouseInteractionAware for RawHaalkaEl<ButtonBundle> {}
 impl MouseInteractionAware for El<ButtonBundle> {}
 impl MouseInteractionAware for Column<ButtonBundle> {}
 impl MouseInteractionAware for Row<ButtonBundle> {}
 impl MouseInteractionAware for Stack<ButtonBundle> {}
 
-pub trait Spawnable: RawElWrapper + Sized {
+pub trait Spawnable: RawElWrapper {
     fn spawn(self, world: &mut World) -> Entity {
-        self.into_raw_el().spawn(world)
+        self.into_raw_el().into_node_builder().spawn(world)
     }
 }
 
+impl<NodeType: Bundle> Spawnable for RawHaalkaEl<NodeType> {}
 impl<NodeType: Bundle> Spawnable for El<NodeType> {}
 impl<NodeType: Bundle> Spawnable for Column<NodeType> {}
 impl<NodeType: Bundle> Spawnable for Row<NodeType> {}
 impl<NodeType: Bundle> Spawnable for Stack<NodeType> {}
 
-pub trait ComponentSignalable: RawElWrapper + Sized {
-    fn component_signal(self, component_signal: impl Signal<Item = impl Component> + 'static + Send + Sync) -> Self {
-        self.update_raw_el(|raw_el| raw_el.component_signal(component_signal))
-    }
+macro_rules! impl_node_methods {
+    ($($node_type:ty => [$($field:ident: $field_type:ty),* $(,)?]),+ $(,)?) => {
+        $(
+            impl El<$node_type> {
+                $(
+                    paste! {
+                        pub fn [<$field _signal>](self, [<$field _signal>]: impl Signal<Item = $field_type> + Send + Sync + 'static) -> Self {
+                            self.update_raw_el(|raw_el| raw_el.component_signal([<$field _signal>]))
+                        }
+                    }
+                )*
+            }
+        )*
+    };
 }
+// // Define the main macro to apply the helper macro to each type
+// macro_rules! impl_node_methods {
+//     ($($node_type:ty),* $(,)?) => {
+//         $(
+//             impl_methods_for_type!($node_type, /* list of fields and types for this $node_type */);
+//         )*
+//     };
+// }
 
-impl<NodeType: Bundle> ComponentSignalable for El<NodeType> {}
-impl<NodeType: Bundle> ComponentSignalable for Column<NodeType> {}
-impl<NodeType: Bundle> ComponentSignalable for Row<NodeType> {}
-impl<NodeType: Bundle> ComponentSignalable for Stack<NodeType> {}
+// // Example usage of the macro  // TODO
+// impl_node_methods!(
+//     El, 
+//     Row, 
+//     Column, 
+//     Stack,
+//     // More types can be added as needed
+// );
+
+impl_node_methods! {
+    NodeBundle => [
+        node: bevy::ui::Node,
+        style: Style,
+        background_color: BackgroundColor,
+        border_color: BorderColor,
+        focus_policy: FocusPolicy,
+        transform: Transform,
+        global_transform: GlobalTransform,
+        visibility: Visibility,
+        inherited_visibility: InheritedVisibility,
+        view_visibility: ViewVisibility,
+        z_index: ZIndex,
+    ],
+    ImageBundle => [
+        node: bevy::ui::Node,
+        style: Style,
+        calculated_size: ContentSize,
+        background_color: BackgroundColor,
+        image: UiImage,
+        image_size: UiImageSize,
+        focus_policy: FocusPolicy,
+        transform: Transform,
+        global_transform: GlobalTransform,
+        visibility: Visibility,
+        inherited_visibility: InheritedVisibility,
+        view_visibility: ViewVisibility,
+        z_index: ZIndex,
+    ],
+    AtlasImageBundle => [
+        node: bevy::ui::Node,
+        style: Style,
+        calculated_size: ContentSize,
+        background_color: BackgroundColor,
+        texture_atlas: Handle<TextureAtlas>,
+        texture_atlas_image: UiTextureAtlasImage,
+        focus_policy: FocusPolicy,
+        image_size: UiImageSize,
+        transform: Transform,
+        global_transform: GlobalTransform,
+        visibility: Visibility,
+        inherited_visibility: InheritedVisibility,
+        view_visibility: ViewVisibility,
+        z_index: ZIndex,
+    ],
+    TextBundle => [
+        node: bevy::ui::Node,
+        style: Style,
+        text: Text,
+        text_layout_info: TextLayoutInfo,
+        text_flags: TextFlags,
+        calculated_size: ContentSize,
+        focus_policy: FocusPolicy,
+        transform: Transform,
+        global_transform: GlobalTransform,
+        visibility: Visibility,
+        inherited_visibility: InheritedVisibility,
+        view_visibility: ViewVisibility,
+        z_index: ZIndex,
+        background_color: BackgroundColor,
+    ],
+    ButtonBundle => [
+        node: bevy::ui::Node,
+        button: Button,
+        style: Style,
+        interaction: Interaction,
+        focus_policy: FocusPolicy,
+        background_color: BackgroundColor,
+        border_color: BorderColor,
+        image: UiImage,
+        transform: Transform,
+        global_transform: GlobalTransform,
+        visibility: Visibility,
+        inherited_visibility: InheritedVisibility,
+        view_visibility: ViewVisibility,
+        z_index: ZIndex,
+    ],
+    // TODO: macros don't play nice with generics
+    // MaterialNodeBundle<M: UiMaterial> => [
+    //     node: bevy::ui::Node,
+    //     style: Style,
+    //     focus_policy: FocusPolicy,
+    //     transform: Transform,
+    //     global_transform: GlobalTransform,
+    //     visibility: Visibility,
+    //     inherited_visibility: InheritedVisibility,
+    //     view_visibility: ViewVisibility,
+    //     z_index: ZIndex,
+    // ],
+}
 
 #[derive(Component)]
 struct Hoverable(Box<dyn FnMut(bool) + 'static + Send + Sync>);
@@ -955,25 +983,6 @@ struct TaskHolder(Vec<Task<()>>);
 
 fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> Task<T> {
     AsyncComputeTaskPool::get().spawn(future)
-}
-
-async fn sync_component<T: Component>(async_world: AsyncWorld, entity: Entity, component_signal: impl Signal<Item = T> + 'static + Send + Sync) {
-    // TODO: need partial_eq derivations for all the node related components to minimize updates with .dedupe
-    component_signal.for_each(|value| {
-        clone!((async_world) async move {
-            async_world.apply(move |world: &mut World| {
-                if let Some(mut entity) = world.get_entity_mut(entity) {
-                    entity.insert(value);
-                }
-            }).await;
-        })
-    }).await;
-}
-
-fn sync_component_task_wrapper<T: Component>(component_signal: impl Signal<Item = T> + 'static + Send + Sync) -> Box<dyn FnOnce(AsyncWorld, Entity) -> Task<()> + Send + Sync> {
-    Box::new(|async_world: AsyncWorld, entity: Entity| {
-        spawn(sync_component(async_world, entity, component_signal))
-    })
 }
 
 fn get_offset(i: usize, contiguous_child_block_populations: &[usize]) -> usize {

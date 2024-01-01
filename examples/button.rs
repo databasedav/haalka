@@ -63,8 +63,8 @@ fn button(font: Handle<Font>) -> impl Element {
     button_node
     .on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
     .on_press(move |is_pressed| pressed.set_neq(is_pressed))
-    .border_color(border_color_signal)
-    .background_color(background_color_signal)
+    .border_color_signal(border_color_signal)
+    .background_color_signal(background_color_signal)
     .child({
         let text_signal = {
             pressed_hovered_broadcaster.signal()
@@ -90,7 +90,7 @@ fn button(font: Handle<Font>) -> impl Element {
                 Text::from_section(string, text_style)
             })
         };
-        El::<TextBundle>::new().text(text_signal)
+        El::<TextBundle>::new().text_signal(text_signal)
     })
 }
 

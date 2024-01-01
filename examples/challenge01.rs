@@ -92,8 +92,8 @@ fn button(sub_menu: SubMenu, show_sub_menu: Mutable<Option<SubMenu>>) -> impl El
         if is_pressed { show_sub_menu.set_neq(Some(sub_menu)) }
         pressed.set_neq(is_pressed);
     })
-    .border_color(border_color_signal)
-    .background_color(background_color_signal)
+    .border_color_signal(border_color_signal)
+    .background_color_signal(background_color_signal)
     .child({
         let text_style = {
             TextStyle {
@@ -111,8 +111,8 @@ fn button(sub_menu: SubMenu, show_sub_menu: Mutable<Option<SubMenu>>) -> impl El
     })
 }
 
-fn menu_base(sides: f32, on_close_option: Option<Box<dyn FnMut() + 'static + Send + Sync>>) -> Stack<NodeBundle> {
-    let mut el = Stack::from(NodeBundle {
+fn menu_base(sides: f32) -> Column<NodeBundle> {
+    Column::from(NodeBundle {
         style: Style {
             width: Val::Px(sides),
             height: Val::Px(sides),
@@ -125,81 +125,78 @@ fn menu_base(sides: f32, on_close_option: Option<Box<dyn FnMut() + 'static + Sen
         border_color: BorderColor(Color::BLACK),
         background_color: BackgroundColor(NORMAL_BUTTON),
         ..default()
-    });
-    if let Some(mut on_close) = on_close_option {
-        let hovered = Mutable::new(false);
-        el = el.layer(
-            El::from(
-                ButtonBundle {
-                    style: Style {
-                        position_type: PositionType::Absolute,
-                        align_self: AlignSelf::End,
-                        margin: UiRect::bottom(Val::Auto),
-                        padding: UiRect::all(Val::Px(5.)),
-                        ..default()
-                    },
-                    background_color: BackgroundColor(Color::NONE),
+    })
+}
+
+fn audio_menu() -> Column<NodeBundle> {
+    menu_base(500.)
+}
+
+fn graphics_menu() -> Column<NodeBundle> {
+    menu_base(500.)
+}
+
+fn x_button(mut on_press: impl FnMut() + 'static + Send + Sync) -> impl Element {
+    let hovered = Mutable::new(false);
+    El::from(
+        ButtonBundle {
+            background_color: BackgroundColor(Color::NONE),
+            ..default()
+        }
+    )
+    .on_hovered_change(clone!((hovered) move |is_hovered| hovered.set_neq(is_hovered)))
+    .on_press(move |is_pressed| if is_pressed { on_press() })
+    .child(
+        El::<TextBundle>::new()
+        .text_signal(
+            hovered.signal()
+            .map_bool(|| Color::RED, || TEXT_COLOR)
+            .map(|color| {
+                Text::from_section("x", TextStyle {
+                    font_size: 30.0,
+                    color,
                     ..default()
-                }
-            )
-            .on_hovered_change(clone!((hovered) move |is_hovered| hovered.set_neq(is_hovered)))
-            .on_press(move |is_pressed| if is_pressed { on_close() })
-            .child(
-                El::from(TextBundle::default())
-                .text(
-                    hovered.signal()
-                    .map_bool(|| Color::RED, || TEXT_COLOR)
-                    .map(|color| {
-                        Text::from_section("x", TextStyle {
-                            font_size: 30.0,
-                            color,
-                            ..default()
-                        })
-                    })
-                )
-            )
-        );
-    }
-    el
-}
-
-fn audio_menu(show_sub_menu: Mutable<Option<SubMenu>>) -> Stack<NodeBundle> {
-    menu_base(500., Some(Box::new(move || { show_sub_menu.take(); })))
-}
-
-fn graphics_menu(show_sub_menu: Mutable<Option<SubMenu>>) -> Stack<NodeBundle> {
-    menu_base(500., Some(Box::new(move || { show_sub_menu.take(); })))
+                })
+            })
+        )
+    )
 }
 
 fn menu() -> impl Element {
     let show_sub_menu = Mutable::new(None);
-    Stack::from(NodeBundle::default())
+    Stack::<NodeBundle>::new()
     .layer(
-        menu_base(300., None)
-        .layer(
-            Column::from(NodeBundle::default())
-            .items([
-                button(SubMenu::Audio, show_sub_menu.clone()),
-                button(SubMenu::Graphics, show_sub_menu.clone()),
-            ])
-        )
+        menu_base(300.)
+        .items([
+            button(SubMenu::Audio, show_sub_menu.clone()),
+            button(SubMenu::Graphics, show_sub_menu.clone()),
+        ])
     )
     .layer_signal(
         show_sub_menu.signal()
         .map_some(
             move |sub_menu| {
                 let menu = match sub_menu {
-                    SubMenu::Audio => audio_menu(show_sub_menu.clone()),
-                    SubMenu::Graphics => graphics_menu(show_sub_menu.clone()),
+                    SubMenu::Audio => audio_menu(),
+                    SubMenu::Graphics => graphics_menu(),
                 };
-                menu.on_spawn(|world, entity| {
-                    if let Some(mut entity) = world.get_entity_mut(entity) {
-                        if let Some(mut style) = entity.get_mut::<Style>() {
+                Stack::<NodeBundle>::new()
+                .layer(
+                    menu.update_raw_el(|raw_el| {
+                        raw_el.update_component::<Style>(|style| {
                             style.position_type = PositionType::Absolute;
                             style.align_self = AlignSelf::Center;
                             style.justify_self = JustifySelf::Center;
-                        }
-                    }
+                        })
+                    })
+                )
+                .layer(x_button(clone!((show_sub_menu) move || { show_sub_menu.take(); })))
+                .update_raw_el(|raw_el| {
+                    raw_el.update_component::<Style>(|style| {
+                        style.position_type = PositionType::Absolute;
+                        style.align_self = AlignSelf::Center;
+                        style.justify_self = JustifySelf::Center;
+                    })
                 })
             },
         )
