@@ -1,7 +1,7 @@
-use std::{future::Future, marker::PhantomData, mem};
+use std::{future::Future, mem};
 use bevy::{
     prelude::*,
-    tasks::{AsyncComputeTaskPool, Task}, ui::{FocusPolicy, widget::{TextFlags, UiImageSize}, ContentSize, update}, text::TextLayoutInfo,
+    tasks::{AsyncComputeTaskPool, Task}, ui::{FocusPolicy, widget::{TextFlags, UiImageSize}, ContentSize}, text::TextLayoutInfo,
 };
 use futures_signals::{signal::{Mutable, Signal, SignalExt}, signal_vec::{SignalVec, SignalVecExt, VecDiff, MutableVec}};
 use bevy_async_ecs::*;
@@ -39,9 +39,9 @@ impl<T: Bundle> From<T> for NodeBuilder<T> {
 macro_rules! impl_node_methods {
     ($($node_type:ty => [$($field:ident: $field_type:ty),* $(,)?]),+ $(,)?) => {
         $(
-            impl El<RawHaalkaEl<$node_type>> {
+            impl El<$node_type> {
                 $(
-                    pub fn $field(self, $field: impl Signal<Item = $field_type> + 'static + Send + Sync) -> Self {
+                    pub fn $field(self, $field: impl Signal<Item = $field_type> + Send + Sync + 'static) -> Self {
                         self.component_signal($field)
                     }
                 )*
@@ -141,44 +141,6 @@ impl_node_methods! {
     // ],
 }
 
-impl NodeBuilder<ButtonBundle> {
-    pub fn on_hovered_change(self, handler: impl FnMut(bool) + 'static + Send + Sync) -> Self {
-        self.insert(Hoverable(Box::new(handler)))
-    }
-
-    pub fn on_press(self, handler: impl FnMut(bool) + 'static + Send + Sync) -> Self {
-        self.insert(Pressable(Box::new(handler)))
-    }
-}
-
-pub struct NodeTypeNotSet;
-
-impl NodeBuilder<NodeTypeNotSet> {
-    pub fn new() -> NodeBuilder<NodeBundle> {
-        NodeBuilder::from(NodeBundle::default())
-    }
-
-    pub fn new_image() -> NodeBuilder<ImageBundle> {
-        NodeBuilder::from(ImageBundle::default())
-    }
-
-    pub fn new_atlas_image() -> NodeBuilder<AtlasImageBundle> {
-        NodeBuilder::from(AtlasImageBundle::default())
-    }
-
-    pub fn new_text() -> NodeBuilder<TextBundle> {
-        NodeBuilder::from(TextBundle::default())
-    }
-
-    pub fn new_button() -> NodeBuilder<ButtonBundle> {
-        NodeBuilder::from(ButtonBundle::default())
-    }
-
-    pub fn new_material<M: UiMaterial>() -> NodeBuilder<MaterialNodeBundle<M>> {
-        NodeBuilder::from(MaterialNodeBundle::<M>::default())
-    }
-}
-
 impl<NodeType: Bundle> NodeBuilder<NodeType> {
     pub fn on_spawn(mut self, on_spawn: impl FnOnce(&mut World, Entity) + Send + Sync + 'static) -> Self {
         self.on_spawns.push(Box::new(on_spawn));
@@ -193,7 +155,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         })
     }
 
-    pub fn component_signal(mut self, component_signal: impl Signal<Item = impl Component> + 'static + Send + Sync) -> Self {
+    pub fn component_signal(mut self, component_signal: impl Signal<Item = impl Component> + Send + Sync + 'static) -> Self {
         self.task_wrappers.push(Box::new(sync_component_task_wrapper(component_signal)));
         self
     }
@@ -229,7 +191,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn child_signal<ChildNodeType: Bundle>(mut self, child_option: impl Signal<Item = impl Into<Option<NodeBuilder<ChildNodeType>>> + Send + 'static> + 'static + Send + Sync) -> Self {
+    pub fn child_signal<ChildNodeType: Bundle>(mut self, child_option: impl Signal<Item = impl Into<Option<NodeBuilder<ChildNodeType>>> + Send> + Send + Sync + 'static) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(0);
         self.child_block_inserted.lock_mut().push(false);
@@ -283,7 +245,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn children<ChildNodeType: Bundle>(mut self, children: impl IntoIterator<Item = NodeBuilder<ChildNodeType>> + 'static + Send + Sync) -> Self {
+    pub fn children<ChildNodeType: Bundle>(mut self, children: impl IntoIterator<Item = NodeBuilder<ChildNodeType>> + Send + Sync + 'static) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(0);
         self.child_block_inserted.lock_mut().push(false);
@@ -319,7 +281,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn children_signal_vec<ChildNodeType: Bundle>(mut self, children_signal_vec: impl SignalVec<Item = NodeBuilder<ChildNodeType>> + 'static + Send + Sync) -> Self {
+    pub fn children_signal_vec<ChildNodeType: Bundle>(mut self, children_signal_vec: impl SignalVec<Item = NodeBuilder<ChildNodeType>> + Send + Sync + 'static) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(0);
         self.child_block_inserted.lock_mut().push(false);
@@ -511,21 +473,51 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
     }
 }
 
-pub trait RawEl: Sized {
-    type NodeType: Bundle;
+// TODO: how do i use this default
+pub struct RawHaalkaEl<NodeType = NodeBundle>(pub Option<NodeBuilder<NodeType>>);
 
-    fn new_dummy() -> Self;
+impl<NodeType: Bundle> From<NodeType> for RawHaalkaEl<NodeType> {
+    fn from(node_bundle: NodeType) -> Self {
+        Self(Some(NodeBuilder::from(node_bundle)))
+    }
+}
 
-    fn update_node_builder(self, updater: impl FnOnce(NodeBuilder<Self::NodeType>) -> NodeBuilder<Self::NodeType>) -> Self;
+impl<NodeType: Bundle + Default> RawHaalkaEl<NodeType> {
+    pub fn new() -> Self {
+        Self::from(NodeType::default())
+    }
+}
 
-    fn child(self, child_option: impl IntoOptionElement) -> Self {
+impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
+    fn new_dummy() -> Self {
+        Self(None)
+    }
+
+    fn update_node_builder(mut self, updater: impl FnOnce(NodeBuilder<NodeType>) -> NodeBuilder<NodeType>) -> Self {
+        self.0 = Some(updater(self.0.unwrap()));
+        self
+    }
+
+    fn on_spawn(self, on_spawn: impl FnOnce(&mut World, Entity) + Send + Sync + 'static) -> Self {
+        self.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn))
+    }
+
+    fn insert<T: Bundle>(self, bundle: T) -> Self {
+        self.update_node_builder(|node_builder| node_builder.insert(bundle))
+    }
+
+    fn child<IOE: IntoOptionElement>(self, child_option: IOE) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
         if let Some(child) = child_option.into_option_element() {
             return self.update_node_builder(|node_builder| node_builder.child(child.into_raw().into_node_builder()))
         }
         self
     }
 
-    fn child_signal(self, child_option_signal: impl Signal<Item = impl IntoOptionElement + Send + 'static> + 'static + Send + Sync) -> Self {
+    fn child_signal<IOE: IntoOptionElement>(self, child_option_signal: impl Signal<Item = IOE> + Send + Sync + 'static) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
         self.update_node_builder(|node_builder| {
             node_builder
             .child_signal(child_option_signal.map(|child_option| {
@@ -535,8 +527,8 @@ pub trait RawEl: Sized {
         )})
     }
 
-    fn children<I: IntoIterator<Item = impl IntoOptionElement> + 'static + Send + Sync>(self, children_options: I) -> Self
-    where I::IntoIter: Send + Sync
+    fn children<IOE: IntoOptionElement, I: IntoIterator<Item = IOE>>(self, children_options: I) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle, I::IntoIter: Send + Sync + 'static
     {
         self.update_node_builder(|node_builder| {
             node_builder.children(
@@ -547,7 +539,9 @@ pub trait RawEl: Sized {
         })
     }
 
-    fn children_signal_vec(self, children_options_signal_vec: impl SignalVec<Item = impl IntoOptionElement + Send + 'static> + 'static + Send + Sync) -> Self {
+    fn children_signal_vec<IOE: IntoOptionElement>(self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + Sync + 'static) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
         self.update_node_builder(|node_builder| {
             node_builder.children_signal_vec(
                 children_options_signal_vec
@@ -565,18 +559,18 @@ pub trait RawEl: Sized {
         self.into_node_builder().spawn(world)
     }
 
-    fn into_node_builder(self) -> NodeBuilder<Self::NodeType>;
+    fn into_node_builder(self) -> NodeBuilder<NodeType> {
+        self.0.unwrap()
+    }
 }
 
 pub trait Element: Sized {
     type NodeType: Bundle;
-
     fn into_raw(self) -> RawHaalkaEl<Self::NodeType>;
 }
 
-impl<REW: RawElWrapper> Element for REW where RawHaalkaEl<<<REW as RawElWrapper>::RawEl as RawEl>::NodeType>: From<<REW as RawElWrapper>::RawEl> {
-    type NodeType = <<REW as RawElWrapper>::RawEl as RawEl>::NodeType;
-
+impl<REW: RawElWrapper> Element for REW {
+    type NodeType = REW::NodeType;
     fn into_raw(self) -> RawHaalkaEl<Self::NodeType> {
         self.into_raw_el().into()
     }
@@ -595,127 +589,325 @@ impl<T: Element> IntoElement for T {
 }
 
 pub trait IntoOptionElement {
+    type NodeType;
     type EL: Element;
     fn into_option_element(self) -> Option<Self::EL>;
 }
 
-impl<E: Element, T: IntoElement<EL = E>> IntoOptionElement for Option<T> {
+impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for Option<IE> {
+    type NodeType = E::NodeType;
     type EL = E;
     fn into_option_element(self) -> Option<Self::EL> {
         self.map(|into_element| into_element.into_element())
     }
 }
 
-impl<E: Element, T: IntoElement<EL = E>> IntoOptionElement for T {
+impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
+    type NodeType = E::NodeType;
     type EL = E;
     fn into_option_element(self) -> Option<Self::EL> {
         Some(self.into_element())
     }
 }
 
-pub trait Styleable {
-    fn update_style(self, updater: impl FnOnce(&mut Style)) -> Self;
-}
-
-macro_rules! impl_styleable_for_nodes {
-    ($($node_type:ty),* $(,)?) => {
-        $(
-            impl Styleable for RawHaalkaEl<$node_type> {
-                fn update_style(mut self, updater: impl FnOnce(&mut Style)) -> Self {
-                    let style = &mut self.0.as_mut().unwrap().raw_node.style;
-                    updater(style);
-                    self
-                }
-            }
-        )*
-    };
-}
-
-impl_styleable_for_nodes!(
-    NodeBundle,
-    ImageBundle,
-    AtlasImageBundle,
-    TextBundle,
-    ButtonBundle,
-    // MaterialNodeBundle<impl UiMaterial>,  // TODO
-);
-
-pub struct RawHaalkaEl<NodeType>(pub Option<NodeBuilder<NodeType>>);
-
-impl<NodeType: Bundle> From<NodeType> for RawHaalkaEl<NodeType> {
-    fn from(node_bundle: NodeType) -> Self {
-        Self(Some(NodeBuilder::from(node_bundle)))
-    }
-}
-
-impl<NodeType: Bundle> RawEl for RawHaalkaEl<NodeType> {
-    type NodeType = NodeType;
-
-    fn new_dummy() -> Self {
-        Self(None)
-    }
-
-    fn update_node_builder(mut self, updater: impl FnOnce(NodeBuilder<Self::NodeType>) -> NodeBuilder<Self::NodeType>) -> Self {
-        self.0 = Some(updater(self.0.unwrap()));
-        self
-    }
-
-    fn into_node_builder(self) -> NodeBuilder<Self::NodeType> {
-        self.0.unwrap()
-    }
-}
-
 pub trait RawElWrapper: Sized {
-    type RawEl: RawEl;
+    type NodeType: Bundle;
 
-    fn raw_el_mut(&mut self) -> &mut Self::RawEl;
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<Self::NodeType>;
 
-    fn update_raw_el(mut self, updater: impl FnOnce(Self::RawEl) -> Self::RawEl) -> Self {
-        let raw_el = mem::replace(self.raw_el_mut(), RawEl::new_dummy());
+    fn update_raw_el(mut self, updater: impl FnOnce(RawHaalkaEl<Self::NodeType>) -> RawHaalkaEl<Self::NodeType>) -> Self {
+        let raw_el = mem::replace(self.raw_el_mut(), RawHaalkaEl::<Self::NodeType>::new_dummy());
         mem::swap(self.raw_el_mut(), &mut updater(raw_el));
         self
     }
 
-    fn into_raw_el(mut self) -> Self::RawEl {
-        mem::replace(self.raw_el_mut(), RawEl::new_dummy())
+    fn into_raw_el(mut self) -> RawHaalkaEl<Self::NodeType> {
+        mem::replace(self.raw_el_mut(), RawHaalkaEl::<Self::NodeType>::new_dummy())
     }
 }
 
 impl<NodeType: Bundle> Element for RawHaalkaEl<NodeType> {
     type NodeType = NodeType;
-
     fn into_raw(self) -> Self {
         self
     }
 }
 
-pub struct El<RE: RawEl>(pub RE);
+pub struct El<NodeType>(RawHaalkaEl<NodeType>);
 
-impl<NodeType: Bundle> From<NodeType> for El<RawHaalkaEl<NodeType>> where RawHaalkaEl<NodeType>: Styleable {
+// TODO: r functions like this possible?
+// fn get_component_mut<'a, C: Component>(world: &'a mut World, entity: Entity) -> Option<&mut Mut<'_, C>> {
+//     if let Some(entity) = world.get_entity_mut(entity).as_mut() {
+//         return entity.get_mut::<C>().as_mut();
+//     }
+//     None
+// }
+
+impl<NodeType: Bundle> From<NodeType> for El<NodeType> {
     fn from(node_bundle: NodeType) -> Self {
-        let raw_el = RawHaalkaEl::from(node_bundle);
-        let raw_el = raw_el.update_style(|style| {
-            style.display = Display::Flex;
-        });
-        Self(raw_el)
+        Self(
+            RawHaalkaEl::from(node_bundle)
+            .on_spawn(|world, entity| {
+                if let Some(mut entity) = world.get_entity_mut(entity) {
+                    if let Some(mut style) = entity.get_mut::<Style>() {
+                        style.display = Display::Flex;
+                    }
+                }
+            })
+        )
     }
 }
 
-impl<NodeType: Bundle + Default> El<RawHaalkaEl<NodeType>> where RawHaalkaEl<NodeType>: Styleable {
+impl<NodeType: Bundle + Default> El<NodeType> {
     pub fn new() -> Self {
         Self::from(NodeType::default())
     }
 }
 
-impl<RE: RawEl> RawElWrapper for El<RE> {
-    type RawEl = RE;
-
-    fn raw_el_mut(&mut self) -> &mut Self::RawEl {
+impl<NodeType: Bundle> RawElWrapper for El<NodeType> {
+    type NodeType = NodeType;
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
         &mut self.0
     }
 }
 
-pub trait MouseEventAware: RawElWrapper + Sized {
+impl<NodeType: Bundle> El<NodeType> {
+    pub fn child<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
+        self.0 = self.0.child(child_option);
+        self
+    }
+
+    pub fn child_signal<IOE: IntoOptionElement>(mut self, child_option: impl Signal<Item = IOE> + Send + Sync + 'static) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
+        self.0 = self.0.child_signal(child_option);
+        self
+    }
+
+    pub fn children<IOE: IntoOptionElement, I: IntoIterator<Item = IOE>>(mut self, children: I) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle, I::IntoIter: Send + Sync + 'static
+    {
+        self.0 = self.0.children(children);
+        self
+    }
+
+    pub fn children_signal_vec<IOE: IntoOptionElement>(mut self, children_signal_vec: impl SignalVec<Item = IOE> + Send + Sync + 'static) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
+        self.0 = self.0.children_signal_vec(children_signal_vec);
+        self
+    }
+}
+
+pub struct Column<NodeType>(RawHaalkaEl<NodeType>);  // TODO: impl Element like api so the inner raw el's don't need to be managed
+
+impl<NodeType: Bundle> From<NodeType> for Column<NodeType> {
+    fn from(node_bundle: NodeType) -> Self {
+        Self(
+            RawHaalkaEl::from(node_bundle)
+            .on_spawn(|world, entity| {
+                if let Some(mut entity) = world.get_entity_mut(entity) {
+                    if let Some(mut style) = entity.get_mut::<Style>() {
+                        style.display = Display::Flex;
+                        style.flex_direction = FlexDirection::Column;
+                    }
+                }
+            })
+        )
+    }
+}
+
+impl<NodeType: Bundle + Default> Column<NodeType> {
+    pub fn new() -> Self {
+        Self::from(NodeType::default())
+    }
+}
+
+impl<NodeType: Bundle> Column<NodeType> {
+    pub fn item<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
+        self.0 = self.0.child(child_option);
+        self
+    }
+
+    pub fn item_signal<IOE: IntoOptionElement>(mut self, child_option: impl Signal<Item = IOE> + Send + Sync + 'static) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
+        self.0 = self.0.child_signal(child_option);
+        self
+    }
+
+    pub fn items<IOE: IntoOptionElement, I: IntoIterator<Item = IOE>>(mut self, children: I) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle, I::IntoIter: Send + Sync + 'static
+    {
+        self.0 = self.0.children(children);
+        self
+    }
+
+    pub fn items_signal_vec<IOE: IntoOptionElement>(mut self, children_signal_vec: impl SignalVec<Item = IOE> + Send + Sync + 'static) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
+        self.0 = self.0.children_signal_vec(children_signal_vec);
+        self
+    }
+}
+
+impl<NodeType: Bundle> RawElWrapper for Column<NodeType> {
+    type NodeType = NodeType;
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
+        &mut self.0
+    }
+}
+
+pub struct Row<NodeType>(RawHaalkaEl<NodeType>);
+
+impl<NodeType: Bundle> From<NodeType> for Row<NodeType> {
+    fn from(node_bundle: NodeType) -> Self {
+        Self(
+            RawHaalkaEl::from(node_bundle)
+            .on_spawn(|world, entity| {
+                if let Some(mut entity) = world.get_entity_mut(entity) {
+                    if let Some(mut style) = entity.get_mut::<Style>() {
+                        style.display = Display::Flex;
+                        style.flex_direction = FlexDirection::Row;
+                    }
+                }
+            })
+        )
+    }
+}
+
+impl<NodeType: Bundle + Default> Row<NodeType> {
+    pub fn new() -> Self {
+        Self::from(NodeType::default())
+    }
+}
+
+impl<NodeType: Bundle> Row<NodeType> {
+    pub fn item<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
+        self.0 = self.0.child(child_option);
+        self
+    }
+
+    pub fn item_signal<IOE: IntoOptionElement>(mut self, child_option: impl Signal<Item = IOE> + Send + Sync + 'static) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
+        self.0 = self.0.child_signal(child_option);
+        self
+    }
+
+    pub fn items<IOE: IntoOptionElement, I: IntoIterator<Item = IOE>>(mut self, children: I) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle, I::IntoIter: Send + Sync + 'static
+    {
+        self.0 = self.0.children(children);
+        self
+    }
+
+    pub fn items_signal_vec<IOE: IntoOptionElement>(mut self, children_signal_vec: impl SignalVec<Item = IOE> + Send + Sync + 'static) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
+        self.0 = self.0.children_signal_vec(children_signal_vec);
+        self
+    }
+}
+
+impl<NodeType: Bundle> RawElWrapper for Row<NodeType> {
+    type NodeType = NodeType;
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
+        &mut self.0
+    }
+}
+
+pub struct Stack<NodeType>(RawHaalkaEl<NodeType>);
+
+impl<NodeType: Bundle> From<NodeType> for Stack<NodeType> {
+    fn from(node_bundle: NodeType) -> Self {
+        Self(
+            RawHaalkaEl::from(node_bundle)
+            .on_spawn(|world, entity| {
+                if let Some(mut entity) = world.get_entity_mut(entity) {
+                    if let Some(mut style) = entity.get_mut::<Style>() {
+                        style.display = Display::Grid;
+                        style.grid_auto_columns = vec![GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto)];
+                        style.grid_auto_rows = vec![GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto)];
+                    }
+                }
+            })
+        )
+    }
+}
+
+impl<NodeType: Bundle + Default> Stack<NodeType> {
+    pub fn new() -> Self {
+        Self::from(NodeType::default())
+    }
+}
+
+impl<NodeType: Bundle> Stack<NodeType> {
+    pub fn layer<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
+        self.0 = self.0.child(child_option);
+        self
+    }
+
+    pub fn layer_signal<IOE: IntoOptionElement>(mut self, child_option: impl Signal<Item = IOE> + Send + Sync + 'static) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
+        self.0 = self.0.child_signal(child_option);
+        self
+    }
+
+    pub fn layers<IOE: IntoOptionElement, I: IntoIterator<Item = IOE>>(mut self, children: I) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle, I::IntoIter: Send + Sync + 'static
+    {
+        self.0 = self.0.children(children);
+        self
+    }
+
+    pub fn layers_signal_vec<IOE: IntoOptionElement>(mut self, children_signal_vec: impl SignalVec<Item = IOE> + Send + Sync + 'static) -> Self
+    where <<IOE as IntoOptionElement>::EL as Element>::NodeType: Bundle
+    {
+        self.0 = self.0.children_signal_vec(children_signal_vec);
+        self
+    }
+}
+
+impl<NodeType: Bundle> RawElWrapper for Stack<NodeType> {
+    type NodeType = NodeType;
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
+        &mut self.0
+    }
+}
+
+pub trait OnSpawnable: RawElWrapper + Sized {
+    fn on_spawn(self, on_spawn: impl FnOnce(&mut World, Entity) + Send + Sync + 'static) -> Self {
+        self.update_raw_el(|raw_el| raw_el.on_spawn(on_spawn))
+    }
+}
+
+impl<NodeType: Bundle> OnSpawnable for El<NodeType> {}
+impl<NodeType: Bundle> OnSpawnable for Column<NodeType> {}
+impl<NodeType: Bundle> OnSpawnable for Row<NodeType> {}
+impl<NodeType: Bundle> OnSpawnable for Stack<NodeType> {}
+
+pub trait Insertable: RawElWrapper + Sized {
+    fn insert<T: Bundle>(self, bundle: T) -> Self {
+        self.update_raw_el(|raw_el| raw_el.insert(bundle))
+    }
+}
+
+impl<NodeType: Bundle> Insertable for El<NodeType> {}
+impl<NodeType: Bundle> Insertable for Column<NodeType> {}
+impl<NodeType: Bundle> Insertable for Row<NodeType> {}
+impl<NodeType: Bundle> Insertable for Stack<NodeType> {}
+
+pub trait MouseInteractionAware: RawElWrapper + Sized {
     fn on_hovered_change(self, handler: impl FnMut(bool) + 'static + Send + Sync) -> Self {
         self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.insert(Hoverable(Box::new(handler)))))
     }
@@ -725,7 +917,10 @@ pub trait MouseEventAware: RawElWrapper + Sized {
     }
 }
 
-impl<RE: RawEl> MouseEventAware for El<RE> {}
+impl MouseInteractionAware for El<ButtonBundle> {}
+impl MouseInteractionAware for Column<ButtonBundle> {}
+impl MouseInteractionAware for Row<ButtonBundle> {}
+impl MouseInteractionAware for Stack<ButtonBundle> {}
 
 pub trait Spawnable: RawElWrapper + Sized {
     fn spawn(self, world: &mut World) -> Entity {
@@ -733,7 +928,10 @@ pub trait Spawnable: RawElWrapper + Sized {
     }
 }
 
-impl<RE: RawEl> Spawnable for El<RE> {}
+impl<NodeType: Bundle> Spawnable for El<NodeType> {}
+impl<NodeType: Bundle> Spawnable for Column<NodeType> {}
+impl<NodeType: Bundle> Spawnable for Row<NodeType> {}
+impl<NodeType: Bundle> Spawnable for Stack<NodeType> {}
 
 pub trait ComponentSignalable: RawElWrapper + Sized {
     fn component_signal(self, component_signal: impl Signal<Item = impl Component> + 'static + Send + Sync) -> Self {
@@ -741,169 +939,10 @@ pub trait ComponentSignalable: RawElWrapper + Sized {
     }
 }
 
-impl<RE: RawEl> ComponentSignalable for El<RE> {}
-
-impl<NodeType: Bundle> El<RawHaalkaEl<NodeType>> where RawHaalkaEl<NodeType>: Styleable {
-    pub fn child(mut self, child_option: impl IntoOptionElement) -> Self {
-        self.0 = self.0.child(child_option);
-        self
-    }
-
-    pub fn child_signal(mut self, child_option: impl Signal<Item = impl IntoOptionElement + Send + 'static> + 'static + Send + Sync) -> Self {
-        self.0 = self.0.child_signal(child_option);
-        self
-    }
-
-    pub fn children<I: IntoIterator<Item = impl IntoOptionElement> + 'static + Send + Sync>(mut self, children: I) -> Self
-    where I::IntoIter: Send + Sync
-    {
-        self.0 = self.0.children(children);
-        self
-    }
-
-    pub fn children_signal_vec(mut self, children_signal_vec: impl SignalVec<Item = impl IntoOptionElement + Send + 'static> + 'static + Send + Sync) -> Self {
-        self.0 = self.0.children_signal_vec(children_signal_vec);
-        self
-    }
-}
-
-pub struct Column<RE: RawEl>(pub RE);  // TODO: impl Element like api so the inner raw el's don't need to be managed
-
-impl<NodeType: Bundle> From<NodeType> for Column<RawHaalkaEl<NodeType>> where RawHaalkaEl<NodeType>: Styleable {
-    fn from(node_bundle: NodeType) -> Self {
-        let raw_el = RawHaalkaEl::from(node_bundle);
-        let raw_el = raw_el.update_style(|style| {
-            style.display = Display::Flex;
-            style.flex_direction = FlexDirection::Column;
-        });
-        Self(raw_el)
-    }
-}
-
-impl<NodeType: Bundle + Default> Column<RawHaalkaEl<NodeType>> where RawHaalkaEl<NodeType>: Styleable {
-    pub fn new() -> Self {
-        Self::from(NodeType::default())
-    }
-}
-
-impl<RE: RawEl> RawElWrapper for Column<RE> {
-    type RawEl = RE;
-
-    fn raw_el_mut(&mut self) -> &mut Self::RawEl {
-        &mut self.0
-    }
-}
-
-impl<NodeType: Bundle> Column<RawHaalkaEl<NodeType>> where RawHaalkaEl<NodeType>: Styleable {
-    pub fn item(mut self, child_option: impl IntoOptionElement) -> Self {
-        self.0 = self.0.child(child_option);
-        self
-    }
-
-    pub fn item_signal(mut self, child_option: impl Signal<Item = impl IntoOptionElement + Send + 'static> + 'static + Send + Sync) -> Self {
-        self.0 = self.0.child_signal(child_option);
-        self
-    }
-
-    pub fn items<I: IntoIterator<Item = impl IntoOptionElement> + 'static + Send + Sync>(mut self, children: I) -> Self
-    where I::IntoIter: Send + Sync
-    {
-        self.0 = self.0.children(children);
-        self
-    }
-
-    pub fn items_signal_vec(mut self, children_signal_vec: impl SignalVec<Item = impl IntoOptionElement + Send + 'static> + 'static + Send + Sync) -> Self {
-        self.0 = self.0.children_signal_vec(children_signal_vec);
-        self
-    }
-}
-
-pub struct Row<RE: RawEl>(RE);
-
-impl<NodeType: Bundle> From<NodeType> for Row<RawHaalkaEl<NodeType>> where RawHaalkaEl<NodeType>: Styleable {
-    fn from(node_bundle: NodeType) -> Self {
-        let raw_el = RawHaalkaEl::from(node_bundle);
-        let raw_el = raw_el.update_style(|style| {
-            style.display = Display::Flex;
-            style.flex_direction = FlexDirection::Row;
-        });
-        Self(raw_el)
-    }
-}
-
-impl<NodeType: Bundle + Default> Row<RawHaalkaEl<NodeType>> where RawHaalkaEl<NodeType>: Styleable {
-    pub fn new() -> Self {
-        Self::from(NodeType::default())
-    }
-}
-
-impl<NodeType: Bundle> Row<RawHaalkaEl<NodeType>> where RawHaalkaEl<NodeType>: Styleable {
-    pub fn item(mut self, child_option: impl IntoOptionElement) -> Self {
-        self.0 = self.0.child(child_option);
-        self
-    }
-
-    pub fn item_signal(mut self, child_option: impl Signal<Item = impl IntoOptionElement + Send + 'static> + 'static + Send + Sync) -> Self {
-        self.0 = self.0.child_signal(child_option);
-        self
-    }
-
-    pub fn items<I: IntoIterator<Item = impl IntoOptionElement> + 'static + Send + Sync>(mut self, children: I) -> Self
-    where I::IntoIter: Send + Sync
-    {
-        self.0 = self.0.children(children);
-        self
-    }
-
-    pub fn items_signal_vec(mut self, children_signal_vec: impl SignalVec<Item = impl IntoOptionElement + Send + 'static> + 'static + Send + Sync) -> Self {
-        self.0 = self.0.children_signal_vec(children_signal_vec);
-        self
-    }
-}
-
-pub struct Stack<RE: RawEl>(RE);
-
-impl<NodeType: Bundle + Styleable> From<NodeType> for Stack<RawHaalkaEl<NodeType>> where RawHaalkaEl<NodeType>: Styleable {
-    fn from(node_bundle: NodeType) -> Self {
-        let mut raw_el = RawHaalkaEl::from(node_bundle);
-        raw_el = raw_el.update_style(|style| {
-            style.display = Display::Grid;
-            style.grid_auto_columns = vec![GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto)];
-            style.grid_auto_rows = vec![GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto)];
-        });
-        Self(raw_el)
-    }
-}
-
-impl<NodeType: Bundle + Styleable + Default> Stack<RawHaalkaEl<NodeType>> where RawHaalkaEl<NodeType>: Styleable {
-    pub fn new() -> Self {
-        Self::from(NodeType::default())
-    }
-}
-
-impl<NodeType: Bundle + Styleable> Stack<RawHaalkaEl<NodeType>> where RawHaalkaEl<NodeType>: Styleable {
-    pub fn layer(mut self, child_option: impl IntoOptionElement) -> Self {
-        self.0 = self.0.child(child_option);
-        self
-    }
-
-    pub fn layer_signal(mut self, child_option: impl Signal<Item = impl IntoOptionElement + Send + 'static> + 'static + Send + Sync) -> Self {
-        self.0 = self.0.child_signal(child_option);
-        self
-    }
-
-    pub fn layers<I: IntoIterator<Item = impl IntoOptionElement> + 'static + Send + Sync>(mut self, children: I) -> Self
-    where I::IntoIter: Send + Sync
-    {
-        self.0 = self.0.children(children);
-        self
-    }
-
-    pub fn layers_signal_vec(mut self, children_signal_vec: impl SignalVec<Item = impl IntoOptionElement + Send + 'static> + 'static + Send + Sync) -> Self {
-        self.0 = self.0.children_signal_vec(children_signal_vec);
-        self
-    }
-}
+impl<NodeType: Bundle> ComponentSignalable for El<NodeType> {}
+impl<NodeType: Bundle> ComponentSignalable for Column<NodeType> {}
+impl<NodeType: Bundle> ComponentSignalable for Row<NodeType> {}
+impl<NodeType: Bundle> ComponentSignalable for Stack<NodeType> {}
 
 #[derive(Component)]
 struct Hoverable(Box<dyn FnMut(bool) + 'static + Send + Sync>);

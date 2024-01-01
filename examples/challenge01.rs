@@ -111,9 +111,8 @@ fn button(sub_menu: SubMenu, show_sub_menu: Mutable<Option<SubMenu>>) -> impl El
     })
 }
 
-fn menu_base(sides: f32, on_close_option: Option<Box<dyn FnMut() + 'static + Send + Sync>>) -> Column<RawHaalkaEl<NodeBundle>>
-{
-    let mut el = Column::from(NodeBundle {
+fn menu_base(sides: f32, on_close_option: Option<Box<dyn FnMut() + 'static + Send + Sync>>) -> Stack<NodeBundle> {
+    let mut el = Stack::from(NodeBundle {
         style: Style {
             width: Val::Px(sides),
             height: Val::Px(sides),
@@ -129,7 +128,7 @@ fn menu_base(sides: f32, on_close_option: Option<Box<dyn FnMut() + 'static + Sen
     });
     if let Some(mut on_close) = on_close_option {
         let hovered = Mutable::new(false);
-        el = el.item(
+        el = el.layer(
             El::from(
                 ButtonBundle {
                     style: Style {
@@ -164,22 +163,28 @@ fn menu_base(sides: f32, on_close_option: Option<Box<dyn FnMut() + 'static + Sen
     el
 }
 
-fn audio_menu(show_sub_menu: Mutable<Option<SubMenu>>) -> Column<RawHaalkaEl<NodeBundle>> {
+fn audio_menu(show_sub_menu: Mutable<Option<SubMenu>>) -> Stack<NodeBundle> {
     menu_base(500., Some(Box::new(move || { show_sub_menu.take(); })))
 }
 
-fn graphics_menu(show_sub_menu: Mutable<Option<SubMenu>>) -> Column<RawHaalkaEl<NodeBundle>> {
+fn graphics_menu(show_sub_menu: Mutable<Option<SubMenu>>) -> Stack<NodeBundle> {
     menu_base(500., Some(Box::new(move || { show_sub_menu.take(); })))
 }
 
 fn menu() -> impl Element {
     let show_sub_menu = Mutable::new(None);
-    menu_base(300., None)
-    .items([
-        button(SubMenu::Audio, show_sub_menu.clone()),
-        button(SubMenu::Graphics, show_sub_menu.clone()),
-    ])
-    .item_signal(
+    Stack::from(NodeBundle::default())
+    .layer(
+        menu_base(300., None)
+        .layer(
+            Column::from(NodeBundle::default())
+            .items([
+                button(SubMenu::Audio, show_sub_menu.clone()),
+                button(SubMenu::Graphics, show_sub_menu.clone()),
+            ])
+        )
+    )
+    .layer_signal(
         show_sub_menu.signal()
         .map_some(
             move |sub_menu| {
@@ -187,8 +192,14 @@ fn menu() -> impl Element {
                     SubMenu::Audio => audio_menu(show_sub_menu.clone()),
                     SubMenu::Graphics => graphics_menu(show_sub_menu.clone()),
                 };
-                menu.into_raw().update_style(|style| {
-                    style.position_type = PositionType::Absolute;
+                menu.on_spawn(|world, entity| {
+                    if let Some(mut entity) = world.get_entity_mut(entity) {
+                        if let Some(mut style) = entity.get_mut::<Style>() {
+                            style.position_type = PositionType::Absolute;
+                            style.align_self = AlignSelf::Center;
+                            style.justify_self = JustifySelf::Center;
+                        }
+                    }
                 })
             },
         )

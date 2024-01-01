@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use haalka::{self, HaalkaPlugin};
+use haalka::*;
 use futures_signals::{signal::{Mutable, SignalExt}, map_ref};
 
 
@@ -14,7 +14,7 @@ const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
 const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
 
-fn button(font: Handle<Font>) -> haalka::NodeBuilder<ButtonBundle> {
+fn button(font: Handle<Font>) -> impl Element {
     let hovered = Mutable::new(false);
     let pressed = Mutable::new(false);
     let pressed_hovered_broadcaster = map_ref! {
@@ -49,7 +49,7 @@ fn button(font: Handle<Font>) -> haalka::NodeBuilder<ButtonBundle> {
         })
         .map(BackgroundColor)
     };
-    let button_node = haalka::NodeBuilder::from(ButtonBundle {
+    let button_node = El::from(ButtonBundle {
         style: Style {
             width: Val::Px(150.0),
             height: Val::Px(65.0),
@@ -90,7 +90,7 @@ fn button(font: Handle<Font>) -> haalka::NodeBuilder<ButtonBundle> {
                 Text::from_section(string, text_style)
             })
         };
-        haalka::NodeBuilder::new_text().text(text_signal)
+        El::<TextBundle>::new().text(text_signal)
     })
 }
 
@@ -99,7 +99,7 @@ fn setup(mut commands: Commands) {
 }
 
 fn insert_ui_root(world: &mut World) {
-    let root_node = haalka::NodeBuilder::from(NodeBundle {
+    let root_node = El::from(NodeBundle {
         style: Style {
             width: Val::Percent(100.0),
             height: Val::Percent(100.0),
