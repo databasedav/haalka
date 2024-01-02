@@ -10,9 +10,8 @@ powered by the incredible FRP signals of https://github.com/Pauan/rust-signals a
 ## examples
 
 <p align="center">
-  <img src="docs/static/counter.mp4" width=500 title="fuck">
+  <img src="docs/static/counter.gif">
 </p>
-![test](docs/static/counter.mp4)
 
 write bevy ui's with the signal semantics you're used to from https://github.com/MoonZoon/MoonZoon and https://github.com/Pauan/rust-dominator !
 ```rust
