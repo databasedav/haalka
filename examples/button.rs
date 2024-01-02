@@ -6,7 +6,7 @@ use futures_signals::{signal::{Mutable, SignalExt}, map_ref};
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, HaalkaPlugin))
-        .add_systems(Startup, (setup, insert_ui_root))
+        .add_systems(Startup, (setup, spawn_ui_root))
         .run();
 }
 
@@ -49,20 +49,18 @@ fn button(font: Handle<Font>) -> impl Element {
         })
         .map(BackgroundColor)
     };
-    let button_node = El::from(ButtonBundle {
+    El::from(ButtonBundle {
         style: Style {
             width: Val::Px(150.0),
             height: Val::Px(65.0),
             border: UiRect::all(Val::Px(5.0)),
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
             ..default()
         },
         ..default()
-    });
-    button_node
+    })
+    .align_content(vec![Align::CenterX, Align::CenterY])
     .on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
-    .on_press(move |is_pressed| pressed.set_neq(is_pressed))
+    .on_pressed_change(move |is_pressed| pressed.set_neq(is_pressed))
     .border_color_signal(border_color_signal)
     .background_color_signal(background_color_signal)
     .child({
@@ -98,18 +96,16 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 }
 
-fn insert_ui_root(world: &mut World) {
-    let root_node = El::from(NodeBundle {
+fn spawn_ui_root(world: &mut World) {
+    El::from(NodeBundle {
         style: Style {
             width: Val::Percent(100.0),
             height: Val::Percent(100.0),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
             ..default()
         },
         ..default()
-    });
-    root_node
+    })
+    .align_content(vec![Align::CenterX, Align::CenterY])
     .child(button(world.resource::<AssetServer>().load("fonts/FiraSans-Bold.ttf")))
     .spawn(world);
 }
