@@ -18,7 +18,7 @@ use paste::paste;
 
 #[derive(Default)]
 pub struct NodeBuilder<NodeType> {
-    pub raw_node: NodeType,
+    raw_node: NodeType,
     on_spawns: Vec<Box<dyn FnOnce(&mut World, Entity) + Send>>,
     task_wrappers: Vec<Box<dyn FnOnce(AsyncWorld, Entity) -> Task<()> + Send>>,
     contiguous_child_block_populations: MutableVec<usize>,
@@ -284,7 +284,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                                         move_from_to(parent, children_entities, a, b);
                                         if a < b {
                                             move_from_to(parent, children_entities, b - 1, a);
-                            
+
                                         } else if a > b {
                                             move_from_to(parent, children_entities, b + 1, a);
                                         }
@@ -370,7 +370,7 @@ enum AlignHolder {
     AlignSignal(BoxSignal<'static, Option<Vec<Align>>>),
 }
 
-// TODO: how do i use this default
+// TODO: how can i make use of this default ?
 pub struct RawHaalkaEl<NodeType = NodeBundle> {
     node_builder: Option<NodeBuilder<NodeType>>,
     align: Option<AlignHolder>,
@@ -471,7 +471,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         })
     }
 
-    pub fn insert<T: Bundle>(self, bundle: T) -> Self {
+    pub fn insert<B: Bundle>(self, bundle: B) -> Self {
         self.with_entity(|entity| {
             entity.insert(bundle);
         })
@@ -582,14 +582,6 @@ impl<NodeType: Bundle> RawElWrapper for RawHaalkaEl<NodeType> {
 
 pub struct El<NodeType>(RawHaalkaEl<NodeType>);
 
-// TODO: r functions like this possible?
-// fn get_component_mut<'a, C: Component>(world: &'a mut World, entity: Entity) -> Option<&mut Mut<'_, C>> {
-//     if let Some(entity) = world.get_entity_mut(entity).as_mut() {
-//         return entity.get_mut::<C>().as_mut();
-//     }
-//     None
-// }
-
 impl<NodeType: Bundle> From<NodeType> for El<NodeType> {
     fn from(node_bundle: NodeType) -> Self {
         Self(
@@ -619,28 +611,28 @@ impl<NodeType: Bundle> El<NodeType> {
     pub fn child<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
     where <IOE::EL as Element>::NodeType: Bundle
     {
-        self.0 = self.0.child(child_option);
+        self.0 = self.0.child(Self::process_child(child_option));
         self
     }
 
-    pub fn child_signal<IOE: IntoOptionElement>(mut self, child_option: impl Signal<Item = IOE> + Send + 'static) -> Self
+    pub fn child_signal<IOE: IntoOptionElement + 'static>(mut self, child_option: impl Signal<Item = IOE> + Send + 'static) -> Self
     where <IOE::EL as Element>::NodeType: Bundle
     {
-        self.0 = self.0.child_signal(child_option);
+        self.0 = self.0.child_signal(child_option.map(Self::process_child));
         self
     }
 
-    pub fn children<IOE: IntoOptionElement, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
+    pub fn children<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
     where <IOE::EL as Element>::NodeType: Bundle, I::IntoIter: Send + 'static
     {
-        self.0 = self.0.children(children_options);
+        self.0 = self.0.children(children_options.into_iter().map(Self::process_child));
         self
     }
 
-    pub fn children_signal_vec<IOE: IntoOptionElement>(mut self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static) -> Self
+    pub fn children_signal_vec<IOE: IntoOptionElement + 'static>(mut self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static) -> Self
     where <IOE::EL as Element>::NodeType: Bundle
     {
-        self.0 = self.0.children_signal_vec(children_options_signal_vec);
+        self.0 = self.0.children_signal_vec(children_options_signal_vec.map(Self::process_child));
         self
     }
 }
@@ -669,28 +661,28 @@ impl<NodeType: Bundle> Column<NodeType> {
     pub fn item<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
     where <IOE::EL as Element>::NodeType: Bundle
     {
-        self.0 = self.0.child(child_option);
+        self.0 = self.0.child(Self::process_child(child_option));
         self
     }
 
-    pub fn item_signal<IOE: IntoOptionElement>(mut self, child_option: impl Signal<Item = IOE> + Send + 'static) -> Self
+    pub fn item_signal<IOE: IntoOptionElement + 'static>(mut self, child_option: impl Signal<Item = IOE> + Send + 'static) -> Self
     where <IOE::EL as Element>::NodeType: Bundle
     {
-        self.0 = self.0.child_signal(child_option);
+        self.0 = self.0.child_signal(child_option.map(Self::process_child));
         self
     }
 
-    pub fn items<IOE: IntoOptionElement, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
+    pub fn items<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
     where <IOE::EL as Element>::NodeType: Bundle, I::IntoIter: Send + 'static
     {
-        self.0 = self.0.children(children_options);
+        self.0 = self.0.children(children_options.into_iter().map(Self::process_child));
         self
     }
 
-    pub fn items_signal_vec<IOE: IntoOptionElement>(mut self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static) -> Self
+    pub fn items_signal_vec<IOE: IntoOptionElement + 'static>(mut self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static) -> Self
     where <IOE::EL as Element>::NodeType: Bundle
     {
-        self.0 = self.0.children_signal_vec(children_options_signal_vec);
+        self.0 = self.0.children_signal_vec(children_options_signal_vec.map(Self::process_child));
         self
     }
 }
@@ -727,28 +719,28 @@ impl<NodeType: Bundle> Row<NodeType> {
     pub fn item<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
     where <IOE::EL as Element>::NodeType: Bundle
     {
-        self.0 = self.0.child(child_option);
+        self.0 = self.0.child(Self::process_child(child_option));
         self
     }
 
-    pub fn item_signal<IOE: IntoOptionElement>(mut self, child_option: impl Signal<Item = IOE> + Send + 'static) -> Self
+    pub fn item_signal<IOE: IntoOptionElement + 'static>(mut self, child_option: impl Signal<Item = IOE> + Send + 'static) -> Self
     where <IOE::EL as Element>::NodeType: Bundle
     {
-        self.0 = self.0.child_signal(child_option);
+        self.0 = self.0.child_signal(child_option.map(Self::process_child));
         self
     }
 
-    pub fn items<IOE: IntoOptionElement, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
+    pub fn items<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
     where <IOE::EL as Element>::NodeType: Bundle, I::IntoIter: Send + 'static
     {
-        self.0 = self.0.children(children_options);
+        self.0 = self.0.children(children_options.into_iter().map(Self::process_child));
         self
     }
 
-    pub fn items_signal_vec<IOE: IntoOptionElement>(mut self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static) -> Self
+    pub fn items_signal_vec<IOE: IntoOptionElement + 'static>(mut self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static) -> Self
     where <IOE::EL as Element>::NodeType: Bundle
     {
-        self.0 = self.0.children_signal_vec(children_options_signal_vec);
+        self.0 = self.0.children_signal_vec(children_options_signal_vec.map(Self::process_child));
         self
     }
 }
@@ -1042,127 +1034,358 @@ impl<CA: ChildAlignable> ChildProcessable for CA {
 }
 
 macro_rules! impl_node_methods {
-    ($($node_type:ty => [$($field:ident: $field_type:ty),* $(,)?]),+ $(,)?) => {
+    ($($el_type:ty => { $($node_type:ty => [$($field:ident: $field_type:ty),* $(,)?]),+ $(,)? }),+ $(,)?) => {
         $(
-            impl El<$node_type> {
-                $(
-                    paste! {
-                        pub fn [<$field _signal>](self, [<$field _signal>]: impl Signal<Item = $field_type> + Send + 'static) -> Self {
-                            self.update_raw_el(|raw_el| raw_el.component_signal([<$field _signal>]))
-                        }
+            $(
+                paste! {
+                    impl $el_type<$node_type> {
+                        $(
+                            paste! {
+                                pub fn $field(self, $field: $field_type) -> Self {
+                                    self.update_raw_el(|raw_el| raw_el.insert($field))
+                                }
 
-                        pub fn [<signal_with_ $field>]<T: Send + 'static>(
-                            self,
-                            signal: impl Signal<Item = T> + 'static + Send,
-                            mut f: impl FnMut(&mut $field_type, T) + Clone + Send + 'static,
-                        ) -> Self {
-                            self.update_raw_el(|raw_el| {    
-                                raw_el.signal_with_component::<$field_type, T>(signal, move |$field, value| {
-                                    f($field, value);
-                                })
-                            })
-                        }
+                                pub fn [<with_ $field>](self, f: impl FnOnce(&mut $field_type) + Send + 'static) -> Self {
+                                    self.update_raw_el(|raw_el| raw_el.with_component::<$field_type>(f))
+                                }
+
+                                pub fn [<$field _signal>](self, [<$field _signal>]: impl Signal<Item = $field_type> + Send + 'static) -> Self {
+                                    self.update_raw_el(|raw_el| raw_el.component_signal([<$field _signal>]))
+                                }
+
+                                pub fn [<signal_with_ $field>]<T: Send + 'static>(
+                                    self,
+                                    signal: impl Signal<Item = T> + 'static + Send,
+                                    mut f: impl FnMut(&mut $field_type, T) + Clone + Send + 'static,
+                                ) -> Self {
+                                    self.update_raw_el(|raw_el| {
+                                        raw_el.signal_with_component::<$field_type, T>(signal, move |$field, value| {
+                                            f($field, value);
+                                        })
+                                    })
+                                }
+                            }
+                        )*
                     }
-                )*
-            }
+                }
+            )*
         )*
     };
 }
-// // Define the main macro to apply the helper macro to each type
-// macro_rules! impl_node_methods {
-//     ($($node_type:ty),* $(,)?) => {
-//         $(
-//             impl_methods_for_type!($node_type, /* list of fields and types for this $node_type */);
-//         )*
-//     };
-// }
-
-// // Example usage of the macro  // TODO
-// impl_node_methods!(
-//     El, 
-//     Row, 
-//     Column, 
-//     Stack,
-//     // More types can be added as needed
-// );
 
 impl_node_methods! {
-    NodeBundle => [
-        node: bevy::ui::Node,
-        style: Style,
-        background_color: BackgroundColor,
-        border_color: BorderColor,
-        focus_policy: FocusPolicy,
-        transform: Transform,
-        global_transform: GlobalTransform,
-        visibility: Visibility,
-        inherited_visibility: InheritedVisibility,
-        view_visibility: ViewVisibility,
-        z_index: ZIndex,
-    ],
-    ImageBundle => [
-        node: bevy::ui::Node,
-        style: Style,
-        calculated_size: ContentSize,
-        background_color: BackgroundColor,
-        image: UiImage,
-        image_size: UiImageSize,
-        focus_policy: FocusPolicy,
-        transform: Transform,
-        global_transform: GlobalTransform,
-        visibility: Visibility,
-        inherited_visibility: InheritedVisibility,
-        view_visibility: ViewVisibility,
-        z_index: ZIndex,
-    ],
-    AtlasImageBundle => [
-        node: bevy::ui::Node,
-        style: Style,
-        calculated_size: ContentSize,
-        background_color: BackgroundColor,
-        texture_atlas: Handle<TextureAtlas>,
-        texture_atlas_image: UiTextureAtlasImage,
-        focus_policy: FocusPolicy,
-        image_size: UiImageSize,
-        transform: Transform,
-        global_transform: GlobalTransform,
-        visibility: Visibility,
-        inherited_visibility: InheritedVisibility,
-        view_visibility: ViewVisibility,
-        z_index: ZIndex,
-    ],
-    TextBundle => [
-        node: bevy::ui::Node,
-        style: Style,
-        text: Text,
-        text_layout_info: TextLayoutInfo,
-        text_flags: TextFlags,
-        calculated_size: ContentSize,
-        focus_policy: FocusPolicy,
-        transform: Transform,
-        global_transform: GlobalTransform,
-        visibility: Visibility,
-        inherited_visibility: InheritedVisibility,
-        view_visibility: ViewVisibility,
-        z_index: ZIndex,
-        background_color: BackgroundColor,
-    ],
-    ButtonBundle => [
-        node: bevy::ui::Node,
-        button: Button,
-        style: Style,
-        interaction: Interaction,
-        focus_policy: FocusPolicy,
-        background_color: BackgroundColor,
-        border_color: BorderColor,
-        image: UiImage,
-        transform: Transform,
-        global_transform: GlobalTransform,
-        visibility: Visibility,
-        inherited_visibility: InheritedVisibility,
-        view_visibility: ViewVisibility,
-        z_index: ZIndex,
-    ],
+    El => {
+        NodeBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            background_color: BackgroundColor,
+            border_color: BorderColor,
+            focus_policy: FocusPolicy,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+        ImageBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            calculated_size: ContentSize,
+            background_color: BackgroundColor,
+            image: UiImage,
+            image_size: UiImageSize,
+            focus_policy: FocusPolicy,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+        AtlasImageBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            calculated_size: ContentSize,
+            background_color: BackgroundColor,
+            texture_atlas: Handle<TextureAtlas>,
+            texture_atlas_image: UiTextureAtlasImage,
+            focus_policy: FocusPolicy,
+            image_size: UiImageSize,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+        TextBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            text: Text,
+            text_layout_info: TextLayoutInfo,
+            text_flags: TextFlags,
+            calculated_size: ContentSize,
+            focus_policy: FocusPolicy,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+            background_color: BackgroundColor,
+        ],
+        ButtonBundle => [
+            node: bevy::ui::Node,
+            button: Button,
+            style: Style,
+            interaction: Interaction,
+            focus_policy: FocusPolicy,
+            background_color: BackgroundColor,
+            border_color: BorderColor,
+            image: UiImage,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+    },
+    Column => {
+        NodeBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            background_color: BackgroundColor,
+            border_color: BorderColor,
+            focus_policy: FocusPolicy,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+        ImageBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            calculated_size: ContentSize,
+            background_color: BackgroundColor,
+            image: UiImage,
+            image_size: UiImageSize,
+            focus_policy: FocusPolicy,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+        AtlasImageBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            calculated_size: ContentSize,
+            background_color: BackgroundColor,
+            texture_atlas: Handle<TextureAtlas>,
+            texture_atlas_image: UiTextureAtlasImage,
+            focus_policy: FocusPolicy,
+            image_size: UiImageSize,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+        TextBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            text: Text,
+            text_layout_info: TextLayoutInfo,
+            text_flags: TextFlags,
+            calculated_size: ContentSize,
+            focus_policy: FocusPolicy,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+            background_color: BackgroundColor,
+        ],
+        ButtonBundle => [
+            node: bevy::ui::Node,
+            button: Button,
+            style: Style,
+            interaction: Interaction,
+            focus_policy: FocusPolicy,
+            background_color: BackgroundColor,
+            border_color: BorderColor,
+            image: UiImage,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+    },
+    Row => {
+        NodeBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            background_color: BackgroundColor,
+            border_color: BorderColor,
+            focus_policy: FocusPolicy,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+        ImageBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            calculated_size: ContentSize,
+            background_color: BackgroundColor,
+            image: UiImage,
+            image_size: UiImageSize,
+            focus_policy: FocusPolicy,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+        AtlasImageBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            calculated_size: ContentSize,
+            background_color: BackgroundColor,
+            texture_atlas: Handle<TextureAtlas>,
+            texture_atlas_image: UiTextureAtlasImage,
+            focus_policy: FocusPolicy,
+            image_size: UiImageSize,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+        TextBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            text: Text,
+            text_layout_info: TextLayoutInfo,
+            text_flags: TextFlags,
+            calculated_size: ContentSize,
+            focus_policy: FocusPolicy,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+            background_color: BackgroundColor,
+        ],
+        ButtonBundle => [
+            node: bevy::ui::Node,
+            button: Button,
+            style: Style,
+            interaction: Interaction,
+            focus_policy: FocusPolicy,
+            background_color: BackgroundColor,
+            border_color: BorderColor,
+            image: UiImage,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+    },
+    Stack => {
+        NodeBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            background_color: BackgroundColor,
+            border_color: BorderColor,
+            focus_policy: FocusPolicy,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+        ImageBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            calculated_size: ContentSize,
+            background_color: BackgroundColor,
+            image: UiImage,
+            image_size: UiImageSize,
+            focus_policy: FocusPolicy,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+        AtlasImageBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            calculated_size: ContentSize,
+            background_color: BackgroundColor,
+            texture_atlas: Handle<TextureAtlas>,
+            texture_atlas_image: UiTextureAtlasImage,
+            focus_policy: FocusPolicy,
+            image_size: UiImageSize,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+        TextBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            text: Text,
+            text_layout_info: TextLayoutInfo,
+            text_flags: TextFlags,
+            calculated_size: ContentSize,
+            focus_policy: FocusPolicy,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+            background_color: BackgroundColor,
+        ],
+        ButtonBundle => [
+            node: bevy::ui::Node,
+            button: Button,
+            style: Style,
+            interaction: Interaction,
+            focus_policy: FocusPolicy,
+            background_color: BackgroundColor,
+            border_color: BorderColor,
+            image: UiImage,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+    },
     // TODO: macros don't play nice with generics
     // MaterialNodeBundle<M: UiMaterial> => [
     //     node: bevy::ui::Node,

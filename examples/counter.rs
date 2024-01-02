@@ -15,24 +15,15 @@ struct Counter(Mutable<i32>);
 
 fn ui_root(world: &mut World) {
     let counter = Mutable::new(0);
-    El::from(
-        NodeBundle {
-            style: Style {
-                width: Val::Percent(100.),
-                height: Val::Percent(100.),
-                ..default()
-            },
-            ..default()
-        }
-    )
+    El::<NodeBundle>::new()
+    .with_style(|style| {
+        style.width = Val::Percent(100.);
+        style.height = Val::Percent(100.);
+    })
     .align_content(vec![Align::CenterX, Align::CenterY])
     .child(
-        Row::from(
-            NodeBundle {
-                style: Style { column_gap: Val::Px(15.0), ..default() },
-                ..default()
-            }
-        )
+        Row::<NodeBundle>::new()
+        .with_style(|style| style.column_gap = Val::Px(15.0))
         .item(counter_button(counter.clone(), "-", -1))
         .item(
             El::<TextBundle>::new()
@@ -55,13 +46,8 @@ fn ui_root(world: &mut World) {
 fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element {
     let hovered = Mutable::new(false);
     let pressed = Mutable::new(false);
-    El::from(ButtonBundle {
-        style: Style {
-            width: Val::Px(45.0),
-            ..default()
-        },
-        ..default()
-    })
+    El::<ButtonBundle>::new()
+    .with_style(|style| style.width = Val::Px(45.0))
     .align_content(vec![Align::CenterX, Align::CenterY])
     .background_color_signal(
         signal::or(hovered.signal(), pressed.signal()).dedupe()
@@ -76,7 +62,10 @@ fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element
         if is_pressed { *counter.lock_mut() += step }
         pressed.set_neq(is_pressed);
     })
-    .child(El::from(TextBundle::from_section(label, TextStyle { font_size: 30.0, ..default() })))
+    .child(
+        El::<TextBundle>::new()
+        .text(Text::from_section(label, TextStyle { font_size: 30.0, ..default() }))
+    )
 }
 
 fn camera(mut commands: Commands) {

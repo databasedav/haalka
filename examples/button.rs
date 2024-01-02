@@ -49,14 +49,11 @@ fn button(font: Handle<Font>) -> impl Element {
         })
         .map(BackgroundColor)
     };
-    El::from(ButtonBundle {
-        style: Style {
-            width: Val::Px(150.0),
-            height: Val::Px(65.0),
-            border: UiRect::all(Val::Px(5.0)),
-            ..default()
-        },
-        ..default()
+    El::<ButtonBundle>::new()
+    .with_style(|style| {
+        style.width = Val::Px(150.0);
+        style.height = Val::Px(65.);
+        style.border = UiRect::all(Val::Px(5.0));
     })
     .align_content(vec![Align::CenterX, Align::CenterY])
     .on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
@@ -97,13 +94,10 @@ fn setup(mut commands: Commands) {
 }
 
 fn spawn_ui_root(world: &mut World) {
-    El::from(NodeBundle {
-        style: Style {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            ..default()
-        },
-        ..default()
+    El::<NodeBundle>::new()
+    .with_style(|style| {
+        style.width = Val::Percent(100.0);
+        style.height = Val::Percent(100.0);
     })
     .align_content(vec![Align::CenterX, Align::CenterY])
     .child(button(world.resource::<AssetServer>().load("fonts/FiraSans-Bold.ttf")))
