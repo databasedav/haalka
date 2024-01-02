@@ -25,7 +25,7 @@ fn main() {
             }),
             HaalkaPlugin
         ))
-        .add_systems(Startup, (setup, insert_ui_root))
+        .add_systems(Startup, (setup, spawn_ui_root))
         .run();
 }
 
@@ -80,35 +80,31 @@ fn button(sub_menu: SubMenu, show_sub_menu: Mutable<Option<SubMenu>>) -> impl El
             width: Val::Px(180.0),
             height: Val::Px(65.),
             border: UiRect::all(Val::Px(5.)),
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
             ..default()
         },
         ..default()
     });
     button_node
+    .align_content(vec![Align::CenterX, Align::CenterY])
     .on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
-    .on_press(move |is_pressed| {
+    .on_pressed_change(move |is_pressed| {
         if is_pressed { show_sub_menu.set_neq(Some(sub_menu)) }
         pressed.set_neq(is_pressed);
     })
     .border_color_signal(border_color_signal)
     .background_color_signal(background_color_signal)
-    .child({
-        let text_style = {
-            TextStyle {
-                font_size: 40.0,
-                color: TEXT_COLOR,
-                ..default()
-            }
-        };
+    .child(
         El::from(
-            TextBundle {
-                text: Text::from_section(match sub_menu { SubMenu::Audio => "audio", SubMenu::Graphics => "graphics" }, text_style),
-                ..default()
-            }
+            TextBundle::from_section(
+                match sub_menu { SubMenu::Audio => "audio", SubMenu::Graphics => "graphics" },
+                TextStyle {
+                    font_size: 40.0,
+                    color: TEXT_COLOR,
+                    ..default()
+                }
+            )
         )
-    })
+    )
 }
 
 fn menu_base(sides: f32) -> Column<NodeBundle> {
@@ -117,8 +113,6 @@ fn menu_base(sides: f32) -> Column<NodeBundle> {
             width: Val::Px(sides),
             height: Val::Px(sides),
             border: UiRect::all(Val::Px(5.)),
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
             row_gap: Val::Px(30.),
             ..default()
         },
@@ -126,6 +120,7 @@ fn menu_base(sides: f32) -> Column<NodeBundle> {
         background_color: BackgroundColor(NORMAL_BUTTON),
         ..default()
     })
+    .align_content(vec![Align::CenterX, Align::CenterY])
 }
 
 fn audio_menu() -> Column<NodeBundle> {
@@ -136,7 +131,7 @@ fn graphics_menu() -> Column<NodeBundle> {
     menu_base(500.)
 }
 
-fn x_button(mut on_press: impl FnMut() + 'static + Send + Sync) -> impl Element {
+fn x_button(mut on_press: impl FnMut() + 'static + Send + Sync) -> impl Element + RawElWrapper + Alignable {
     let hovered = Mutable::new(false);
     El::from(
         ButtonBundle {
@@ -145,20 +140,29 @@ fn x_button(mut on_press: impl FnMut() + 'static + Send + Sync) -> impl Element 
         }
     )
     .on_hovered_change(clone!((hovered) move |is_hovered| hovered.set_neq(is_hovered)))
-    .on_press(move |is_pressed| if is_pressed { on_press() })
+    .on_pressed_change(move |is_pressed| if is_pressed { on_press() })
     .child(
-        El::<TextBundle>::new()
-        .text_signal(
-            hovered.signal()
-            .map_bool(|| Color::RED, || TEXT_COLOR)
-            .map(|color| {
-                Text::from_section("x", TextStyle {
-                    font_size: 30.0,
-                    color,
-                    ..default()
-                })
-            })
+        El::from(TextBundle::from_section("x", TextStyle { font_size: 30.0, ..default() }))
+        .signal_with_text(
+            hovered.signal().map_bool(|| Color::RED, || TEXT_COLOR),
+            |text, value| {
+                if let Some(section) = text.sections.first_mut() {
+                    section.style.color = value;
+                }
+            },
         )
+        // or like this:
+        // El::<TextBundle>::new()
+        // .text_signal(
+        //     hovered.signal().map_bool(|| Color::RED, || TEXT_COLOR)
+        //     .map(|color| {
+        //         Text::from_section("x", TextStyle {
+        //             font_size: 30.0,
+        //             color,
+        //             ..default()
+        //         })
+        //     })
+        // )
     )
 }
 
@@ -180,25 +184,30 @@ fn menu() -> impl Element {
                     SubMenu::Audio => audio_menu(),
                     SubMenu::Graphics => graphics_menu(),
                 };
-                Stack::<NodeBundle>::new()
+                Stack::from(
+                    NodeBundle {
+                        style: Style {
+                            width: Val::Px(500.),
+                            height: Val::Px(500.),
+                            // TODO: without absolute there's some weird bouncing when switching between menus
+                            position_type: PositionType::Absolute,
+                            ..default()
+                        },
+                        ..default()
+                    }
+                )
+                .align(vec![Align::CenterX, Align::CenterY])
+                .layer(menu.align(vec![Align::CenterX, Align::CenterY]))
                 .layer(
-                    menu.update_raw_el(|raw_el| {
-                        raw_el.update_component::<Style>(|style| {
-                            style.position_type = PositionType::Absolute;
-                            style.align_self = AlignSelf::Center;
-                            style.justify_self = JustifySelf::Center;
+                    x_button(clone!((show_sub_menu) move || { show_sub_menu.take(); }))
+                    .align(vec![Align::Top, Align::Right])
+                    .update_raw_el(|raw_el| {
+                        raw_el.with_component::<Style>(|style| {
+                            style.padding = UiRect::new(Val::Px(0.), Val::Px(10.), Val::Px(5.), Val::Px(0.));
                         })
                     })
                 )
-                .layer(x_button(clone!((show_sub_menu) move || { show_sub_menu.take(); })))
-                .update_raw_el(|raw_el| {
-                    raw_el.update_component::<Style>(|style| {
-                        style.position_type = PositionType::Absolute;
-                        style.align_self = AlignSelf::Center;
-                        style.justify_self = JustifySelf::Center;
-                    })
-                })
-            },
+            }
         )
     )
 }
@@ -207,16 +216,16 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 }
 
-fn insert_ui_root(world: &mut World) {
-    let root_node = El::from(NodeBundle {
+fn spawn_ui_root(world: &mut World) {
+    El::from(NodeBundle {
         style: Style {
             width: Val::Percent(100.0),
             height: Val::Percent(100.0),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
             ..default()
         },
         ..default()
-    });
-    root_node.child(menu()).spawn(world);
+    })
+    .align_content(vec![Align::CenterX, Align::CenterY])
+    .child(menu())
+    .spawn(world);
 }
