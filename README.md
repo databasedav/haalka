@@ -33,6 +33,7 @@ struct Counter(Mutable<i32>);
 
 fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element {
     let hovered = Mutable::new(false);
+    let pressed = Mutable::new(false);
     El::from(ButtonBundle {
         style: Style {
             width: Val::Px(45.0),
@@ -42,7 +43,7 @@ fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element
     })
     .align_content(vec![Align::CenterX, Align::CenterY])
     .background_color_signal(
-        hovered.signal()
+        signal::or(hovered.signal(), pressed.signal()).dedupe()
         .map_bool(
             || Color::hsl(300., 0.75, 0.85),
             || Color::hsl(300., 0.75, 0.75),
@@ -50,7 +51,10 @@ fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element
         .map(BackgroundColor)
     )
     .on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
-    .on_pressed_change(move |is_pressed| if is_pressed { *counter.lock_mut() += step })
+    .on_pressed_change(move |is_pressed| {
+        if is_pressed { *counter.lock_mut() += step }
+        pressed.set_neq(is_pressed);
+    })
     .child(El::from(TextBundle::from_section(label, TextStyle { font_size: 30.0, ..default() })))
 }
 
