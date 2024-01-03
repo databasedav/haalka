@@ -3,10 +3,10 @@ use bevy::{
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task}, ui::{FocusPolicy, widget::{TextFlags, UiImageSize}, ContentSize}, text::TextLayoutInfo,
 };
-use futures_signals::{signal::{Mutable, Signal, SignalExt}, signal_vec::{SignalVec, SignalVecExt, VecDiff, MutableVec}};
+pub use futures_signals::{self, signal::{Mutable, Signal, SignalExt}, signal_vec::{SignalVec, SignalVecExt, VecDiff, MutableVec}};
 use bevy_async_ecs::*;
 pub use enclose::enclose as clone;
-use futures_signals_ext::{MutableExt, BoxSignal};
+pub use futures_signals_ext::{self, MutableExt, BoxSignal};
 use paste::paste;
 
 
@@ -186,6 +186,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                 children_signal_vec
                 .for_each(clone!((async_world, parent, children_entities, offset, contiguous_child_block_populations, child_block_inserted) move |diff| {
                     clone!((async_world, parent, children_entities, offset, contiguous_child_block_populations, child_block_inserted) async move {
+                        // TODO: unit tests for every branch
                         match diff {
                             VecDiff::Replace { values: nodes } => {
                                 async_world.apply(move |world: &mut World| {
@@ -299,11 +300,11 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                             }
                             VecDiff::RemoveAt { index } => {
                                 async_world.apply(move |world: &mut World| {
-                                    if let Some(existing_child) = children_entities.lock_ref().get(index).copied() {
+                                    let mut children_lock = children_entities.lock_mut();
+                                    if let Some(existing_child) = children_lock.get(index).copied() {
                                         if let Some(child) = world.get_entity_mut(existing_child) {
                                             child.despawn_recursive();  // removes from parent
                                         }
-                                        let mut children_lock = children_entities.lock_mut();
                                         children_lock.remove(index);
                                         contiguous_child_block_populations.lock_mut().set(block, children_lock.len());
                                     }
@@ -347,7 +348,8 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
     }
 
     pub fn spawn(self, world: &mut World) -> Entity {
-        let id = world.spawn(self.raw_node).id();
+        // include task holder so tasks can be added on spawn
+        let id = world.spawn((self.raw_node, TaskHolder::new())).id();
         for on_spawn in self.on_spawns {
             on_spawn(world, id);
         }
@@ -358,7 +360,11 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                 tasks.push(task_wrapper(async_world.clone(), id));
             }
             if let Some(mut entity) = world.get_entity_mut(id) {
-                entity.insert(TaskHolder(tasks));
+                if let Some(mut task_holder) = entity.get_mut::<TaskHolder>() {
+                    for task in tasks {
+                        task_holder.hold(task);
+                    }
+                }
             }
         }
         id
@@ -477,7 +483,15 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         })
     }
 
-    pub fn signal_with_entity<T: Send + 'static>(
+    pub fn hold_tasks(self, tasks: impl IntoIterator<Item = Task<()>> + Send + 'static) -> Self {
+        self.with_component::<TaskHolder>(|task_holder| {
+            for task in tasks.into_iter() {
+                task_holder.hold(task);
+            }
+        })
+    }
+
+    pub fn on_signal_with_entity<T: Send + 'static>(
         self,
         signal: impl Signal<Item = T> + 'static + Send,
         f: impl FnMut(&mut EntityWorldMut, T) + Clone + Send + 'static,
@@ -494,12 +508,12 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         })
     }
 
-    pub fn signal_with_component<C: Component, T: Send + 'static>(
+    pub fn on_signal_with_component<C: Component, T: Send + 'static>(
         self,
         signal: impl Signal<Item = T> + 'static + Send,
         mut f: impl FnMut(&mut C, T) + Clone + Send + 'static,
     ) -> Self {
-        self.signal_with_entity(signal, move |entity, value| {
+        self.on_signal_with_entity(signal, move |entity, value| {
             if let Some(mut component) = entity.get_mut::<C>() {
                 f(&mut component, value);
             }
@@ -508,7 +522,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
 
     pub fn component_signal<C: Component>(self, component_signal: impl Signal<Item = C> + 'static + Send) -> Self {
         // TODO: need partial_eq derivations for all the node related components to minimize updates with .dedupe
-        self.signal_with_entity::<C>(component_signal, move |entity, value| {
+        self.on_signal_with_entity::<C>(component_signal, move |entity, value| {
             entity.insert(value);
         })
     }
@@ -811,11 +825,11 @@ impl<NodeType: Bundle> RawElWrapper for Stack<NodeType> {
 }
 
 pub trait MouseInteractionAware: RawElWrapper {
-    fn on_hovered_change(self, handler: impl FnMut(bool) + 'static + Send + Sync) -> Self {
+    fn on_hovered_change(self, handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
         self.update_raw_el(|raw_el| raw_el.insert(Hoverable(Box::new(handler))))
     }
 
-    fn on_pressed_change(self, handler: impl FnMut(bool) + 'static + Send + Sync) -> Self {
+    fn on_pressed_change(self, handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
         self.update_raw_el(|raw_el| raw_el.insert(Pressable(Box::new(handler))))
     }
 }
@@ -867,7 +881,7 @@ trait ChildAlignable: RawElWrapper where Self: 'static {
                 }
                 AlignHolder::AlignSignal(align_signal) => {
                     // TODO next: must remove existing aligns
-                    child = child.signal_with_component::<Style, Option<Vec<Align>>>(align_signal, |style, aligns_option| {
+                    child = child.on_signal_with_component::<Style, Option<Vec<Align>>>(align_signal, |style, aligns_option| {
                         if let Some(aligns) = aligns_option {
                             for align in aligns {
                                 Self::map_align(style, align)
@@ -960,7 +974,7 @@ pub trait Alignable: ChildAlignable {
 
     fn align_content_signal(self, align_signal: impl Signal<Item = Option<Vec<Align>>> + Send + 'static) -> Self {
         self.update_raw_el(|raw_el| {
-            raw_el.signal_with_component::<Style, Option<Vec<Align>>>(align_signal, |style, aligns_option| {
+            raw_el.on_signal_with_component::<Style, Option<Vec<Align>>>(align_signal, |style, aligns_option| {
                 // TODO: remove existing when none
                 if let Some(aligns) = aligns_option {
                     for align in aligns {
@@ -1033,6 +1047,14 @@ impl<CA: ChildAlignable> ChildProcessable for CA {
     }
 }
 
+// pub trait NearbyElementAddable: RawElWrapper {
+//     fn element_below_signal(self, element_below_signal: impl Signal<Item = Option<Entity>> + Send + 'static) -> Self {
+
+//         self.update_raw_el(|raw_el| raw_el.insert(ElementBelowSignal(element_below_signal.boxed())))
+//     }
+// }
+
+#[macro_export]
 macro_rules! impl_node_methods {
     ($($el_type:ty => { $($node_type:ty => [$($field:ident: $field_type:ty),* $(,)?]),+ $(,)? }),+ $(,)?) => {
         $(
@@ -1053,15 +1075,13 @@ macro_rules! impl_node_methods {
                                     self.update_raw_el(|raw_el| raw_el.component_signal([<$field _signal>]))
                                 }
 
-                                pub fn [<signal_with_ $field>]<T: Send + 'static>(
+                                pub fn [<on_signal_with_ $field>]<T: Send + 'static>(
                                     self,
-                                    signal: impl Signal<Item = T> + 'static + Send,
-                                    mut f: impl FnMut(&mut $field_type, T) + Clone + Send + 'static,
+                                    signal: impl Signal<Item = T> + Send + 'static,
+                                    f: impl FnMut(&mut $field_type, T) + Clone + Send + 'static,
                                 ) -> Self {
                                     self.update_raw_el(|raw_el| {
-                                        raw_el.signal_with_component::<$field_type, T>(signal, move |$field, value| {
-                                            f($field, value);
-                                        })
+                                        raw_el.on_signal_with_component::<$field_type, T>(signal, f)
                                     })
                                 }
                             }
@@ -1401,15 +1421,25 @@ impl_node_methods! {
 }
 
 #[derive(Component)]
-struct Hoverable(Box<dyn FnMut(bool) + 'static + Send + Sync>);
+struct Hoverable(Box<dyn FnMut(bool) + Send + Sync + 'static>);
 
 #[derive(Component)]
-struct Pressable(Box<dyn FnMut(bool) + 'static + Send + Sync>);
+struct Pressable(Box<dyn FnMut(bool) + Send + Sync + 'static>);
 
 #[derive(Component)]
-struct TaskHolder(Vec<Task<()>>);
+pub struct TaskHolder(Vec<Task<()>>);
 
-fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> Task<T> {
+impl TaskHolder {
+    fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn hold(self: &mut Self, task: Task<()>) {
+        self.0.push(task);
+    }
+}
+
+pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> Task<T> {
     AsyncComputeTaskPool::get().spawn(future)
 }
 

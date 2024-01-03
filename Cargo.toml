@@ -1,10 +1,13 @@
+[workspace]
+members = ["examples/*"]
+resolver = "2"
+
 [package]
 name = "haalka"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-async-io = "2.2.2"
 bevy = "0.12.1"
 bevy-async-ecs = "0.3.0"
 enclose = "1.1.8"
@@ -12,6 +15,3 @@ futures-signals = "0.3.33"
 futures-util = { version = "0.3.30", features = ["sink"] }
 futures_signals_ext = { git = "https://github.com/MoonZoon/MoonZoon", rev = "4bf101bd5ace83281bf570cc6fb601d1ad608a75" }
 paste = "1.0.14"
-
-[[example]]
-name = "button"

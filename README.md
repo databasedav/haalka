@@ -13,7 +13,7 @@ powered by the incredible FRP signals of https://github.com/Pauan/rust-signals a
   <img src="docs/static/counter.gif">
 </p>
 
-write bevy ui's with the signal semantics you're used to from https://github.com/MoonZoon/MoonZoon and https://github.com/Pauan/rust-dominator !
+write bevy ui's with the signal semantics you're used to from [MoonZoon](https://github.com/MoonZoon/MoonZoon) and [Dominator](https://github.com/Pauan/rust-dominator) !
 ```rust
 use bevy::prelude::*;
 use haalka::*;

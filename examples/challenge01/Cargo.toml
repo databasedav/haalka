@@ -1,0 +1,11 @@
+[package]
+name = "challenge01"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+haalka = { path = "../../" }
+bevy = "0.12.1"
+async-io = "2.2.2"
+strum = { version = "0.25.0", features = ["derive"] }
