@@ -1,4 +1,4 @@
-use std::{future::Future, mem};
+use std::{future::Future, mem, collections::BTreeSet};
 use bevy::{
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task}, ui::{FocusPolicy, widget::{TextFlags, UiImageSize}, ContentSize}, text::TextLayoutInfo,
@@ -372,8 +372,8 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
 }
 
 enum AlignHolder {
-    Align(Vec<Align>),
-    AlignSignal(BoxSignal<'static, Option<Vec<Align>>>),
+    Align(Align),
+    AlignSignal(BoxSignal<'static, Option<Align>>),
 }
 
 // TODO: how can i make use of this default ?
@@ -846,14 +846,10 @@ pub trait Spawnable: RawElWrapper {
     }
 }
 
-impl<NodeType: Bundle> Spawnable for RawHaalkaEl<NodeType> {}
-impl<NodeType: Bundle> Spawnable for El<NodeType> {}
-impl<NodeType: Bundle> Spawnable for Column<NodeType> {}
-impl<NodeType: Bundle> Spawnable for Row<NodeType> {}
-impl<NodeType: Bundle> Spawnable for Stack<NodeType> {}
+impl<REW: RawElWrapper> Spawnable for REW {}
 
-#[derive(Clone, Copy)]
-pub enum Align {
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Alignment {
     Top,
     Bottom,
     Left,
@@ -862,32 +858,111 @@ pub enum Align {
     CenterY,
 }
 
-trait ChildAlignable: RawElWrapper where Self: 'static {
+#[derive(Clone, Default)]
+pub struct Align {
+    alignments: BTreeSet<Alignment>,
+}
+
+impl Align {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn center() -> Self {
+        Self::default().center_x().center_y()
+    }
+
+    pub fn center_x(mut self) -> Self {
+        self.alignments.insert(Alignment::CenterX);
+        self.alignments.remove(&Alignment::Left);
+        self.alignments.remove(&Alignment::Right);
+        self
+    }
+
+    pub fn center_y(mut self) -> Self {
+        self.alignments.insert(Alignment::CenterY);
+        self.alignments.remove(&Alignment::Top);
+        self.alignments.remove(&Alignment::Bottom);
+        self
+    }
+
+    pub fn top(mut self) -> Self {
+        self.alignments.insert(Alignment::Top);
+        self.alignments.remove(&Alignment::CenterY);
+        self.alignments.remove(&Alignment::Bottom);
+        self
+    }
+
+    pub fn bottom(mut self) -> Self {
+        self.alignments.insert(Alignment::Bottom);
+        self.alignments.remove(&Alignment::CenterY);
+        self.alignments.remove(&Alignment::Top);
+        self
+    }
+
+    pub fn left(mut self) -> Self {
+        self.alignments.insert(Alignment::Left);
+        self.alignments.remove(&Alignment::CenterX);
+        self.alignments.remove(&Alignment::Right);
+        self
+    }
+
+    pub fn right(mut self) -> Self {
+        self.alignments.insert(Alignment::Right);
+        self.alignments.remove(&Alignment::CenterX);
+        self.alignments.remove(&Alignment::Left);
+        self
+    }
+}
+
+pub enum AddRemove {
+    Add,
+    Remove,
+}
+
+fn register_align_signal<REW: RawElWrapper>(element: REW, align_signal: impl Signal<Item = Option<Vec<Alignment>>> + Send + 'static, apply_alignment: fn(&mut Style, Alignment, AddRemove)) -> REW {
+    let mut last_alignments_option: Option<Vec<Alignment>> = None;
+    element.update_raw_el(|raw_el| raw_el.on_signal_with_component::<Style, Option<Vec<Alignment>>>(align_signal, move |style, aligns_option| {
+        if let Some(alignments) = aligns_option {
+            if let Some(mut last_alignments) = last_alignments_option.take() {
+                last_alignments.retain(|align| !alignments.contains(align));
+                for alignment in last_alignments {
+                    apply_alignment(style, alignment, AddRemove::Remove)
+                }
+            }
+            for alignment in &alignments {
+                apply_alignment(style, *alignment, AddRemove::Add)
+            }
+            last_alignments_option = if !alignments.is_empty() { Some(alignments) } else { None };
+        } else {
+            if let Some(last_aligns) = last_alignments_option.take() {
+                for align in last_aligns {
+                    apply_alignment(style, align, AddRemove::Remove)
+                }
+            }
+        }
+    }))
+}
+
+pub trait ChildAlignable: RawElWrapper where Self: 'static {
     fn update_style(_style: &mut Style) {}  // only Stack requires base updates
 
-    fn map_align(style: &mut Style, align: Align);
+    fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove);
 
     fn manage<NodeType: Bundle>(mut child: RawHaalkaEl<NodeType>) -> RawHaalkaEl<NodeType> {
         child = child.with_component::<Style>(Self::update_style);
         // TODO: this .take means that child can't be passed around parents without losing align info, but this can be easily added if desired
         if let Some(align) = child.align.take() {
             match align {
-                AlignHolder::Align(aligns) => {
+                AlignHolder::Align(align) => {
                     child = child.with_component::<Style>(move |style| {
-                        for align in aligns {
-                            Self::map_align(style, align)
+                        for align in align.alignments {
+                            Self::apply_alignment(style, align, AddRemove::Add)
                         }
                     })
                 }
-                AlignHolder::AlignSignal(align_signal) => {
-                    // TODO next: must remove existing aligns
-                    child = child.on_signal_with_component::<Style, Option<Vec<Align>>>(align_signal, |style, aligns_option| {
-                        if let Some(aligns) = aligns_option {
-                            for align in aligns {
-                                Self::map_align(style, align)
-                            }
-                        }
-                    })
+                AlignHolder::AlignSignal(align_option_signal) => {
+                    child = register_align_signal(child, align_option_signal.map(|align_option| align_option.map(|align| align.alignments.into_iter().collect())), Self::apply_alignment)
                 }
             }
         }
@@ -896,33 +971,69 @@ trait ChildAlignable: RawElWrapper where Self: 'static {
 }
 
 impl<NodeType: Bundle> ChildAlignable for El<NodeType> {
-    fn map_align(style: &mut Style, align: Align) {
-        Column::<NodeType>::map_align(style, align);
+    fn apply_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        Column::<NodeType>::apply_alignment(style, alignment, action);
     }
 }
 
 impl<NodeType: Bundle> ChildAlignable for Column<NodeType> {
-    fn map_align(style: &mut Style, align: Align) {
-        match align {
-            Align::Top => style.margin = UiRect::bottom(Val::Auto),
-            Align::Bottom => style.margin = UiRect::top(Val::Auto),
-            Align::Left => style.align_self = AlignSelf::Start,
-            Align::Right => style.align_self = AlignSelf::End,
-            Align::CenterX => style.align_self = AlignSelf::Center,
-            Align::CenterY => style.margin = UiRect::vertical(Val::Auto),
+    fn apply_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        match alignment {
+            Alignment::Top => style.margin.bottom = match action {
+                AddRemove::Add => Val::Auto,
+                AddRemove::Remove => Val::ZERO,
+            },
+            Alignment::Bottom => style.margin.top = match action {
+                AddRemove::Add => Val::Auto,
+                AddRemove::Remove => Val::ZERO,
+            },
+            Alignment::Left => style.align_self = match action {
+                AddRemove::Add => AlignSelf::Start,
+                AddRemove::Remove => AlignSelf::DEFAULT,
+            },
+            Alignment::Right => style.align_self = match action {
+                AddRemove::Add => AlignSelf::End,
+                AddRemove::Remove => AlignSelf::DEFAULT,
+            },
+            Alignment::CenterX => style.align_self = match action {
+                AddRemove::Add => AlignSelf::Center,
+                AddRemove::Remove => AlignSelf::DEFAULT,
+            },
+            Alignment::CenterY => (style.margin.top, style.margin.bottom) = match action {
+                AddRemove::Add => (Val::Auto, Val::Auto),
+                AddRemove::Remove => (Val::ZERO, Val::ZERO),
+            },
         }
     }
 }
 
 impl<NodeType: Bundle> ChildAlignable for Row<NodeType> {
-    fn map_align(style: &mut Style, align: Align) {
-        match align {
-            Align::Top => style.align_self = AlignSelf::Start,
-            Align::Bottom => style.align_self = AlignSelf::End,
-            Align::Left => style.margin = UiRect::right(Val::Auto),
-            Align::Right => style.margin = UiRect::left(Val::Auto),
-            Align::CenterX => style.margin = UiRect::horizontal(Val::Auto),
-            Align::CenterY => style.align_self = AlignSelf::Center,
+    fn apply_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        match alignment {
+            Alignment::Top => style.align_self = match action {
+                AddRemove::Add => AlignSelf::Start,
+                AddRemove::Remove => AlignSelf::DEFAULT,
+            },
+            Alignment::Bottom => style.align_self = match action {
+                AddRemove::Add => AlignSelf::End,
+                AddRemove::Remove => AlignSelf::DEFAULT,
+            },
+            Alignment::Left => style.margin.right = match action {
+                AddRemove::Add => Val::Auto,
+                AddRemove::Remove => Val::ZERO, 
+            },
+            Alignment::Right => style.margin.left = match action {
+                AddRemove::Add => Val::Auto,
+                AddRemove::Remove => Val::ZERO,
+            },
+            Alignment::CenterX => (style.margin.left, style.margin.right) = match action {
+                AddRemove::Add => (Val::Auto, Val::Auto),
+                AddRemove::Remove => (Val::ZERO, Val::ZERO),
+            },
+            Alignment::CenterY => style.align_self = match action {
+                AddRemove::Add => AlignSelf::Center,
+                AddRemove::Remove => AlignSelf::DEFAULT,
+            },
         }
     }
 }
@@ -933,101 +1044,164 @@ impl<NodeType: Bundle> ChildAlignable for Stack<NodeType> {
         style.grid_row = GridPlacement::start(1);
     }
 
-    fn map_align(style: &mut Style, align: Align) {
-        match align {
-            Align::Top => style.align_self = AlignSelf::Start,
-            Align::Bottom => style.align_self = AlignSelf::End,
-            Align::Left => style.justify_self = JustifySelf::Start,
-            Align::Right => style.justify_self = JustifySelf::End,
-            Align::CenterX => style.justify_self = JustifySelf::Center,
-            Align::CenterY => style.align_self = AlignSelf::Center,
+    fn apply_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        match alignment {
+            Alignment::Top => style.align_self = match action {
+                AddRemove::Add => AlignSelf::Start,
+                AddRemove::Remove => AlignSelf::DEFAULT,
+            },
+            Alignment::Bottom => style.align_self = match action {
+                AddRemove::Add => AlignSelf::End,
+                AddRemove::Remove => AlignSelf::DEFAULT,
+            },
+            Alignment::Left => style.justify_self = match action {
+                AddRemove::Add => JustifySelf::Start,
+                AddRemove::Remove => JustifySelf::DEFAULT,
+            },
+            Alignment::Right => style.justify_self = match action {
+                AddRemove::Add => JustifySelf::End,
+                AddRemove::Remove => JustifySelf::DEFAULT,
+            },
+            Alignment::CenterX => style.justify_self = match action {
+                AddRemove::Add => JustifySelf::Center,
+                AddRemove::Remove => JustifySelf::DEFAULT,
+            },
+            Alignment::CenterY => style.align_self = match action {
+                AddRemove::Add => AlignSelf::Center,
+                AddRemove::Remove => AlignSelf::DEFAULT,
+            },
         }
     }
 }
 
 pub trait Alignable: ChildAlignable {
-    fn align(self, aligns: Vec<Align>) -> Self {
+    fn align(self, align: Align) -> Self {
         self.update_raw_el(|mut raw_el| {
-            raw_el.align = Some(AlignHolder::Align(aligns));
+            raw_el.align = Some(AlignHolder::Align(align));
             raw_el
         })
     }
 
-    fn align_signal(self, align_signal: impl Signal<Item = Option<Vec<Align>>> + Send + 'static) -> Self {
+    fn align_signal(self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self {
         self.update_raw_el(|mut raw_el| {
-            raw_el.align = Some(AlignHolder::AlignSignal(align_signal.boxed()));
+            raw_el.align = Some(AlignHolder::AlignSignal(align_option_signal.boxed()));
             raw_el
         })
     }
 
-    fn map_align_content(style: &mut Style, align: Align);
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove);
 
-    fn align_content(self, aligns: Vec<Align>) -> Self {
+    fn align_content(self, align: Align) -> Self {
         self.update_raw_el(|raw_el| {
             raw_el.with_component::<Style>(|style| {
-                for align in aligns {
-                    Self::map_align_content(style, align)
+                for alignment in align.alignments {
+                    Self::apply_content_alignment(style, alignment, AddRemove::Add)
                 }
             })
         })
     }
 
-    fn align_content_signal(self, align_signal: impl Signal<Item = Option<Vec<Align>>> + Send + 'static) -> Self {
-        self.update_raw_el(|raw_el| {
-            raw_el.on_signal_with_component::<Style, Option<Vec<Align>>>(align_signal, |style, aligns_option| {
-                // TODO: remove existing when none
-                if let Some(aligns) = aligns_option {
-                    for align in aligns {
-                        Self::map_align_content(style, align)
-                    }
-                }
-            })
-        })
+    fn align_content_signal(self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self {
+        register_align_signal(self, align_option_signal.map(|align_option| align_option.map(|align| align.alignments.into_iter().collect())), Self::apply_content_alignment)
     }
 }
 
 impl<NodeType: Bundle> Alignable for El<NodeType> {
-    fn map_align_content(style: &mut Style, align: Align) {
-        match align {
-            Align::Top => style.justify_content = JustifyContent::Start,
-            Align::Bottom => style.justify_content = JustifyContent::End,
-            Align::Left => style.align_items = AlignItems::Start,
-            Align::Right => style.align_items = AlignItems::End,
-            Align::CenterX => style.align_items = AlignItems::Center,
-            Align::CenterY => style.justify_content = JustifyContent::Center,
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        match alignment {
+            Alignment::Top => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::Start,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::Bottom => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::End,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::Left => style.align_items = match action {
+                AddRemove::Add => AlignItems::Start,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::Right => style.align_items = match action {
+                AddRemove::Add => AlignItems::End,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::CenterX => style.align_items = match action {
+                AddRemove::Add => AlignItems::Center,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::CenterY => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::Center,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
         }
     }
 }
 
 impl<NodeType: Bundle> Alignable for Column<NodeType> {
-    fn map_align_content(style: &mut Style, align: Align) {
-        match align {
-            Align::Top => style.justify_content = JustifyContent::Start,
-            Align::Bottom => style.justify_content = JustifyContent::End,
-            Align::Left => style.align_items = AlignItems::Start,
-            Align::Right => style.align_items = AlignItems::End,
-            Align::CenterX => style.align_items = AlignItems::Center,
-            Align::CenterY => style.justify_content = JustifyContent::Center,
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        match alignment {
+            Alignment::Top => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::Start,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::Bottom => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::End,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::Left => style.align_items = match action {
+                AddRemove::Add => AlignItems::Start,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::Right => style.align_items = match action {
+                AddRemove::Add => AlignItems::End,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::CenterX => style.align_items = match action {
+                AddRemove::Add => AlignItems::Center,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::CenterY => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::Center,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
         }
     }
 }
 
 impl<NodeType: Bundle> Alignable for Row<NodeType> {
-    fn map_align_content(style: &mut Style, align: Align) {
-        match align {
-            Align::Top => style.align_items = AlignItems::Start,
-            Align::Bottom => style.align_items = AlignItems::End,
-            Align::Left => style.justify_content = JustifyContent::Start,
-            Align::Right => style.justify_content = JustifyContent::End,
-            Align::CenterX => style.justify_content = JustifyContent::Center,
-            Align::CenterY => style.align_items = AlignItems::Center,
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        match alignment {
+            Alignment::Top => style.align_items = match action {
+                AddRemove::Add => AlignItems::Start,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::Bottom => style.align_items = match action {
+                AddRemove::Add => AlignItems::End,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::Left => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::Start,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::Right => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::End,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::CenterX => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::Center,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::CenterY => style.align_items = match action {
+                AddRemove::Add => AlignItems::Center,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
         }
     }
 }
 
 impl<NodeType: Bundle> Alignable for Stack<NodeType> {
-    fn map_align_content(style: &mut Style, align: Align) {
-        Row::<NodeType>::map_align_content(style, align)
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        Row::<NodeType>::apply_content_alignment(style, alignment, action)
     }
 }
 
@@ -1047,11 +1221,9 @@ impl<CA: ChildAlignable> ChildProcessable for CA {
     }
 }
 
+// TODO
 // pub trait NearbyElementAddable: RawElWrapper {
-//     fn element_below_signal(self, element_below_signal: impl Signal<Item = Option<Entity>> + Send + 'static) -> Self {
-
-//         self.update_raw_el(|raw_el| raw_el.insert(ElementBelowSignal(element_below_signal.boxed())))
-//     }
+//     fn element_below_signal;
 // }
 
 #[macro_export]

@@ -55,7 +55,7 @@ fn button(font: Handle<Font>) -> impl Element {
         style.height = Val::Px(65.);
         style.border = UiRect::all(Val::Px(5.0));
     })
-    .align_content(vec![Align::CenterX, Align::CenterY])
+    .align_content(Align::center())
     .on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
     .on_pressed_change(move |is_pressed| pressed.set_neq(is_pressed))
     .border_color_signal(border_color_signal)
@@ -99,7 +99,7 @@ fn spawn_ui_root(world: &mut World) {
         style.width = Val::Percent(100.0);
         style.height = Val::Percent(100.0);
     })
-    .align_content(vec![Align::CenterX, Align::CenterY])
+    .align_content(Align::center())
     .child(button(world.resource::<AssetServer>().load("fonts/FiraSans-Bold.ttf")))
     .spawn(world);
 }

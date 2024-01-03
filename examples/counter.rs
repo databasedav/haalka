@@ -20,7 +20,7 @@ fn ui_root(world: &mut World) {
         style.width = Val::Percent(100.);
         style.height = Val::Percent(100.);
     })
-    .align_content(vec![Align::CenterX, Align::CenterY])
+    .align_content(Align::center())
     .child(
         Row::<NodeBundle>::new()
         .with_style(|style| style.column_gap = Val::Px(15.0))
@@ -48,7 +48,7 @@ fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element
     let pressed = Mutable::new(false);
     El::<ButtonBundle>::new()
     .with_style(|style| style.width = Val::Px(45.0))
-    .align_content(vec![Align::CenterX, Align::CenterY])
+    .align_content(Align::center())
     .background_color_signal(
         signal::or(hovered.signal(), pressed.signal()).dedupe()
         .map_bool(

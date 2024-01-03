@@ -6,7 +6,7 @@
 //     Mouse: Separate styles for hover and press.
 //     Keyboard/Controller: Separate styles for currently focused element.
 
-use std::fmt::Display;
+use std::{fmt::Display, time::Duration};
 
 use bevy::prelude::*;
 use haalka::*;
@@ -41,9 +41,9 @@ const MAIN_MENU_SIDES: f32 = 300.;
 const SUB_MENU_HEIGHT: f32 = 700.;
 const SUB_MENU_WIDTH: f32 = 1200.;
 const BASE_PADDING: f32 = 10.;
-const BASE_BUTTON_HEIGHT: f32 = 65.;
+const DEFAULT_BUTTON_HEIGHT: f32 = 65.;
 const BASE_BORDER_WIDTH: f32 = 5.;
-const MENU_ITEM_HEIGHT: f32 = BASE_BUTTON_HEIGHT + BASE_PADDING;
+const MENU_ITEM_HEIGHT: f32 = DEFAULT_BUTTON_HEIGHT + BASE_PADDING;
 
 #[derive(Clone, Copy, PartialEq, Display)]
 enum SubMenu {
@@ -106,10 +106,10 @@ impl Button {
             el: {
                 El::<ButtonBundle>::new()
                 .with_style(move |style| {
-                    style.height = Val::Px(BASE_BUTTON_HEIGHT);
+                    style.height = Val::Px(DEFAULT_BUTTON_HEIGHT);
                     style.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH));
                 })
-                .align_content(vec![Align::CenterX, Align::CenterY])
+                .align_content(Align::center())
                 .on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
                 .border_color_signal(border_color_signal)
                 .background_color_signal(background_color_signal)
@@ -151,7 +151,7 @@ impl Button {
 
     fn selected_signal(mut self, selected_signal: impl Signal<Item = bool> + Send + 'static) -> Self {
         let task = spawn(sync(self.selected.clone(), selected_signal));
-        self.el = self.el.update_raw_el(|raw_el| raw_el.hold_tasks(vec![task]));
+        self.el = self.el.update_raw_el(|raw_el| raw_el.hold_tasks([task]));
         self
     }
 }
@@ -198,7 +198,7 @@ fn menu_base(width: f32, height: f32, title: &str) -> Column<NodeBundle> {
         })
         .child(
             El::<TextBundle>::new()
-            .align(vec![Align::Top, Align::Left])
+            .align(Align::new().top().left())
             .text(text(title))
         )
     )
@@ -222,7 +222,7 @@ fn dropdown<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: Mut
             })
             .layer(
                 El::<TextBundle>::new()
-                .align(vec![Align::Left])
+                .align(Align::new().left())
                 .text_signal(
                     selected.signal_cloned()
                     .map(|selected_option| {
@@ -234,7 +234,7 @@ fn dropdown<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: Mut
             .layer(
                 Row::<NodeBundle>::new()
                 .with_style(|style| style.column_gap = Val::Px(BASE_PADDING))
-                .align(vec![Align::Right])
+                .align(Align::new().right())
                 .item_signal({
                     if clearable {
                         selected.signal_ref(Option::is_some).map_true(clone!((selected) move || x_button(clone!((selected) move || { selected.take(); })))).boxed()
@@ -299,6 +299,7 @@ enum Quality {
     Low,
     Medium,
     High,
+    Ultra,
 }
 
 fn signal_eq<T: PartialEq + Send>(signal1: impl Signal<Item = T> + Send + 'static, signal2: impl Signal<Item = T> + Send + 'static) -> impl Signal<Item = bool> + Send + 'static {
@@ -354,8 +355,8 @@ fn menu_item(label: &str, body: impl Element + Alignable) -> Stack<ButtonBundle>
         style.padding = UiRect::axes(Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.));
         style.height = Val::Px(MENU_ITEM_HEIGHT);
     })
-    .layer(El::<TextBundle>::new().text(text(label)).align(vec![Align::Left, Align::CenterY]))
-    .layer(body.align(vec![Align::Right, Align::CenterY]))
+    .layer(El::<TextBundle>::new().text(text(label)).align(Align::new().left().center_y()))
+    .layer(body.align(Align::new().right().center_y()))
 }
 
 fn audio_menu() -> Column<NodeBundle> {
@@ -379,7 +380,7 @@ fn audio_menu() -> Column<NodeBundle> {
             checkbox(Mutable::new(false)).el,
         )
     )
-    // slider
+    // slider (migrate interations to mod picking)
     // iterate with left/right arrows
 }
 
@@ -416,32 +417,30 @@ fn graphics_menu() -> Column<NodeBundle> {
         .to_future()
         .await;
     }));
+    let items = [
+        menu_item(
+            "preset quality",
+            dropdown(MutableVec::new_with_values(Quality::iter().collect()), preset_quality, true),
+        ),
+        menu_item(
+            "texture quality",
+            dropdown(MutableVec::new_with_values(Quality::iter().collect()), texture_quality, false)
+        ),
+        menu_item(
+            "shadow quality",
+            dropdown(MutableVec::new_with_values(Quality::iter().collect()), shadow_quality, false)
+        ),
+        menu_item(
+            "bloom quality",
+            dropdown(MutableVec::new_with_values(Quality::iter().collect()), bloom_quality, false)
+        ),
+    ];
+    let l = items.len();
     menu_base(SUB_MENU_WIDTH, SUB_MENU_HEIGHT, "graphics menu")
-    .update_raw_el(|raw_el| raw_el.hold_tasks(vec![preset_broadcaster, preset_unsetter]))
+    .update_raw_el(|raw_el| raw_el.hold_tasks([preset_broadcaster, preset_unsetter]))
     .items(
-        [
-            menu_item(
-                "preset quality",
-                dropdown(MutableVec::new_with_values(Quality::iter().collect()), preset_quality, true),
-            ),
-            menu_item(
-                "texture quality",
-                dropdown(MutableVec::new_with_values(Quality::iter().collect()), texture_quality, false)
-            ),
-            menu_item(
-                "shadow quality",
-                dropdown(MutableVec::new_with_values(Quality::iter().collect()), shadow_quality, false)
-            ),
-            menu_item(
-                "bloom quality",
-                dropdown(MutableVec::new_with_values(Quality::iter().collect()), bloom_quality, false)
-            ),
-        ]
-        .into_iter()
-        .enumerate()
-        .map(|(i, item)| {
-            item.z_index(ZIndex::Local(4 - i as i32))
-        })
+        items.into_iter().enumerate()
+        .map(move |(i, item)| item.z_index(ZIndex::Local((l - i) as i32)))
     )
 }
 
@@ -485,7 +484,7 @@ fn menu() -> impl Element {
         .item(
             Column::<NodeBundle>::new()
             .with_style(|style| style.row_gap = Val::Px(BASE_PADDING))
-            .align_content(vec![Align::CenterX, Align::CenterY])
+            .align_content(Align::center())
             .items([
                 sub_menu_button(SubMenu::Audio, show_sub_menu.clone()),
                 sub_menu_button(SubMenu::Graphics, show_sub_menu.clone()),
@@ -500,18 +499,41 @@ fn menu() -> impl Element {
                     SubMenu::Audio => audio_menu(),
                     SubMenu::Graphics => graphics_menu(),
                 };
+                // let align = Mutable::new(Some(Align::new().top().right()));
+                // let task = spawn(clone!((align) async move {
+                //     loop {
+                //         Timer::after(Duration::from_millis(1000)).await;
+                //         *align.lock_mut() = Some(Align::new().right().center_y());
+                //         Timer::after(Duration::from_millis(1000)).await;
+                //         *align.lock_mut() = Some(Align::new().bottom().right());
+                //         Timer::after(Duration::from_millis(1000)).await;
+                //         *align.lock_mut() = Some(Align::new().bottom().center_x());
+                //         Timer::after(Duration::from_millis(1000)).await;
+                //         *align.lock_mut() = Some(Align::new().bottom().left());
+                //         Timer::after(Duration::from_millis(1000)).await;
+                //         *align.lock_mut() = Some(Align::new().left().center_y());
+                //         Timer::after(Duration::from_millis(1000)).await;
+                //         *align.lock_mut() = Some(Align::new().top().left());
+                //         Timer::after(Duration::from_millis(1000)).await;
+                //         *align.lock_mut() = Some(Align::new().top().center_x());
+                //         Timer::after(Duration::from_millis(1000)).await;
+                //         *align.lock_mut() = Some(Align::new().top().right());
+                //     }
+                // }));
                 Stack::<NodeBundle>::new()
+                // .update_raw_el(|raw_el| raw_el.hold_tasks([task]))
                 .with_style(|style| {
                     style.width =  Val::Px(SUB_MENU_WIDTH);
                     style.height =  Val::Px(SUB_MENU_HEIGHT);
                     // TODO: without absolute there's some weird bouncing when switching between menus, perhaps due to the layout system having to figure stuff out ?
                     style.position_type =  PositionType::Absolute;
                 })
-                .align(vec![Align::CenterX, Align::CenterY])
-                .layer(menu.align(vec![Align::CenterX, Align::CenterY]))
+                .align(Align::center())
+                .layer(menu.align(Align::center()))
                 .layer(
                     x_button(clone!((show_sub_menu) move || { show_sub_menu.take(); }))
-                    .align(vec![Align::Top, Align::Right])
+                    .align(Align::new().top().right())
+                    // .align_signal(align.signal_cloned())
                     .update_raw_el(|raw_el| {
                         raw_el.with_component::<Style>(|style| {
                             style.padding = UiRect::new(Val::Px(0.), Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.), Val::Px(0.));
@@ -533,7 +555,7 @@ fn spawn_ui_root(world: &mut World) {
         style.width = Val::Percent(100.0);
         style.height = Val::Percent(100.0);
     })
-    .align_content(vec![Align::CenterX, Align::CenterY])
+    .align_content(Align::center())
     .child(menu())
     .spawn(world);
 }
