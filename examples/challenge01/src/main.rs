@@ -237,7 +237,7 @@ fn dropdown<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: Mut
                 .align(Align::new().right())
                 .item_signal({
                     if clearable {
-                        selected.signal_ref(Option::is_some).map_true(clone!((selected) move || x_button(clone!((selected) move || { selected.take(); })))).boxed()
+                        selected.signal_ref(Option::is_some).dedupe().map_true(clone!((selected) move || x_button(clone!((selected) move || { selected.take(); })))).boxed()
                     } else {
                         always(None).boxed()
                     }
@@ -246,7 +246,7 @@ fn dropdown<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: Mut
                     El::<TextBundle>::new()
                     // TODO: need to figure out to rotate in place (around center)
                     // .on_signal_with_transform(show_dropdown.signal(), |transform, showing| {
-                    //     transform.rotation = Quat::from_rotation_z((if showing { 180.0f32 } else { 0. }).to_radians());
+                    //     transform.rotate_around(Vec3::X, Quat::from_rotation_z((if showing { 180.0f32 } else { 0. }).to_radians()));
                     // })
                     .text(text("v"))
                 )
@@ -408,8 +408,7 @@ fn graphics_menu() -> Column<NodeBundle> {
                 let mut preset = preset_quality.lock_mut();
                 if preset.is_none() && texture == shadow && shadow == bloom {
                     *preset = *texture;
-                }
-                else if preset.is_some() && (&*preset != texture || &*preset != shadow || &*preset != bloom) {
+                } else if preset.is_some() && (&*preset != texture || &*preset != shadow || &*preset != bloom) {
                     *preset = None;
                 }
             }
