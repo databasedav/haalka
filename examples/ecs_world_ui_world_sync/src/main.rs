@@ -188,7 +188,7 @@ struct Counts {
 }
 
 fn ui_root(world: &mut World) {
-    let spawn_rate = Mutable::new(3.);
+    let spawn_rate = Mutable::new(1.5);
     let despawn_rate = Mutable::new(1.);
     let blue_count = Mutable::new(0);
     let green_count = Mutable::new(0);
@@ -235,7 +235,7 @@ fn ui_root(world: &mut World) {
                 .item(
                     Column::<NodeBundle>::new()
                     .with_style(|style| style.row_gap = Val::Px(10.))
-                    .item(category_count(ColorCategory::Blue, red_count.signal()))
+                    .item(category_count(ColorCategory::Blue, blue_count.signal()))
                     .item(category_count(ColorCategory::Green, green_count.signal()))
                     .item(category_count(ColorCategory::Red, red_count.signal()))
                     .item(category_count(ColorCategory::Yellow, yellow_count.signal()))
@@ -334,7 +334,7 @@ fn spawn_dot(
     if spawner.0.timer.tick(time.delta()).finished() {
         commands.spawn((
             MaterialMesh2dBundle {
-                mesh: meshes.add(shape::Circle::new(2.).into()).into(),
+                mesh: meshes.add(shape::Circle::new(10.).into()).into(),
                 material: materials.add(ColorMaterial::from(Color::BLACK)),
                 transform: Transform::from_translation(Vec3::new(rng.gen::<f32>() * HEIGHT, rng.gen::<f32>() * HEIGHT, 0.) - Vec3::new(WIDTH / 2., HEIGHT / 2., -1.)),
                 ..default()
