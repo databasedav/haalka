@@ -333,6 +333,15 @@ fn mutually_exclusive_options<T: Clone + PartialEq + Display + Send + Sync + 'st
     )
 }
 
+fn slider(value: Mutable<u32>) -> impl Element + Alignable {
+    El::<NodeBundle>::new()
+    .with_style(|style| {
+        style.width = Val::Px(300.);
+        style.height = Val::Px(10.);
+    })
+    .background_color(BackgroundColor(Color::BLACK))
+}
+
 fn options(n: usize) -> Vec<String> {
     (1..=n).map(|i| format!("option {}", i)).collect()
 }
@@ -378,6 +387,12 @@ fn audio_menu() -> Column<NodeBundle> {
         menu_item(
             "item 3",
             checkbox(Mutable::new(false)).el,
+        )
+    )
+    .item(
+        menu_item(
+            "item 4",
+            slider(Mutable::new(0)),
         )
     )
     // slider (migrate interations to mod picking)

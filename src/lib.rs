@@ -1613,7 +1613,11 @@ fn offset(i: usize, contiguous_child_block_populations: &MutableVec<Option<usize
 }
 
 async fn wait_until_child_block_inserted(block: usize, contiguous_child_block_populations: &MutableVec<Option<usize>>) {
-    contiguous_child_block_populations.signal_vec().to_signal_map(|last_child_block_inserted| last_child_block_inserted[block].is_some()).wait_for(true).await;
+    contiguous_child_block_populations.signal_vec()
+    .to_signal_map(|contiguous_child_block_populations| {
+        contiguous_child_block_populations.get(block).copied().flatten().is_some()
+    })
+    .wait_for(true).await;
 }
 
 fn hoverable_system(
