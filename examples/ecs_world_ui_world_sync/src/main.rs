@@ -202,7 +202,7 @@ fn ui_root(world: &mut World) {
         red: red_count.clone(),
         yellow: yellow_count.clone(),
     });
-    let counts = MutableVec::new_with_values(vec![red_count.clone(), green_count.clone(), red_count.clone(), yellow_count.clone()]);
+    let counts = MutableVec::new_with_values(vec![blue_count.clone(), green_count.clone(), red_count.clone(), yellow_count.clone()]);
     El::<NodeBundle>::new()
     .with_style(|style| {
         style.width = Val::Percent(100.);
