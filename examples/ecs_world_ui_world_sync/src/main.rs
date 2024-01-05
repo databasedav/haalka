@@ -151,7 +151,7 @@ struct MutableTimer {
 }
 
 fn close(a: f32, b: f32) -> bool {
-    (a - b).abs() < 0.0001
+    (a - b).abs() < 0.000001
 }
 
 impl MutableTimer {
