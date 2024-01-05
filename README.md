@@ -94,6 +94,7 @@ run the examples with [`just`](https://github.com/casey/just) (`cargo install ju
 ```bash
 just example counter  # the example above
 just example button  # port of https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs
+just example ecs_world_ui_world_sync
 # in progress ui challenges from https://github.com/bevyengine/bevy/discussions/11100
 just example challenge01  # in progress
 ```
