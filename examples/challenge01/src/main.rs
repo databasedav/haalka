@@ -34,7 +34,7 @@ fn main() {
 
 const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
-const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
+const CLICKED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
 const TEXT_COLOR: Color = Color::rgb(0.9, 0.9, 0.9);
 const FONT_SIZE: f32 = 30.;
 const MAIN_MENU_SIDES: f32 = 300.;
@@ -52,13 +52,12 @@ enum SubMenu {
 }
 
 struct Button {
-    el: El<ButtonBundle>,
-    pressed: Mutable<bool>,
+    el: El<NodeBundle>,
     selected: Mutable<bool>,
 }
 
 impl RawElWrapper for Button {
-    type NodeType = ButtonBundle;
+    type NodeType = NodeBundle;
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<Self::NodeType> {
         self.el.raw_el_mut()
     }
@@ -68,12 +67,10 @@ impl Button {
     fn new() -> Self {
         let selected = Mutable::new(false);
         let hovered = Mutable::new(false);
-        let pressed = Mutable::new(false);
-        let pressed_or_selected = signal::or(selected.signal(), pressed.signal());
         let selected_hovered_broadcaster = map_ref! {
-            let pressed_or_selected = pressed_or_selected,
+            let selected = selected.signal(),
             let hovered = hovered.signal() => {
-                (*pressed_or_selected, *hovered)
+                (*selected, *hovered)
             }
         }.broadcast();
         let border_color_signal = {
@@ -93,7 +90,7 @@ impl Button {
             selected_hovered_broadcaster.signal()
             .map(|(selected, hovered)| {
                 if selected {
-                    PRESSED_BUTTON
+                    CLICKED_BUTTON
                 } else if hovered {
                     HOVERED_BUTTON
                 } else {
@@ -104,17 +101,16 @@ impl Button {
         };
         Self {
             el: {
-                El::<ButtonBundle>::new()
+                El::<NodeBundle>::new()
                 .with_style(move |style| {
                     style.height = Val::Px(DEFAULT_BUTTON_HEIGHT);
                     style.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH));
                 })
                 .align_content(Align::center())
-                .on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
+                .hovered_sync(hovered)
                 .border_color_signal(border_color_signal)
                 .background_color_signal(background_color_signal)
             },
-            pressed,
             selected,
         }
     }
@@ -138,14 +134,8 @@ impl Button {
         self
     }
 
-    fn on_press(mut self, mut on_press: impl FnMut() + 'static + Send + Sync) -> Self {
-        self.el = {
-            self.el
-            .on_pressed_change(clone!((self.pressed => pressed) move |is_pressed| {
-                if is_pressed { on_press() }
-                pressed.set_neq(is_pressed);
-            }))
-        };
+    fn on_click(mut self, on_click: impl FnMut() + 'static + Send + Sync) -> Self {
+        self.el = self.el.on_click(on_click);
         self
     }
 
@@ -154,24 +144,26 @@ impl Button {
         self.el = self.el.update_raw_el(|raw_el| raw_el.hold_tasks([task]));
         self
     }
+
+    fn update_el(mut self, update: impl FnOnce(El<NodeBundle>) -> El<NodeBundle> + 'static) -> Self {
+        self.el = update(self.el);
+        self
+    }
 }
 
 async fn sync<T>(mutable: Mutable<T>, signal: impl Signal<Item = T> + Send + 'static) {
-    signal.for_each_sync(move |value| {
-        mutable.set(value);
-    })
-    .await;
+    signal.for_each_sync(|value| mutable.set(value)).await;
 }
 
 fn text(text: &str) -> Text {
     Text::from_section(text, TextStyle { font_size: FONT_SIZE, ..default() })
 }
 
-fn text_button(text_signal: impl Signal<Item = String> + Send + 'static, on_press: impl FnMut() + 'static + Send + Sync) -> Button {
+fn text_button(text_signal: impl Signal<Item = String> + Send + 'static, on_click: impl FnMut() + 'static + Send + Sync) -> Button {
     Button::new()
     .width(Val::Px(200.))
     .body_signal(always(El::<TextBundle>::new().text_signal(text_signal.map(|t| text(&t)))))
-    .on_press(on_press)
+    .on_click(on_click)
 }
 
 fn sub_menu_button(sub_menu: SubMenu, show_sub_menu: Mutable<Option<SubMenu>>) -> impl Element {
@@ -252,7 +244,7 @@ fn dropdown<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: Mut
                 )
             )
         ))
-        .on_press(clone!((show_dropdown) move || { flip(&show_dropdown) }))
+        .on_click(clone!((show_dropdown) move || { flip(&show_dropdown) }))
     )
     .child_signal(
         show_dropdown.signal()
@@ -290,7 +282,7 @@ fn checkbox(checked: Mutable<bool>) -> Button {
     Button::new()
     .width(Val::Px(30.))
     .height(Val::Px(30.))
-    .on_press(clone!((checked) move || { flip(&checked) }))
+    .on_click(clone!((checked) move || { flip(&checked) }))
     .selected_signal(checked.signal())
 }
 
@@ -333,24 +325,121 @@ fn mutually_exclusive_options<T: Clone + PartialEq + Display + Send + Sync + 'st
     )
 }
 
-fn slider(value: Mutable<u32>) -> impl Element + Alignable {
-    El::<NodeBundle>::new()
+enum LeftRight {
+    Left,
+    Right,
+}
+
+fn centered_arrow_text(direction: LeftRight) -> El<TextBundle> {
+    El::<TextBundle>::new()
     .with_style(|style| {
-        style.width = Val::Px(300.);
-        style.height = Val::Px(10.);
+        style.bottom = Val::Px(2.);
+        style.right = Val::Px(2.);
     })
-    .background_color(BackgroundColor(Color::BLACK))
+    .align(Align::center()).text(text(match direction { LeftRight::Left => "<", LeftRight::Right => ">" }))
+}
+
+fn iterable_options<T: Clone + PartialEq + Display + Send + Sync + 'static>(selected: Mutable<T>, options: Vec<T>) -> impl Element + Alignable {
+    Row::<NodeBundle>::new()
+    .with_style(|style| style.column_gap = Val::Px(BASE_PADDING * 2.))
+    .item({
+        let pressed = Mutable::new(false);
+        Button::new()
+        .selected_signal(pressed.signal())
+        .pressed_sync(pressed)
+        .width(Val::Px(30.))
+        .height(Val::Px(30.))
+        .on_click(clone!((selected, options) move || {
+            if let Some(i) = options.iter().position(|option| option == &*selected.lock_ref()) {
+                selected.set_neq(options.iter().rev().cycle().skip(options.len() - i).next().unwrap().clone());
+            }
+        }))
+        .body_signal(always(centered_arrow_text(LeftRight::Left)))
+    })
+    .item(
+        El::<TextBundle>::new()
+        .text_signal(selected.signal_cloned().map(|selected| text(&selected.to_string())))
+    )
+    .item({
+        let pressed = Mutable::new(false);
+        Button::new()
+        .selected_signal(pressed.signal())
+        .pressed_sync(pressed)
+        .width(Val::Px(30.))
+        .height(Val::Px(30.))
+        .on_click(clone!((selected, options) move || {
+            if let Some(i) = options.iter().position(|option| option == &*selected.lock_ref()) {
+                selected.set_neq(options.iter().cycle().skip(i + 1).next().unwrap().clone());
+            }
+        }))
+        .body_signal(always(centered_arrow_text(LeftRight::Right)))
+    })
+}
+
+fn slider(value: Mutable<f32>) -> impl Element + Alignable {
+    let slider_width = 400.;
+    let slider_padding = 5.;
+    let handle_size = 30.;
+    let max = slider_width - slider_padding - handle_size - BASE_BORDER_WIDTH;
+    let left = Mutable::new(value.get() / 100. * max);
+    let value_setter = spawn(clone!((left, value) async move {
+        left.signal()
+        .for_each_sync(|left| {
+            value.set_neq(left / max * 100.);
+        })
+        .await;
+    }));
+    Row::<NodeBundle>::new()
+    .update_raw_el(|raw_el| raw_el.hold_tasks([value_setter]))
+    .with_style(|style| style.column_gap = Val::Px(10.))
+    .item(
+        El::<TextBundle>::new()
+        .text_signal(value.signal().map(|value| text(&format!("{:.1}", value))))
+    )
+    .item(
+        Stack::<NodeBundle>::new()
+        .with_style(move |style| {
+            style.width = Val::Px(slider_width);
+            style.height = Val::Px(5.);
+            style.padding = UiRect::horizontal(Val::Px(slider_padding));
+        })
+        .background_color(BackgroundColor(Color::BLACK))
+        .layer({
+            let dragging = Mutable::new(false);
+            let pressed = Mutable::new(false);
+            Button::new()
+            .selected_signal(signal::or(pressed.signal(), dragging.signal()))
+            .pressed_sync(pressed)
+            .width(Val::Px(handle_size))
+            .height(Val::Px(handle_size))
+            .update_el(move |el| {
+                el
+                .on_signal_with_style(left.signal(), |style, left| {
+                    style.left = Val::Px(left);
+                })
+                .align(Align::new().center_y())
+                .update_raw_el(|raw_el| {
+                    raw_el
+                    .insert((
+                        On::<Pointer<DragStart>>::run(clone!((dragging) move || dragging.set_neq(true))),
+                        On::<Pointer<DragEnd>>::run(move || dragging.set_neq(false)),
+                        On::<Pointer<Drag>>::run(move |drag: Listener<Pointer<Drag>>| {
+                            left.set_neq((left.get() + drag.delta.x).max(0.).min(max));
+                        }),
+                    ))
+                })
+            })
+        })
+    )
 }
 
 fn options(n: usize) -> Vec<String> {
     (1..=n).map(|i| format!("option {}", i)).collect()
 }
 
-fn menu_item(label: &str, body: impl Element + Alignable) -> Stack<ButtonBundle> {
+fn menu_item(label: &str, body: impl Element + Alignable) -> Stack<NodeBundle> {
     let hovered = Mutable::new(false);
-    Stack::<ButtonBundle>::new()
-    // TODO: need to migrate interactions to mod picking to capture child hovering
-    .on_hovered_change(clone!((hovered) move |is_hovered| hovered.set_neq(is_hovered)))
+    Stack::<NodeBundle>::new()
     .background_color_signal(
         hovered.signal()
         .map_bool(
@@ -359,6 +448,7 @@ fn menu_item(label: &str, body: impl Element + Alignable) -> Stack<ButtonBundle>
         )
         .map(BackgroundColor)
     )
+    .hovered_sync(hovered)
     .with_style(|style| {
         style.width = Val::Percent(100.);
         style.padding = UiRect::axes(Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.));
@@ -377,25 +467,13 @@ fn audio_menu() -> Column<NodeBundle> {
         )
         .z_index(ZIndex::Local(1))
     )
-    .item(
-        menu_item(
-            "item 2",
-            mutually_exclusive_options(MutableVec::new_with_values(options(3))),
-        )
-    )
-    .item(
-        menu_item(
-            "item 3",
-            checkbox(Mutable::new(false)).el,
-        )
-    )
-    .item(
-        menu_item(
-            "item 4",
-            slider(Mutable::new(0)),
-        )
-    )
-    // slider (migrate interations to mod picking)
+    .item(menu_item("item 2", mutually_exclusive_options(MutableVec::new_with_values(options(3)))))
+    .item(menu_item("item 3", checkbox(Mutable::new(false)).el))
+    .item(menu_item("item 4", iterable_options(Mutable::new("option 1".to_string()), options(4))))
+    .item(menu_item("master volume", slider(Mutable::new(100.))))
+    .item(menu_item("effect volume", slider(Mutable::new(50.))))
+    .item(menu_item("music volume", slider(Mutable::new(50.))))
+    .item(menu_item("voice volume", slider(Mutable::new(50.))))
     // iterate with left/right arrows
 }
 
@@ -458,12 +536,12 @@ fn graphics_menu() -> Column<NodeBundle> {
     )
 }
 
-fn x_button(mut on_press: impl FnMut() + 'static + Send + Sync) -> impl Element + RawElWrapper + Alignable {
+fn x_button(on_click: impl FnMut() + 'static + Send + Sync) -> impl Element + RawElWrapper + Alignable {
     let hovered = Mutable::new(false);
-    El::<ButtonBundle>::new()
+    El::<NodeBundle>::new()
     .background_color(BackgroundColor(Color::NONE))
-    .on_hovered_change(clone!((hovered) move |is_hovered| hovered.set_neq(is_hovered)))
-    .on_pressed_change(move |is_pressed| if is_pressed { on_press() })
+    .hovered_sync(hovered.clone())
+    .on_click(on_click)
     .child(
         El::<TextBundle>::new()
         .text(text("x"))
@@ -513,29 +591,7 @@ fn menu() -> impl Element {
                     SubMenu::Audio => audio_menu(),
                     SubMenu::Graphics => graphics_menu(),
                 };
-                // let align = Mutable::new(Some(Align::new().top().right()));
-                // let task = spawn(clone!((align) async move {
-                //     loop {
-                //         Timer::after(Duration::from_millis(1000)).await;
-                //         *align.lock_mut() = Some(Align::new().right().center_y());
-                //         Timer::after(Duration::from_millis(1000)).await;
-                //         *align.lock_mut() = Some(Align::new().bottom().right());
-                //         Timer::after(Duration::from_millis(1000)).await;
-                //         *align.lock_mut() = Some(Align::new().bottom().center_x());
-                //         Timer::after(Duration::from_millis(1000)).await;
-                //         *align.lock_mut() = Some(Align::new().bottom().left());
-                //         Timer::after(Duration::from_millis(1000)).await;
-                //         *align.lock_mut() = Some(Align::new().left().center_y());
-                //         Timer::after(Duration::from_millis(1000)).await;
-                //         *align.lock_mut() = Some(Align::new().top().left());
-                //         Timer::after(Duration::from_millis(1000)).await;
-                //         *align.lock_mut() = Some(Align::new().top().center_x());
-                //         Timer::after(Duration::from_millis(1000)).await;
-                //         *align.lock_mut() = Some(Align::new().top().right());
-                //     }
-                // }));
                 Stack::<NodeBundle>::new()
-                // .update_raw_el(|raw_el| raw_el.hold_tasks([task]))
                 .with_style(|style| {
                     style.width =  Val::Px(SUB_MENU_WIDTH);
                     style.height =  Val::Px(SUB_MENU_HEIGHT);
@@ -547,7 +603,6 @@ fn menu() -> impl Element {
                 .layer(
                     x_button(clone!((show_sub_menu) move || { show_sub_menu.take(); }))
                     .align(Align::new().top().right())
-                    // .align_signal(align.signal_cloned())
                     .update_raw_el(|raw_el| {
                         raw_el.with_component::<Style>(|style| {
                             style.padding = UiRect::new(Val::Px(0.), Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.), Val::Px(0.));

@@ -1,8 +1,9 @@
-use std::{future::Future, mem, collections::BTreeSet, convert::identity};
+use std::{future::Future, mem, collections::BTreeSet, convert::identity, sync::OnceLock};
 use bevy::{
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task}, ui::{FocusPolicy, widget::{TextFlags, UiImageSize}, ContentSize}, text::TextLayoutInfo,
 };
+pub use bevy_mod_picking::prelude::*;
 pub use futures_signals::{self, signal::{Mutable, Signal, SignalExt}, signal_vec::{SignalVec, SignalVecExt, VecDiff, MutableVec}};
 use bevy_async_ecs::*;
 pub use enclose::enclose as clone;
@@ -10,17 +11,21 @@ pub use futures_signals_ext::{self, MutableExt, BoxSignal};
 use paste::paste;
 
 
-// static ASYNC_WORLD: OnceLock<AsyncWorld> = OnceLock::new();
+static ASYNC_WORLD: OnceLock<AsyncWorld> = OnceLock::new();
 
-// fn async_world() -> &'static AsyncWorld {
-//     ASYNC_WORLD.get().expect("expected AsyncWorld to be initialized")
-// }
+pub fn async_world() -> &'static AsyncWorld {
+    ASYNC_WORLD.get().expect("expected ASYNC_WORLD to be initialized")
+}
+
+fn init_async_world(world: &mut World) {
+    ASYNC_WORLD.set(AsyncWorld::from_world(world)).expect("failed to initialize ASYNC_WORLD");
+}
 
 #[derive(Default)]
 pub struct NodeBuilder<NodeType> {
     raw_node: NodeType,
     on_spawns: Vec<Box<dyn FnOnce(&mut World, Entity) + Send>>,
-    task_wrappers: Vec<Box<dyn FnOnce(AsyncWorld, Entity) -> Task<()> + Send>>,
+    task_wrappers: Vec<Box<dyn FnOnce(Entity) -> Task<()> + Send>>,
     contiguous_child_block_populations: MutableVec<Option<usize>>,
 }
 
@@ -41,11 +46,9 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn on_signal<T, Fut: Future<Output = ()> + Send + 'static>(mut self, signal: impl Signal<Item = T> + Send + 'static, mut f: impl FnMut(AsyncWorld, Entity, T) -> Fut + Send + 'static) -> Self {
-        self.task_wrappers.push(Box::new(move |async_world: AsyncWorld, entity: Entity| {
-            spawn(signal.for_each(move |value| {
-                f(async_world.clone(), entity, value)
-            }))
+    pub fn on_signal<T, Fut: Future<Output = ()> + Send + 'static>(mut self, signal: impl Signal<Item = T> + Send + 'static, mut f: impl FnMut(Entity, T) -> Fut + Send + 'static) -> Self {
+        self.task_wrappers.push(Box::new(move |entity: Entity| {
+            spawn(signal.for_each(move |value| f(entity, value)))
         }));
         self
     }
@@ -56,12 +59,12 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self.contiguous_child_block_populations.lock_mut().push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
         let offset = offset(block, &contiguous_child_block_populations);
-        let task_wrapper = move |async_world: AsyncWorld, entity: Entity| {
-            spawn(clone!((async_world, entity => parent) async move {
+        let task_wrapper = move |entity: Entity| {
+            spawn(clone!((entity => parent) async move {
                 if block > 0 {
                     wait_until_child_block_inserted(block - 1, &contiguous_child_block_populations).await;
                 }
-                async_world.apply(move |world: &mut World| {
+                async_world().apply(move |world: &mut World| {
                     let child_entity = child.spawn(world);
                     if let Some(mut parent) = world.get_entity_mut(parent) {
                         parent.insert_children(offset.get(), &[child_entity]);
@@ -82,17 +85,17 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
-        let task_wrapper = move |async_world: AsyncWorld, entity: Entity| {
+        let task_wrapper = move |entity: Entity| {
             let offset = offset(block, &contiguous_child_block_populations);
             let existing_child_option = Mutable::new(None);
-            spawn(clone!((async_world, entity => parent) async move {
+            spawn(clone!((entity => parent) async move {
                 if block > 0 {
                     wait_until_child_block_inserted(block - 1, &contiguous_child_block_populations).await;
                 }
                 child_option.for_each(move |child_option| {
-                    clone!((async_world, existing_child_option, offset, contiguous_child_block_populations) async move {
+                    clone!((existing_child_option, offset, contiguous_child_block_populations) async move {
                         if let Some(child) = child_option.into() {
-                            async_world.apply(move |world: &mut World| {
+                            async_world().apply(move |world: &mut World| {
                                 if let Some(existing_child) = existing_child_option.take() {
                                     if let Some(entity) = world.get_entity_mut(existing_child) {
                                         entity.despawn_recursive();  // removes from parent
@@ -110,7 +113,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                                 contiguous_child_block_populations.lock_mut().set(block, Some(1));
                             }).await;
                         } else {
-                            async_world.apply(move |world: &mut World| {
+                            async_world().apply(move |world: &mut World| {
                                 if let Some(existing_child) = existing_child_option.take() {
                                     if let Some(entity) = world.get_entity_mut(existing_child) {
                                         entity.despawn_recursive();
@@ -133,12 +136,12 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self.contiguous_child_block_populations.lock_mut().push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
         let offset = offset(block, &contiguous_child_block_populations);
-        let task_wrapper = move |async_world: AsyncWorld, entity: Entity| {
-            spawn(clone!((async_world, entity => parent) async move {
+        let task_wrapper = move |entity: Entity| {
+            spawn(clone!((entity => parent) async move {
                 if block > 0 {
                     wait_until_child_block_inserted(block - 1, &contiguous_child_block_populations).await;
                 }
-                async_world.apply(move |world: &mut World| {
+                async_world().apply(move |world: &mut World| {
                     let mut children_entities = vec![];
                     for child in children {
                         children_entities.push(child.spawn(world));
@@ -166,16 +169,16 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self.contiguous_child_block_populations.lock_mut().push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
         let offset = offset(block, &contiguous_child_block_populations);
-        let task_wrapper = move |async_world: AsyncWorld, entity: Entity| {
-            spawn(clone!((async_world, entity => parent) {
+        let task_wrapper = move |entity: Entity| {
+            spawn(clone!((entity => parent) {
                 let children_entities = MutableVec::default();
                 children_signal_vec
-                .for_each(clone!((async_world, parent, children_entities, offset, contiguous_child_block_populations) move |diff| {
-                    clone!((async_world, parent, children_entities, offset, contiguous_child_block_populations) async move {
+                .for_each(clone!((parent, children_entities, offset, contiguous_child_block_populations) move |diff| {
+                    clone!((parent, children_entities, offset, contiguous_child_block_populations) async move {
                         // TODO: unit tests for every branch
                         match diff {
                             VecDiff::Replace { values: nodes } => {
-                                async_world.apply(move |world: &mut World| {
+                                async_world().apply(move |world: &mut World| {
                                     let mut children_lock = children_entities.lock_mut();
                                     let old_children = children_lock.drain(..).collect::<Vec<_>>();
                                     for node in nodes {
@@ -200,7 +203,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                                 .await;
                             }
                             VecDiff::InsertAt { index, value: node } => {
-                                async_world.apply(move |world: &mut World| {
+                                async_world().apply(move |world: &mut World| {
                                     let child_entity = node.spawn(world);
                                     if let Some(mut parent) = world.get_entity_mut(parent) {
                                         parent.insert_children(offset.get() + index, &[child_entity]);
@@ -216,7 +219,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                                 .await;
                             }
                             VecDiff::Push { value: node } => {
-                                async_world.apply(move |world: &mut World| {
+                                async_world().apply(move |world: &mut World| {
                                     let child_entity = node.spawn(world);
                                     if let Some(mut parent) = world.get_entity_mut(parent) {
                                         let mut children_lock = children_entities.lock_mut();
@@ -232,7 +235,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                                 .await;
                             }
                             VecDiff::UpdateAt { index, value: node } => {
-                                async_world.apply(move |world: &mut World| {
+                                async_world().apply(move |world: &mut World| {
                                     if let Some(existing_child) = children_entities.lock_ref().get(index).copied() {
                                         if let Some(child) = world.get_entity_mut(existing_child) {
                                             child.despawn_recursive();  // removes from parent
@@ -251,7 +254,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                                 .await;
                             }
                             VecDiff::Move { old_index, new_index } => {
-                                async_world.apply(move |world: &mut World| {
+                                async_world().apply(move |world: &mut World| {
                                     let mut children_lock = children_entities.lock_mut();
                                     children_lock.swap(old_index, new_index);
                                     // porting the swap implementation above
@@ -280,7 +283,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                                 .await;
                             }
                             VecDiff::RemoveAt { index } => {
-                                async_world.apply(move |world: &mut World| {
+                                async_world().apply(move |world: &mut World| {
                                     let mut children_lock = children_entities.lock_mut();
                                     if let Some(existing_child) = children_lock.get(index).copied() {
                                         if let Some(child) = world.get_entity_mut(existing_child) {
@@ -293,7 +296,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                                 .await;
                             }
                             VecDiff::Pop {} => {
-                                async_world.apply(move |world: &mut World| {
+                                async_world().apply(move |world: &mut World| {
                                     let mut children_lock = children_entities.lock_mut();
                                     if let Some(child_entity) = children_lock.pop() {
                                         if let Some(child) = world.get_entity_mut(child_entity) {
@@ -305,7 +308,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                                 .await;
                             }
                             VecDiff::Clear {} => {
-                                async_world.apply(move |world: &mut World| {
+                                async_world().apply(move |world: &mut World| {
                                     let mut children_lock = children_entities.lock_mut();
                                     for child_entity in children_lock.drain(..) {
                                         if let Some(child) = world.get_entity_mut(child_entity) {
@@ -327,15 +330,22 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
 
     pub fn spawn(self, world: &mut World) -> Entity {
         // include task holder so tasks can be added on spawn
-        let id = world.spawn((self.raw_node, TaskHolder::new())).id();
+        let id = {
+            world.spawn((
+                self.raw_node,
+                TaskHolder::new(),
+                Pickable::IGNORE,
+            ))
+            // .remove::<PickableBundle>()
+            .id()
+        };
         for on_spawn in self.on_spawns {
             on_spawn(world, id);
         }
         if !self.task_wrappers.is_empty() {
             let mut tasks = vec![];
-            let async_world = AsyncWorld::from_world(world);
             for task_wrapper in self.task_wrappers {
-                tasks.push(task_wrapper(async_world.clone(), id));
+                tasks.push(task_wrapper(id));
             }
             if let Some(mut entity) = world.get_entity_mut(id) {
                 if let Some(mut task_holder) = entity.get_mut::<TaskHolder>() {
@@ -435,7 +445,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn)))
     }
 
-    pub fn on_signal<T, Fut: Future<Output = ()> + Send + 'static>(self, signal: impl Signal<Item = T> + Send + 'static, f: impl FnMut(AsyncWorld, Entity, T) -> Fut + Send + 'static) -> Self {
+    pub fn on_signal<T, Fut: Future<Output = ()> + Send + 'static>(self, signal: impl Signal<Item = T> + Send + 'static, f: impl FnMut(Entity, T) -> Fut + Send + 'static) -> Self {
         self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.on_signal(signal, f)))
     }
 
@@ -474,9 +484,9 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         signal: impl Signal<Item = T> + 'static + Send,
         f: impl FnMut(&mut EntityWorldMut, T) + Clone + Send + 'static,
     ) -> Self {
-        self.on_signal(signal, move |async_world, entity, value| {
+        self.on_signal(signal, move |entity, value| {
             clone!((mut f) async move {
-                async_world.apply(move |world: &mut World| {
+                async_world().apply(move |world: &mut World| {
                     if let Some(mut entity) = world.get_entity_mut(entity) {
                         f(&mut entity, value);
                     }
@@ -802,21 +812,59 @@ impl<NodeType: Bundle> RawElWrapper for Stack<NodeType> {
     }
 }
 
-pub trait MouseInteractionAware: RawElWrapper {
-    fn on_hovered_change(self, handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
-        self.update_raw_el(|raw_el| raw_el.insert(Hoverable(Box::new(handler))))
-    }
-
-    fn on_pressed_change(self, handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
-        self.update_raw_el(|raw_el| raw_el.insert(Pressable(Box::new(handler))))
+fn pressable_system(
+    mut interaction_query: Query<(&PickingInteraction, &mut Pressable), Changed<PickingInteraction>>  // TODO: does Changed actually do anything here ?
+) {
+    for (interaction, mut pressable) in &mut interaction_query {
+        pressable.0(matches!(interaction, PickingInteraction::Pressed));
     }
 }
 
-impl MouseInteractionAware for RawHaalkaEl<ButtonBundle> {}
-impl MouseInteractionAware for El<ButtonBundle> {}
-impl MouseInteractionAware for Column<ButtonBundle> {}
-impl MouseInteractionAware for Row<ButtonBundle> {}
-impl MouseInteractionAware for Stack<ButtonBundle> {}
+pub trait MouseInteractionAware: RawElWrapper {
+    fn on_hovered_change(self, mut handler: impl FnMut(bool) + Clone + Send + Sync + 'static) -> Self {
+        self.update_raw_el(|raw_el| {
+            raw_el
+            .insert((
+                Pickable::default(),
+                On::<Pointer<Over>>::run(clone!((mut handler) move || handler(true))),
+                On::<Pointer<Out>>::run(move || handler(false)),
+            ))
+        })
+    }
+
+    fn on_click(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
+        self.update_raw_el(|raw_el| {
+            raw_el.insert((
+                Pickable::default(),
+                On::<Pointer<Click>>::run(handler),
+            ))
+        })
+    }
+
+    fn on_pressed_change(self, mut handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
+        self.update_raw_el(|raw_el| {
+            raw_el
+            .insert((
+                Pickable::default(),
+                Pressable(Box::new(move |pressed| handler(pressed))),
+            ))
+        })
+    }
+
+    fn on_pressing(self, mut handler: impl FnMut() + Clone + Send + Sync + 'static) -> Self {
+        self.on_pressed_change(move |is_pressed| if is_pressed { handler() })
+    }
+
+    fn hovered_sync(self, hovered: Mutable<bool>) -> Self {
+        self.on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
+    }
+
+    fn pressed_sync(self, pressed: Mutable<bool>) -> Self {
+        self.on_pressed_change(move |is_pressed| pressed.set_neq(is_pressed))
+    }
+}
+
+impl<REW: RawElWrapper> MouseInteractionAware for REW {}
 
 pub trait Spawnable: RawElWrapper {
     fn spawn(self, world: &mut World) -> Entity {
@@ -1620,29 +1668,15 @@ async fn wait_until_child_block_inserted(block: usize, contiguous_child_block_po
     .wait_for(true).await;
 }
 
-fn hoverable_system(
-    mut interaction_query: Query<(&Interaction, &mut Hoverable), Changed<Interaction>>
-) {
-    for (interaction, mut hoverable) in &mut interaction_query {
-        hoverable.0(matches!(interaction, Interaction::Hovered));
-    }
-}
-
-fn pressable_system(
-    mut interaction_query: Query<(&Interaction, &mut Pressable), Changed<Interaction>>
-) {
-    for (interaction, mut pressable) in &mut interaction_query {
-        pressable.0(matches!(interaction, Interaction::Pressed));
-    }
-}
-
 pub struct HaalkaPlugin;
 
 impl Plugin for HaalkaPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_plugins(AsyncEcsPlugin)
-        .add_systems(Update, (hoverable_system, pressable_system));
+        .add_plugins((AsyncEcsPlugin, DefaultPickingPlugins.build()))
+        .add_systems(PreStartup, init_async_world)
+        .add_systems(Update, pressable_system)
+        ;
     }
 }
 
@@ -1673,15 +1707,4 @@ impl Plugin for HaalkaPlugin {
 //             mutable_holder.mutable_bool.set_neq(mutable_event.0);
 //         }
 //     }
-// }
-
-// fn init_async_world(world: &mut World) {
-//     ASYNC_WORLD.set(AsyncWorld::from_world(world)).unwrap();
-//     AsyncComputeTaskPool::get_or_init(|| {
-//         let task_pool = TaskPool::default();
-//         task_pool.with_local_executor(|_| {
-//             ASYNC_WORLD.set(AsyncWorld::from_world(world)).unwrap();
-//         });
-//         task_pool
-//     });
 // }

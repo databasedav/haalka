@@ -26,67 +26,48 @@ fn button(font: Handle<Font>) -> impl Element {
     let border_color_signal = {
         pressed_hovered_broadcaster.signal()
         .map(|(pressed, hovered)| {
-            if pressed {
-                Color::RED
-            } else if hovered {
-                Color::WHITE
-            } else {
-                Color::BLACK
-            }
+            if pressed { Color::RED } else if hovered { Color::WHITE } else { Color::BLACK }
         })
         .map(BorderColor)
     };
     let background_color_signal = {
         pressed_hovered_broadcaster.signal()
         .map(|(pressed, hovered)| {
-            if pressed {
-                PRESSED_BUTTON
-            } else if hovered {
-                HOVERED_BUTTON
-            } else {
-                NORMAL_BUTTON
-            }
+            if pressed { PRESSED_BUTTON } else if hovered { HOVERED_BUTTON } else { NORMAL_BUTTON }
         })
         .map(BackgroundColor)
     };
-    El::<ButtonBundle>::new()
+    El::<NodeBundle>::new()
     .with_style(|style| {
         style.width = Val::Px(150.0);
         style.height = Val::Px(65.);
         style.border = UiRect::all(Val::Px(5.0));
     })
     .align_content(Align::center())
-    .on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
-    .on_pressed_change(move |is_pressed| pressed.set_neq(is_pressed))
     .border_color_signal(border_color_signal)
     .background_color_signal(background_color_signal)
-    .child({
-        let text_signal = {
+    .hovered_sync(hovered)
+    .pressed_sync(pressed)
+    .child(
+        El::<TextBundle>::new()
+        .text_signal(
             pressed_hovered_broadcaster.signal()
             .map(|(pressed, hovered)| {
-                if pressed {
-                    "Press"
-                } else if hovered {
-                    "Hover"
-                } else {
-                    "Button"
-                }
-                .to_string()
+                if pressed { "Press" } else if hovered { "Hover" } else { "Button" }
             })
             .map(move |string| {
-                let text_style = {
+                Text::from_section(
+                    string,
                     TextStyle {
                         font: font.clone(),
                         font_size: 40.0,
                         color: Color::rgb(0.9, 0.9, 0.9),
                         ..default()
                     }
-                };
-                Text::from_section(string, text_style)
+                )
             })
-        };
-        El::<TextBundle>::new().text_signal(text_signal)
-    })
+        )
+    )
 }
 
 fn setup(mut commands: Commands) {

@@ -1,6 +1,6 @@
 use std::{ops::{Neg, AddAssign}, time::Duration};
 
-use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
+use bevy::{prelude::*, sprite::MaterialMesh2dBundle, utils::hashbrown::raw};
 use haalka::*;
 use futures_signals::signal::{Mutable, SignalExt};
 use futures_signals_ext::*;
@@ -11,7 +11,7 @@ fn main() {
     App::new()
     .add_plugins((DefaultPlugins, HaalkaPlugin, EntropyPlugin::<ChaCha8Rng>::default()))
     .add_systems(Startup, (ui_root, setup))
-    .add_systems(Update, (sync_timer, spawn_dot, despawn_dots, count_dots))
+    .add_systems(Update, (sync_timer, dot_spawner, dot_despawner, count_dots))
     .run();
 }
 
@@ -57,7 +57,7 @@ fn labeled_element(label: impl IntoElement, element: impl Element) -> impl Eleme
     Row::<NodeBundle>::new()
     .with_style(|style| style.column_gap = Val::Px(10.))
     .item(label)
-    .item(element.into_element())
+    .item(element)
 }
 
 fn labeled_count(label: impl IntoElement, count_signal: impl Signal<Item = u32> + Send + 'static) -> impl Element {
@@ -112,28 +112,27 @@ fn category_count(category: ColorCategory, count: impl Signal<Item = u32> + Send
 }
 
 // like serde
-fn incrde_button<T: AddAssign + Neg + Copy + Default + PartialOrd + Send + Sync + 'static>(value: Mutable<T>, incr: T) -> impl Element {
+fn incrde_button(value: Mutable<f32>, incr: f32) -> impl Element {
     let hovered = Mutable::new(false);
-    let pressed = Mutable::new(false);
-    El::<ButtonBundle>::new()
+    El::<NodeBundle>::new()
     .with_style(|style| style.width = Val::Px(45.0))
     .align_content(Align::center())
     .background_color_signal(
-        signal::or(hovered.signal(), pressed.signal()).dedupe()
+        hovered.signal()
         .map_bool(
             || Color::hsl(300., 0.75, 0.85),
             || Color::hsl(300., 0.75, 0.75),
         )
         .map(BackgroundColor)
     )
-    .on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
-    .on_pressed_change(move |is_pressed| {
-        if is_pressed { *value.lock_mut() += incr }
-        pressed.set_neq(is_pressed);
+    .hovered_sync(hovered)
+    .on_pressing(move || {
+        let new = (*value.lock_ref() + incr).max(0.);
+        *value.lock_mut() = new;
     })
     .child(
         El::<TextBundle>::new()
-        .text(text(if incr >= T::default() { "+" } else { "-" }))
+        .text(text(if incr.is_sign_positive() { "+" } else { "-" }))
     )
 }
 
@@ -164,11 +163,16 @@ impl MutableTimer {
 
     fn sync(&mut self) {
         let rate = self.rate.get();
-        let new = 1. / rate;
-        let cur = self.timer.duration().as_secs_f32();
-        if !close(new, cur) {
-            println!("rate changed from {:.1} to {:.1}", 1. / cur, rate);
-            self.timer.set_duration(Duration::from_secs_f32(new));
+        if rate > 0. {
+            self.timer.unpause();
+            let new = 1. / rate;
+            let cur = self.timer.duration().as_secs_f32();
+            if !close(new, cur) {
+                println!("rate changed from {:.1} to {:.1}", 1. / cur, rate);
+                self.timer.set_duration(Duration::from_secs_f32(new));
+            }
+        } else {
+            self.timer.pause();
         }
     }
 }
@@ -187,9 +191,12 @@ struct Counts {
     yellow: Mutable<u32>,
 }
 
+const STARTING_SPAWN_RATE: f32 = 1.5;
+const STARTING_DESPAWN_RATE: f32 = 1.;
+
 fn ui_root(world: &mut World) {
-    let spawn_rate = Mutable::new(1.5);
-    let despawn_rate = Mutable::new(1.);
+    let spawn_rate = Mutable::new(STARTING_SPAWN_RATE);
+    let despawn_rate = Mutable::new(STARTING_DESPAWN_RATE);
     let blue_count = Mutable::new(0);
     let green_count = Mutable::new(0);
     let red_count = Mutable::new(0);
@@ -217,7 +224,7 @@ fn ui_root(world: &mut World) {
                 style.width = Val::Px(HEIGHT);
                 style.height = Val::Px(HEIGHT);
             })
-            // can't put non ui nodes on top of ui nodes
+            // can't put non ui nodes on top of ui nodes; yes u can https://discord.com/channels/691052431525675048/743663673393938453/1192729978744352858
             // Column::<NodeBundle>::new()
             // .with_z_index(|z_index| *z_index = ZIndex::Global(1))
             // .item(Row::<NodeBundle>::new().item(box_(Category::A)).item(box_(Category::B)))
@@ -247,6 +254,7 @@ fn ui_root(world: &mut World) {
                             counts.signal_vec_cloned()
                             .map_signal(|count| count.signal())
                             .to_signal_map(|counts| counts.iter().sum())
+                            .dedupe()
                         }
                     )
                 )
@@ -323,7 +331,17 @@ fn sync_timer(mut spawner: ResMut<Spawner>, mut despawner: ResMut<Despawner>) {
 #[derive(Component)]
 struct Dot;
 
-fn spawn_dot(
+// TODO: use global async world on click to send such events
+#[derive(Event)]
+struct SpawnDot;
+
+#[derive(Event)]
+struct DepawnDot;
+
+fn spawn_dot() {}
+fn despawn_dot() {}
+
+fn dot_spawner(
     mut commands: Commands,
     mut spawner: ResMut<Spawner>,
     time: Res<Time>,
@@ -340,13 +358,12 @@ fn spawn_dot(
                 ..default()
             },
             Dot,
-            ZIndex::Global(2),
         ));
         spawner.0.timer.reset();
     }
 }
 
-fn despawn_dots(mut commands: Commands, mut despawner: ResMut<Despawner>, time: Res<Time>, dots: Query<Entity, &Dot>, mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>,) {
+fn dot_despawner(mut commands: Commands, mut despawner: ResMut<Despawner>, time: Res<Time>, dots: Query<Entity, &Dot>, mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>,) {
     if despawner.0.timer.tick(time.delta()).finished() {
         if let Some(dot) = dots.iter().choose(rng.as_mut()) {
             commands.entity(dot).despawn_recursive();

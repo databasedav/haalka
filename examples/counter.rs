@@ -45,23 +45,19 @@ fn ui_root(world: &mut World) {
 
 fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element {
     let hovered = Mutable::new(false);
-    let pressed = Mutable::new(false);
-    El::<ButtonBundle>::new()
+    El::<NodeBundle>::new()
     .with_style(|style| style.width = Val::Px(45.0))
     .align_content(Align::center())
     .background_color_signal(
-        signal::or(hovered.signal(), pressed.signal()).dedupe()
+        hovered.signal()
         .map_bool(
             || Color::hsl(300., 0.75, 0.85),
             || Color::hsl(300., 0.75, 0.75),
         )
         .map(BackgroundColor)
     )
-    .on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
-    .on_pressed_change(move |is_pressed| {
-        if is_pressed { *counter.lock_mut() += step }
-        pressed.set_neq(is_pressed);
-    })
+    .hovered_sync(hovered)
+    .on_click(move || *counter.lock_mut() += step)
     .child(
         El::<TextBundle>::new()
         .text(Text::from_section(label, TextStyle { font_size: 30.0, ..default() }))
