@@ -1,15 +1,17 @@
-use std::{future::Future, mem, collections::BTreeSet, convert::identity, sync::OnceLock};
+use std::{future::Future, mem, collections::BTreeSet, convert::identity, sync::OnceLock, time::Duration};
 use bevy::{
     prelude::*,
-    tasks::{AsyncComputeTaskPool, Task}, ui::{FocusPolicy, widget::{TextFlags, UiImageSize}, ContentSize}, text::TextLayoutInfo,
+    tasks::{AsyncComputeTaskPool, Task}, ui::{FocusPolicy, widget::{TextFlags, UiImageSize}, ContentSize}, text::TextLayoutInfo, app::PluginGroupBuilder,
 };
+use bevy_eventlistener::{event_dispatcher::EventDispatcher, EventListenerSet};
+use bevy_mod_picking::picking_core::PickSet;
 pub use bevy_mod_picking::prelude::*;
 pub use futures_signals::{self, signal::{Mutable, Signal, SignalExt}, signal_vec::{SignalVec, SignalVecExt, VecDiff, MutableVec}};
 use bevy_async_ecs::*;
 pub use enclose::enclose as clone;
 pub use futures_signals_ext::{self, MutableExt, BoxSignal};
 use paste::paste;
-
+use async_io::Timer;
 
 static ASYNC_WORLD: OnceLock<AsyncWorld> = OnceLock::new();
 
@@ -329,14 +331,12 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
     }
 
     pub fn spawn(self, world: &mut World) -> Entity {
-        // include task holder so tasks can be added on spawn
         let id = {
             world.spawn((
                 self.raw_node,
-                TaskHolder::new(),
+                TaskHolder::new(),  // include so tasks can be added on spawn
                 Pickable::IGNORE,
             ))
-            // .remove::<PickableBundle>()
             .id()
         };
         for on_spawn in self.on_spawns {
@@ -820,6 +820,10 @@ fn pressable_system(
     }
 }
 
+async fn sleep(duration: Duration) {
+    Timer::after(duration).await;
+}
+
 pub trait MouseInteractionAware: RawElWrapper {
     fn on_hovered_change(self, mut handler: impl FnMut(bool) + Clone + Send + Sync + 'static) -> Self {
         self.update_raw_el(|raw_el| {
@@ -846,13 +850,43 @@ pub trait MouseInteractionAware: RawElWrapper {
             raw_el
             .insert((
                 Pickable::default(),
-                Pressable(Box::new(move |pressed| handler(pressed))),
+                Pressable(Box::new(move |is_pressed| handler(is_pressed))),
             ))
         })
     }
 
     fn on_pressing(self, mut handler: impl FnMut() + Clone + Send + Sync + 'static) -> Self {
         self.on_pressed_change(move |is_pressed| if is_pressed { handler() })
+    }
+
+    fn on_pressing_blockable(self, mut handler: impl FnMut() + Clone + Send + Sync + 'static, blocked: Mutable<bool>) -> Self {
+        // TODO: should instead track pickability and just add/remove the Pressable on blocked change to minimize spurious handler calls
+        self.on_pressed_change(move |is_pressed| if is_pressed && !blocked.get() { handler() })
+    }
+
+    fn on_pressing_throttled(self, mut handler: impl FnMut() + Clone + Send + Sync + 'static, duration: Duration) -> Self {
+        let blocked = Mutable::new(false);
+        let throttler = spawn(clone!((blocked) async move {
+            blocked.signal()
+            .for_each(move |b| {
+                clone!((blocked) async move {
+                    if b {
+                        sleep(duration).await;
+                        blocked.set_neq(false);
+                    }
+                })
+            })
+            .await;
+        }));
+        self
+        .update_raw_el(|raw_el| raw_el.hold_tasks([throttler]))
+        .on_pressing_blockable(
+            clone!((blocked) move || {
+                handler();
+                blocked.set_neq(true);
+            }),
+            blocked
+        )
     }
 
     fn hovered_sync(self, hovered: Mutable<bool>) -> Self {
@@ -1619,9 +1653,6 @@ impl_node_methods! {
 }
 
 #[derive(Component)]
-struct Hoverable(Box<dyn FnMut(bool) + Send + Sync + 'static>);
-
-#[derive(Component)]
 struct Pressable(Box<dyn FnMut(bool) + Send + Sync + 'static>);
 
 #[derive(Component)]
@@ -1656,7 +1687,7 @@ fn offset(i: usize, contiguous_child_block_populations: &MutableVec<Option<usize
             async {}
         }))
     };
-    spawn(updater).detach();  // future dropped when all node tasks are  // TODO: confirm
+    spawn(updater).detach();  // future dropped when node is  // TODO: confirm
     offset
 }
 
@@ -1665,7 +1696,110 @@ async fn wait_until_child_block_inserted(block: usize, contiguous_child_block_po
     .to_signal_map(|contiguous_child_block_populations| {
         contiguous_child_block_populations.get(block).copied().flatten().is_some()
     })
-    .wait_for(true).await;
+    .wait_for(true)
+    .await;
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
+struct PointerOverSet;
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
+struct PointerOutSet;
+
+struct PointerOverPlugin;
+impl Plugin for PointerOverPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_event::<Pointer<Over>>()
+            .insert_resource(EventDispatcher::<Pointer<Over>>::default())
+            .add_systems(
+                PreUpdate,
+                (
+                    EventDispatcher::<Pointer<Over>>::build,
+                    EventDispatcher::<Pointer<Over>>::bubble_events,
+                    EventDispatcher::<Pointer<Over>>::cleanup,
+                )
+                    .chain()
+                    .run_if(on_event::<Pointer<Over>>())
+                    .in_set(EventListenerSet)
+                    .in_set(PointerOverSet)
+            );
+    }
+}
+
+struct PointerOutPlugin;
+impl Plugin for PointerOutPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_event::<Pointer<Out>>()
+            .insert_resource(EventDispatcher::<Pointer<Out>>::default())
+            .add_systems(
+                PreUpdate,
+                (
+                    EventDispatcher::<Pointer<Out>>::build,
+                    EventDispatcher::<Pointer<Out>>::bubble_events,
+                    EventDispatcher::<Pointer<Out>>::cleanup,
+                )
+                    .chain()
+                    .run_if(on_event::<Pointer<Out>>())
+                    .in_set(EventListenerSet)
+                    .in_set(PointerOutSet)
+            );
+    }
+}
+
+struct RiggedInteractionPlugin;
+impl Plugin for RiggedInteractionPlugin {
+    fn build(&self, app: &mut App) {
+        use events::*;
+        use focus::{update_focus, update_interactions};
+
+        app.init_resource::<focus::HoverMap>()
+            .init_resource::<focus::PreviousHoverMap>()
+            .init_resource::<DragMap>()
+            .add_event::<PointerCancel>()
+            .add_systems(
+                PreUpdate,
+                (
+                    update_focus,
+                    pointer_events,
+                    update_interactions,
+                    send_click_and_drag_events,
+                    send_drag_over_events,
+                )
+                    .chain()
+                    .in_set(PickSet::Focus),
+            )
+            .configure_sets(PreUpdate, (PointerOutSet, PointerOverSet).chain())
+            .add_plugins((
+                PointerOverPlugin,
+                PointerOutPlugin,
+                EventListenerPlugin::<Pointer<Down>>::default(),
+                EventListenerPlugin::<Pointer<Up>>::default(),
+                EventListenerPlugin::<Pointer<Click>>::default(),
+                EventListenerPlugin::<Pointer<Move>>::default(),
+                EventListenerPlugin::<Pointer<DragStart>>::default(),
+                EventListenerPlugin::<Pointer<Drag>>::default(),
+                EventListenerPlugin::<Pointer<DragEnd>>::default(),
+                EventListenerPlugin::<Pointer<DragEnter>>::default(),
+                EventListenerPlugin::<Pointer<DragOver>>::default(),
+                EventListenerPlugin::<Pointer<DragLeave>>::default(),
+                EventListenerPlugin::<Pointer<Drop>>::default(),
+            ));
+    }
+}
+
+struct RiggedPickingPlugin;
+impl PluginGroup for RiggedPickingPlugin {
+    fn build(self) -> PluginGroupBuilder {
+        let mut builder = PluginGroupBuilder::start::<Self>();
+
+        builder = builder
+            .add(picking_core::CorePlugin)
+            .add(RiggedInteractionPlugin)
+            .add(input::InputPlugin)
+            .add(BevyUiBackend);
+
+        builder
+    }
 }
 
 pub struct HaalkaPlugin;
@@ -1673,7 +1807,7 @@ pub struct HaalkaPlugin;
 impl Plugin for HaalkaPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_plugins((AsyncEcsPlugin, DefaultPickingPlugins.build()))
+        .add_plugins((AsyncEcsPlugin, RiggedPickingPlugin.build()))
         .add_systems(PreStartup, init_async_world)
         .add_systems(Update, pressable_system)
         ;

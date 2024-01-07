@@ -53,14 +53,14 @@ fn text(string: &str) -> Text {
     )
 }
 
-fn labeled_element(label: impl IntoElement, element: impl Element) -> impl Element {
+fn labeled_element(label: impl Element, element: impl Element) -> impl Element {
     Row::<NodeBundle>::new()
     .with_style(|style| style.column_gap = Val::Px(10.))
     .item(label)
     .item(element)
 }
 
-fn labeled_count(label: impl IntoElement, count_signal: impl Signal<Item = u32> + Send + 'static) -> impl Element {
+fn labeled_count(label: impl Element, count_signal: impl Signal<Item = u32> + Send + 'static) -> impl Element {
     labeled_element(
         label,
         {
@@ -114,6 +114,10 @@ fn category_count(category: ColorCategory, count: impl Signal<Item = u32> + Send
 // like serde
 fn incrde_button(value: Mutable<f32>, incr: f32) -> impl Element {
     let hovered = Mutable::new(false);
+    let f = move || {
+        let new = (*value.lock_ref() + incr).max(0.);
+        *value.lock_mut() = new;
+    };
     El::<NodeBundle>::new()
     .with_style(|style| style.width = Val::Px(45.0))
     .align_content(Align::center())
@@ -126,10 +130,9 @@ fn incrde_button(value: Mutable<f32>, incr: f32) -> impl Element {
         .map(BackgroundColor)
     )
     .hovered_sync(hovered)
-    .on_pressing(move || {
-        let new = (*value.lock_ref() + incr).max(0.);
-        *value.lock_mut() = new;
-    })
+    .on_pressing(f)
+    // or limit the speed of increments
+    // .on_pressing_throttled(f, Duration::from_millis(100))
     .child(
         El::<TextBundle>::new()
         .text(text(if incr.is_sign_positive() { "+" } else { "-" }))
@@ -168,8 +171,8 @@ impl MutableTimer {
             let new = 1. / rate;
             let cur = self.timer.duration().as_secs_f32();
             if !close(new, cur) {
-                println!("rate changed from {:.1} to {:.1}", 1. / cur, rate);
                 self.timer.set_duration(Duration::from_secs_f32(new));
+                println!("rate changed from {:.1} to {:.1}", 1. / cur, rate);
             }
         } else {
             self.timer.pause();

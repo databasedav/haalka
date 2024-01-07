@@ -6,13 +6,12 @@
 //     Mouse: Separate styles for hover and press.
 //     Keyboard/Controller: Separate styles for currently focused element.
 
-use std::{fmt::Display, time::Duration};
+use std::fmt::Display;
 
 use bevy::prelude::*;
 use haalka::*;
 use futures_signals::map_ref;
 use futures_signals_ext::*;
-use async_io::Timer;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 fn main() {
@@ -474,7 +473,6 @@ fn audio_menu() -> Column<NodeBundle> {
     .item(menu_item("effect volume", slider(Mutable::new(50.))))
     .item(menu_item("music volume", slider(Mutable::new(50.))))
     .item(menu_item("voice volume", slider(Mutable::new(50.))))
-    // iterate with left/right arrows
 }
 
 fn graphics_menu() -> Column<NodeBundle> {
@@ -541,7 +539,7 @@ fn x_button(on_click: impl FnMut() + 'static + Send + Sync) -> impl Element + Ra
     El::<NodeBundle>::new()
     .background_color(BackgroundColor(Color::NONE))
     .hovered_sync(hovered.clone())
-    .on_click(on_click)
+    .on_click(on_click)  // TODO: stop propagation here so e.g. clearing dropdown button doesn't show drodown
     .child(
         El::<TextBundle>::new()
         .text(text("x"))
