@@ -575,6 +575,38 @@ pub trait RawElWrapper: Sized {
     }
 }
 
+pub trait ElementWrapper: Sized {
+    type EL: RawElWrapper + ChildAlignable;
+    fn element_mut(&mut self) -> &mut Self::EL;
+}
+
+impl<EW: ElementWrapper> RawElWrapper for EW {
+    type NodeType = <<EW as ElementWrapper>::EL as RawElWrapper>::NodeType;
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<Self::NodeType> {
+        self.element_mut().raw_el_mut()
+    }
+}
+
+impl<EW: ElementWrapper> Alignable for EW {
+    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
+        self.element_mut().align_mut()
+    }
+
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        EW::EL::apply_content_alignment(style, alignment, action);
+    }
+}
+
+impl<EW: ElementWrapper + Alignable + 'static> ChildAlignable for EW {
+    fn update_style(style: &mut Style) {
+        EW::EL::update_style(style);
+    }
+
+    fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove) {
+        EW::EL::apply_alignment(style, align, action);
+    }
+}
+
 impl<NodeType: Bundle> RawElWrapper for RawHaalkaEl<NodeType> {
     type NodeType = NodeType;
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {

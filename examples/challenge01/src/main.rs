@@ -54,26 +54,10 @@ struct Button {
     selected: Mutable<bool>,
 }
 
-impl RawElWrapper for Button {
-    type NodeType = NodeBundle;
-    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<Self::NodeType> {
-        self.el.raw_el_mut()
-    }
-}
-
-impl Alignable for Button {
-    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
-        self.el.align_mut()
-    }
-
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
-        El::<NodeBundle>::apply_content_alignment(style, alignment, action);
-    }
-}
-
-impl ChildAlignable for Button {
-    fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove) {
-        El::<NodeBundle>::apply_alignment(style, align, action);
+impl ElementWrapper for Button {
+    type EL = El<NodeBundle>;
+    fn element_mut(&mut self) -> &mut Self::EL {
+        &mut self.el
     }
 }
 
