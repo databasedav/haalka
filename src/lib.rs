@@ -9,9 +9,10 @@ pub use bevy_mod_picking::prelude::*;
 pub use futures_signals::{self, signal::{Mutable, Signal, SignalExt}, signal_vec::{SignalVec, SignalVecExt, VecDiff, MutableVec}};
 use bevy_async_ecs::*;
 pub use enclose::enclose as clone;
-pub use futures_signals_ext::{self, MutableExt, BoxSignal};
+pub use futures_signals_ext::*;
 use paste::paste;
 use async_io::Timer;
+pub use static_ref_macro::static_ref;
 
 static ASYNC_WORLD: OnceLock<AsyncWorld> = OnceLock::new();
 
@@ -359,15 +360,14 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
     }
 }
 
-enum AlignHolder {
+pub enum AlignHolder {
     Align(Align),
     AlignSignal(BoxSignal<'static, Option<Align>>),
 }
 
-// TODO: how can i make use of this default ?
+// TODO: how can i make use of this default ? should i just remove it ?
 pub struct RawHaalkaEl<NodeType = NodeBundle> {
     node_builder: Option<NodeBuilder<NodeType>>,
-    align: Option<AlignHolder>,
 }
 
 impl<NodeType: Bundle> From<NodeType> for RawHaalkaEl<NodeType> {
@@ -384,7 +384,7 @@ impl<NodeType: Bundle + Default> RawHaalkaEl<NodeType> {
 
 impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
     fn new_dummy() -> Self {
-        Self { node_builder: None, align: None }
+        Self { node_builder: None }
     }
 
     pub fn update_node_builder(mut self, updater: impl FnOnce(NodeBuilder<NodeType>) -> NodeBuilder<NodeType>) -> Self {
@@ -397,7 +397,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
     }
 
     pub fn child<IOE: IntoOptionElement>(self, child_option: IOE) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle
     {
         if let Some(child) = child_option.into_option_element() {
             return self.update_node_builder(|node_builder| node_builder.child(child.into_raw().into_node_builder()))
@@ -406,7 +406,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
     }
 
     pub fn child_signal<IOE: IntoOptionElement>(self, child_option_signal: impl Signal<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle
     {
         self.update_node_builder(|node_builder| {
             node_builder
@@ -418,7 +418,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
     }
 
     pub fn children<IOE: IntoOptionElement, I: IntoIterator<Item = IOE>>(self, children_options: I) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle, I::IntoIter: Send + 'static
+    where <IOE::EL as RawElement>::NodeType: Bundle, I::IntoIter: Send + 'static
     {
         self.update_node_builder(|node_builder| {
             node_builder.children(
@@ -430,7 +430,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
     }
 
     pub fn children_signal_vec<IOE: IntoOptionElement>(self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle
     {
         self.update_node_builder(|node_builder| {
             node_builder.children_signal_vec(
@@ -516,12 +516,12 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
     }
 }
 
-pub trait Element: Sized {
+pub trait RawElement: Sized {
     type NodeType: Bundle;
     fn into_raw(self) -> RawHaalkaEl<Self::NodeType>;
 }
 
-impl<REW: RawElWrapper> Element for REW {
+impl<REW: RawElWrapper> RawElement for REW {
     type NodeType = REW::NodeType;
     fn into_raw(self) -> RawHaalkaEl<Self::NodeType> {
         self.into_raw_el().into()
@@ -529,11 +529,11 @@ impl<REW: RawElWrapper> Element for REW {
 }
 
 pub trait IntoElement {
-    type EL: Element;
+    type EL: RawElement;
     fn into_element(self) -> Self::EL;
 }
 
-impl<T: Element> IntoElement for T {
+impl<T: RawElement> IntoElement for T {
     type EL = T;
     fn into_element(self) -> Self::EL {
         self
@@ -541,18 +541,18 @@ impl<T: Element> IntoElement for T {
 }
 
 pub trait IntoOptionElement {
-    type EL: Element;
+    type EL: RawElement;
     fn into_option_element(self) -> Option<Self::EL>;
 }
 
-impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for Option<IE> {
+impl<E: RawElement, IE: IntoElement<EL = E>> IntoOptionElement for Option<IE> {
     type EL = E;
     fn into_option_element(self) -> Option<Self::EL> {
         self.map(|into_element| into_element.into_element())
     }
 }
 
-impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
+impl<E: RawElement, IE: IntoElement<EL = E>> IntoOptionElement for IE {
     type EL = E;
     fn into_option_element(self) -> Option<Self::EL> {
         Some(self.into_element())
@@ -582,17 +582,23 @@ impl<NodeType: Bundle> RawElWrapper for RawHaalkaEl<NodeType> {
     }
 }
 
-pub struct El<NodeType>(RawHaalkaEl<NodeType>);
+pub struct El<NodeType> {
+    raw_el: RawHaalkaEl<NodeType>,
+    align: Option<AlignHolder>,
+}
 
 impl<NodeType: Bundle> From<NodeType> for El<NodeType> {
     fn from(node_bundle: NodeType) -> Self {
-        Self(
-            RawHaalkaEl::from(node_bundle)
-            .with_component::<Style>(|style| {
-                style.display = Display::Flex;
-                style.flex_direction = FlexDirection::Column;
-            })
-        )
+        Self {
+            raw_el: {
+                RawHaalkaEl::from(node_bundle)
+                .with_component::<Style>(|style| {
+                    style.display = Display::Flex;
+                    style.flex_direction = FlexDirection::Column;
+                })
+            },
+            align: None,
+        }
     }
 }
 
@@ -605,51 +611,60 @@ impl<NodeType: Bundle + Default> El<NodeType> {
 impl<NodeType: Bundle> RawElWrapper for El<NodeType> {
     type NodeType = NodeType;
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
-        self.0.raw_el_mut()
+        self.raw_el.raw_el_mut()
     }
 }
 
 impl<NodeType: Bundle> El<NodeType> {
     pub fn child<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: Alignable
     {
-        self.0 = self.0.child(Self::process_child(child_option));
+        self.raw_el = self.raw_el.child(child_option.into_option_element().map(|mut child| {
+            child = <Self as ChildAlignable>::manage::<<<IOE as IntoOptionElement>::EL as RawElement>::NodeType, <IOE as IntoOptionElement>::EL>(child);
+            child
+        }));
         self
     }
 
     pub fn child_signal<IOE: IntoOptionElement + 'static>(mut self, child_option: impl Signal<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.child_signal(child_option.map(Self::process_child));
+        self.raw_el = self.raw_el.child_signal(child_option.map(Self::process_child));
         self
     }
 
     pub fn children<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle, I::IntoIter: Send + 'static
+    where <IOE::EL as RawElement>::NodeType: Bundle, I::IntoIter: Send + 'static, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.children(children_options.into_iter().map(Self::process_child));
+        self.raw_el = self.raw_el.children(children_options.into_iter().map(Self::process_child));
         self
     }
 
     pub fn children_signal_vec<IOE: IntoOptionElement + 'static>(mut self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.children_signal_vec(children_options_signal_vec.map(Self::process_child));
+        self.raw_el = self.raw_el.children_signal_vec(children_options_signal_vec.map(Self::process_child));
         self
     }
 }
 
-pub struct Column<NodeType>(RawHaalkaEl<NodeType>);  // TODO: impl Element like api so the inner raw el's don't need to be managed
+pub struct Column<NodeType> {
+    raw_el: RawHaalkaEl<NodeType>,
+    align: Option<AlignHolder>,
+}
 
 impl<NodeType: Bundle> From<NodeType> for Column<NodeType> {
     fn from(node_bundle: NodeType) -> Self {
-        Self(
-            RawHaalkaEl::from(node_bundle)
-            .with_component::<Style>(|style| {
-                style.display = Display::Flex;
-                style.flex_direction = FlexDirection::Column;
-            })
-        )
+        Self {
+            raw_el: {
+                RawHaalkaEl::from(node_bundle)
+                .with_component::<Style>(|style| {
+                    style.display = Display::Flex;
+                    style.flex_direction = FlexDirection::Column;
+                })
+            },
+            align: None,
+        }
     }
 }
 
@@ -661,30 +676,30 @@ impl<NodeType: Bundle + Default> Column<NodeType> {
 
 impl<NodeType: Bundle> Column<NodeType> {
     pub fn item<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.child(Self::process_child(child_option));
+        self.raw_el = self.raw_el.child(Self::process_child(child_option));
         self
     }
 
     pub fn item_signal<IOE: IntoOptionElement + 'static>(mut self, child_option: impl Signal<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.child_signal(child_option.map(Self::process_child));
+        self.raw_el = self.raw_el.child_signal(child_option.map(Self::process_child));
         self
     }
 
     pub fn items<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle, I::IntoIter: Send + 'static
+    where <IOE::EL as RawElement>::NodeType: Bundle, I::IntoIter: Send + 'static, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.children(children_options.into_iter().map(Self::process_child));
+        self.raw_el = self.raw_el.children(children_options.into_iter().map(Self::process_child));
         self
     }
 
     pub fn items_signal_vec<IOE: IntoOptionElement + 'static>(mut self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.children_signal_vec(children_options_signal_vec.map(Self::process_child));
+        self.raw_el = self.raw_el.children_signal_vec(children_options_signal_vec.map(Self::process_child));
         self
     }
 }
@@ -692,22 +707,28 @@ impl<NodeType: Bundle> Column<NodeType> {
 impl<NodeType: Bundle> RawElWrapper for Column<NodeType> {
     type NodeType = NodeType;
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
-        self.0.raw_el_mut()
+        self.raw_el.raw_el_mut()
     }
 }
 
-pub struct Row<NodeType>(RawHaalkaEl<NodeType>);
+pub struct Row<NodeType> {
+    raw_el: RawHaalkaEl<NodeType>,
+    align: Option<AlignHolder>,
+}
 
 impl<NodeType: Bundle> From<NodeType> for Row<NodeType> {
     fn from(node_bundle: NodeType) -> Self {
-        Self(
-            RawHaalkaEl::from(node_bundle)
-            .with_component::<Style>(|style| {
-                style.display = Display::Flex;
-                style.flex_direction = FlexDirection::Row;
-                style.align_items = AlignItems::Center;
-            })
-        )
+        Self {
+            raw_el: {
+                RawHaalkaEl::from(node_bundle)
+                .with_component::<Style>(|style| {
+                    style.display = Display::Flex;
+                    style.flex_direction = FlexDirection::Row;
+                    style.align_items = AlignItems::Center;
+                })
+            },
+            align: None,
+        }
     }
 }
 
@@ -719,30 +740,30 @@ impl<NodeType: Bundle + Default> Row<NodeType> {
 
 impl<NodeType: Bundle> Row<NodeType> {
     pub fn item<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.child(Self::process_child(child_option));
+        self.raw_el = self.raw_el.child(Self::process_child(child_option));
         self
     }
 
     pub fn item_signal<IOE: IntoOptionElement + 'static>(mut self, child_option: impl Signal<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.child_signal(child_option.map(Self::process_child));
+        self.raw_el = self.raw_el.child_signal(child_option.map(Self::process_child));
         self
     }
 
     pub fn items<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle, I::IntoIter: Send + 'static
+    where <IOE::EL as RawElement>::NodeType: Bundle, I::IntoIter: Send + 'static, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.children(children_options.into_iter().map(Self::process_child));
+        self.raw_el = self.raw_el.children(children_options.into_iter().map(Self::process_child));
         self
     }
 
     pub fn items_signal_vec<IOE: IntoOptionElement + 'static>(mut self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.children_signal_vec(children_options_signal_vec.map(Self::process_child));
+        self.raw_el = self.raw_el.children_signal_vec(children_options_signal_vec.map(Self::process_child));
         self
     }
 }
@@ -750,22 +771,28 @@ impl<NodeType: Bundle> Row<NodeType> {
 impl<NodeType: Bundle> RawElWrapper for Row<NodeType> {
     type NodeType = NodeType;
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
-        self.0.raw_el_mut()
+        self.raw_el.raw_el_mut()
     }
 }
 
-pub struct Stack<NodeType>(RawHaalkaEl<NodeType>);
+pub struct Stack<NodeType> {
+    raw_el: RawHaalkaEl<NodeType>,
+    align: Option<AlignHolder>,
+}
 
 impl<NodeType: Bundle> From<NodeType> for Stack<NodeType> {
     fn from(node_bundle: NodeType) -> Self {
-        Self(
-            RawHaalkaEl::from(node_bundle)
-            .with_component::<Style>(|style| {
-                style.display = Display::Grid;
-                style.grid_auto_columns = vec![GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto)];
-                style.grid_auto_rows = vec![GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto)];
-            })
-        )
+        Self {
+            raw_el: {
+                RawHaalkaEl::from(node_bundle)
+                .with_component::<Style>(|style| {
+                    style.display = Display::Grid;
+                    style.grid_auto_columns = vec![GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto)];
+                    style.grid_auto_rows = vec![GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto)];
+                })
+            },
+            align: None,
+        }
     }
 }
 
@@ -777,30 +804,30 @@ impl<NodeType: Bundle + Default> Stack<NodeType> {
 
 impl<NodeType: Bundle> Stack<NodeType> {
     pub fn layer<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.child(Self::process_child(child_option));
+        self.raw_el = self.raw_el.child(Self::process_child(child_option));
         self
     }
 
     pub fn layer_signal<IOE: IntoOptionElement + 'static>(mut self, child_option_signal: impl Signal<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.child_signal(child_option_signal.map(Self::process_child));
+        self.raw_el = self.raw_el.child_signal(child_option_signal.map(Self::process_child));
         self
     }
 
     pub fn layers<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle, I::IntoIter: Send + 'static
+    where <IOE::EL as RawElement>::NodeType: Bundle, I::IntoIter: Send + 'static, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.children(children_options.into_iter().map(Self::process_child));
+        self.raw_el = self.raw_el.children(children_options.into_iter().map(Self::process_child));
         self
     }
 
     pub fn layers_signal_vec<IOE: IntoOptionElement + 'static>(mut self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as Element>::NodeType: Bundle
+    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
     {
-        self.0 = self.0.children_signal_vec(children_options_signal_vec.map(Self::process_child));
+        self.raw_el = self.raw_el.children_signal_vec(children_options_signal_vec.map(Self::process_child));
         self
     }
 }
@@ -808,7 +835,7 @@ impl<NodeType: Bundle> Stack<NodeType> {
 impl<NodeType: Bundle> RawElWrapper for Stack<NodeType> {
     type NodeType = NodeType;
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
-        self.0.raw_el_mut()
+        self.raw_el.raw_el_mut()
     }
 }
 
@@ -860,7 +887,7 @@ pub trait MouseInteractionAware: RawElWrapper {
     }
 
     fn on_pressing_blockable(self, mut handler: impl FnMut() + Clone + Send + Sync + 'static, blocked: Mutable<bool>) -> Self {
-        // TODO: should instead track pickability and just add/remove the Pressable on blocked change to minimize spurious handler calls
+        // TODO: should instead track pickability and just add/remove the Pressable on blocked change to minimize spurious handler calls, also blocked can then be a signal
         self.on_pressed_change(move |is_pressed| if is_pressed && !blocked.get() { handler() })
     }
 
@@ -1004,25 +1031,178 @@ fn register_align_signal<REW: RawElWrapper>(element: REW, align_signal: impl Sig
     }))
 }
 
-pub trait ChildAlignable: RawElWrapper where Self: 'static {
+pub trait Alignable: RawElWrapper {
+    fn align_mut(&mut self) -> &mut Option<AlignHolder>;
+
+    fn align(mut self, align: Align) -> Self {
+        *self.align_mut() = Some(AlignHolder::Align(align));
+        self
+    }
+
+    fn align_signal(mut self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self {
+        *self.align_mut() = Some(AlignHolder::AlignSignal(align_option_signal.boxed()));
+        self
+    }
+
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove);
+
+    fn align_content(self, align: Align) -> Self {
+        self.update_raw_el(|raw_el| {
+            raw_el.with_component::<Style>(|style| {
+                for alignment in align.alignments {
+                    Self::apply_content_alignment(style, alignment, AddRemove::Add)
+                }
+            })
+        })
+    }
+
+    fn align_content_signal(self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self {
+        register_align_signal(self, align_option_signal.map(|align_option| align_option.map(|align| align.alignments.into_iter().collect())), Self::apply_content_alignment)
+    }
+}
+
+impl<NodeType: Bundle> Alignable for El<NodeType> {
+    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
+        &mut self.align
+    }
+
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        match alignment {
+            Alignment::Top => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::Start,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::Bottom => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::End,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::Left => style.align_items = match action {
+                AddRemove::Add => AlignItems::Start,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::Right => style.align_items = match action {
+                AddRemove::Add => AlignItems::End,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::CenterX => style.align_items = match action {
+                AddRemove::Add => AlignItems::Center,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::CenterY => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::Center,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+        }
+    }
+}
+
+impl<NodeType: Bundle> Alignable for Column<NodeType> {
+    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
+        &mut self.align
+    }
+    
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        match alignment {
+            Alignment::Top => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::Start,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::Bottom => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::End,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::Left => style.align_items = match action {
+                AddRemove::Add => AlignItems::Start,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::Right => style.align_items = match action {
+                AddRemove::Add => AlignItems::End,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::CenterX => style.align_items = match action {
+                AddRemove::Add => AlignItems::Center,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::CenterY => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::Center,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+        }
+    }
+}
+
+impl<NodeType: Bundle> Alignable for Row<NodeType> {
+    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
+        &mut self.align
+    }
+    
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        match alignment {
+            Alignment::Top => style.align_items = match action {
+                AddRemove::Add => AlignItems::Start,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::Bottom => style.align_items = match action {
+                AddRemove::Add => AlignItems::End,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+            Alignment::Left => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::Start,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::Right => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::End,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::CenterX => style.justify_content = match action {
+                AddRemove::Add => JustifyContent::Center,
+                AddRemove::Remove => JustifyContent::DEFAULT,
+            },
+            Alignment::CenterY => style.align_items = match action {
+                AddRemove::Add => AlignItems::Center,
+                AddRemove::Remove => AlignItems::DEFAULT,
+            },
+        }
+    }
+}
+
+impl<NodeType: Bundle> Alignable for Stack<NodeType> {
+    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
+        &mut self.align
+    }
+
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        Row::<NodeType>::apply_content_alignment(style, alignment, action)
+    }
+}
+
+pub trait ChildAlignable: Alignable where Self: 'static {
     fn update_style(_style: &mut Style) {}  // only Stack requires base updates
 
     fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove);
 
-    fn manage<NodeType: Bundle>(mut child: RawHaalkaEl<NodeType>) -> RawHaalkaEl<NodeType> {
-        child = child.with_component::<Style>(Self::update_style);
+    fn manage<NodeType: Bundle, Child: RawElWrapper + Alignable>(mut child: Child) -> Child {
+        child = child.update_raw_el(|raw_el| raw_el.with_component::<Style>(Self::update_style));
         // TODO: this .take means that child can't be passed around parents without losing align info, but this can be easily added if desired
-        if let Some(align) = child.align.take() {
+        if let Some(align) = child.align_mut().take() {
             match align {
                 AlignHolder::Align(align) => {
-                    child = child.with_component::<Style>(move |style| {
+                    child = child.update_raw_el(|raw_el| raw_el.with_component::<Style>(move |style| {
                         for align in align.alignments {
                             Self::apply_alignment(style, align, AddRemove::Add)
                         }
-                    })
+                    }))
                 }
                 AlignHolder::AlignSignal(align_option_signal) => {
-                    child = register_align_signal(child, align_option_signal.map(|align_option| align_option.map(|align| align.alignments.into_iter().collect())), Self::apply_alignment)
+                    child = register_align_signal(
+                        child,
+                        {
+                            align_option_signal.map(|align_option|
+                                align_option.map(|align| align.alignments.into_iter().collect())
+                            )
+                        },
+                        Self::apply_alignment
+                    )
                 }
             }
         }
@@ -1134,152 +1314,26 @@ impl<NodeType: Bundle> ChildAlignable for Stack<NodeType> {
     }
 }
 
-pub trait Alignable: ChildAlignable {
-    fn align(self, align: Align) -> Self {
-        self.update_raw_el(|mut raw_el| {
-            raw_el.align = Some(AlignHolder::Align(align));
-            raw_el
-        })
-    }
-
-    fn align_signal(self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self {
-        self.update_raw_el(|mut raw_el| {
-            raw_el.align = Some(AlignHolder::AlignSignal(align_option_signal.boxed()));
-            raw_el
-        })
-    }
-
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove);
-
-    fn align_content(self, align: Align) -> Self {
-        self.update_raw_el(|raw_el| {
-            raw_el.with_component::<Style>(|style| {
-                for alignment in align.alignments {
-                    Self::apply_content_alignment(style, alignment, AddRemove::Add)
-                }
-            })
-        })
-    }
-
-    fn align_content_signal(self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self {
-        register_align_signal(self, align_option_signal.map(|align_option| align_option.map(|align| align.alignments.into_iter().collect())), Self::apply_content_alignment)
-    }
-}
-
-impl<NodeType: Bundle> Alignable for El<NodeType> {
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
-        match alignment {
-            Alignment::Top => style.justify_content = match action {
-                AddRemove::Add => JustifyContent::Start,
-                AddRemove::Remove => JustifyContent::DEFAULT,
-            },
-            Alignment::Bottom => style.justify_content = match action {
-                AddRemove::Add => JustifyContent::End,
-                AddRemove::Remove => JustifyContent::DEFAULT,
-            },
-            Alignment::Left => style.align_items = match action {
-                AddRemove::Add => AlignItems::Start,
-                AddRemove::Remove => AlignItems::DEFAULT,
-            },
-            Alignment::Right => style.align_items = match action {
-                AddRemove::Add => AlignItems::End,
-                AddRemove::Remove => AlignItems::DEFAULT,
-            },
-            Alignment::CenterX => style.align_items = match action {
-                AddRemove::Add => AlignItems::Center,
-                AddRemove::Remove => AlignItems::DEFAULT,
-            },
-            Alignment::CenterY => style.justify_content = match action {
-                AddRemove::Add => JustifyContent::Center,
-                AddRemove::Remove => JustifyContent::DEFAULT,
-            },
-        }
-    }
-}
-
-impl<NodeType: Bundle> Alignable for Column<NodeType> {
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
-        match alignment {
-            Alignment::Top => style.justify_content = match action {
-                AddRemove::Add => JustifyContent::Start,
-                AddRemove::Remove => JustifyContent::DEFAULT,
-            },
-            Alignment::Bottom => style.justify_content = match action {
-                AddRemove::Add => JustifyContent::End,
-                AddRemove::Remove => JustifyContent::DEFAULT,
-            },
-            Alignment::Left => style.align_items = match action {
-                AddRemove::Add => AlignItems::Start,
-                AddRemove::Remove => AlignItems::DEFAULT,
-            },
-            Alignment::Right => style.align_items = match action {
-                AddRemove::Add => AlignItems::End,
-                AddRemove::Remove => AlignItems::DEFAULT,
-            },
-            Alignment::CenterX => style.align_items = match action {
-                AddRemove::Add => AlignItems::Center,
-                AddRemove::Remove => AlignItems::DEFAULT,
-            },
-            Alignment::CenterY => style.justify_content = match action {
-                AddRemove::Add => JustifyContent::Center,
-                AddRemove::Remove => JustifyContent::DEFAULT,
-            },
-        }
-    }
-}
-
-impl<NodeType: Bundle> Alignable for Row<NodeType> {
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
-        match alignment {
-            Alignment::Top => style.align_items = match action {
-                AddRemove::Add => AlignItems::Start,
-                AddRemove::Remove => AlignItems::DEFAULT,
-            },
-            Alignment::Bottom => style.align_items = match action {
-                AddRemove::Add => AlignItems::End,
-                AddRemove::Remove => AlignItems::DEFAULT,
-            },
-            Alignment::Left => style.justify_content = match action {
-                AddRemove::Add => JustifyContent::Start,
-                AddRemove::Remove => JustifyContent::DEFAULT,
-            },
-            Alignment::Right => style.justify_content = match action {
-                AddRemove::Add => JustifyContent::End,
-                AddRemove::Remove => JustifyContent::DEFAULT,
-            },
-            Alignment::CenterX => style.justify_content = match action {
-                AddRemove::Add => JustifyContent::Center,
-                AddRemove::Remove => JustifyContent::DEFAULT,
-            },
-            Alignment::CenterY => style.align_items = match action {
-                AddRemove::Add => AlignItems::Center,
-                AddRemove::Remove => AlignItems::DEFAULT,
-            },
-        }
-    }
-}
-
-impl<NodeType: Bundle> Alignable for Stack<NodeType> {
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
-        Row::<NodeType>::apply_content_alignment(style, alignment, action)
-    }
-}
-
-pub trait ChildProcessable: RawElWrapper {
-    fn process_child<IOE: IntoOptionElement>(child_option: IOE) -> Option<RawHaalkaEl<<<IOE as IntoOptionElement>::EL as Element>::NodeType>>;
+// TODO: ideally want to be able to process raw el's as well if they need some ...
+pub trait ChildProcessable: Alignable {
+    fn process_child<IOE: IntoOptionElement>(child_option: IOE) -> std::option::Option<<IOE as IntoOptionElement>::EL>
+    where IOE::EL: ChildProcessable;
 }
 
 impl<CA: ChildAlignable> ChildProcessable for CA {
-    fn process_child<IOE: IntoOptionElement>(child_option: IOE) -> Option<RawHaalkaEl<<<IOE as IntoOptionElement>::EL as Element>::NodeType>> {
-        child_option.into_option_element().map(|child| {
-            child.into_raw()
-            .update_raw_el(|mut raw_el| {
-                raw_el = <Self as ChildAlignable>::manage(raw_el);
-                raw_el
-            })
+    fn process_child<IOE: IntoOptionElement>(child_option: IOE) -> std::option::Option<<IOE as IntoOptionElement>::EL>
+    where IOE::EL: ChildProcessable
+    {
+        child_option.into_option_element().map(|mut child| {
+            child = <Self as ChildAlignable>::manage::<<<IOE as IntoOptionElement>::EL as RawElement>::NodeType, <IOE as IntoOptionElement>::EL>(child);
+            child
         })
     }
 }
+
+pub trait Element: RawElement + ChildProcessable {}
+
+impl<T: RawElement + ChildProcessable> Element for T {}
 
 // TODO
 // pub trait NearbyElementAddable: RawElWrapper {
@@ -1682,9 +1736,8 @@ fn offset(i: usize, contiguous_child_block_populations: &MutableVec<Option<usize
         contiguous_child_block_populations.signal_vec()
         .to_signal_map(move |contiguous_child_block_populations| get_offset(i, contiguous_child_block_populations))
         .dedupe()
-        .for_each(clone!((offset) move |new_offset| {
+        .for_each_sync(clone!((offset) move |new_offset| {
             offset.set_neq(new_offset);
-            async {}
         }))
     };
     spawn(updater).detach();  // future dropped when node is  // TODO: confirm
@@ -1768,6 +1821,7 @@ impl Plugin for RiggedInteractionPlugin {
                     .chain()
                     .in_set(PickSet::Focus),
             )
+            // so bubbling hover is always true last
             .configure_sets(PreUpdate, (PointerOutSet, PointerOverSet).chain())
             .add_plugins((
                 PointerOverPlugin,
@@ -1813,32 +1867,3 @@ impl Plugin for HaalkaPlugin {
         ;
     }
 }
-
-
-// #[derive(Event)]
-// struct MutableEvent(bool);
-
-// fn mutable_updater_system(
-//     mut interaction_query: Query<(&Interaction, &mut Pressable)>, /* Changed<Interaction>>, */  // TODO: explain the bug that occurs when using Changed
-//     mut mutable_events: EventWriter<MutableEvent>,
-// ) {
-//     for (interaction, mut pressable) in &mut interaction_query {
-//         if matches!(interaction, Interaction::Pressed) {
-//             mutable_events.send(MutableEvent(true));
-//             return;
-//         }
-//     }
-//     // println!("not pressed");
-//     mutable_events.send(MutableEvent(false));
-// }
-
-// fn mutable_event_listener(
-//     mut mutable_events: EventReader<MutableEvent>,
-//     mut mutable_holder_query: Query<&mut MutableHolder>,
-// ) {
-//     for mutable_event in mutable_events.read() {
-//         for mut mutable_holder in &mut mutable_holder_query {
-//             mutable_holder.mutable_bool.set_neq(mutable_event.0);
-//         }
-//     }
-// }

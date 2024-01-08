@@ -11,7 +11,6 @@ use std::fmt::Display;
 use bevy::prelude::*;
 use haalka::*;
 use futures_signals::map_ref;
-use futures_signals_ext::*;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 fn main() {
@@ -62,16 +61,27 @@ impl RawElWrapper for Button {
     }
 }
 
+impl Alignable for Button {
+    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
+        self.el.align_mut()
+    }
+
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        El::<NodeBundle>::apply_content_alignment(style, alignment, action);
+    }
+}
+
+impl ChildAlignable for Button {
+    fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove) {
+        El::<NodeBundle>::apply_alignment(style, align, action);
+    }
+}
+
 impl Button {
     fn new() -> Self {
-        let selected = Mutable::new(false);
-        let hovered = Mutable::new(false);
-        let selected_hovered_broadcaster = map_ref! {
-            let selected = selected.signal(),
-            let hovered = hovered.signal() => {
-                (*selected, *hovered)
-            }
-        }.broadcast();
+        let (selected, selected_signal) = Mutable::new_and_signal(false);
+        let (hovered, hovered_signal) = Mutable::new_and_signal(false);
+        let selected_hovered_broadcaster = map_ref!(selected_signal, hovered_signal => (*selected_signal, *hovered_signal)).broadcast();
         let border_color_signal = {
             selected_hovered_broadcaster.signal()
             .map(|(selected, hovered)| {
@@ -128,8 +138,8 @@ impl Button {
         self
     }
 
-    fn body_signal(mut self, body_option_signal: impl Signal<Item = impl IntoOptionElement + 'static> + Send + 'static) -> Self {
-        self.el = self.el.child_signal(body_option_signal);
+    fn body(mut self, body: impl Element) -> Self {
+        self.el = self.el.child(body);
         self
     }
 
@@ -141,11 +151,6 @@ impl Button {
     fn selected_signal(mut self, selected_signal: impl Signal<Item = bool> + Send + 'static) -> Self {
         let task = spawn(sync(self.selected.clone(), selected_signal));
         self.el = self.el.update_raw_el(|raw_el| raw_el.hold_tasks([task]));
-        self
-    }
-
-    fn update_el(mut self, update: impl FnOnce(El<NodeBundle>) -> El<NodeBundle> + 'static) -> Self {
-        self.el = update(self.el);
         self
     }
 }
@@ -161,7 +166,7 @@ fn text(text: &str) -> Text {
 fn text_button(text_signal: impl Signal<Item = String> + Send + 'static, on_click: impl FnMut() + 'static + Send + Sync) -> Button {
     Button::new()
     .width(Val::Px(200.))
-    .body_signal(always(El::<TextBundle>::new().text_signal(text_signal.map(|t| text(&t)))))
+    .body(El::<TextBundle>::new().text_signal(text_signal.map(|t| text(&t))))
     .on_click(on_click)
 }
 
@@ -205,7 +210,7 @@ fn dropdown<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: Mut
     .child(
         Button::new()
         .width(Val::Px(300.))
-        .body_signal(always(
+        .body(
             Stack::<NodeBundle>::new()
             .with_style(|style| {
                 style.width = Val::Percent(100.);
@@ -228,7 +233,9 @@ fn dropdown<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: Mut
                 .align(Align::new().right())
                 .item_signal({
                     if clearable {
-                        selected.signal_ref(Option::is_some).dedupe().map_true(clone!((selected) move || x_button(clone!((selected) move || { selected.take(); })))).boxed()
+                        selected.signal_ref(Option::is_some).dedupe()
+                        .map_true(clone!((selected) move || x_button(clone!((selected) move || { selected.take(); }))))
+                        .boxed()
                     } else {
                         always(None).boxed()
                     }
@@ -242,7 +249,7 @@ fn dropdown<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: Mut
                     .text(text("v"))
                 )
             )
-        ))
+        )
         .on_click(clone!((show_dropdown) move || { flip(&show_dropdown) }))
     )
     .child_signal(
@@ -277,10 +284,14 @@ fn dropdown<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: Mut
     )
 }
 
-fn checkbox(checked: Mutable<bool>) -> Button {
+fn lil_baby_button() -> Button {
     Button::new()
     .width(Val::Px(30.))
     .height(Val::Px(30.))
+}
+
+fn checkbox(checked: Mutable<bool>) -> Button {
+    lil_baby_button()
     .on_click(clone!((checked) move || { flip(&checked) }))
     .selected_signal(checked.signal())
 }
@@ -294,17 +305,10 @@ enum Quality {
 }
 
 fn signal_eq<T: PartialEq + Send>(signal1: impl Signal<Item = T> + Send + 'static, signal2: impl Signal<Item = T> + Send + 'static) -> impl Signal<Item = bool> + Send + 'static {
-    map_ref! {
-        let signal1 = signal1,
-        let signal2 = signal2 => {
-            signal1 == signal2
-        }
-    }
-    .dedupe()
+    map_ref!(signal1, signal2 => *signal1 == *signal2).dedupe()
 }
 
-fn mutually_exclusive_options<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: MutableVec<T>) -> impl Element + Alignable {
-    let selected = Mutable::new(None);
+fn mutually_exclusive_options<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: MutableVec<T>, selected: Mutable<Option<usize>>) -> impl Element {
     Row::<NodeBundle>::new()
     .items_signal_vec(
         options.signal_vec_cloned().enumerate()
@@ -335,25 +339,23 @@ fn centered_arrow_text(direction: LeftRight) -> El<TextBundle> {
         style.bottom = Val::Px(2.);
         style.right = Val::Px(2.);
     })
-    .align(Align::center()).text(text(match direction { LeftRight::Left => "<", LeftRight::Right => ">" }))
+    .text(text(match direction { LeftRight::Left => "<", LeftRight::Right => ">" }))
 }
 
-fn iterable_options<T: Clone + PartialEq + Display + Send + Sync + 'static>(selected: Mutable<T>, options: Vec<T>) -> impl Element + Alignable {
+fn iterable_options<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: Vec<T>, selected: Mutable<T>) -> impl Element {
     Row::<NodeBundle>::new()
     .with_style(|style| style.column_gap = Val::Px(BASE_PADDING * 2.))
     .item({
         let pressed = Mutable::new(false);
-        Button::new()
+        lil_baby_button()
         .selected_signal(pressed.signal())
         .pressed_sync(pressed)
-        .width(Val::Px(30.))
-        .height(Val::Px(30.))
         .on_click(clone!((selected, options) move || {
             if let Some(i) = options.iter().position(|option| option == &*selected.lock_ref()) {
                 selected.set_neq(options.iter().rev().cycle().skip(options.len() - i).next().unwrap().clone());
             }
         }))
-        .body_signal(always(centered_arrow_text(LeftRight::Left)))
+        .body(centered_arrow_text(LeftRight::Left))
     })
     .item(
         El::<TextBundle>::new()
@@ -361,21 +363,19 @@ fn iterable_options<T: Clone + PartialEq + Display + Send + Sync + 'static>(sele
     )
     .item({
         let pressed = Mutable::new(false);
-        Button::new()
+        lil_baby_button()
         .selected_signal(pressed.signal())
         .pressed_sync(pressed)
-        .width(Val::Px(30.))
-        .height(Val::Px(30.))
         .on_click(clone!((selected, options) move || {
             if let Some(i) = options.iter().position(|option| option == &*selected.lock_ref()) {
                 selected.set_neq(options.iter().cycle().skip(i + 1).next().unwrap().clone());
             }
         }))
-        .body_signal(always(centered_arrow_text(LeftRight::Right)))
+        .body(centered_arrow_text(LeftRight::Right))
     })
 }
 
-fn slider(value: Mutable<f32>) -> impl Element + Alignable {
+fn slider(value: Mutable<f32>) -> impl Element {
     let slider_width = 400.;
     let slider_padding = 5.;
     let handle_size = 30.;
@@ -411,22 +411,18 @@ fn slider(value: Mutable<f32>) -> impl Element + Alignable {
             .pressed_sync(pressed)
             .width(Val::Px(handle_size))
             .height(Val::Px(handle_size))
-            .update_el(move |el| {
-                el
-                .on_signal_with_style(left.signal(), |style, left| {
-                    style.left = Val::Px(left);
-                })
-                .align(Align::new().center_y())
-                .update_raw_el(|raw_el| {
-                    raw_el
-                    .insert((
-                        On::<Pointer<DragStart>>::run(clone!((dragging) move || dragging.set_neq(true))),
-                        On::<Pointer<DragEnd>>::run(move || dragging.set_neq(false)),
-                        On::<Pointer<Drag>>::run(move |drag: Listener<Pointer<Drag>>| {
-                            left.set_neq((left.get() + drag.delta.x).max(0.).min(max));
-                        }),
-                    ))
-                })
+            .el  // we need lower level access now
+            .on_signal_with_style(left.signal(), |style, left| style.left = Val::Px(left))
+            .align(Align::new().center_y())
+            .update_raw_el(|raw_el| {
+                raw_el
+                .insert((
+                    On::<Pointer<DragStart>>::run(clone!((dragging) move || dragging.set_neq(true))),
+                    On::<Pointer<DragEnd>>::run(move || dragging.set_neq(false)),
+                    On::<Pointer<Drag>>::run(move |drag: Listener<Pointer<Drag>>| {
+                        left.set_neq((left.get() + drag.delta.x).max(0.).min(max));
+                    }),
+                ))
             })
         })
     )
@@ -436,7 +432,9 @@ fn options(n: usize) -> Vec<String> {
     (1..=n).map(|i| format!("option {}", i)).collect()
 }
 
-fn menu_item(label: &str, body: impl Element + Alignable) -> Stack<NodeBundle> {
+
+
+fn menu_item(label: &str, body: impl Element) -> Stack<NodeBundle> {
     let hovered = Mutable::new(false);
     Stack::<NodeBundle>::new()
     .background_color_signal(
@@ -462,48 +460,53 @@ fn audio_menu() -> Column<NodeBundle> {
     .item(
         menu_item(
             "item 1",
-            dropdown(MutableVec::new_with_values(options(4)), Mutable::new(None), true),
+            dropdown(MutableVec::new_with_values(options(4)), misc_demo_settings().dropdown.clone(), true),
         )
         .z_index(ZIndex::Local(1))
     )
-    .item(menu_item("item 2", mutually_exclusive_options(MutableVec::new_with_values(options(3)))))
-    .item(menu_item("item 3", checkbox(Mutable::new(false)).el))
-    .item(menu_item("item 4", iterable_options(Mutable::new("option 1".to_string()), options(4))))
-    .item(menu_item("master volume", slider(Mutable::new(100.))))
-    .item(menu_item("effect volume", slider(Mutable::new(50.))))
-    .item(menu_item("music volume", slider(Mutable::new(50.))))
-    .item(menu_item("voice volume", slider(Mutable::new(50.))))
+    .item(menu_item("item 2", mutually_exclusive_options(MutableVec::new_with_values(options(3)), misc_demo_settings().mutually_exclusive_options.clone())))
+    .item(menu_item("item 3", checkbox(misc_demo_settings().checkbox.clone()).el))
+    .item(menu_item("item 4", iterable_options(options(4), misc_demo_settings().iterable_options.clone())))
+    .item(menu_item("master volume", slider(audio_settings().master_volume.clone())))
+    .item(menu_item("effect volume", slider(audio_settings().effect_volume.clone())))
+    .item(menu_item("music volume", slider(audio_settings().music_volume.clone())))
+    .item(menu_item("voice volume", slider(audio_settings().voice_volume.clone())))
 }
 
 fn graphics_menu() -> Column<NodeBundle> {
-    let preset_quality = Mutable::new(Some(Quality::Medium));
-    let texture_quality = Mutable::new(Some(Quality::Medium));
-    let shadow_quality = Mutable::new(Some(Quality::Medium));
-    let bloom_quality = Mutable::new(Some(Quality::Medium));
-    let preset_broadcaster = spawn(clone!((preset_quality, texture_quality, shadow_quality, bloom_quality) async move {
+    let preset_quality = graphics_settings().preset_quality.clone();
+    let texture_quality = graphics_settings().texture_quality.clone();
+    let shadow_quality = graphics_settings().shadow_quality.clone();
+    let bloom_quality = graphics_settings().bloom_quality.clone();
+    let non_preset_qualities = MutableVec::new_with_values(vec![texture_quality.clone(), shadow_quality.clone(), bloom_quality.clone()]);
+    let preset_broadcaster = spawn(clone!((preset_quality, non_preset_qualities) async move {
         preset_quality.signal()
-        .for_each_sync(|quality_option| {
-            if let Some(quality) = quality_option {
-                texture_quality.set_neq(Some(quality));
-                shadow_quality.set_neq(Some(quality));
-                bloom_quality.set_neq(Some(quality));
+        .for_each_sync(|preset_quality_option| {
+            if let Some(preset_quality) = preset_quality_option {
+                for quality in non_preset_qualities.lock_ref().iter() {
+                    quality.set_neq(Some(preset_quality));
+                    quality.set_neq(Some(preset_quality));
+                    quality.set_neq(Some(preset_quality));
+                }
             }
         })
         .await;
     }));
-    let preset_unsetter = spawn(clone!((preset_quality, texture_quality, shadow_quality, bloom_quality) async move {
-        map_ref! {
-            let texture = texture_quality.signal(),
-            let shadow = shadow_quality.signal(),
-            let bloom = bloom_quality.signal() => {
-                let mut preset = preset_quality.lock_mut();
-                if preset.is_none() && texture == shadow && shadow == bloom {
-                    *preset = *texture;
-                } else if preset.is_some() && (&*preset != texture || &*preset != shadow || &*preset != bloom) {
-                    *preset = None;
+    let preset_unsetter = spawn(clone!((preset_quality) async move {
+        non_preset_qualities.signal_vec_cloned()
+        .map_signal(|quality| quality.signal())
+        .to_signal_map(|qualities| {
+            let mut qualities = qualities.into_iter();
+            let mut preset = preset_quality.lock_mut();
+            if preset.is_none() {
+                let first = qualities.next().unwrap();  // always populated
+                if qualities.all(|quality| quality == first) {
+                    *preset = *first;
                 }
+            } else if preset.is_some() && qualities.any(|quality| quality != &*preset) {
+                *preset = None;
             }
-        }
+        })
         .to_future()
         .await;
     }));
@@ -534,7 +537,7 @@ fn graphics_menu() -> Column<NodeBundle> {
     )
 }
 
-fn x_button(on_click: impl FnMut() + 'static + Send + Sync) -> impl Element + RawElWrapper + Alignable {
+fn x_button(on_click: impl FnMut() + 'static + Send + Sync) -> impl Element {
     let hovered = Mutable::new(false);
     El::<NodeBundle>::new()
     .background_color(BackgroundColor(Color::NONE))
@@ -603,7 +606,8 @@ fn menu() -> impl Element {
                     .align(Align::new().top().right())
                     .update_raw_el(|raw_el| {
                         raw_el.with_component::<Style>(|style| {
-                            style.padding = UiRect::new(Val::Px(0.), Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.), Val::Px(0.));
+                            style.padding.right = Val::Px(BASE_PADDING);
+                            style.padding.top = Val::Px(BASE_PADDING / 2.);
                         })
                     })
                 )
@@ -616,7 +620,64 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 }
 
+#[derive(Resource, Clone)]
+struct AudioSettings {
+    master_volume: Mutable<f32>,
+    effect_volume: Mutable<f32>,
+    music_volume: Mutable<f32>,
+    voice_volume: Mutable<f32>,
+}
+
+#[static_ref]
+fn audio_settings() -> &'static AudioSettings {
+    AudioSettings {
+        master_volume: Mutable::new(100.),
+        effect_volume: Mutable::new(50.),
+        music_volume: Mutable::new(50.),
+        voice_volume: Mutable::new(50.),
+    }
+}
+
+#[derive(Resource, Clone)]
+struct GraphicsSettings {
+    preset_quality: Mutable<Option<Quality>>,
+    texture_quality: Mutable<Option<Quality>>,
+    shadow_quality: Mutable<Option<Quality>>,
+    bloom_quality: Mutable<Option<Quality>>,
+}
+
+#[static_ref]
+fn graphics_settings() -> &'static GraphicsSettings {
+    GraphicsSettings {
+        preset_quality: Mutable::new(Some(Quality::Medium)),
+        texture_quality: Mutable::new(Some(Quality::Medium)),
+        shadow_quality: Mutable::new(Some(Quality::Medium)),
+        bloom_quality: Mutable::new(Some(Quality::Medium)),
+    }
+}
+
+#[derive(Resource, Clone)]
+struct MiscDemoSettings {
+    dropdown: Mutable<Option<String>>,
+    mutually_exclusive_options: Mutable<Option<usize>>,
+    checkbox: Mutable<bool>,
+    iterable_options: Mutable<String>,
+}
+
+#[static_ref]
+fn misc_demo_settings() -> &'static MiscDemoSettings {
+    MiscDemoSettings {
+        dropdown: Mutable::new(None),
+        mutually_exclusive_options: Mutable::new(None),
+        checkbox: Mutable::new(false),
+        iterable_options: Mutable::new("option 1".to_string()),
+    }
+}
+
 fn spawn_ui_root(world: &mut World) {
+    world.insert_resource(audio_settings().clone());
+    world.insert_resource(graphics_settings().clone());
+    world.insert_resource(misc_demo_settings().clone());
     El::<NodeBundle>::new()
     .with_style(|style| {
         style.width = Val::Percent(100.0);

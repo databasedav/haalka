@@ -15,14 +15,9 @@ const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
 const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
 
 fn button(font: Handle<Font>) -> impl Element {
-    let hovered = Mutable::new(false);
-    let pressed = Mutable::new(false);
-    let pressed_hovered_broadcaster = map_ref! {
-        let pressed = pressed.signal(),
-        let hovered = hovered.signal() => {
-            (*pressed, *hovered)
-        }
-    }.broadcast();
+    let (pressed, pressed_signal) = Mutable::new_and_signal(false);
+    let (hovered, hovered_signal) = Mutable::new_and_signal(false);
+    let pressed_hovered_broadcaster = map_ref!(pressed_signal, hovered_signal => (*pressed_signal, *hovered_signal)).broadcast();
     let border_color_signal = {
         pressed_hovered_broadcaster.signal()
         .map(|(pressed, hovered)| {
