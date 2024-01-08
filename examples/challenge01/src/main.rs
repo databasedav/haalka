@@ -204,12 +204,20 @@ fn flip(mutable_bool: &Mutable<bool>) {
     mutable_bool.set(!mutable_bool.get());
 }
 
+#[static_ref]
+fn dropdown_showing_option() -> &'static Mutable<Option<Mutable<bool>>> {
+    Mutable::new(None)
+}
+
 fn dropdown<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: MutableVec<T>, selected: Mutable<Option<T>>, clearable: bool) -> El<NodeBundle> {
     let show_dropdown = Mutable::new(false);
+    let pressed = Mutable::new(false);
     El::<NodeBundle>::new()
     .child(
         Button::new()
         .width(Val::Px(300.))
+        .selected_signal(pressed.signal())
+        .pressed_sync(pressed)
         .body(
             Stack::<NodeBundle>::new()
             .with_style(|style| {
@@ -250,7 +258,9 @@ fn dropdown<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: Mut
                 )
             )
         )
-        .on_click(clone!((show_dropdown) move || { flip(&show_dropdown) }))
+        .on_click(clone!((show_dropdown) move || {
+            only_one_up_flipper(&show_dropdown, dropdown_showing_option(), None);
+        }))
     )
     .child_signal(
         show_dropdown.signal()
@@ -270,6 +280,7 @@ fn dropdown<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: Mut
                     .dedupe()
                 }))
                 .map(clone!((selected, show_dropdown) move |option| {
+                    let pressed = Mutable::new(false);
                     text_button(
                         always(option.to_string()),
                         clone!((selected, show_dropdown, option) move || {
@@ -278,6 +289,8 @@ fn dropdown<T: Clone + PartialEq + Display + Send + Sync + 'static>(options: Mut
                         })
                     )
                     .width(Val::Percent(100.))
+                    .selected_signal(pressed.signal())
+                    .pressed_sync(pressed)
                 }))
             )
         }))
@@ -432,7 +445,27 @@ fn options(n: usize) -> Vec<String> {
     (1..=n).map(|i| format!("option {}", i)).collect()
 }
 
+fn only_one_up_flipper<'a>(
+    to_flip: &Mutable<bool>,
+    already_up_option: &'a Mutable<Option<Mutable<bool>>>,
+    target_option: Option<bool>,
+) {
+    let cur = target_option.map(|target| !target).unwrap_or(to_flip.get());
+    if cur {
+        already_up_option.take();
+    } else {
+        if let Some(previous) = &*already_up_option.lock_ref() {
+            previous.set(false);
+        }
+        already_up_option.set(Some(to_flip.clone()));
+    }
+    to_flip.set(!cur);
+}
 
+#[static_ref]
+fn menu_item_hovered_option() -> &'static Mutable<Option<Mutable<bool>>> {
+    Mutable::new(None)
+}
 
 fn menu_item(label: &str, body: impl Element) -> Stack<NodeBundle> {
     let hovered = Mutable::new(false);
@@ -445,7 +478,9 @@ fn menu_item(label: &str, body: impl Element) -> Stack<NodeBundle> {
         )
         .map(BackgroundColor)
     )
-    .hovered_sync(hovered)
+    .on_hovered_change(move |is_hovered| {
+        only_one_up_flipper(&hovered, menu_item_hovered_option(), Some(is_hovered));
+    })
     .with_style(|style| {
         style.width = Val::Percent(100.);
         style.padding = UiRect::axes(Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.));
@@ -535,14 +570,31 @@ fn graphics_menu() -> Column<NodeBundle> {
         items.into_iter().enumerate()
         .map(move |(i, item)| item.z_index(ZIndex::Local((l - i) as i32)))
     )
+    .item(
+        // solely here to dehover dropdown menu items  // TODO: this can also be solved by allowing setting Over/Out order at runtime or implementing .on_hovered_outside, i should do both of these
+        El::<NodeBundle>::new()
+        .with_style(move |style| style.height = Val::Px(SUB_MENU_HEIGHT - (l + 1) as f32 * MENU_ITEM_HEIGHT - BASE_PADDING * 2.))
+        .on_hovered_change(|is_hovered| {
+            if is_hovered {
+                if let Some(hovered) = menu_item_hovered_option().take() {
+                    hovered.set(false);
+                }
+            }
+        })
+    )
 }
 
-fn x_button(on_click: impl FnMut() + 'static + Send + Sync) -> impl Element {
+fn x_button(mut on_click: impl FnMut() + 'static + Send + Sync) -> impl Element {
     let hovered = Mutable::new(false);
     El::<NodeBundle>::new()
     .background_color(BackgroundColor(Color::NONE))
     .hovered_sync(hovered.clone())
-    .on_click(on_click)  // TODO: stop propagation here so e.g. clearing dropdown button doesn't show drodown
+    .update_raw_el(move |raw_el| {
+        raw_el.insert(On::<Pointer<Click>>::run(move |mut event: ListenerMut<Pointer<Click>>| {
+            event.stop_propagation();
+            on_click();
+        }))
+    })
     .child(
         El::<TextBundle>::new()
         .text(text("x"))
