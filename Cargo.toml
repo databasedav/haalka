@@ -17,6 +17,7 @@ enclose = "1.1.8"
 futures-signals = "0.3.33"
 futures-util = { version = "0.3.30", features = ["sink"] }  # TODO: need to add sink feature upstream
 futures_signals_ext = { git = "https://github.com/MoonZoon/MoonZoon", rev = "4bf101bd5ace83281bf570cc6fb601d1ad608a75" }
-syn = { version = "1.0", features = ["full", "parsing"] }  # TODO: need to add parsing, full features upstream + update syn version
+# syn = { version = "1.0", features = ["full", "parsing"] }  # TODO: need to add parsing, full features upstream + update syn version
 static_ref_macro = { git = "https://github.com/databasedav/MoonZoon", rev = "004d03dee8ee487d53dffcd399f747ee3e9a4a95" }
 paste = "1.0.14"
+apply = "0.3.0"
