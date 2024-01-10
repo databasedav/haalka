@@ -1,7 +1,13 @@
 use bevy::prelude::*;
-use futures_signals::{signal::{Signal, SignalExt}, signal_vec::{SignalVec, SignalVecExt}};
+use futures_signals::{
+    signal::{Signal, SignalExt},
+    signal_vec::{SignalVec, SignalVecExt},
+};
 
-use crate::{RawHaalkaEl, AlignHolder, RawElWrapper, IntoOptionElement, RawElement, ChildAlignable, ChildProcessable, Alignment, AddRemove, Alignable, Row};
+use crate::{
+    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable,
+    IntoOptionElement, RawElWrapper, RawElement, RawHaalkaEl, Row,
+};
 
 pub struct Stack<NodeType> {
     raw_el: RawHaalkaEl<NodeType>,
@@ -12,11 +18,16 @@ impl<NodeType: Bundle> From<NodeType> for Stack<NodeType> {
     fn from(node_bundle: NodeType) -> Self {
         Self {
             raw_el: {
-                RawHaalkaEl::from(node_bundle)
-                .with_component::<Style>(|style| {
+                RawHaalkaEl::from(node_bundle).with_component::<Style>(|style| {
                     style.display = Display::Grid;
-                    style.grid_auto_columns = vec![GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto)];
-                    style.grid_auto_rows = vec![GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto)];
+                    style.grid_auto_columns = vec![GridTrack::minmax(
+                        MinTrackSizingFunction::Px(0.),
+                        MaxTrackSizingFunction::Auto,
+                    )];
+                    style.grid_auto_rows = vec![GridTrack::minmax(
+                        MinTrackSizingFunction::Px(0.),
+                        MaxTrackSizingFunction::Auto,
+                    )];
                 })
             },
             align: None,
@@ -32,30 +43,54 @@ impl<NodeType: Bundle + Default> Stack<NodeType> {
 
 impl<NodeType: Bundle> Stack<NodeType> {
     pub fn layer<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
-    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
+    where
+        <IOE::EL as RawElement>::NodeType: Bundle,
+        IOE::EL: ChildProcessable,
     {
         self.raw_el = self.raw_el.child(Self::process_child(child_option));
         self
     }
 
-    pub fn layer_signal<IOE: IntoOptionElement + 'static>(mut self, child_option_signal: impl Signal<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
+    pub fn layer_signal<IOE: IntoOptionElement + 'static>(
+        mut self,
+        child_option_signal: impl Signal<Item = IOE> + Send + 'static,
+    ) -> Self
+    where
+        <IOE::EL as RawElement>::NodeType: Bundle,
+        IOE::EL: ChildProcessable,
     {
-        self.raw_el = self.raw_el.child_signal(child_option_signal.map(Self::process_child));
+        self.raw_el = self
+            .raw_el
+            .child_signal(child_option_signal.map(Self::process_child));
         self
     }
 
-    pub fn layers<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
-    where <IOE::EL as RawElement>::NodeType: Bundle, I::IntoIter: Send + 'static, IOE::EL: ChildProcessable
+    pub fn layers<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(
+        mut self,
+        children_options: I,
+    ) -> Self
+    where
+        <IOE::EL as RawElement>::NodeType: Bundle,
+        I::IntoIter: Send + 'static,
+        IOE::EL: ChildProcessable,
     {
-        self.raw_el = self.raw_el.children(children_options.into_iter().map(Self::process_child));
+        self.raw_el = self
+            .raw_el
+            .children(children_options.into_iter().map(Self::process_child));
         self
     }
 
-    pub fn layers_signal_vec<IOE: IntoOptionElement + 'static>(mut self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as RawElement>::NodeType: Bundle, IOE::EL: ChildProcessable
+    pub fn layers_signal_vec<IOE: IntoOptionElement + 'static>(
+        mut self,
+        children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static,
+    ) -> Self
+    where
+        <IOE::EL as RawElement>::NodeType: Bundle,
+        IOE::EL: ChildProcessable,
     {
-        self.raw_el = self.raw_el.children_signal_vec(children_options_signal_vec.map(Self::process_child));
+        self.raw_el = self
+            .raw_el
+            .children_signal_vec(children_options_signal_vec.map(Self::process_child));
         self
     }
 }
@@ -85,30 +120,42 @@ impl<NodeType: Bundle> ChildAlignable for Stack<NodeType> {
 
     fn apply_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
         match alignment {
-            Alignment::Top => style.align_self = match action {
-                AddRemove::Add => AlignSelf::Start,
-                AddRemove::Remove => AlignSelf::DEFAULT,
-            },
-            Alignment::Bottom => style.align_self = match action {
-                AddRemove::Add => AlignSelf::End,
-                AddRemove::Remove => AlignSelf::DEFAULT,
-            },
-            Alignment::Left => style.justify_self = match action {
-                AddRemove::Add => JustifySelf::Start,
-                AddRemove::Remove => JustifySelf::DEFAULT,
-            },
-            Alignment::Right => style.justify_self = match action {
-                AddRemove::Add => JustifySelf::End,
-                AddRemove::Remove => JustifySelf::DEFAULT,
-            },
-            Alignment::CenterX => style.justify_self = match action {
-                AddRemove::Add => JustifySelf::Center,
-                AddRemove::Remove => JustifySelf::DEFAULT,
-            },
-            Alignment::CenterY => style.align_self = match action {
-                AddRemove::Add => AlignSelf::Center,
-                AddRemove::Remove => AlignSelf::DEFAULT,
-            },
+            Alignment::Top => {
+                style.align_self = match action {
+                    AddRemove::Add => AlignSelf::Start,
+                    AddRemove::Remove => AlignSelf::DEFAULT,
+                }
+            }
+            Alignment::Bottom => {
+                style.align_self = match action {
+                    AddRemove::Add => AlignSelf::End,
+                    AddRemove::Remove => AlignSelf::DEFAULT,
+                }
+            }
+            Alignment::Left => {
+                style.justify_self = match action {
+                    AddRemove::Add => JustifySelf::Start,
+                    AddRemove::Remove => JustifySelf::DEFAULT,
+                }
+            }
+            Alignment::Right => {
+                style.justify_self = match action {
+                    AddRemove::Add => JustifySelf::End,
+                    AddRemove::Remove => JustifySelf::DEFAULT,
+                }
+            }
+            Alignment::CenterX => {
+                style.justify_self = match action {
+                    AddRemove::Add => JustifySelf::Center,
+                    AddRemove::Remove => JustifySelf::DEFAULT,
+                }
+            }
+            Alignment::CenterY => {
+                style.align_self = match action {
+                    AddRemove::Add => AlignSelf::Center,
+                    AddRemove::Remove => AlignSelf::DEFAULT,
+                }
+            }
         }
     }
 }

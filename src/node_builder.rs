@@ -1,10 +1,13 @@
-use std::{sync::OnceLock, convert::identity};
+use std::{convert::identity, sync::OnceLock};
 
 use bevy::{prelude::*, tasks::Task};
 use bevy_async_ecs::AsyncWorld;
 use bevy_mod_picking::picking_core::Pickable;
 use enclose::enclose as clone;
-use futures_signals::{signal::{Mutable, Signal, SignalExt}, signal_vec::{MutableVec, SignalVec, VecDiff, SignalVecExt}};
+use futures_signals::{
+    signal::{Mutable, Signal, SignalExt},
+    signal_vec::{MutableVec, SignalVec, SignalVecExt, VecDiff},
+};
 use futures_signals_ext::{MutableExt, SignalExtExt};
 use futures_util::Future;
 
@@ -13,11 +16,15 @@ use crate::spawn;
 static ASYNC_WORLD: OnceLock<AsyncWorld> = OnceLock::new();
 
 pub fn async_world() -> &'static AsyncWorld {
-    ASYNC_WORLD.get().expect("expected ASYNC_WORLD to be initialized")
+    ASYNC_WORLD
+        .get()
+        .expect("expected ASYNC_WORLD to be initialized")
 }
 
 pub(crate) fn init_async_world(world: &mut World) {
-    ASYNC_WORLD.set(AsyncWorld::from_world(world)).expect("failed to initialize ASYNC_WORLD");
+    ASYNC_WORLD
+        .set(AsyncWorld::from_world(world))
+        .expect("failed to initialize ASYNC_WORLD");
 }
 
 #[derive(Default)]
@@ -45,17 +52,24 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn on_signal<T, Fut: Future<Output = ()> + Send + 'static>(mut self, signal: impl Signal<Item = T> + Send + 'static, mut f: impl FnMut(Entity, T) -> Fut + Send + 'static) -> Self {
+    pub fn on_signal<T, Fut: Future<Output = ()> + Send + 'static>(
+        mut self,
+        signal: impl Signal<Item = T> + Send + 'static,
+        mut f: impl FnMut(Entity, T) -> Fut + Send + 'static,
+    ) -> Self {
         self.task_wrappers.push(Box::new(move |entity: Entity| {
             spawn(signal.for_each(move |value| f(entity, value)))
         }));
         self
     }
 
-    // TODO: list out limitations; limitation: if multiple children are added to entity, they must be registered thru this abstraction because of the way siblings are tracked
+    // TODO: list out limitations; limitation: if multiple children are added to entity, they must
+    // be registered thru this abstraction because of the way siblings are tracked
     pub fn child<ChildNodeType: Bundle>(mut self, child: NodeBuilder<ChildNodeType>) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
-        self.contiguous_child_block_populations.lock_mut().push(None);
+        self.contiguous_child_block_populations
+            .lock_mut()
+            .push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
         let offset = offset(block, &contiguous_child_block_populations);
         let task_wrapper = move |entity: Entity| {
@@ -80,9 +94,16 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn child_signal<ChildNodeType: Bundle>(mut self, child_option: impl Signal<Item = impl Into<Option<NodeBuilder<ChildNodeType>>> + Send> + Send + 'static) -> Self {
+    pub fn child_signal<ChildNodeType: Bundle>(
+        mut self,
+        child_option: impl Signal<Item = impl Into<Option<NodeBuilder<ChildNodeType>>> + Send>
+            + Send
+            + 'static,
+    ) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
-        self.contiguous_child_block_populations.lock_mut().push(None);
+        self.contiguous_child_block_populations
+            .lock_mut()
+            .push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
         let task_wrapper = move |entity: Entity| {
             let offset = offset(block, &contiguous_child_block_populations);
@@ -130,9 +151,14 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn children<ChildNodeType: Bundle>(mut self, children: impl IntoIterator<Item = NodeBuilder<ChildNodeType>> + Send + 'static) -> Self {
+    pub fn children<ChildNodeType: Bundle>(
+        mut self,
+        children: impl IntoIterator<Item = NodeBuilder<ChildNodeType>> + Send + 'static,
+    ) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
-        self.contiguous_child_block_populations.lock_mut().push(None);
+        self.contiguous_child_block_populations
+            .lock_mut()
+            .push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
         let offset = offset(block, &contiguous_child_block_populations);
         let task_wrapper = move |entity: Entity| {
@@ -163,9 +189,14 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn children_signal_vec<ChildNodeType: Bundle>(mut self, children_signal_vec: impl SignalVec<Item = NodeBuilder<ChildNodeType>> + Send + 'static) -> Self {
+    pub fn children_signal_vec<ChildNodeType: Bundle>(
+        mut self,
+        children_signal_vec: impl SignalVec<Item = NodeBuilder<ChildNodeType>> + Send + 'static,
+    ) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
-        self.contiguous_child_block_populations.lock_mut().push(None);
+        self.contiguous_child_block_populations
+            .lock_mut()
+            .push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
         let offset = offset(block, &contiguous_child_block_populations);
         let task_wrapper = move |entity: Entity| {
@@ -329,12 +360,13 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
 
     pub fn spawn(self, world: &mut World) -> Entity {
         let id = {
-            world.spawn((
-                self.raw_node,
-                TaskHolder::new(),  // include so tasks can be added on spawn
-                Pickable::IGNORE,
-            ))
-            .id()
+            world
+                .spawn((
+                    self.raw_node,
+                    TaskHolder::new(), // include so tasks can be added on spawn
+                    Pickable::IGNORE,  // PickSelection::default(),
+                ))
+                .id()
         };
         for on_spawn in self.on_spawns {
             on_spawn(world, id);
@@ -370,28 +402,49 @@ impl TaskHolder {
 }
 
 fn get_offset(i: usize, contiguous_child_block_populations: &[Option<usize>]) -> usize {
-    contiguous_child_block_populations[0..i].iter().copied().filter_map(identity).sum()
+    contiguous_child_block_populations[0..i]
+        .iter()
+        .copied()
+        .filter_map(identity)
+        .sum()
 }
 
-fn offset(i: usize, contiguous_child_block_populations: &MutableVec<Option<usize>>) -> Mutable<usize> {
-    let offset = Mutable::new(get_offset(i, &*contiguous_child_block_populations.lock_ref()));
+fn offset(
+    i: usize,
+    contiguous_child_block_populations: &MutableVec<Option<usize>>,
+) -> Mutable<usize> {
+    let offset = Mutable::new(get_offset(
+        i,
+        &*contiguous_child_block_populations.lock_ref(),
+    ));
     let updater = {
-        contiguous_child_block_populations.signal_vec()
-        .to_signal_map(move |contiguous_child_block_populations| get_offset(i, contiguous_child_block_populations))
-        .dedupe()
-        .for_each_sync(clone!((offset) move |new_offset| {
-            offset.set_neq(new_offset);
-        }))
+        contiguous_child_block_populations
+            .signal_vec()
+            .to_signal_map(move |contiguous_child_block_populations| {
+                get_offset(i, contiguous_child_block_populations)
+            })
+            .dedupe()
+            .for_each_sync(clone!((offset) move |new_offset| {
+                offset.set_neq(new_offset);
+            }))
     };
-    spawn(updater).detach();  // future dropped when node is  // TODO: confirm
+    spawn(updater).detach(); // future dropped when node is  // TODO: confirm
     offset
 }
 
-async fn wait_until_child_block_inserted(block: usize, contiguous_child_block_populations: &MutableVec<Option<usize>>) {
-    contiguous_child_block_populations.signal_vec()
-    .to_signal_map(|contiguous_child_block_populations| {
-        contiguous_child_block_populations.get(block).copied().flatten().is_some()
-    })
-    .wait_for(true)
-    .await;
+async fn wait_until_child_block_inserted(
+    block: usize,
+    contiguous_child_block_populations: &MutableVec<Option<usize>>,
+) {
+    contiguous_child_block_populations
+        .signal_vec()
+        .to_signal_map(|contiguous_child_block_populations| {
+            contiguous_child_block_populations
+                .get(block)
+                .copied()
+                .flatten()
+                .is_some()
+        })
+        .wait_for(true)
+        .await;
 }

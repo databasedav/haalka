@@ -6,7 +6,10 @@ use node_builder::init_async_world;
 pub use node_builder::{async_world, NodeBuilder, TaskHolder};
 
 mod raw_el;
-pub use raw_el::{RawHaalkaEl, RawElement, RawElWrapper, IntoRawElement, IntoOptionRawElement, IntoElement, IntoOptionElement, ElementWrapper, Element, Spawnable};
+pub use raw_el::{
+    Element, ElementWrapper, IntoElement, IntoOptionElement, IntoOptionRawElement, IntoRawElement,
+    RawElWrapper, RawElement, RawHaalkaEl, Spawnable,
+};
 
 mod el;
 pub use el::El;
@@ -21,20 +24,22 @@ mod stack;
 pub use stack::Stack;
 
 mod align;
-pub use align::{Alignment, Align, AlignHolder, AddRemove, Alignable, ChildAlignable, ChildProcessable};
+pub use align::{
+    AddRemove, Align, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable,
+};
 
 mod pointer_event_aware;
-use pointer_event_aware::{RiggedPickingPlugin, pressable_system};
 pub use pointer_event_aware::MouseInteractionAware;
+use pointer_event_aware::{pressable_system, RiggedPickingPlugin};
 
 mod derive;
 
 mod utils;
 pub use utils::{sleep, spawn};
 
+pub use enclose::enclose as clone;
 pub use futures_signals_ext::*;
 pub use static_ref_macro::static_ref;
-pub use enclose::enclose as clone;
 
 pub use bevy_mod_picking::prelude::*;
 
@@ -44,10 +49,8 @@ pub struct HaalkaPlugin;
 
 impl Plugin for HaalkaPlugin {
     fn build(&self, app: &mut App) {
-        app
-        .add_plugins((AsyncEcsPlugin, RiggedPickingPlugin.build()))
-        .add_systems(PreStartup, init_async_world)
-        .add_systems(Update, pressable_system)
-        ;
+        app.add_plugins((AsyncEcsPlugin, RiggedPickingPlugin.build()))
+            .add_systems(PreStartup, init_async_world)
+            .add_systems(Update, pressable_system);
     }
 }

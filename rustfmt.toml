@@ -1,0 +1,10 @@
+use_field_init_shorthand = true
+newline_style = "Unix"
+
+# requires nightly
+unstable_features = true
+trailing_comma = "Vertical"
+imports_granularity = "Crate"
+wrap_comments = true
+comment_width = 100
+normalize_comments = true

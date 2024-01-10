@@ -1,8 +1,15 @@
-use bevy::{prelude::*, ui::{FocusPolicy, ContentSize, widget::{UiImageSize, TextFlags}}, text::TextLayoutInfo};
-use futures_signals::{signal::Signal};
+use bevy::{
+    prelude::*,
+    text::TextLayoutInfo,
+    ui::{
+        widget::{TextFlags, UiImageSize},
+        ContentSize, FocusPolicy,
+    },
+};
+use futures_signals::signal::Signal;
 use paste::paste;
 
-use crate::{El, RawElWrapper, Column, Row, Stack};
+use crate::{Column, El, RawElWrapper, Row, Stack};
 
 #[macro_export]
 macro_rules! impl_node_methods {
@@ -28,7 +35,7 @@ macro_rules! impl_node_methods {
                                 pub fn [<on_signal_with_ $field>]<T: Send + 'static>(
                                     self,
                                     signal: impl Signal<Item = T> + Send + 'static,
-                                    f: impl FnMut(&mut $field_type, T) + Clone + Send + 'static,
+                                    f: impl FnMut(&mut $field_type, T) + Send + 'static,
                                 ) -> Self {
                                     self.update_raw_el(|raw_el| {
                                         raw_el.on_signal_with_component::<$field_type, T>(signal, f)

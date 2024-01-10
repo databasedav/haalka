@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
 
 use bevy::prelude::*;
-use futures_signals::signal::{Signal, SignalExt, BoxSignal};
+use futures_signals::signal::{BoxSignal, Signal, SignalExt};
 
-use crate::{RawElWrapper, RawElement, IntoOptionElement};
+use crate::{IntoOptionElement, RawElWrapper, RawElement};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Alignment {
@@ -82,28 +82,41 @@ pub enum AddRemove {
     Remove,
 }
 
-fn register_align_signal<REW: RawElWrapper>(element: REW, align_signal: impl Signal<Item = Option<Vec<Alignment>>> + Send + 'static, apply_alignment: fn(&mut Style, Alignment, AddRemove)) -> REW {
+fn register_align_signal<REW: RawElWrapper>(
+    element: REW,
+    align_signal: impl Signal<Item = Option<Vec<Alignment>>> + Send + 'static,
+    apply_alignment: fn(&mut Style, Alignment, AddRemove),
+) -> REW {
     let mut last_alignments_option: Option<Vec<Alignment>> = None;
-    element.update_raw_el(|raw_el| raw_el.on_signal_with_component::<Style, Option<Vec<Alignment>>>(align_signal, move |style, aligns_option| {
-        if let Some(alignments) = aligns_option {
-            if let Some(mut last_alignments) = last_alignments_option.take() {
-                last_alignments.retain(|align| !alignments.contains(align));
-                for alignment in last_alignments {
-                    apply_alignment(style, alignment, AddRemove::Remove)
+    element.update_raw_el(|raw_el| {
+        raw_el.on_signal_with_component::<Style, Option<Vec<Alignment>>>(
+            align_signal,
+            move |style, aligns_option| {
+                if let Some(alignments) = aligns_option {
+                    if let Some(mut last_alignments) = last_alignments_option.take() {
+                        last_alignments.retain(|align| !alignments.contains(align));
+                        for alignment in last_alignments {
+                            apply_alignment(style, alignment, AddRemove::Remove)
+                        }
+                    }
+                    for alignment in &alignments {
+                        apply_alignment(style, *alignment, AddRemove::Add)
+                    }
+                    last_alignments_option = if !alignments.is_empty() {
+                        Some(alignments)
+                    } else {
+                        None
+                    };
+                } else {
+                    if let Some(last_aligns) = last_alignments_option.take() {
+                        for align in last_aligns {
+                            apply_alignment(style, align, AddRemove::Remove)
+                        }
+                    }
                 }
-            }
-            for alignment in &alignments {
-                apply_alignment(style, *alignment, AddRemove::Add)
-            }
-            last_alignments_option = if !alignments.is_empty() { Some(alignments) } else { None };
-        } else {
-            if let Some(last_aligns) = last_alignments_option.take() {
-                for align in last_aligns {
-                    apply_alignment(style, align, AddRemove::Remove)
-                }
-            }
-        }
-    }))
+            },
+        )
+    })
 }
 
 pub trait Alignable: RawElWrapper {
@@ -114,7 +127,10 @@ pub trait Alignable: RawElWrapper {
         self
     }
 
-    fn align_signal(mut self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self {
+    fn align_signal(
+        mut self,
+        align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static,
+    ) -> Self {
         *self.align_mut() = Some(AlignHolder::AlignSignal(align_option_signal.boxed()));
         self
     }
@@ -131,37 +147,52 @@ pub trait Alignable: RawElWrapper {
         })
     }
 
-    fn align_content_signal(self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self {
-        register_align_signal(self, align_option_signal.map(|align_option| align_option.map(|align| align.alignments.into_iter().collect())), Self::apply_content_alignment)
+    fn align_content_signal(
+        self,
+        align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static,
+    ) -> Self {
+        register_align_signal(
+            self,
+            align_option_signal.map(|align_option| {
+                align_option.map(|align| align.alignments.into_iter().collect())
+            }),
+            Self::apply_content_alignment,
+        )
     }
 }
 
-pub trait ChildAlignable: Alignable where Self: 'static {
-    fn update_style(_style: &mut Style) {}  // only Stack requires base updates
+pub trait ChildAlignable: Alignable
+where
+    Self: 'static,
+{
+    fn update_style(_style: &mut Style) {} // only Stack requires base updates
 
     fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove);
 
     fn manage<NodeType: Bundle, Child: RawElWrapper + Alignable>(mut child: Child) -> Child {
         child = child.update_raw_el(|raw_el| raw_el.with_component::<Style>(Self::update_style));
-        // TODO: this .take means that child can't be passed around parents without losing align info, but this can be easily added if desired
+        // TODO: this .take means that child can't be passed around parents without losing align
+        // info, but this can be easily added if desired
         if let Some(align) = child.align_mut().take() {
             match align {
                 AlignHolder::Align(align) => {
-                    child = child.update_raw_el(|raw_el| raw_el.with_component::<Style>(move |style| {
-                        for align in align.alignments {
-                            Self::apply_alignment(style, align, AddRemove::Add)
-                        }
-                    }))
+                    child = child.update_raw_el(|raw_el| {
+                        raw_el.with_component::<Style>(move |style| {
+                            for align in align.alignments {
+                                Self::apply_alignment(style, align, AddRemove::Add)
+                            }
+                        })
+                    })
                 }
                 AlignHolder::AlignSignal(align_option_signal) => {
                     child = register_align_signal(
                         child,
                         {
-                            align_option_signal.map(|align_option|
+                            align_option_signal.map(|align_option| {
                                 align_option.map(|align| align.alignments.into_iter().collect())
-                            )
+                            })
                         },
-                        Self::apply_alignment
+                        Self::apply_alignment,
                     )
                 }
             }
@@ -170,16 +201,23 @@ pub trait ChildAlignable: Alignable where Self: 'static {
     }
 }
 
-// TODO: ideally want to be able to process raw el's as well if they need some, but this is convenient for now ...
+// TODO: ideally want to be able to process raw el's as well (e.g. processability should not depend
+// on alignability) if they need some, but this is convenient for now ...
 pub trait ChildProcessable: Alignable {
-    fn process_child<IOE: IntoOptionElement>(child_option: IOE) -> std::option::Option<<IOE as IntoOptionElement>::EL>;
+    fn process_child<IOE: IntoOptionElement>(
+        child_option: IOE,
+    ) -> std::option::Option<<IOE as IntoOptionElement>::EL>;
 }
 
 impl<CA: ChildAlignable> ChildProcessable for CA {
-    fn process_child<IOE: IntoOptionElement>(child_option: IOE) -> std::option::Option<<IOE as IntoOptionElement>::EL>
-    {
+    fn process_child<IOE: IntoOptionElement>(
+        child_option: IOE,
+    ) -> std::option::Option<<IOE as IntoOptionElement>::EL> {
         child_option.into_option_element().map(|mut child| {
-            child = <Self as ChildAlignable>::manage::<<<IOE as IntoOptionElement>::EL as RawElement>::NodeType, <IOE as IntoOptionElement>::EL>(child);
+            child = <Self as ChildAlignable>::manage::<
+                <<IOE as IntoOptionElement>::EL as RawElement>::NodeType,
+                <IOE as IntoOptionElement>::EL,
+            >(child);
             child
         })
     }

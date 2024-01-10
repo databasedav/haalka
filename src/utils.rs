@@ -1,9 +1,8 @@
 use std::time::Duration;
 
 use async_io::Timer;
-use bevy::tasks::{Task, AsyncComputeTaskPool};
+use bevy::tasks::{AsyncComputeTaskPool, Task};
 use futures_util::Future;
-
 
 pub async fn sleep(duration: Duration) {
     Timer::after(duration).await;

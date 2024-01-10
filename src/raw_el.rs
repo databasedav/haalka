@@ -1,11 +1,23 @@
-use std::{mem, sync::{Arc, Mutex}};
+use std::{
+    mem,
+    sync::{Arc, Mutex},
+};
 
 use bevy::{prelude::*, tasks::Task};
 use enclose::enclose as clone;
-use futures_signals::{signal::{Signal, SignalExt}, signal_vec::{SignalVec, SignalVecExt}};
+use futures_signals::{
+    signal::{Signal, SignalExt},
+    signal_vec::{SignalVec, SignalVecExt},
+};
 use futures_util::Future;
 
-use crate::{NodeBuilder, node_builder::TaskHolder, async_world, align::{Alignment, AlignHolder, Alignable, ChildAlignable, AddRemove, ChildProcessable}, pointer_event_aware::MouseInteractionAware};
+use crate::{
+    align::{AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable},
+    async_world,
+    node_builder::TaskHolder,
+    pointer_event_aware::MouseInteractionAware,
+    NodeBuilder,
+};
 
 // TODO: how can i make use of this default ? should i just remove it ?
 pub struct RawHaalkaEl<NodeType = NodeBundle> {
@@ -14,7 +26,10 @@ pub struct RawHaalkaEl<NodeType = NodeBundle> {
 
 impl<NodeType: Bundle> From<NodeType> for RawHaalkaEl<NodeType> {
     fn from(node_bundle: NodeType) -> Self {
-        Self { node_builder: Some(NodeBuilder::from(node_bundle)), ..Self::new_dummy() }
+        Self {
+            node_builder: Some(NodeBuilder::from(node_bundle)),
+            ..Self::new_dummy()
+        }
     }
 }
 
@@ -29,7 +44,10 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         Self { node_builder: None }
     }
 
-    pub fn update_node_builder(mut self, updater: impl FnOnce(NodeBuilder<NodeType>) -> NodeBuilder<NodeType>) -> Self {
+    pub fn update_node_builder(
+        mut self,
+        updater: impl FnOnce(NodeBuilder<NodeType>) -> NodeBuilder<NodeType>,
+    ) -> Self {
         self.node_builder = Some(updater(self.node_builder.unwrap()));
         self
     }
@@ -38,68 +56,93 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         self.node_builder.unwrap()
     }
 
-    pub fn child<IOE: IntoOptionRawElement>(self, child_option: IOE) -> Self
-    where <IOE::EL as RawElement>::NodeType: Bundle
+    pub fn child<IORE: IntoOptionRawElement>(self, child_option: IORE) -> Self
+    where
+        <IORE::EL as RawElement>::NodeType: Bundle,
     {
         if let Some(child) = child_option.into_option_element() {
-            return self.update_node_builder(|node_builder| node_builder.child(child.into_raw().into_node_builder()))
+            return self.update_node_builder(|node_builder| {
+                node_builder.child(child.into_raw().into_node_builder())
+            });
         }
         self
     }
 
-    pub fn child_signal<IOE: IntoOptionRawElement>(self, child_option_signal: impl Signal<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as RawElement>::NodeType: Bundle
+    pub fn child_signal<IORE: IntoOptionRawElement>(
+        self,
+        child_option_signal: impl Signal<Item = IORE> + Send + 'static,
+    ) -> Self
+    where
+        <IORE::EL as RawElement>::NodeType: Bundle,
     {
         self.update_node_builder(|node_builder| {
-            node_builder
-            .child_signal(child_option_signal.map(|child_option| {
-                child_option.into_option_element()
-                .map(|child| child.into_raw().into_node_builder())
-            })
-        )})
+            node_builder.child_signal(child_option_signal.map(|child_option| {
+                child_option
+                    .into_option_element()
+                    .map(|child| child.into_raw().into_node_builder())
+            }))
+        })
     }
 
-    pub fn children<IOE: IntoOptionRawElement, I: IntoIterator<Item = IOE>>(self, children_options: I) -> Self
-    where <IOE::EL as RawElement>::NodeType: Bundle, I::IntoIter: Send + 'static
+    pub fn children<IORE: IntoOptionRawElement, I: IntoIterator<Item = IORE>>(
+        self,
+        children_options: I,
+    ) -> Self
+    where
+        <IORE::EL as RawElement>::NodeType: Bundle,
+        I::IntoIter: Send + 'static,
     {
         self.update_node_builder(|node_builder| {
             node_builder.children(
-                children_options.into_iter()
-                .filter_map(|child_option| child_option.into_option_element())
-                .map(|child| child.into_raw_element().into_raw().into_node_builder())
+                children_options
+                    .into_iter()
+                    .filter_map(|child_option| child_option.into_option_element())
+                    .map(|child| child.into_raw_element().into_raw().into_node_builder()),
             )
         })
     }
 
-    pub fn children_signal_vec<IOE: IntoOptionRawElement>(self, children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static) -> Self
-    where <IOE::EL as RawElement>::NodeType: Bundle
+    pub fn children_signal_vec<IORE: IntoOptionRawElement>(
+        self,
+        children_options_signal_vec: impl SignalVec<Item = IORE> + Send + 'static,
+    ) -> Self
+    where
+        <IORE::EL as RawElement>::NodeType: Bundle,
     {
         self.update_node_builder(|node_builder| {
             node_builder.children_signal_vec(
                 children_options_signal_vec
-                .filter_map(|child_option| child_option.into_option_element())
-                .map(|child| child.into_raw_element().into_raw().into_node_builder())
+                    .filter_map(|child_option| child_option.into_option_element())
+                    .map(|child| child.into_raw_element().into_raw().into_node_builder()),
             )
         })
     }
 
     pub fn on_spawn(self, on_spawn: impl FnOnce(&mut World, Entity) + Send + 'static) -> Self {
-        self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn)))
+        self.update_raw_el(|raw_el| {
+            raw_el.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn))
+        })
     }
 
-    pub fn on_signal<T, Fut: Future<Output = ()> + Send + 'static>(self, signal: impl Signal<Item = T> + Send + 'static, f: impl FnMut(Entity, T) -> Fut + Send + 'static) -> Self {
-        self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.on_signal(signal, f)))
+    pub fn on_signal<T, Fut: Future<Output = ()> + Send + 'static>(
+        self,
+        signal: impl Signal<Item = T> + Send + 'static,
+        f: impl FnMut(Entity, T) -> Fut + Send + 'static,
+    ) -> Self {
+        self.update_raw_el(|raw_el| {
+            raw_el.update_node_builder(|node_builder| node_builder.on_signal(signal, f))
+        })
     }
 
-    pub fn on_signal_sync<T>(self, signal: impl Signal<Item = T> + Send + 'static, mut f: impl FnMut(Entity, T) + Send + 'static) -> Self {
-        self.update_raw_el(move |raw_el|
-            raw_el.update_node_builder(move |node_builder|
-                node_builder.on_signal(signal, move |entity, value| {
-                    f(entity, value);
-                    async {}
-                })
-            )
-        )
+    pub fn on_signal_sync<T>(
+        self,
+        signal: impl Signal<Item = T> + Send + 'static,
+        mut f: impl FnMut(Entity, T) + Send + 'static,
+    ) -> Self {
+        self.on_signal(signal, move |entity, value| {
+            f(entity, value);
+            async {}
+        })
     }
 
     pub fn with_entity(self, f: impl FnOnce(&mut EntityWorldMut) + Send + 'static) -> Self {
@@ -160,11 +203,22 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         })
     }
 
-    pub fn component_signal<C: Component>(self, component_signal: impl Signal<Item = C> + 'static + Send) -> Self {
-        // TODO: need partial_eq derivations for all the node related components to minimize updates with .dedupe
-        self.on_signal_with_entity::<C>(component_signal, move |entity, value| {
-            entity.insert(value);
-        })
+    pub fn component_signal<C: Component>(
+        self,
+        component_signal: impl Signal<Item = impl Into<Option<C>>> + 'static + Send,
+    ) -> Self {
+        // TODO: need partial_eq derivations for all the node related components to minimize updates
+        // with .dedupe
+        self.on_signal_with_entity::<Option<C>>(
+            component_signal.map(|into_component_option| into_component_option.into()),
+            move |entity, component_option| {
+                if let Some(component) = component_option {
+                    entity.insert(component);
+                } else {
+                    entity.remove::<C>();
+                }
+            },
+        )
     }
 }
 
@@ -216,14 +270,23 @@ pub trait RawElWrapper: Sized {
 
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<Self::NodeType>;
 
-    fn update_raw_el(mut self, updater: impl FnOnce(RawHaalkaEl<Self::NodeType>) -> RawHaalkaEl<Self::NodeType>) -> Self {
-        let raw_el = mem::replace(self.raw_el_mut(), RawHaalkaEl::<Self::NodeType>::new_dummy());
+    fn update_raw_el(
+        mut self,
+        updater: impl FnOnce(RawHaalkaEl<Self::NodeType>) -> RawHaalkaEl<Self::NodeType>,
+    ) -> Self {
+        let raw_el = mem::replace(
+            self.raw_el_mut(),
+            RawHaalkaEl::<Self::NodeType>::new_dummy(),
+        );
         mem::swap(self.raw_el_mut(), &mut updater(raw_el));
         self
     }
 
     fn into_raw_el(mut self) -> RawHaalkaEl<Self::NodeType> {
-        mem::replace(self.raw_el_mut(), RawHaalkaEl::<Self::NodeType>::new_dummy())
+        mem::replace(
+            self.raw_el_mut(),
+            RawHaalkaEl::<Self::NodeType>::new_dummy(),
+        )
     }
 }
 
