@@ -7,8 +7,8 @@ pub use node_builder::{async_world, NodeBuilder, TaskHolder};
 
 mod raw_el;
 pub use raw_el::{
-    Element, ElementWrapper, IntoElement, IntoOptionElement, IntoOptionRawElement, IntoRawElement,
-    RawElWrapper, RawElement, RawHaalkaEl, Spawnable,
+    Element, ElementWrapper, IntoElement, IntoOptionElement, IntoOptionRawElement, IntoRawElement, RawElWrapper,
+    RawElement, RawHaalkaEl, Spawnable,
 };
 
 mod el;
@@ -24,9 +24,7 @@ mod stack;
 pub use stack::Stack;
 
 mod align;
-pub use align::{
-    AddRemove, Align, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable,
-};
+pub use align::{AddRemove, Align, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable};
 
 mod pointer_event_aware;
 pub use pointer_event_aware::MouseInteractionAware;

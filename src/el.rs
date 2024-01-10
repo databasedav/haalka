@@ -5,8 +5,8 @@ use futures_signals::{
 };
 
 use crate::{
-    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, Column,
-    IntoOptionElement, RawElWrapper, RawElement, RawHaalkaEl,
+    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, Column, IntoOptionElement,
+    RawElWrapper, RawElement, RawHaalkaEl,
 };
 
 pub struct El<NodeType> {
@@ -59,9 +59,7 @@ impl<NodeType: Bundle> El<NodeType> {
         <IOE::EL as RawElement>::NodeType: Bundle,
         IOE::EL: ChildProcessable,
     {
-        self.raw_el = self
-            .raw_el
-            .child_signal(child_option.map(Self::process_child));
+        self.raw_el = self.raw_el.child_signal(child_option.map(Self::process_child));
         self
     }
 

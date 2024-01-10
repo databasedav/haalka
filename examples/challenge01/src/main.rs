@@ -6,7 +6,7 @@
 //     Mouse: Separate styles for hover and press.
 //     Keyboard/Controller: Separate styles for currently focused element.
 
-use std::{convert::identity, fmt::Display, time::Duration};
+use std::{convert::identity, fmt::Display, hash::Hash, time::Duration};
 
 use bevy::prelude::*;
 use futures_signals::map_ref;
@@ -27,7 +27,7 @@ fn main() {
         ))
         .add_plugins(EventListenerPlugin::<MenuInputEvent>::default())
         .add_systems(Startup, (setup, spawn_ui_root))
-        .add_systems(Update, menu_input_events)
+        .add_systems(Update, (keyboard_menu_input_events, gamepad_menu_input_events))
         .run();
 }
 
@@ -140,10 +140,7 @@ impl Button {
         self
     }
 
-    fn selected_signal(
-        mut self,
-        selected_signal: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
+    fn selected_signal(mut self, selected_signal: impl Signal<Item = bool> + Send + 'static) -> Self {
         let syncer = spawn(sync(self.selected.clone(), selected_signal));
         self.el = self.el.update_raw_el(|raw_el| raw_el.hold_tasks([syncer]));
         self
@@ -233,29 +230,29 @@ impl Checkbox {
         Self {
             el: {
                 lil_baby_button()
-                .apply(|element| focus_on_signal(element, controlling.signal()))
-                .apply(|element| {
-                    input_event_listener_controller(
-                        element,
-                        controlling_signal,
-                        clone!((checked) move || {
-                            On::<MenuInputEvent>::run(clone!((checked) move |event: ListenerMut<MenuInputEvent>| {
-                                match event.input {
-                                    MenuInput::Select => {
-                                        checked.set_neq(!checked.get());
-                                    },
-                                    MenuInput::Delete => {
-                                        checked.set(false);
-                                    },
-                                    _ => ()
-                                }
-                            }))
-                        })
-                    )
-                })
-                .on_click(clone!((checked) move || { flip(&checked) }))
-                .selected_signal(checked.signal())
-                .into_element()
+                    .apply(|element| focus_on_signal(element, controlling.signal()))
+                    .apply(|element| {
+                        input_event_listener_controller(
+                            element,
+                            controlling_signal,
+                            clone!((checked) move || {
+                                On::<MenuInputEvent>::run(clone!((checked) move |event: ListenerMut<MenuInputEvent>| {
+                                    match event.input {
+                                        MenuInput::Select => {
+                                            checked.set_neq(!checked.get());
+                                        },
+                                        MenuInput::Delete => {
+                                            checked.set(false);
+                                        },
+                                        _ => ()
+                                    }
+                                }))
+                            }),
+                        )
+                    })
+                    .on_click(clone!((checked) move || { flip(&checked) }))
+                    .selected_signal(checked.signal())
+                    .into_element()
             },
             controlling,
         }
@@ -392,7 +389,7 @@ struct IterableOptions {
     controlling: Mutable<bool>,
 }
 
-const FLASH_MS: f32 = 50.; // TODO: address background color desyncing
+const FLASH_MS: f32 = 50.; // TODO: address background/border color desyncing
 
 impl IterableOptions {
     fn new<T: Clone + PartialEq + Display + Send + Sync + 'static>(
@@ -421,7 +418,7 @@ impl IterableOptions {
                                                     left_pressed.set(true);
                                                     spawn(clone!((left_pressed) async move {
                                                         sleep(Duration::from_millis(FLASH_MS as u64)).await;
-                                                        left_pressed.signal().wait_for(true).await;  // TODO: this doesn't prevent desyncing, could be lower level issue since only the background color sticks and not only here
+                                                        left_pressed.signal().wait_for(true).await;  // TODO: this doesn't prevent desyncing, could be lower level issue ...
                                                         left_pressed.set(false);
                                                     })).detach();
                                                     -1
@@ -510,66 +507,58 @@ impl Slider {
                     left.signal().for_each_sync(|left| value.set_neq(left / max * 100.)).await;
                 }));
                 Row::<NodeBundle>::new()
-                .update_raw_el(|raw_el| raw_el.insert(SliderTag))
-                .apply(|element| focus_on_signal(element, controlling.signal()))
-                .apply(|element| {
-                    input_event_listener_controller(
-                        element,
-                        controlling_signal,
-                        clone!((left) move || {
-                            On::<MenuInputEvent>::run(clone!((left) move |event: ListenerMut<MenuInputEvent>| {
-                                match event.input {
-                                    MenuInput::Left | MenuInput::Right => {
-                                        let dir = if matches!(event.input, MenuInput::Left) { -1. } else { 1. };
-                                        left.update(move |left| left + dir * max * 0.001);
-                                    },
-                                    _ => ()
-                                }
-                            }))
-                        })
-                    )
-                })
-                .update_raw_el(|raw_el| raw_el.hold_tasks([value_setter]))
-                .with_style(|style| style.column_gap = Val::Px(10.))
-                .item(
-                    El::<TextBundle>::new().text_signal(
-                        value.signal().map(|value| text(&format!("{:.1}", value))),
-                    ),
-                )
-                .item(
-                    Stack::<NodeBundle>::new()
-                    .with_style(move |style| {
-                        style.width = Val::Px(slider_width);
-                        style.height = Val::Px(5.);
-                        style.padding = UiRect::horizontal(Val::Px(slider_padding));
-                    })
-                    .background_color(BackgroundColor(Color::BLACK))
-                    .layer({
-                        let dragging = Mutable::new(false);
-                        lil_baby_button()
-                            .selected_signal(dragging.signal())
-                            .el // we need lower level access now
-                            .on_signal_with_style(left.signal(), |style, left| {
-                                style.left = Val::Px(left)
-                            })
-                            .align(Align::new().center_y())
-                            .update_raw_el(|raw_el| {
-                                raw_el.insert((
-                                    On::<Pointer<DragStart>>::run(
-                                        clone!((dragging) move || dragging.set_neq(true)),
-                                    ),
-                                    On::<Pointer<DragEnd>>::run(move || {
-                                        dragging.set_neq(false)
-                                    }),
-                                    On::<Pointer<Drag>>::run(
-                                        move |drag: Listener<Pointer<Drag>>| {
-                                            left.set_neq((left.get() + drag.delta.x).max(0.).min(max));
+                    .update_raw_el(|raw_el| raw_el.insert(SliderTag))
+                    .apply(|element| focus_on_signal(element, controlling.signal()))
+                    .apply(|element| {
+                        input_event_listener_controller(
+                            element,
+                            controlling_signal,
+                            clone!((left) move || {
+                                On::<MenuInputEvent>::run(clone!((left) move |event: ListenerMut<MenuInputEvent>| {
+                                    match event.input {
+                                        MenuInput::Left | MenuInput::Right => {
+                                            let dir = if matches!(event.input, MenuInput::Left) { -1. } else { 1. };
+                                            left.update(move |left| (left + dir * max * 0.001).max(0.).min(max));
                                         },
-                                    ),
-                                ))
-                            })
+                                        _ => ()
+                                    }
+                                }))
+                            }),
+                        )
                     })
-                )
+                    .update_raw_el(|raw_el| raw_el.hold_tasks([value_setter]))
+                    .with_style(|style| style.column_gap = Val::Px(10.))
+                    .item(
+                        El::<TextBundle>::new().text_signal(value.signal().map(|value| text(&format!("{:.1}", value)))),
+                    )
+                    .item(
+                        Stack::<NodeBundle>::new()
+                            .with_style(move |style| {
+                                style.width = Val::Px(slider_width);
+                                style.height = Val::Px(5.);
+                                style.padding = UiRect::horizontal(Val::Px(slider_padding));
+                            })
+                            .background_color(BackgroundColor(Color::BLACK))
+                            .layer({
+                                let dragging = Mutable::new(false);
+                                lil_baby_button()
+                                    .selected_signal(dragging.signal())
+                                    .el // we need lower level access now
+                                    .on_signal_with_style(left.signal(), |style, left| style.left = Val::Px(left))
+                                    .align(Align::new().center_y())
+                                    .update_raw_el(|raw_el| {
+                                        raw_el.insert((
+                                            On::<Pointer<DragStart>>::run(
+                                                clone!((dragging) move || dragging.set_neq(true)),
+                                            ),
+                                            On::<Pointer<DragEnd>>::run(move || dragging.set_neq(false)),
+                                            On::<Pointer<Drag>>::run(move |drag: Listener<Pointer<Drag>>| {
+                                                left.set_neq((left.get() + drag.delta.x).max(0.).min(max));
+                                            }),
+                                        ))
+                                    })
+                            }),
+                    )
             },
             controlling,
         }
@@ -620,10 +609,7 @@ fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<N
         .background_color_signal(
             hovered
                 .signal()
-                .map_bool(
-                    || NORMAL_BUTTON.with_l(NORMAL_BUTTON.l() + 0.1),
-                    || NORMAL_BUTTON,
-                )
+                .map_bool(|| NORMAL_BUTTON.with_l(NORMAL_BUTTON.l() + 0.1), || NORMAL_BUTTON)
                 .map(BackgroundColor),
         )
         .on_hovered_change(move |is_hovered| {
@@ -648,10 +634,7 @@ where
 {
     fn controlling(&self) -> &Mutable<bool>;
 
-    fn controlling_signal(
-        mut self,
-        controlling_signal: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
+    fn controlling_signal(mut self, controlling_signal: impl Signal<Item = bool> + Send + 'static) -> Self {
         let syncer = spawn(sync(self.controlling().clone(), controlling_signal));
         self = self.update_raw_el(|raw_el| raw_el.hold_tasks([syncer]));
         self
@@ -879,8 +862,7 @@ fn focus_on_no_child_hovered<E: Element>(
 
 fn sub_menu_child_hover_manager<E: Element>(element: E, hovereds: MutableVec<Mutable<bool>>) -> E {
     let l = hovereds.lock_ref().len();
-    element
-    .apply(|element| {
+    element.apply(|element| {
         input_event_listener_controller(
             element,
             always(true),
@@ -911,7 +893,7 @@ fn sub_menu_child_hover_manager<E: Element>(element: E, hovereds: MutableVec<Mut
                         _ => ()
                     }
                 }))
-            })
+            }),
         )
     })
 }
@@ -949,8 +931,7 @@ fn audio_menu() -> Column<NodeBundle> {
         |hovered: Mutable<bool>| {
             menu_item(
                 "item 3",
-                Checkbox::new(misc_demo_settings().checkbox.clone())
-                    .controlling_signal(hovered.signal()),
+                Checkbox::new(misc_demo_settings().checkbox.clone()).controlling_signal(hovered.signal()),
                 hovered,
             )
         },
@@ -968,39 +949,34 @@ fn audio_menu() -> Column<NodeBundle> {
         |hovered: Mutable<bool>| {
             menu_item(
                 "master volume",
-                Slider::new(audio_settings().master_volume.clone())
-                    .controlling_signal(hovered.signal()),
+                Slider::new(audio_settings().master_volume.clone()).controlling_signal(hovered.signal()),
                 hovered,
             )
         },
         |hovered: Mutable<bool>| {
             menu_item(
                 "effect volume",
-                Slider::new(audio_settings().effect_volume.clone())
-                    .controlling_signal(hovered.signal()),
+                Slider::new(audio_settings().effect_volume.clone()).controlling_signal(hovered.signal()),
                 hovered,
             )
         },
         |hovered: Mutable<bool>| {
             menu_item(
                 "music volume",
-                Slider::new(audio_settings().music_volume.clone())
-                    .controlling_signal(hovered.signal()),
+                Slider::new(audio_settings().music_volume.clone()).controlling_signal(hovered.signal()),
                 hovered,
             )
         },
         |hovered: Mutable<bool>| {
             menu_item(
                 "voice volume",
-                Slider::new(audio_settings().voice_volume.clone())
-                    .controlling_signal(hovered.signal()),
+                Slider::new(audio_settings().voice_volume.clone()).controlling_signal(hovered.signal()),
                 hovered,
             )
         },
     ];
     let l = item_funcs.len();
-    let hovereds =
-        MutableVec::new_with_values((0..l).into_iter().map(|_| Mutable::new(false)).collect());
+    let hovereds = MutableVec::new_with_values((0..l).into_iter().map(|_| Mutable::new(false)).collect());
     menu_base(SUB_MENU_WIDTH, SUB_MENU_HEIGHT, "audio menu")
         .apply(|element| focus_on_no_child_hovered(element, hovereds.signal_vec_cloned()))
         .apply(|element| sub_menu_child_hover_manager(element, hovereds.clone()))
@@ -1060,20 +1036,18 @@ fn graphics_menu() -> Column<NodeBundle> {
         ("bloom quality", bloom_quality, false),
     ];
     let l = items.len();
-    let hovereds = MutableVec::new_with_values(
-        (0..l)
-            .into_iter()
-            .map(|_| Mutable::new(false))
-            .collect::<Vec<_>>(),
-    );
+    let hovereds = MutableVec::new_with_values((0..l).into_iter().map(|_| Mutable::new(false)).collect::<Vec<_>>());
     menu_base(SUB_MENU_WIDTH, SUB_MENU_HEIGHT, "graphics menu")
         .apply(|element| focus_on_no_child_hovered(element, hovereds.signal_vec_cloned()))
         .apply(|element| sub_menu_child_hover_manager(element, hovereds.clone()))
         .update_raw_el(|raw_el| raw_el.hold_tasks([preset_broadcaster, preset_controller]))
         .items({
             let hovereds = hovereds.lock_ref().into_iter().cloned().collect::<Vec<_>>();
-            items.into_iter().zip(hovereds).enumerate().map(
-                move |(i, ((label, quality, clearable), hovered))| {
+            items
+                .into_iter()
+                .zip(hovereds)
+                .enumerate()
+                .map(move |(i, ((label, quality, clearable), hovered))| {
                     menu_item(
                         label,
                         {
@@ -1087,8 +1061,7 @@ fn graphics_menu() -> Column<NodeBundle> {
                         hovered,
                     )
                     .z_index(ZIndex::Local((l - i) as i32))
-                },
-            )
+                })
         })
         .item(
             // solely here to dehover dropdown menu items  // TODO: this can also be solved by
@@ -1096,9 +1069,7 @@ fn graphics_menu() -> Column<NodeBundle> {
             // should do both of these
             El::<NodeBundle>::new()
                 .with_style(move |style| {
-                    style.height = Val::Px(
-                        SUB_MENU_HEIGHT - (l + 1) as f32 * MENU_ITEM_HEIGHT - BASE_PADDING * 2.,
-                    )
+                    style.height = Val::Px(SUB_MENU_HEIGHT - (l + 1) as f32 * MENU_ITEM_HEIGHT - BASE_PADDING * 2.)
                 })
                 .on_hovered_change(|is_hovered| {
                     if is_hovered {
@@ -1125,34 +1096,18 @@ fn x_button(mut on_click: impl FnMut() + 'static + Send + Sync) -> impl Element 
                 },
             ))
         })
-        .child(
-            El::<TextBundle>::new().text(text("x")).on_signal_with_text(
-                hovered.signal().map_bool(|| Color::RED, || TEXT_COLOR),
-                |text, color| {
-                    if let Some(section) = text.sections.first_mut() {
-                        section.style.color = color;
-                    }
-                },
-            ), /*  or like this:
-                * .text_signal(
-                *     hovered.signal().map_bool(|| Color::RED, || TEXT_COLOR)
-                *     .map(|color| {
-                *         Text::from_section(
-                *             "x",
-                *             TextStyle { font_size: 30.0, color, ..default() }
-                *         )
-                *     })
-                * ) */
-        )
+        .child(El::<TextBundle>::new().text(text("x")).on_signal_with_text(
+            hovered.signal().map_bool(|| Color::RED, || TEXT_COLOR),
+            |text, color| {
+                if let Some(section) = text.sections.first_mut() {
+                    section.style.color = color;
+                }
+            },
+        ))
 }
 
 #[static_ref]
 fn sub_menu_selected() -> &'static Mutable<Option<SubMenu>> {
-    Mutable::new(None)
-}
-
-#[static_ref]
-fn focused_entity_option() -> &'static Mutable<Option<Entity>> {
     Mutable::new(None)
 }
 
@@ -1181,64 +1136,39 @@ fn menu() -> impl Element {
     Stack::<NodeBundle>::new()
         .layer(
             menu_base(MAIN_MENU_SIDES, MAIN_MENU_SIDES, "main menu")
-                .apply(|element| {
-                    focus_on_signal(element, show_sub_menu().signal_ref(Option::is_none))
-                })
+                .apply(|element| focus_on_signal(element, show_sub_menu().signal_ref(Option::is_none)))
                 .apply(move |element| {
-                    input_event_listener_controller(
-                        element,
-                        show_sub_menu().signal_ref(Option::is_none),
-                        move || {
-                            On::<MenuInputEvent>::run(move |event: ListenerMut<MenuInputEvent>| {
-                                match event.input {
-                                    MenuInput::Up | MenuInput::Down => {
-                                        if let Some(cur_sub_menu) = sub_menu_selected().get() {
-                                            if let Some(i) = SubMenu::iter()
-                                                .position(|sub_menu| cur_sub_menu == sub_menu)
-                                            {
-                                                let sub_menus = SubMenu::iter().collect::<Vec<_>>();
-                                                sub_menu_selected().set(
-                                                    if matches!(event.input, MenuInput::Down) {
-                                                        sub_menus
-                                                            .iter()
-                                                            .rev()
-                                                            .cycle()
-                                                            .skip(sub_menus.len() - i)
-                                                            .next()
-                                                            .copied()
-                                                    } else {
-                                                        sub_menus
-                                                            .iter()
-                                                            .cycle()
-                                                            .skip(i + 1)
-                                                            .next()
-                                                            .copied()
-                                                    },
-                                                )
-                                            }
+                    input_event_listener_controller(element, show_sub_menu().signal_ref(Option::is_none), move || {
+                        On::<MenuInputEvent>::run(move |event: ListenerMut<MenuInputEvent>| match event.input {
+                            MenuInput::Up | MenuInput::Down => {
+                                if let Some(cur_sub_menu) = sub_menu_selected().get() {
+                                    if let Some(i) = SubMenu::iter().position(|sub_menu| cur_sub_menu == sub_menu) {
+                                        let sub_menus = SubMenu::iter().collect::<Vec<_>>();
+                                        sub_menu_selected().set(if matches!(event.input, MenuInput::Down) {
+                                            sub_menus.iter().rev().cycle().skip(sub_menus.len() - i).next().copied()
                                         } else {
-                                            sub_menu_selected().set_neq(Some(
-                                                if matches!(event.input, MenuInput::Up) {
-                                                    SubMenu::iter().last().unwrap()
-                                                } else {
-                                                    SubMenu::iter().next().unwrap()
-                                                },
-                                            ));
-                                        }
+                                            sub_menus.iter().cycle().skip(i + 1).next().copied()
+                                        })
                                     }
-                                    MenuInput::Select => {
-                                        if let Some(sub_menu) = sub_menu_selected().get() {
-                                            show_sub_menu().set_neq(Some(sub_menu));
-                                        }
-                                    }
-                                    MenuInput::Back => {
-                                        sub_menu_selected().take();
-                                    }
-                                    _ => (),
+                                } else {
+                                    sub_menu_selected().set_neq(Some(if matches!(event.input, MenuInput::Up) {
+                                        SubMenu::iter().last().unwrap()
+                                    } else {
+                                        SubMenu::iter().next().unwrap()
+                                    }));
                                 }
-                            })
-                        },
-                    )
+                            }
+                            MenuInput::Select => {
+                                if let Some(sub_menu) = sub_menu_selected().get() {
+                                    show_sub_menu().set_neq(Some(sub_menu));
+                                }
+                            }
+                            MenuInput::Back => {
+                                sub_menu_selected().take();
+                            }
+                            _ => (),
+                        })
+                    })
                 })
                 .with_style(|style| style.row_gap = Val::Px(BASE_PADDING * 2.))
                 .item(
@@ -1247,14 +1177,12 @@ fn menu() -> impl Element {
                         .align_content(Align::center())
                         .items([
                             sub_menu_button(SubMenu::Audio).hovered_signal(
-                                sub_menu_selected().signal_ref(|selected_option| {
-                                    selected_option == &Some(SubMenu::Audio)
-                                }),
+                                sub_menu_selected()
+                                    .signal_ref(|selected_option| selected_option == &Some(SubMenu::Audio)),
                             ),
                             sub_menu_button(SubMenu::Graphics).hovered_signal(
-                                sub_menu_selected().signal_ref(|selected_option| {
-                                    selected_option == &Some(SubMenu::Graphics)
-                                }),
+                                sub_menu_selected()
+                                    .signal_ref(|selected_option| selected_option == &Some(SubMenu::Graphics)),
                             ),
                         ]),
                 ),
@@ -1369,16 +1297,11 @@ struct MenuInputRateLimiter(Timer);
 #[derive(Resource)]
 struct SliderRateLimiter(Timer);
 
-#[static_ref]
-fn controlling_slider() -> &'static Mutable<bool> {
-    Mutable::new(false)
-}
-
-fn rate_limited_menu_input(
-    key: KeyCode,
+fn rate_limited_menu_input<T: Copy + Eq + Hash + Send + Sync>(
+    key: T,
     input: MenuInput,
     entity: Entity,
-    keys: &Res<Input<KeyCode>>,
+    keys: &Res<Input<T>>,
     menu_input_events: &mut EventWriter<MenuInputEvent>,
     rate_limiter: &mut Timer,
     time: &Res<Time>,
@@ -1400,7 +1323,7 @@ fn rate_limited_menu_input(
 #[derive(Component)]
 struct SliderTag;
 
-fn menu_input_events(
+fn keyboard_menu_input_events(
     sliders: Query<Entity, With<SliderTag>>,
     focused_entity: Res<FocusedEntity>,
     keys: Res<Input<KeyCode>>,
@@ -1440,9 +1363,7 @@ fn menu_input_events(
         (KeyCode::Delete, MenuInput::Delete),
     ] {
         let rate_limiter = {
-            if sliders.get(focused_entity.0).is_ok()
-                && matches!(input, MenuInput::Left | MenuInput::Right)
-            {
+            if sliders.get(focused_entity.0).is_ok() && matches!(input, MenuInput::Left | MenuInput::Right) {
                 &mut slider_rate_limiter.0
             } else {
                 &mut menu_input_rate_limiter.0
@@ -1457,6 +1378,55 @@ fn menu_input_events(
             rate_limiter,
             &time,
         );
+    }
+}
+
+fn gamepad_menu_input_events(
+    sliders: Query<Entity, With<SliderTag>>,
+    focused_entity: Res<FocusedEntity>,
+    gamepads: Res<Gamepads>,
+    buttons: Res<Input<GamepadButton>>,
+    mut menu_input_events: EventWriter<MenuInputEvent>,
+    mut menu_input_rate_limiter: ResMut<MenuInputRateLimiter>,
+    mut slider_rate_limiter: ResMut<SliderRateLimiter>,
+    time: Res<Time>,
+) {
+    for gamepad in gamepads.iter() {
+        for (key, input) in [
+            (GamepadButton::new(gamepad, GamepadButtonType::DPadUp), MenuInput::Up),
+            (
+                GamepadButton::new(gamepad, GamepadButtonType::DPadDown),
+                MenuInput::Down,
+            ),
+            (
+                GamepadButton::new(gamepad, GamepadButtonType::DPadLeft),
+                MenuInput::Left,
+            ),
+            (
+                GamepadButton::new(gamepad, GamepadButtonType::DPadRight),
+                MenuInput::Right,
+            ),
+            (GamepadButton::new(gamepad, GamepadButtonType::North), MenuInput::Delete),
+            (GamepadButton::new(gamepad, GamepadButtonType::South), MenuInput::Select),
+            (GamepadButton::new(gamepad, GamepadButtonType::East), MenuInput::Back),
+        ] {
+            let rate_limiter = {
+                if sliders.get(focused_entity.0).is_ok() && matches!(input, MenuInput::Left | MenuInput::Right) {
+                    &mut slider_rate_limiter.0
+                } else {
+                    &mut menu_input_rate_limiter.0
+                }
+            };
+            rate_limited_menu_input(
+                key,
+                input,
+                focused_entity.0,
+                &buttons,
+                &mut menu_input_events,
+                rate_limiter,
+                &time,
+            );
+        }
     }
 }
 

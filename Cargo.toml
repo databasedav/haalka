@@ -12,7 +12,7 @@ async-io = "2.2.2"
 bevy = "0.12.1"
 bevy-async-ecs = "0.3.0"
 bevy_eventlistener = "0.6.1"
-bevy_mod_picking = { version = "0.17.0", default-features = false, features = ["backend_bevy_ui", "selection"] }
+bevy_mod_picking = { version = "0.17.0", default-features = false, features = ["backend_bevy_ui"] }
 enclose = "1.1.8"
 futures-signals = "0.3.33"
 futures-util = { version = "0.3.30", features = ["sink"] }  # TODO: need to add sink feature upstream

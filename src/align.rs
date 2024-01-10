@@ -89,33 +89,26 @@ fn register_align_signal<REW: RawElWrapper>(
 ) -> REW {
     let mut last_alignments_option: Option<Vec<Alignment>> = None;
     element.update_raw_el(|raw_el| {
-        raw_el.on_signal_with_component::<Style, Option<Vec<Alignment>>>(
-            align_signal,
-            move |style, aligns_option| {
-                if let Some(alignments) = aligns_option {
-                    if let Some(mut last_alignments) = last_alignments_option.take() {
-                        last_alignments.retain(|align| !alignments.contains(align));
-                        for alignment in last_alignments {
-                            apply_alignment(style, alignment, AddRemove::Remove)
-                        }
-                    }
-                    for alignment in &alignments {
-                        apply_alignment(style, *alignment, AddRemove::Add)
-                    }
-                    last_alignments_option = if !alignments.is_empty() {
-                        Some(alignments)
-                    } else {
-                        None
-                    };
-                } else {
-                    if let Some(last_aligns) = last_alignments_option.take() {
-                        for align in last_aligns {
-                            apply_alignment(style, align, AddRemove::Remove)
-                        }
+        raw_el.on_signal_with_component::<Style, Option<Vec<Alignment>>>(align_signal, move |style, aligns_option| {
+            if let Some(alignments) = aligns_option {
+                if let Some(mut last_alignments) = last_alignments_option.take() {
+                    last_alignments.retain(|align| !alignments.contains(align));
+                    for alignment in last_alignments {
+                        apply_alignment(style, alignment, AddRemove::Remove)
                     }
                 }
-            },
-        )
+                for alignment in &alignments {
+                    apply_alignment(style, *alignment, AddRemove::Add)
+                }
+                last_alignments_option = if !alignments.is_empty() { Some(alignments) } else { None };
+            } else {
+                if let Some(last_aligns) = last_alignments_option.take() {
+                    for align in last_aligns {
+                        apply_alignment(style, align, AddRemove::Remove)
+                    }
+                }
+            }
+        })
     })
 }
 
@@ -127,10 +120,7 @@ pub trait Alignable: RawElWrapper {
         self
     }
 
-    fn align_signal(
-        mut self,
-        align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static,
-    ) -> Self {
+    fn align_signal(mut self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self {
         *self.align_mut() = Some(AlignHolder::AlignSignal(align_option_signal.boxed()));
         self
     }
@@ -147,15 +137,10 @@ pub trait Alignable: RawElWrapper {
         })
     }
 
-    fn align_content_signal(
-        self,
-        align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static,
-    ) -> Self {
+    fn align_content_signal(self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self {
         register_align_signal(
             self,
-            align_option_signal.map(|align_option| {
-                align_option.map(|align| align.alignments.into_iter().collect())
-            }),
+            align_option_signal.map(|align_option| align_option.map(|align| align.alignments.into_iter().collect())),
             Self::apply_content_alignment,
         )
     }
@@ -188,9 +173,8 @@ where
                     child = register_align_signal(
                         child,
                         {
-                            align_option_signal.map(|align_option| {
-                                align_option.map(|align| align.alignments.into_iter().collect())
-                            })
+                            align_option_signal
+                                .map(|align_option| align_option.map(|align| align.alignments.into_iter().collect()))
                         },
                         Self::apply_alignment,
                     )
@@ -204,15 +188,11 @@ where
 // TODO: ideally want to be able to process raw el's as well (e.g. processability should not depend
 // on alignability) if they need some, but this is convenient for now ...
 pub trait ChildProcessable: Alignable {
-    fn process_child<IOE: IntoOptionElement>(
-        child_option: IOE,
-    ) -> std::option::Option<<IOE as IntoOptionElement>::EL>;
+    fn process_child<IOE: IntoOptionElement>(child_option: IOE) -> std::option::Option<<IOE as IntoOptionElement>::EL>;
 }
 
 impl<CA: ChildAlignable> ChildProcessable for CA {
-    fn process_child<IOE: IntoOptionElement>(
-        child_option: IOE,
-    ) -> std::option::Option<<IOE as IntoOptionElement>::EL> {
+    fn process_child<IOE: IntoOptionElement>(child_option: IOE) -> std::option::Option<<IOE as IntoOptionElement>::EL> {
         child_option.into_option_element().map(|mut child| {
             child = <Self as ChildAlignable>::manage::<
                 <<IOE as IntoOptionElement>::EL as RawElement>::NodeType,

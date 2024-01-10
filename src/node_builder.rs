@@ -16,9 +16,7 @@ use crate::spawn;
 static ASYNC_WORLD: OnceLock<AsyncWorld> = OnceLock::new();
 
 pub fn async_world() -> &'static AsyncWorld {
-    ASYNC_WORLD
-        .get()
-        .expect("expected ASYNC_WORLD to be initialized")
+    ASYNC_WORLD.get().expect("expected ASYNC_WORLD to be initialized")
 }
 
 pub(crate) fn init_async_world(world: &mut World) {
@@ -67,9 +65,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
     // be registered thru this abstraction because of the way siblings are tracked
     pub fn child<ChildNodeType: Bundle>(mut self, child: NodeBuilder<ChildNodeType>) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
-        self.contiguous_child_block_populations
-            .lock_mut()
-            .push(None);
+        self.contiguous_child_block_populations.lock_mut().push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
         let offset = offset(block, &contiguous_child_block_populations);
         let task_wrapper = move |entity: Entity| {
@@ -96,14 +92,10 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
 
     pub fn child_signal<ChildNodeType: Bundle>(
         mut self,
-        child_option: impl Signal<Item = impl Into<Option<NodeBuilder<ChildNodeType>>> + Send>
-            + Send
-            + 'static,
+        child_option: impl Signal<Item = impl Into<Option<NodeBuilder<ChildNodeType>>> + Send> + Send + 'static,
     ) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
-        self.contiguous_child_block_populations
-            .lock_mut()
-            .push(None);
+        self.contiguous_child_block_populations.lock_mut().push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
         let task_wrapper = move |entity: Entity| {
             let offset = offset(block, &contiguous_child_block_populations);
@@ -156,9 +148,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         children: impl IntoIterator<Item = NodeBuilder<ChildNodeType>> + Send + 'static,
     ) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
-        self.contiguous_child_block_populations
-            .lock_mut()
-            .push(None);
+        self.contiguous_child_block_populations.lock_mut().push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
         let offset = offset(block, &contiguous_child_block_populations);
         let task_wrapper = move |entity: Entity| {
@@ -194,9 +184,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         children_signal_vec: impl SignalVec<Item = NodeBuilder<ChildNodeType>> + Send + 'static,
     ) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
-        self.contiguous_child_block_populations
-            .lock_mut()
-            .push(None);
+        self.contiguous_child_block_populations.lock_mut().push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
         let offset = offset(block, &contiguous_child_block_populations);
         let task_wrapper = move |entity: Entity| {
@@ -364,7 +352,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                 .spawn((
                     self.raw_node,
                     TaskHolder::new(), // include so tasks can be added on spawn
-                    Pickable::IGNORE,  // PickSelection::default(),
+                    Pickable::IGNORE,
                 ))
                 .id()
         };
@@ -409,20 +397,12 @@ fn get_offset(i: usize, contiguous_child_block_populations: &[Option<usize>]) ->
         .sum()
 }
 
-fn offset(
-    i: usize,
-    contiguous_child_block_populations: &MutableVec<Option<usize>>,
-) -> Mutable<usize> {
-    let offset = Mutable::new(get_offset(
-        i,
-        &*contiguous_child_block_populations.lock_ref(),
-    ));
+fn offset(i: usize, contiguous_child_block_populations: &MutableVec<Option<usize>>) -> Mutable<usize> {
+    let offset = Mutable::new(get_offset(i, &*contiguous_child_block_populations.lock_ref()));
     let updater = {
         contiguous_child_block_populations
             .signal_vec()
-            .to_signal_map(move |contiguous_child_block_populations| {
-                get_offset(i, contiguous_child_block_populations)
-            })
+            .to_signal_map(move |contiguous_child_block_populations| get_offset(i, contiguous_child_block_populations))
             .dedupe()
             .for_each_sync(clone!((offset) move |new_offset| {
                 offset.set_neq(new_offset);
@@ -432,10 +412,7 @@ fn offset(
     offset
 }
 
-async fn wait_until_child_block_inserted(
-    block: usize,
-    contiguous_child_block_populations: &MutableVec<Option<usize>>,
-) {
+async fn wait_until_child_block_inserted(block: usize, contiguous_child_block_populations: &MutableVec<Option<usize>>) {
     contiguous_child_block_populations
         .signal_vec()
         .to_signal_map(|contiguous_child_block_populations| {

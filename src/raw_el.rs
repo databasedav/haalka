@@ -44,10 +44,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         Self { node_builder: None }
     }
 
-    pub fn update_node_builder(
-        mut self,
-        updater: impl FnOnce(NodeBuilder<NodeType>) -> NodeBuilder<NodeType>,
-    ) -> Self {
+    pub fn update_node_builder(mut self, updater: impl FnOnce(NodeBuilder<NodeType>) -> NodeBuilder<NodeType>) -> Self {
         self.node_builder = Some(updater(self.node_builder.unwrap()));
         self
     }
@@ -61,9 +58,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         <IORE::EL as RawElement>::NodeType: Bundle,
     {
         if let Some(child) = child_option.into_option_element() {
-            return self.update_node_builder(|node_builder| {
-                node_builder.child(child.into_raw().into_node_builder())
-            });
+            return self.update_node_builder(|node_builder| node_builder.child(child.into_raw().into_node_builder()));
         }
         self
     }
@@ -84,10 +79,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         })
     }
 
-    pub fn children<IORE: IntoOptionRawElement, I: IntoIterator<Item = IORE>>(
-        self,
-        children_options: I,
-    ) -> Self
+    pub fn children<IORE: IntoOptionRawElement, I: IntoIterator<Item = IORE>>(self, children_options: I) -> Self
     where
         <IORE::EL as RawElement>::NodeType: Bundle,
         I::IntoIter: Send + 'static,
@@ -119,9 +111,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
     }
 
     pub fn on_spawn(self, on_spawn: impl FnOnce(&mut World, Entity) + Send + 'static) -> Self {
-        self.update_raw_el(|raw_el| {
-            raw_el.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn))
-        })
+        self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn)))
     }
 
     pub fn on_signal<T, Fut: Future<Output = ()> + Send + 'static>(
@@ -129,9 +119,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         signal: impl Signal<Item = T> + Send + 'static,
         f: impl FnMut(Entity, T) -> Fut + Send + 'static,
     ) -> Self {
-        self.update_raw_el(|raw_el| {
-            raw_el.update_node_builder(|node_builder| node_builder.on_signal(signal, f))
-        })
+        self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.on_signal(signal, f)))
     }
 
     pub fn on_signal_sync<T>(
@@ -274,19 +262,13 @@ pub trait RawElWrapper: Sized {
         mut self,
         updater: impl FnOnce(RawHaalkaEl<Self::NodeType>) -> RawHaalkaEl<Self::NodeType>,
     ) -> Self {
-        let raw_el = mem::replace(
-            self.raw_el_mut(),
-            RawHaalkaEl::<Self::NodeType>::new_dummy(),
-        );
+        let raw_el = mem::replace(self.raw_el_mut(), RawHaalkaEl::<Self::NodeType>::new_dummy());
         mem::swap(self.raw_el_mut(), &mut updater(raw_el));
         self
     }
 
     fn into_raw_el(mut self) -> RawHaalkaEl<Self::NodeType> {
-        mem::replace(
-            self.raw_el_mut(),
-            RawHaalkaEl::<Self::NodeType>::new_dummy(),
-        )
+        mem::replace(self.raw_el_mut(), RawHaalkaEl::<Self::NodeType>::new_dummy())
     }
 }
 

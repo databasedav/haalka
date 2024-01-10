@@ -5,8 +5,8 @@ use futures_signals::{
 };
 
 use crate::{
-    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable,
-    IntoOptionElement, RawElWrapper, RawElement, RawHaalkaEl,
+    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement, RawElWrapper,
+    RawElement, RawHaalkaEl,
 };
 
 pub struct Column<NodeType> {
@@ -52,16 +52,11 @@ impl<NodeType: Bundle> Column<NodeType> {
         <IOE::EL as RawElement>::NodeType: Bundle,
         IOE::EL: ChildProcessable,
     {
-        self.raw_el = self
-            .raw_el
-            .child_signal(child_option.map(Self::process_child));
+        self.raw_el = self.raw_el.child_signal(child_option.map(Self::process_child));
         self
     }
 
-    pub fn items<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(
-        mut self,
-        children_options: I,
-    ) -> Self
+    pub fn items<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
     where
         <IOE::EL as RawElement>::NodeType: Bundle,
         I::IntoIter: Send + 'static,

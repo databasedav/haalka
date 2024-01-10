@@ -4,9 +4,7 @@ use std::{
 };
 
 use bevy::{app::PluginGroupBuilder, prelude::*};
-use bevy_eventlistener::{
-    event_dispatcher::EventDispatcher, EventListenerPlugin, EventListenerSet,
-};
+use bevy_eventlistener::{event_dispatcher::EventDispatcher, EventListenerPlugin, EventListenerSet};
 use bevy_mod_picking::{picking_core::PickSet, prelude::*};
 use enclose::enclose as clone;
 use futures_signals::signal::{Mutable, SignalExt};
@@ -20,18 +18,14 @@ pub trait MouseInteractionAware: RawElWrapper {
         self.update_raw_el(|raw_el| {
             raw_el.insert((
                 Pickable::default(),
-                On::<Pointer<Over>>::run(
-                    clone!((mut handler) move || handler.lock().unwrap()(true)),
-                ),
+                On::<Pointer<Over>>::run(clone!((mut handler) move || handler.lock().unwrap()(true))),
                 On::<Pointer<Out>>::run(move || handler.lock().unwrap()(false)),
             ))
         })
     }
 
     fn on_click(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.update_raw_el(|raw_el| {
-            raw_el.insert((Pickable::default(), On::<Pointer<Click>>::run(handler)))
-        })
+        self.update_raw_el(|raw_el| raw_el.insert((Pickable::default(), On::<Pointer<Click>>::run(handler))))
     }
 
     fn on_pressed_change(self, handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
@@ -59,11 +53,7 @@ pub trait MouseInteractionAware: RawElWrapper {
         })
     }
 
-    fn on_pressing_blockable(
-        self,
-        mut handler: impl FnMut() + Send + Sync + 'static,
-        blocked: Mutable<bool>,
-    ) -> Self {
+    fn on_pressing_blockable(self, mut handler: impl FnMut() + Send + Sync + 'static, blocked: Mutable<bool>) -> Self {
         // TODO: should instead track pickability and just add/remove the Pressable on blocked
         // change to minimize spurious handler calls, also blocked can then be a signal
         self.on_pressed_change(move |is_pressed| {
@@ -73,11 +63,7 @@ pub trait MouseInteractionAware: RawElWrapper {
         })
     }
 
-    fn on_pressing_throttled(
-        self,
-        mut handler: impl FnMut() + Send + Sync + 'static,
-        duration: Duration,
-    ) -> Self {
+    fn on_pressing_throttled(self, mut handler: impl FnMut() + Send + Sync + 'static, duration: Duration) -> Self {
         let blocked = Mutable::new(false);
         let throttler = spawn(clone!((blocked) async move {
             blocked.signal()
@@ -114,10 +100,7 @@ pub trait MouseInteractionAware: RawElWrapper {
 pub(crate) struct Pressable(Box<dyn FnMut(bool) + Send + Sync + 'static>);
 
 pub(crate) fn pressable_system(
-    mut interaction_query: Query<
-        (&PickingInteraction, &mut Pressable),
-        Changed<PickingInteraction>,
-    >, // TODO: does Changed actually do anything here ?
+    mut interaction_query: Query<(&PickingInteraction, &mut Pressable), Changed<PickingInteraction>>, /* TODO: does Changed actually do anything here ? */
 ) {
     for (interaction, mut pressable) in &mut interaction_query {
         pressable.0(matches!(interaction, PickingInteraction::Pressed));
@@ -220,7 +203,6 @@ impl PluginGroup for RiggedPickingPlugin {
         builder = builder
             .add(picking_core::CorePlugin)
             .add(RiggedInteractionPlugin)
-            // .add(selection::SelectionPlugin)
             .add(input::InputPlugin)
             .add(BevyUiBackend);
 

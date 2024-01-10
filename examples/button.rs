@@ -99,10 +99,6 @@ fn spawn_ui_root(world: &mut World) {
             style.height = Val::Percent(100.0);
         })
         .align_content(Align::center())
-        .child(button(
-            world
-                .resource::<AssetServer>()
-                .load("fonts/FiraSans-Bold.ttf"),
-        ))
+        .child(button(world.resource::<AssetServer>().load("fonts/FiraSans-Bold.ttf")))
         .spawn(world);
 }

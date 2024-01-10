@@ -25,17 +25,15 @@ fn ui_root(world: &mut World) {
             Row::<NodeBundle>::new()
                 .with_style(|style| style.column_gap = Val::Px(15.0))
                 .item(counter_button(counter.clone(), "-", -1))
-                .item(
-                    El::<TextBundle>::new().text_signal(counter.signal().map(|count| {
-                        Text::from_section(
-                            count.to_string(),
-                            TextStyle {
-                                font_size: 30.0,
-                                ..default()
-                            },
-                        )
-                    })),
-                )
+                .item(El::<TextBundle>::new().text_signal(counter.signal().map(|count| {
+                    Text::from_section(
+                        count.to_string(),
+                        TextStyle {
+                            font_size: 30.0,
+                            ..default()
+                        },
+                    )
+                })))
                 .item(counter_button(counter.clone(), "+", 1))
                 .update_raw_el(move |raw_el| raw_el.insert(Counter(counter))),
         )
@@ -50,10 +48,7 @@ fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element
         .background_color_signal(
             hovered
                 .signal()
-                .map_bool(
-                    || Color::hsl(300., 0.75, 0.85),
-                    || Color::hsl(300., 0.75, 0.75),
-                )
+                .map_bool(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
                 .map(BackgroundColor),
         )
         .hovered_sync(hovered)

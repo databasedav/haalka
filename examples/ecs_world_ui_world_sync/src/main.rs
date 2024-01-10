@@ -8,11 +8,7 @@ use rand::prelude::{IteratorRandom, Rng};
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins,
-            HaalkaPlugin,
-            EntropyPlugin::<ChaCha8Rng>::default(),
-        ))
+        .add_plugins((DefaultPlugins, HaalkaPlugin, EntropyPlugin::<ChaCha8Rng>::default()))
         .add_systems(Startup, (ui_root, setup))
         .add_systems(Update, (sync_timer, dot_spawner, dot_despawner, count_dots))
         .run();
@@ -66,35 +62,23 @@ fn labeled_element(label: impl Element, element: impl Element) -> impl Element {
         .item(element)
 }
 
-fn labeled_count(
-    label: impl Element,
-    count_signal: impl Signal<Item = u32> + Send + 'static,
-) -> impl Element {
+fn labeled_count(label: impl Element, count_signal: impl Signal<Item = u32> + Send + 'static) -> impl Element {
     labeled_element(label, {
         El::<TextBundle>::new().text_signal(count_signal.map(|count| text(&count.to_string())))
     })
 }
 
 fn text_labeled_element(label: &str, element: impl Element) -> impl Element {
-    labeled_element(
-        El::<TextBundle>::new().text(text(&format!("{}: ", label))),
-        element,
-    )
+    labeled_element(El::<TextBundle>::new().text(text(&format!("{}: ", label))), element)
 }
 
-fn text_labeled_count(
-    label: &str,
-    count_signal: impl Signal<Item = u32> + Send + 'static,
-) -> impl Element {
+fn text_labeled_count(label: &str, count_signal: impl Signal<Item = u32> + Send + 'static) -> impl Element {
     text_labeled_element(label, {
         El::<TextBundle>::new().text_signal(count_signal.map(|count| text(&count.to_string())))
     })
 }
 
-fn category_count(
-    category: ColorCategory,
-    count: impl Signal<Item = u32> + Send + 'static,
-) -> impl Element {
+fn category_count(category: ColorCategory, count: impl Signal<Item = u32> + Send + 'static) -> impl Element {
     labeled_count(
         {
             El::<NodeBundle>::new()
@@ -131,10 +115,7 @@ fn incrde_button(value: Mutable<f32>, incr: f32) -> impl Element {
         .background_color_signal(
             hovered
                 .signal()
-                .map_bool(
-                    || Color::hsl(300., 0.75, 0.85),
-                    || Color::hsl(300., 0.75, 0.75),
-                )
+                .map_bool(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
                 .map(BackgroundColor),
         )
         .hovered_sync(hovered)
@@ -147,10 +128,7 @@ fn incrde_button(value: Mutable<f32>, incr: f32) -> impl Element {
 fn rate_element(rate: Mutable<f32>) -> impl Element {
     Row::<NodeBundle>::new()
         .with_style(|style| style.column_gap = Val::Px(15.0))
-        .item(
-            El::<TextBundle>::new()
-                .text_signal(rate.signal().map(|rate| text(&format!("{:.1}", rate)))),
-        )
+        .item(El::<TextBundle>::new().text_signal(rate.signal().map(|rate| text(&format!("{:.1}", rate)))))
         .item(incrde_button(rate.clone(), 0.1))
         .item(incrde_button(rate, -0.1))
 }
@@ -308,11 +286,7 @@ fn setup(mut commands: Commands) {
             custom_size: Some(Vec2::new(BOX_SIZE, BOX_SIZE)),
             ..default()
         },
-        transform: Transform::from_translation(Vec3::new(
-            -WIDTH / 2. + BOX_SIZE / 2.,
-            BOX_SIZE / 2.,
-            0.,
-        )),
+        transform: Transform::from_translation(Vec3::new(-WIDTH / 2. + BOX_SIZE / 2., BOX_SIZE / 2., 0.)),
         ..default()
     },));
     commands.spawn((SpriteBundle {
@@ -321,11 +295,7 @@ fn setup(mut commands: Commands) {
             custom_size: Some(Vec2::new(BOX_SIZE, BOX_SIZE)),
             ..default()
         },
-        transform: Transform::from_translation(Vec3::new(
-            -WIDTH / 2. + BOX_SIZE * 3. / 2.,
-            BOX_SIZE / 2.,
-            0.,
-        )),
+        transform: Transform::from_translation(Vec3::new(-WIDTH / 2. + BOX_SIZE * 3. / 2., BOX_SIZE / 2., 0.)),
         ..default()
     },));
     commands.spawn((SpriteBundle {
@@ -334,11 +304,7 @@ fn setup(mut commands: Commands) {
             custom_size: Some(Vec2::new(BOX_SIZE, BOX_SIZE)),
             ..default()
         },
-        transform: Transform::from_translation(Vec3::new(
-            -WIDTH / 2. + BOX_SIZE / 2.,
-            -BOX_SIZE / 2.,
-            0.,
-        )),
+        transform: Transform::from_translation(Vec3::new(-WIDTH / 2. + BOX_SIZE / 2., -BOX_SIZE / 2., 0.)),
         ..default()
     },));
     commands.spawn((SpriteBundle {
@@ -347,11 +313,7 @@ fn setup(mut commands: Commands) {
             custom_size: Some(Vec2::new(BOX_SIZE, BOX_SIZE)),
             ..default()
         },
-        transform: Transform::from_translation(Vec3::new(
-            -WIDTH / 2. + BOX_SIZE * 3. / 2.,
-            -BOX_SIZE / 2.,
-            0.,
-        )),
+        transform: Transform::from_translation(Vec3::new(-WIDTH / 2. + BOX_SIZE * 3. / 2., -BOX_SIZE / 2., 0.)),
         ..default()
     },));
 }
