@@ -1,3 +1,4 @@
+max_width = 120
 # from bevy
 use_field_init_shorthand = true
 newline_style = "Unix"
@@ -5,7 +6,6 @@ newline_style = "Unix"
 # requires nightly
 unstable_features = true
 trailing_comma = "Vertical"
-max_width = 120
 # from bevy
 imports_granularity = "Crate"
 wrap_comments = true

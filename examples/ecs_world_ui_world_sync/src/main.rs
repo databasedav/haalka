@@ -320,7 +320,7 @@ fn setup(mut commands: Commands) {
 
 fn sync_timer(mut spawner: ResMut<Spawner>, mut despawner: ResMut<Despawner>) {
     // TODO: just replace the timer resource with async_world instead, communicating in the ui ->
-    // ecs world with mutables seems like a bad practice, the other direction is fine tho
+    // ecs world with mutables is an anti pattern, the other direction is fine tho
     spawner.0.sync();
     despawner.0.sync();
 }

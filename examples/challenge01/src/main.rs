@@ -51,12 +51,14 @@ enum SubMenu {
     Graphics,
 }
 
+// core widget, pretty much every other widget uses the `Button`
 struct Button {
     el: El<NodeBundle>,
     selected: Mutable<bool>,
     hovered: Mutable<bool>,
 }
 
+// implement `ElementWrapper` allows the struct to be passed directly to .child methods
 impl ElementWrapper for Button {
     type EL = El<NodeBundle>;
     fn element_mut(&mut self) -> &mut Self::EL {
@@ -116,6 +118,7 @@ impl Button {
         }
     }
 
+    // we only expose some methods for customization, but we can add what ever we want to be dynamic
     fn width(mut self, width: Val) -> Self {
         self.el = self.el.with_style(move |style| {
             style.width = width;
@@ -141,6 +144,11 @@ impl Button {
     }
 
     fn selected_signal(mut self, selected_signal: impl Signal<Item = bool> + Send + 'static) -> Self {
+        // syncing mutables like this is a helpful pattern for externally controlling reactive state that
+        // has default widget-internal behavior; for example, all buttons are selected on press, but
+        // what if we want the selectedness to persist? simply add another mutable that gets flipped
+        // on click and then pass a signal of that to this method, which is exactly how the
+        // `Checkbox` widget is implemented
         let syncer = spawn(sync(self.selected.clone(), selected_signal));
         self.el = self.el.update_raw_el(|raw_el| raw_el.hold_tasks([syncer]));
         self
@@ -153,6 +161,7 @@ impl Button {
     }
 }
 
+// TODO: make this a public util ?
 async fn sync<T>(mutable: Mutable<T>, signal: impl Signal<Item = T> + Send + 'static) {
     signal.for_each_sync(|value| mutable.set(value)).await;
 }
@@ -210,6 +219,10 @@ fn flip(mutable_bool: &Mutable<bool>) {
     mutable_bool.set(!mutable_bool.get());
 }
 
+// global ui state comes in super handy sometimes ...
+// here, we use a global to keep track of any dropdowns that are dropped down, passing it to
+// `only_one_up_flipper` to ensure only one is dropped down at a time; a mutable for this can be
+// managed more locally, but adds significant unwieldiness
 #[static_ref]
 fn dropdown_showing_option() -> &'static Mutable<Option<Mutable<bool>>> {
     Mutable::new(None)
@@ -217,6 +230,19 @@ fn dropdown_showing_option() -> &'static Mutable<Option<Mutable<bool>>> {
 
 fn lil_baby_button() -> Button {
     Button::new().width(Val::Px(30.)).height(Val::Px(30.))
+}
+
+trait Controllable: ElementWrapper
+where
+    Self: Sized + 'static,
+{
+    fn controlling(&self) -> &Mutable<bool>;
+
+    fn controlling_signal(mut self, controlling_signal: impl Signal<Item = bool> + Send + 'static) -> Self {
+        let syncer = spawn(sync(self.controlling().clone(), controlling_signal));
+        self = self.update_raw_el(|raw_el| raw_el.hold_tasks([syncer]));
+        self
+    }
 }
 
 struct Checkbox {
@@ -232,10 +258,12 @@ impl Checkbox {
                 lil_baby_button()
                     .apply(|element| focus_on_signal(element, controlling.signal()))
                     .apply(|element| {
+                        // input handling is conveniently defined within the body of the widget itself
                         input_event_listener_controller(
                             element,
                             controlling_signal,
                             clone!((checked) move || {
+                                // TODO: i don't actually need the exclusivity of `run` here, is there a way to avoid it ?
                                 On::<MenuInputEvent>::run(clone!((checked) move |event: ListenerMut<MenuInputEvent>| {
                                     match event.input {
                                         MenuInput::Select => {
@@ -345,7 +373,14 @@ impl MutuallyExclusiveOptions {
                                 }
                             })
                         )
-                        .selected_signal(signal_eq(selected.signal_cloned(), i_option_mutable.signal_cloned()))
+                        // the `Checkbox` just used a flippable `Mutable<bool>` to persist the selectedness, and we could
+                        // have done the same here, e.g. a separate `clicked: Mutable<bool>` for every text button, but then to
+                        // get exclusivity we would have iterate over the other `clicked` mutables and flip them; again, this
+                        // is a totally valid option, but it's more convenient in this case to centrally track selectedness
+                        // with a `Mutable<Option<usize>>` so we get exclusivity for free; also notice that the index from the
+                        // `.enumerate` is a mutable, this is because the options vec is also reactive, so the indicies of items
+                        // can change, so this solution isn't actually correct for dynamic options, but it's fine for this example
+                        .selected_signal(signal_eq(selected.signal_cloned(), i_option_mutable.signal()))
                     }))
                 )
             },
@@ -375,6 +410,7 @@ enum LeftRight {
 fn centered_arrow_text(direction: LeftRight) -> El<TextBundle> {
     El::<TextBundle>::new()
         .with_style(|style| {
+            // manually centered
             style.bottom = Val::Px(2.);
             style.right = Val::Px(2.);
         })
@@ -628,19 +664,6 @@ fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<N
         .layer(body.align(Align::new().right().center_y()))
 }
 
-trait Controllable: ElementWrapper
-where
-    Self: Sized + 'static,
-{
-    fn controlling(&self) -> &Mutable<bool>;
-
-    fn controlling_signal(mut self, controlling_signal: impl Signal<Item = bool> + Send + 'static) -> Self {
-        let syncer = spawn(sync(self.controlling().clone(), controlling_signal));
-        self = self.update_raw_el(|raw_el| raw_el.hold_tasks([syncer]));
-        self
-    }
-}
-
 struct Dropdown {
     el: El<NodeBundle>,
     controlling: Mutable<bool>,
@@ -648,9 +671,16 @@ struct Dropdown {
 
 fn focus_on_signal<E: Element>(element: E, signal: impl Signal<Item = bool> + Send + 'static) -> E {
     element.update_raw_el(|raw_el| {
-        raw_el.on_signal(signal, |entity, focus| async move {
+        raw_el.on_signal(signal.dedupe(), |entity, focus| async move {
             if focus {
+                // at first, i was using a `static_ref` global `Mutable<Option<Entity>>` for this
+                // and wrapping it in a resource for accessing it in the menu input event systems, but this is an
+                // anti pattern; the ecs should not be polling reactive ui state for syncing its own
+                // state/systems (there's an example of this anti pattern in the ecs world ui world sync example https://github.com/databasedav/haalka/blob/main/examples/ecs_world_ui_world_sync/src/main.rs#L154);
+                // instead, like we do here, simply use the `async_world` to update the ecs state *exactly and only*
+                // when it needs to be
                 async_world().insert_resource(FocusedEntity(entity)).await;
+                // TODO: remove reference to ecs world ui world sync example once fixed
             }
         })
     })
@@ -1175,16 +1205,12 @@ fn menu() -> impl Element {
                     Column::<NodeBundle>::new()
                         .with_style(|style| style.row_gap = Val::Px(BASE_PADDING))
                         .align_content(Align::center())
-                        .items([
-                            sub_menu_button(SubMenu::Audio).hovered_signal(
+                        .items(SubMenu::iter().map(|sub_menu| {
+                            sub_menu_button(sub_menu).hovered_signal(
                                 sub_menu_selected()
-                                    .signal_ref(|selected_option| selected_option == &Some(SubMenu::Audio)),
-                            ),
-                            sub_menu_button(SubMenu::Graphics).hovered_signal(
-                                sub_menu_selected()
-                                    .signal_ref(|selected_option| selected_option == &Some(SubMenu::Graphics)),
-                            ),
-                        ]),
+                                    .signal_ref(move |selected_option| selected_option == &Some(sub_menu)),
+                            )
+                        })),
                 ),
         )
         .layer_signal(show_sub_menu().signal().map_some(move |sub_menu| {
@@ -1346,6 +1372,7 @@ fn keyboard_menu_input_events(
             return;
         }
     }
+    let slider_focused = sliders.get(focused_entity.0).is_ok();
     for (key, input) in [
         (KeyCode::Up, MenuInput::Up),
         (KeyCode::Down, MenuInput::Down),
@@ -1363,7 +1390,7 @@ fn keyboard_menu_input_events(
         (KeyCode::Delete, MenuInput::Delete),
     ] {
         let rate_limiter = {
-            if sliders.get(focused_entity.0).is_ok() && matches!(input, MenuInput::Left | MenuInput::Right) {
+            if slider_focused && matches!(input, MenuInput::Left | MenuInput::Right) {
                 &mut slider_rate_limiter.0
             } else {
                 &mut menu_input_rate_limiter.0
@@ -1391,6 +1418,7 @@ fn gamepad_menu_input_events(
     mut slider_rate_limiter: ResMut<SliderRateLimiter>,
     time: Res<Time>,
 ) {
+    let slider_focused = sliders.get(focused_entity.0).is_ok();
     for gamepad in gamepads.iter() {
         for (key, input) in [
             (GamepadButton::new(gamepad, GamepadButtonType::DPadUp), MenuInput::Up),
@@ -1411,7 +1439,7 @@ fn gamepad_menu_input_events(
             (GamepadButton::new(gamepad, GamepadButtonType::East), MenuInput::Back),
         ] {
             let rate_limiter = {
-                if sliders.get(focused_entity.0).is_ok() && matches!(input, MenuInput::Left | MenuInput::Right) {
+                if slider_focused && matches!(input, MenuInput::Left | MenuInput::Right) {
                     &mut slider_rate_limiter.0
                 } else {
                     &mut menu_input_rate_limiter.0
