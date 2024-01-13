@@ -20,14 +20,10 @@ impl<NodeType: Bundle> From<NodeType> for Stack<NodeType> {
             raw_el: {
                 RawHaalkaEl::from(node_bundle).with_component::<Style>(|style| {
                     style.display = Display::Grid;
-                    style.grid_auto_columns = vec![GridTrack::minmax(
-                        MinTrackSizingFunction::Px(0.),
-                        MaxTrackSizingFunction::Auto,
-                    )];
-                    style.grid_auto_rows = vec![GridTrack::minmax(
-                        MinTrackSizingFunction::Px(0.),
-                        MaxTrackSizingFunction::Auto,
-                    )];
+                    style.grid_auto_columns =
+                        GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
+                    style.grid_auto_rows =
+                        GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
                 })
             },
             align: None,

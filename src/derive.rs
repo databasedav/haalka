@@ -9,7 +9,7 @@ use bevy::{
 use futures_signals::signal::Signal;
 use paste::paste;
 
-use crate::{Column, El, RawElWrapper, Row, Stack};
+use crate::{Column, El, Grid, RawElWrapper, Row, Stack};
 
 #[macro_export]
 macro_rules! impl_node_methods {
@@ -362,6 +362,84 @@ impl_node_methods! {
             view_visibility: ViewVisibility,
             z_index: ZIndex,
         ],
+    },
+    Grid => {
+        NodeBundle => [
+            node: bevy::ui::Node,
+            style: Style,
+            background_color: BackgroundColor,
+            border_color: BorderColor,
+            focus_policy: FocusPolicy,
+            transform: Transform,
+            global_transform: GlobalTransform,
+            visibility: Visibility,
+            inherited_visibility: InheritedVisibility,
+            view_visibility: ViewVisibility,
+            z_index: ZIndex,
+        ],
+        // ImageBundle => [
+        //     node: bevy::ui::Node,
+        //     style: Style,
+        //     calculated_size: ContentSize,
+        //     background_color: BackgroundColor,
+        //     image: UiImage,
+        //     image_size: UiImageSize,
+        //     focus_policy: FocusPolicy,
+        //     transform: Transform,
+        //     global_transform: GlobalTransform,
+        //     visibility: Visibility,
+        //     inherited_visibility: InheritedVisibility,
+        //     view_visibility: ViewVisibility,
+        //     z_index: ZIndex,
+        // ],
+        // AtlasImageBundle => [
+        //     node: bevy::ui::Node,
+        //     style: Style,
+        //     calculated_size: ContentSize,
+        //     background_color: BackgroundColor,
+        //     texture_atlas: Handle<TextureAtlas>,
+        //     texture_atlas_image: UiTextureAtlasImage,
+        //     focus_policy: FocusPolicy,
+        //     image_size: UiImageSize,
+        //     transform: Transform,
+        //     global_transform: GlobalTransform,
+        //     visibility: Visibility,
+        //     inherited_visibility: InheritedVisibility,
+        //     view_visibility: ViewVisibility,
+        //     z_index: ZIndex,
+        // ],
+        // TextBundle => [
+        //     node: bevy::ui::Node,
+        //     style: Style,
+        //     text: Text,
+        //     text_layout_info: TextLayoutInfo,
+        //     text_flags: TextFlags,
+        //     calculated_size: ContentSize,
+        //     focus_policy: FocusPolicy,
+        //     transform: Transform,
+        //     global_transform: GlobalTransform,
+        //     visibility: Visibility,
+        //     inherited_visibility: InheritedVisibility,
+        //     view_visibility: ViewVisibility,
+        //     z_index: ZIndex,
+        //     background_color: BackgroundColor,
+        // ],
+        // ButtonBundle => [
+        //     node: bevy::ui::Node,
+        //     button: Button,
+        //     style: Style,
+        //     interaction: Interaction,
+        //     focus_policy: FocusPolicy,
+        //     background_color: BackgroundColor,
+        //     border_color: BorderColor,
+        //     image: UiImage,
+        //     transform: Transform,
+        //     global_transform: GlobalTransform,
+        //     visibility: Visibility,
+        //     inherited_visibility: InheritedVisibility,
+        //     view_visibility: ViewVisibility,
+        //     z_index: ZIndex,
+        // ],
     },
     // TODO: macros don't play nice with generics
     // MaterialNodeBundle<M: UiMaterial> => [

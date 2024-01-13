@@ -89,7 +89,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
                 children_options
                     .into_iter()
                     .filter_map(|child_option| child_option.into_option_element())
-                    .map(|child| child.into_raw_element().into_raw().into_node_builder()),
+                    .map(|child| child.into_raw().into_node_builder()),
             )
         })
     }
@@ -105,7 +105,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
             node_builder.children_signal_vec(
                 children_options_signal_vec
                     .filter_map(|child_option| child_option.into_option_element())
-                    .map(|child| child.into_raw_element().into_raw().into_node_builder()),
+                    .map(|child| child.into_raw().into_node_builder()),
             )
         })
     }

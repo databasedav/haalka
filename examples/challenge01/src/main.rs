@@ -58,7 +58,7 @@ struct Button {
     hovered: Mutable<bool>,
 }
 
-// implement `ElementWrapper` allows the struct to be passed directly to .child methods
+// implementing `ElementWrapper` allows the struct to be passed directly to .child methods
 impl ElementWrapper for Button {
     type EL = El<NodeBundle>;
     fn element_mut(&mut self) -> &mut Self::EL {

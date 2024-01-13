@@ -23,6 +23,9 @@ pub use row::Row;
 mod stack;
 pub use stack::Stack;
 
+mod grid;
+pub use grid::Grid;
+
 mod align;
 pub use align::{AddRemove, Align, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable};
 

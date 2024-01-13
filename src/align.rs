@@ -150,7 +150,7 @@ pub trait ChildAlignable: Alignable
 where
     Self: 'static,
 {
-    fn update_style(_style: &mut Style) {} // only Stack requires base updates
+    fn update_style(_style: &mut Style) {} // only some require base updates
 
     fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove);
 
