@@ -91,4 +91,15 @@ just example button  # port of https://github.com/bevyengine/bevy/blob/main/exam
 just example ecs_world_ui_world_sync
 # ui challenges from https://github.com/bevyengine/bevy/discussions/11100
 just example challenge01
+just example challenge02  # in progress
 ```
+
+## license
+all code in this repository is dual-licensed under either:
+
+- MIT License (LICENSE-MIT or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0 (LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0)
+
+at your option.
+
+assets used in examples may be licensed under different terms, see the [`examples` README](./examples/README.md#license)

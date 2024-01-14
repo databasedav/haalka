@@ -63,10 +63,12 @@ impl<NodeType: Bundle + Default> Grid<NodeType> {
         cell_width_signal: impl Signal<Item = impl Into<Option<f32>> + Send> + Send + 'static,
     ) -> Self {
         self.raw_el = self.raw_el.on_signal_with_component::<Style, Option<f32>>(
-            cell_width_signal.filter_map(|cell_width_option| cell_width_option.into()),
+            cell_width_signal.map(|cell_width_option| cell_width_option.into()),
             |style, cell_width_option| {
                 if let Some(cell_width) = cell_width_option {
                     style.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width)
+                } else {
+                    style.grid_template_columns.clear();
                 }
             },
         );
