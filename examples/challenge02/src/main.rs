@@ -6,12 +6,16 @@
 //     You can leave the bounding box of the inventory while dragging.
 // A tooltip with the item's name is shown when hovering over an item.
 
-use std::sync::OnceLock;
+use std::{collections::HashMap, convert::identity, sync::OnceLock};
 
-use bevy::{prelude::*, transform, utils::HashMap};
+use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use futures_signals::signal::Mutable;
 use haalka::*;
+use rand::{
+    distributions::{Bernoulli, Distribution},
+    Rng,
+};
 
 fn main() {
     App::new()
@@ -179,140 +183,6 @@ fn item_names() -> &'static HashMap<usize, &'static str> {
         (127, "worm"),
         (128, "fish_1"),
         (129, "fish_2"),
-        (130, "disk (save)"),
-        (131, "gear (options)"),
-        (132, "check mark"),
-        (133, "x mark"),
-        (134, "cursor"),
-        (135, "speech bubble"),
-        (136, "skull (big)"),
-        (137, "skull (small)"),
-        (138, "heart (big)"),
-        (139, "heart (small)"),
-        (140, "fire"),
-        (141, "water"),
-        (142, "earth"),
-        (143, "air"),
-        (144, "fire bolt"),
-        (145, "ice bolt"),
-        (146, "lightning bolt"),
-        (147, "buff"),
-        (148, "debuff"),
-        (149, "targeted"),
-        (150, "sword slash"),
-        (151, "sword slash (red)"),
-        (152, "sword slash (yellow)"),
-        (153, "sword slash (blue)"),
-        (154, "thrust"),
-        (155, "sword buff"),
-        (156, "crush"),
-        (157, "impale"),
-        (158, "defense buff"),
-        (159, "triple shot"),
-        (160, "poison nova"),
-        (161, "rage"),
-        (162, "icy death"),
-        (163, "haste"),
-        (164, "far sight (purple)"),
-        (165, "far sight (green)"),
-        (166, "heal"),
-        (167, "heal_2"),
-        (168, "bleeding"),
-        (169, "poisoned"),
-        (170, "bleeding damage"),
-        (171, "poison damage"),
-        (172, "fire damage"),
-        (173, "cold damage"),
-        (174, "electric damage"),
-        (175, "bleeding resistance"),
-        (176, "poison resistance"),
-        (177, "fire resistance"),
-        (178, "cold resistance"),
-        (179, "electric resistance"),
-        (180, "bat wing"),
-        (181, "bat wing (red)"),
-        (182, "bat wing (black)"),
-        (183, "mushroom (purple)"),
-        (184, "mushroom (red)"),
-        (185, "mushroom (yellow)"),
-        (186, "mushroom (blue)"),
-        (187, "ogre eye (red)"),
-        (188, "ogre eye (yellow)"),
-        (189, "ogre eye (purple)"),
-        (190, "skeleton bone"),
-        (191, "skeleton bone (dark)"),
-        (192, "skeleton bone (red)"),
-        (193, "slime goo (green)"),
-        (194, "slime goo (yellow)"),
-        (195, "slime goo (red)"),
-        (196, "slime goo (blue)"),
-        (197, "wolf fang"),
-        (198, "wolf fang_2 "),
-        (199, "wolf fang_3"),
-        (200, "number_0"),
-        (201, "number_1"),
-        (202, "number_2"),
-        (203, "number_3"),
-        (204, "number_4"),
-        (205, "number_5"),
-        (206, "number_6"),
-        (207, "number_7"),
-        (208, "number_8"),
-        (209, "number_9"),
-        (210, "number_0 (red)"),
-        (211, "number_1 (red)"),
-        (212, "number_2 (red)"),
-        (213, "number_3 (red)"),
-        (214, "number_4 (red)"),
-        (215, "number_5 (red)"),
-        (216, "number_6 (red)"),
-        (217, "number_7 (red)"),
-        (218, "number_8 (red)"),
-        (219, "number_9 (red)"),
-        (220, "frame (copper)"),
-        (221, "frame (silver)"),
-        (222, "frame (gold)"),
-        (223, "frame (bright gold)"),
-        (224, "frame (green)"),
-        (225, "frame (blue)"),
-        (226, "frame (purple)"),
-        (227, "frame (red)"),
-        (228, "background"),
-        (229, "catface =^･ω･^="),
-        (230, "exclamation mark"),
-        (231, "question mark"),
-        (232, "minus"),
-        (233, "plus"),
-        (234, "equal"),
-        (235, "multiply"),
-        (236, "divide"),
-        (237, "exclamation mark (red)"),
-        (238, "question mark (red)"),
-        (239, "minus (red)"),
-        (240, "plus (red)"),
-        (241, "equal (red)"),
-        (242, "multiply (red)"),
-        (243, "divide (red)"),
-        (244, "mail"),
-        (245, "scroll_closed"),
-        (246, "letter_open"),
-        (247, "scroll_open"),
-        (248, "scrollvertical_closed"),
-        (249, "scrollvertical_open"),
-        (250, "scrolldiag"),
-        (251, "scrolldiag (red)"),
-        (252, "scrolldiag (purple)"),
-        (253, "scrolldiag (green)"),
-        (254, "scroll_open (blue)"),
-        (255, "scroll_open (red)"),
-        (256, "scroll_open (green)"),
-        (257, "crystal ball"),
-        (258, "pencil"),
-        (259, "pen"),
-        (260, "brush"),
-        (261, "quill"),
-        (262, "ink"),
-        (263, "magnifying glass"),
     ])
 }
 
@@ -364,56 +234,62 @@ struct CellData {
     count: Mutable<usize>,
 }
 
-fn cell() -> impl Element + Alignable {
-    let cell_data_option = Mutable::new(Some(CellData {
-        index: Mutable::new(0),
-        count: Mutable::new(1),
-    }));
+fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl Element + Alignable {
     let hovered = Mutable::new(false);
     let original_position = Mutable::new(None);
+    let down = Mutable::new(false);
     El::<NodeBundle>::new()
-        .update_raw_el(clone!((cell_data_option, hovered) move |raw_el|
-            raw_el
-            .insert(Pickable::default())
-            .component_signal::<On::<Pointer<Click>>>(hovered.signal().map_true(move ||
-                On::<Pointer<Click>>::run(clone!((cell_data_option => self_cell_data_option) move |click: Listener<Pointer<Click>>| {
-                    let mut consume = false;
-                    if let Some(dragging_cell_data_option) = &*dragging_option().lock_ref() {
-                        if self_cell_data_option.lock_ref().is_none() {
-                            if let Some(dragging_cell_data) = &*dragging_cell_data_option.lock_ref() {
-                                self_cell_data_option.set(Some(CellData {
-                                    index: Mutable::new(dragging_cell_data.index.get()),
-                                    count: Mutable::new(0),
-                                }));
+        .update_raw_el(clone!((cell_data_option, hovered, down) move |mut raw_el| {
+            if insertable {
+                raw_el = raw_el
+                .insert((
+                    Pickable::default(),
+                    On::<Pointer<Up>>::run(clone!((down) move || down.set_neq(false))),
+                ))
+                .component_signal::<On::<Pointer<Click>>>(signal::and(signal::not(down.signal()), hovered.signal()).dedupe().map_true(move || {
+                    On::<Pointer<Click>>::run(clone!((cell_data_option => self_cell_data_option) move |click: Listener<Pointer<Click>>| {
+                        let mut consume = false;
+                        if let Some(dragging_cell_data_option) = &*dragging_option().lock_ref() {
+                            if self_cell_data_option.lock_ref().is_none() {
+                                if let Some(dragging_cell_data) = &*dragging_cell_data_option.lock_ref() {
+                                    self_cell_data_option.set(Some(CellData {
+                                        index: Mutable::new(dragging_cell_data.index.get()),
+                                        count: Mutable::new(0),
+                                    }));
+                                }
                             }
-                        }
-                        if self_cell_data_option.lock_ref().as_ref().map(|cell_data| cell_data.index.get()) == dragging_cell_data_option.lock_ref().as_ref().map(|cell_data| cell_data.index.get()) {
                             if let Some((dragging_cell_data, self_cell_data)) = dragging_cell_data_option.lock_ref().as_ref().zip(self_cell_data_option.lock_ref().as_ref()) {
-                                let to_add = {
-                                    if matches!(click.button, PointerButton::Secondary) {
-                                        *dragging_cell_data.count.lock_mut() -= 1;
-                                        if dragging_cell_data.count.get() == 0 {
+                                if self_cell_data.index.get() == dragging_cell_data.index.get() {
+                                    let to_add = {
+                                        if matches!(click.button, PointerButton::Secondary) {
+                                            *dragging_cell_data.count.lock_mut() -= 1;
+                                            if dragging_cell_data.count.get() == 0 {
+                                                consume = true;
+                                            }
+                                            1
+                                        } else {
+                                            let count = dragging_cell_data.count.take();
                                             consume = true;
+                                            count
                                         }
-                                        1
-                                    } else {
-                                        let count = dragging_cell_data.count.take();
-                                        consume = true;
-                                        count
-                                    }
-                                };
-                                self_cell_data.count.update(|count| count + to_add);
+                                    };
+                                    self_cell_data.count.update(|count| count + to_add);
+                                } else {
+                                    self_cell_data.index.swap(&dragging_cell_data.index);
+                                    self_cell_data.count.swap(&dragging_cell_data.count);
+                                }
                             }
                         }
-                    }
-                    if consume {
-                        if let Some(cell_data_option) = dragging_option().take() {
-                            cell_data_option.take();
+                        if consume {
+                            if let Some(cell_data_option) = dragging_option().take() {
+                                cell_data_option.take();
+                            }
                         }
-                    }
-                }))
-            ))
-        ))
+                    }))
+                }));
+            }
+            raw_el
+        }))
         .hovered_sync(hovered.clone())
         .with_style(|style| {
             style.width = Val::Px(CELL_WIDTH);
@@ -433,13 +309,33 @@ fn cell() -> impl Element + Alignable {
                     Stack::<NodeBundle>::new()
                     .layer(
                         icon(cell_data.index.signal(), cell_data.count.signal())
-                        .update_raw_el(clone!((cell_data_option) move |raw_el| {
+                        .update_raw_el(clone!((cell_data_option, down) move |raw_el| {
                             raw_el
                             .insert(Pickable::default())
                             .component_signal::<On::<Pointer<Down>>>(dragging_option().signal_ref(Option::is_some).map_false(clone!((cell_data_option) move ||
-                                On::<Pointer<Down>>::run(clone!((cell_data_option) move |down: Listener<Pointer<Down>>| {
-                                    dragging_option().set(Some(Mutable::new(cell_data_option.take())));
-                                    pointer_position().set(down.pointer_location.position.into());
+                                On::<Pointer<Down>>::run(clone!((cell_data_option, down) move |pointer_down: Listener<Pointer<Down>>| {
+                                    let to_drag_option = {
+                                        if pointer_down.button == PointerButton::Secondary {
+                                            if let Some(cell_data) = &*cell_data_option.lock_ref() {
+                                                let to_take = (cell_data.count.get() / 2).max(1);
+                                                cell_data.count.update(|count| count - to_take);
+                                                Some(CellData {
+                                                    index: Mutable::new(cell_data.index.get()),
+                                                    count: Mutable::new(to_take),
+                                                })
+                                            } else {
+                                                None
+                                            }
+                                        } else {
+                                            cell_data_option.take()
+                                        }
+                                    };
+                                    if cell_data_option.lock_ref().as_ref().map(|cell_data| cell_data.count.get() == 0).unwrap_or(false) {
+                                        cell_data_option.take();
+                                    }
+                                    dragging_option().set(Some(Mutable::new(to_drag_option)));
+                                    pointer_position().set(pointer_down.pointer_location.position.into());
+                                    down.set_neq(true);
                                 }))
                             )))
                         }))
@@ -454,7 +350,7 @@ fn cell() -> impl Element + Alignable {
                                     style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
                                     style.position_type = PositionType::Absolute;
                                     style.height = Val::Px(CELL_WIDTH);
-                                    style.max_width = Val::Px(CELL_WIDTH * 3.);
+                                    style.padding = UiRect::horizontal(Val::Px(10.));
                                 })
                                 .update_raw_el(clone!((original_position) move |raw_el| {
                                     raw_el
@@ -478,7 +374,7 @@ fn cell() -> impl Element + Alignable {
                                 .border_color(CELL_DARK_BORDER_COLOR.into())
                                 .child(
                                     El::<TextBundle>::new()
-                                    .with_style(|style| style.position_type = PositionType::Absolute)
+                                    .align(Align::center())
                                     .text_signal(
                                         cell_data.index.signal()
                                         .map(|i|
@@ -486,6 +382,7 @@ fn cell() -> impl Element + Alignable {
                                                 item_names().get(&i).unwrap().to_string(),
                                                 TextStyle { font_size: 50., ..default() }
                                             )
+                                            .with_no_wrap()
                                         )
                                     )
                                 )
@@ -495,7 +392,28 @@ fn cell() -> impl Element + Alignable {
         )
 }
 
-fn grid(n: usize) -> Grid<NodeBundle> {
+fn bern_cell_data_option(bern: f64) -> Mutable<Option<CellData>> {
+    Mutable::new('block: {
+        let distribution = Bernoulli::new(bern).unwrap();
+        let mut rng = rand::thread_rng();
+        if distribution.sample(&mut rng) {
+            break 'block Some(CellData {
+                index: Mutable::new(rng.gen_range(0..item_names().len())),
+                count: Mutable::new(rng.gen_range(1..=64)),
+            });
+        }
+        None
+    })
+}
+
+fn bern_cell(bern: f64, insertable: bool) -> impl Element + Alignable {
+    cell(bern_cell_data_option(bern), insertable)
+}
+
+fn grid<I: IntoIterator<Item = Mutable<Option<CellData>>>>(cell_data_options: I) -> Grid<NodeBundle>
+where
+    <I as IntoIterator>::IntoIter: std::marker::Send + 'static,
+{
     Grid::<NodeBundle>::new()
         .with_style(|style| {
             style.width = Val::Percent(100.);
@@ -504,7 +422,11 @@ fn grid(n: usize) -> Grid<NodeBundle> {
             style.row_gap = Val::Px(CELL_GAP);
         })
         .row_wrap_cell_width(CELL_WIDTH)
-        .cells((0..n).into_iter().map(|_| cell()))
+        .cells(
+            cell_data_options
+                .into_iter()
+                .map(move |cell_data_option| cell(cell_data_option, true)),
+        )
 }
 
 fn setup(mut commands: Commands) {
@@ -564,7 +486,7 @@ fn inventory() -> impl Element {
                                 .item(
                                     Column::<NodeBundle>::new()
                                         .with_style(|style| style.row_gap = Val::Px(CELL_GAP))
-                                        .items((0..4).into_iter().map(|_| cell())),
+                                        .items((0..4).into_iter().map(|_| bern_cell(0.5, true))),
                                 )
                                 .item(
                                     El::<NodeBundle>::new()
@@ -577,7 +499,7 @@ fn inventory() -> impl Element {
                                 .item(
                                     Column::<NodeBundle>::new()
                                         .with_style(|style| style.row_gap = Val::Px(CELL_GAP))
-                                        .items((0..4).into_iter().map(|_| cell())),
+                                        .items((0..4).into_iter().map(|_| bern_cell(0.5, true))),
                                 ),
                         )
                         .item(
@@ -587,32 +509,70 @@ fn inventory() -> impl Element {
                                     style.height = Val::Percent(100.);
                                 })
                                 .align_content(Align::center())
-                                .child(
+                                .child({
+                                    let parts = MutableVec::new_with_values(
+                                        (0..4).into_iter().map(|_| bern_cell_data_option(0.2)).collect(),
+                                    );
+                                    let output: Mutable<Option<CellData>> = default();
+                                    let outputter = spawn(clone!((parts, output) async move {
+                                        parts.signal_vec_cloned()
+                                        .map_signal(|part| part.signal_cloned().map_some(|cell_data| map_ref! { let _ = cell_data.index.signal_ref(|_|()), let _ = cell_data.count.signal_ref(|_|()) => {()} }).map(signal::option).flatten())
+                                        .to_signal_map(|filleds| filleds.iter().map(Option::is_some).all(identity))
+                                        .for_each_sync(move |all_filled| {
+                                            if all_filled {
+                                                let mut rng = rand::thread_rng();
+                                                output.set(Some(CellData {
+                                                    index: Mutable::new(rng.gen_range(0..item_names().len())),
+                                                    count: Mutable::new(rng.gen_range(1..=64)),
+                                                }));
+                                            } else {
+                                                output.set(None);
+                                            }
+                                        })
+                                        .await;
+                                    }));
                                     Column::<NodeBundle>::new()
+                                        .update_raw_el(|raw_el| raw_el.hold_tasks([outputter]))
                                         .with_style(|style| {
                                             style.row_gap = Val::Px(CELL_GAP * 2.);
                                         })
-                                        .item(cell().align(Align::center()))
-                                        .item(arrow())
                                         .item(
+                                            cell(output.clone(), false).align(Align::center())
+                                            .update_raw_el(clone!((parts) move |raw_el| {
+                                                raw_el
+                                                .component_signal::<On::<Pointer<Down>>>(signal::and(dragging_option().signal_ref(Option::is_none), output.signal_ref(Option::is_some)).dedupe().map_true(move || {
+                                                    On::<Pointer<Down>>::run(clone!((parts) move || {
+                                                        for part in parts.lock_ref().iter() {
+                                                            part.take();
+                                                        }
+                                                    }))
+                                                }))
+                                            }))
+                                        )
+                                        .item(arrow())
+                                        .item({
+                                            let cell_data_options = parts.lock_ref().into_iter().cloned().collect::<Vec<_>>();
                                             El::<NodeBundle>::new()
                                                 .with_style(|style| style.width = Val::Px(CELL_WIDTH * 2. + CELL_GAP))
-                                                .child(grid(4).align_content(Align::new().center_x())),
-                                        ),
-                                ),
+                                                .child(grid(cell_data_options).align_content(Align::new().center_x()))
+                                        })
+                                }),
                         ),
                 )
                 .item(
                     El::<NodeBundle>::new()
                         .with_style(|style| style.width = Val::Percent(100.))
-                        .child(grid(27).align_content(Align::new().center_x())),
+                        .child(
+                            grid((0..27).into_iter().map(|_| bern_cell_data_option(0.5)))
+                                .align_content(Align::new().center_x()),
+                        ),
                 )
                 .item(
                     Row::<NodeBundle>::new()
                         .with_style(|style| {
                             style.column_gap = Val::Px(CELL_GAP);
                         })
-                        .items((0..9).into_iter().map(|_| cell())),
+                        .items((0..9).into_iter().map(|_| bern_cell(0.5, true))),
                 ),
         )
 }

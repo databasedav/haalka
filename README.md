@@ -91,7 +91,7 @@ just example button  # port of https://github.com/bevyengine/bevy/blob/main/exam
 just example ecs_world_ui_world_sync
 # ui challenges from https://github.com/bevyengine/bevy/discussions/11100
 just example challenge01
-just example challenge02  # in progress
+just example challenge02
 ```
 
 ## license

@@ -8,3 +8,4 @@ publish = false
 haalka = { path = "../../" }
 bevy = "0.12.1"
 bevy_asset_loader = { version = "0.19.1", features = ["2d"] }
+rand = "0.8.5"
