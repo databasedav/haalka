@@ -519,13 +519,13 @@ fn inventory() -> impl Element {
                                 })
                                 .align_content(Align::center())
                                 .child({
-                                    let parts = MutableVec::new_with_values(
+                                    let inputs = MutableVec::new_with_values(
                                         (0..4).into_iter().map(|_| bern_cell_data_option(0.2)).collect(),
                                     );
                                     let output: Mutable<Option<CellData>> = default();
-                                    let outputter = spawn(clone!((parts, output) async move {
+                                    let outputter = spawn(clone!((inputs, output) async move {
                                         // TODO: explain every step of this signal
-                                        parts.signal_vec_cloned()
+                                        inputs.signal_vec_cloned()
                                         .map_signal(|part|
                                             part.signal_cloned()
                                             // this says "retrigger" the outputter every time any of the part's
@@ -556,14 +556,14 @@ fn inventory() -> impl Element {
                                             // handler doesn't overwrite the default `cell` `Down` handler
                                             El::<NodeBundle>::new()
                                             .child(cell(output.clone(), false).align(Align::center()))
-                                            .update_raw_el(clone!((parts) move |raw_el| {
+                                            .update_raw_el(clone!((inputs) move |raw_el| {
                                                 raw_el
                                                 .component_signal::<On::<Pointer<Down>>>(
                                                     signal::and(dragging_option().signal_ref(Option::is_none), output.signal_ref(Option::is_some)).dedupe()
                                                     .map_true(move || {
-                                                        On::<Pointer<Down>>::run(clone!((parts) move || {
-                                                            for part in parts.lock_ref().iter() {
-                                                                part.take();
+                                                        On::<Pointer<Down>>::run(clone!((inputs) move || {
+                                                            for input in inputs.lock_ref().iter() {
+                                                                input.take();
                                                             }
                                                         }))
                                                     })
@@ -572,7 +572,7 @@ fn inventory() -> impl Element {
                                         )
                                         .item(arrow())
                                         .item({
-                                            let cell_data_options = parts.lock_ref().into_iter().cloned().collect::<Vec<_>>();
+                                            let cell_data_options = inputs.lock_ref().into_iter().cloned().collect::<Vec<_>>();
                                             El::<NodeBundle>::new()
                                                 .with_style(|style| style.width = Val::Px(CELL_WIDTH * 2. + CELL_GAP))
                                                 .child(grid(cell_data_options).align_content(Align::new().center_x()))
