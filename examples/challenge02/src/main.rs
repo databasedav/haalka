@@ -526,9 +526,9 @@ fn inventory() -> impl Element {
                                     let outputter = spawn(clone!((inputs, output) async move {
                                         // TODO: explain every step of this signal
                                         inputs.signal_vec_cloned()
-                                        .map_signal(|part|
-                                            part.signal_cloned()
-                                            // this says "retrigger" the outputter every time any of the part's
+                                        .map_signal(|input|
+                                            input.signal_cloned()
+                                            // this says "retrigger" the outputter every time any of the input's
                                             // texture atlas index or count changes
                                             .map_some(|cell_data| map_ref! {
                                                 let _ = cell_data.index.signal_ref(|_|()),
