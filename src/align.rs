@@ -100,7 +100,7 @@ fn register_align_signal<REW: RawElWrapper>(
                 for alignment in &alignments {
                     apply_alignment(style, *alignment, AddRemove::Add)
                 }
-                last_alignments_option = if !alignments.is_empty() { Some(alignments) } else { None };
+                last_alignments_option = (!alignments.is_empty()).then_some(alignments);
             } else {
                 if let Some(last_aligns) = last_alignments_option.take() {
                     for align in last_aligns {

@@ -188,6 +188,8 @@ fn item_names() -> &'static HashMap<usize, &'static str> {
 
 static ICON_TEXTURE_ATLAS: OnceLock<Handle<TextureAtlas>> = OnceLock::new();
 
+// using a global handle for this so we don't need to thread the texture atlas handle through the
+// ui tree when we can guarantee it exists before any cells are inserted
 pub fn icon_texture_atlas() -> &'static Handle<TextureAtlas> {
     ICON_TEXTURE_ATLAS
         .get()
@@ -246,49 +248,87 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                     Pickable::default(),
                     On::<Pointer<Up>>::run(clone!((down) move || down.set_neq(false))),
                 ))
-                .component_signal::<On::<Pointer<Click>>>(signal::and(signal::not(down.signal()), hovered.signal()).dedupe().map_true(move || {
-                    On::<Pointer<Click>>::run(clone!((cell_data_option => self_cell_data_option) move |click: Listener<Pointer<Click>>| {
-                        let mut consume = false;
-                        if let Some(dragging_cell_data_option) = &*dragging_option().lock_ref() {
-                            if self_cell_data_option.lock_ref().is_none() {
-                                if let Some(dragging_cell_data) = &*dragging_cell_data_option.lock_ref() {
-                                    self_cell_data_option.set(Some(CellData {
-                                        index: Mutable::new(dragging_cell_data.index.get()),
-                                        count: Mutable::new(0),
-                                    }));
+                // `.component_signal` conveniently allows us to reactively add/remove components,
+                // if the provided signal returns `None`, then the component is removed; but the
+                // signal below doesn't look like it returns an `Option`? actually it does thanks to
+                // `.map_true` which is syntactic sugar for `.map(|bool| if bool { Some(...) } else { None }))`
+                .component_signal::<On::<Pointer<Click>>>(
+                    // we don't want the click listener to trigger if we've just grabbed some of
+                    // the stack as it would immediately drop one down, so we track the `Down` state
+                    signal::and(signal::not(down.signal()), hovered.signal()).dedupe()
+                    .map_true(clone!((cell_data_option) move || {
+                        On::<Pointer<Click>>::run(clone!((cell_data_option => self_cell_data_option) move |click: Listener<Pointer<Click>>| {
+                            let mut consume = false;
+                            if let Some(dragging_cell_data_option) = &*dragging_option().lock_ref() {
+                                if self_cell_data_option.lock_ref().is_none() {
+                                    if let Some(dragging_cell_data) = &*dragging_cell_data_option.lock_ref() {
+                                        self_cell_data_option.set(Some(CellData {
+                                            index: Mutable::new(dragging_cell_data.index.get()),
+                                            count: Mutable::new(0),
+                                        }));
+                                    }
                                 }
-                            }
-                            if let Some((dragging_cell_data, self_cell_data)) = dragging_cell_data_option.lock_ref().as_ref().zip(self_cell_data_option.lock_ref().as_ref()) {
-                                if self_cell_data.index.get() == dragging_cell_data.index.get() {
-                                    let to_add = {
-                                        if matches!(click.button, PointerButton::Secondary) {
-                                            *dragging_cell_data.count.lock_mut() -= 1;
-                                            if dragging_cell_data.count.get() == 0 {
+                                if let Some((dragging_cell_data, self_cell_data)) = dragging_cell_data_option.lock_ref().as_ref().zip(self_cell_data_option.lock_ref().as_ref()) {
+                                    if self_cell_data.index.get() == dragging_cell_data.index.get() {
+                                        let to_add = {
+                                            if matches!(click.button, PointerButton::Secondary) {
+                                                *dragging_cell_data.count.lock_mut() -= 1;
+                                                if dragging_cell_data.count.get() == 0 {
+                                                    consume = true;
+                                                }
+                                                1
+                                            } else {
+                                                let count = dragging_cell_data.count.take();
                                                 consume = true;
+                                                count
                                             }
-                                            1
-                                        } else {
-                                            let count = dragging_cell_data.count.take();
-                                            consume = true;
-                                            count
-                                        }
-                                    };
-                                    self_cell_data.count.update(|count| count + to_add);
-                                } else {
-                                    self_cell_data.index.swap(&dragging_cell_data.index);
-                                    self_cell_data.count.swap(&dragging_cell_data.count);
+                                        };
+                                        self_cell_data.count.update(|count| count + to_add);
+                                    } else {
+                                        self_cell_data.index.swap(&dragging_cell_data.index);
+                                        self_cell_data.count.swap(&dragging_cell_data.count);
+                                    }
                                 }
                             }
-                        }
-                        if consume {
-                            if let Some(cell_data_option) = dragging_option().take() {
-                                cell_data_option.take();
+                            if consume {
+                                if let Some(cell_data_option) = dragging_option().take() {
+                                    cell_data_option.take();
+                                }
                             }
-                        }
+                        }))
                     }))
-                }));
+                );
             }
             raw_el
+            .component_signal::<On::<Pointer<Down>>>(
+                signal::and(dragging_option().signal_ref(Option::is_none), cell_data_option.signal_ref(Option::is_some)).dedupe()
+                .map_true(clone!((cell_data_option, down) move ||
+                    On::<Pointer<Down>>::run(clone!((cell_data_option, down) move |pointer_down: Listener<Pointer<Down>>| {
+                        let to_drag_option = {
+                            if pointer_down.button == PointerButton::Secondary {
+                                if let Some(cell_data) = &*cell_data_option.lock_ref() {
+                                    let to_take = (cell_data.count.get() / 2).max(1);
+                                    cell_data.count.update(|count| count - to_take);
+                                    Some(CellData {
+                                        index: Mutable::new(cell_data.index.get()),
+                                        count: Mutable::new(to_take),
+                                    })
+                                } else {
+                                    None
+                                }
+                            } else {
+                                cell_data_option.take()
+                            }
+                        };
+                        if cell_data_option.lock_ref().as_ref().map(|cell_data| cell_data.count.get() == 0).unwrap_or(false) {
+                            cell_data_option.take();
+                        }
+                        dragging_option().set(Some(Mutable::new(to_drag_option)));
+                        pointer_position().set(pointer_down.pointer_location.position.into());
+                        down.set_neq(true);
+                    }))
+                ))
+            )
         }))
         .hovered_sync(hovered.clone())
         .with_style(|style| {
@@ -297,8 +337,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
         })
         .background_color_signal(
-            hovered
-                .signal()
+            hovered.signal()
                 .map_bool(|| CELL_HIGHLIGHT_COLOR.into(), || CELL_BACKGROUND_COLOR.into()),
         )
         .border_color(CELL_DARK_BORDER_COLOR.into())
@@ -307,39 +346,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                 .signal_cloned()
                 .map_some(move |cell_data| {
                     Stack::<NodeBundle>::new()
-                    .layer(
-                        icon(cell_data.index.signal(), cell_data.count.signal())
-                        .update_raw_el(clone!((cell_data_option, down) move |raw_el| {
-                            raw_el
-                            .insert(Pickable::default())
-                            .component_signal::<On::<Pointer<Down>>>(dragging_option().signal_ref(Option::is_some).map_false(clone!((cell_data_option) move ||
-                                On::<Pointer<Down>>::run(clone!((cell_data_option, down) move |pointer_down: Listener<Pointer<Down>>| {
-                                    let to_drag_option = {
-                                        if pointer_down.button == PointerButton::Secondary {
-                                            if let Some(cell_data) = &*cell_data_option.lock_ref() {
-                                                let to_take = (cell_data.count.get() / 2).max(1);
-                                                cell_data.count.update(|count| count - to_take);
-                                                Some(CellData {
-                                                    index: Mutable::new(cell_data.index.get()),
-                                                    count: Mutable::new(to_take),
-                                                })
-                                            } else {
-                                                None
-                                            }
-                                        } else {
-                                            cell_data_option.take()
-                                        }
-                                    };
-                                    if cell_data_option.lock_ref().as_ref().map(|cell_data| cell_data.count.get() == 0).unwrap_or(false) {
-                                        cell_data_option.take();
-                                    }
-                                    dragging_option().set(Some(Mutable::new(to_drag_option)));
-                                    pointer_position().set(pointer_down.pointer_location.position.into());
-                                    down.set_neq(true);
-                                }))
-                            )))
-                        }))
-                    )
+                    .layer(icon(cell_data.index.signal(), cell_data.count.signal()))
                     .layer_signal(
                         signal::and(hovered.signal(), dragging_option().signal_ref(Option::is_none)).dedupe()
                         .map_true(clone!((original_position) move ||
@@ -453,6 +460,12 @@ fn arrow() -> impl Element {
         .items((0..6).into_iter().map(|_| dot_row(3)))
 }
 
+fn side_column() -> impl Element {
+    Column::<NodeBundle>::new()
+        .with_style(|style| style.row_gap = Val::Px(CELL_GAP))
+        .items((0..4).into_iter().map(|_| bern_cell(0.5, true)))
+}
+
 fn inventory() -> impl Element {
     El::<NodeBundle>::new()
         .align(Align::center())
@@ -483,11 +496,7 @@ fn inventory() -> impl Element {
                                     style.width = Val::Percent(60.);
                                     style.padding = UiRect::horizontal(Val::Px(CELL_GAP * 3.));
                                 })
-                                .item(
-                                    Column::<NodeBundle>::new()
-                                        .with_style(|style| style.row_gap = Val::Px(CELL_GAP))
-                                        .items((0..4).into_iter().map(|_| bern_cell(0.5, true))),
-                                )
+                                .item(side_column())
                                 .item(
                                     El::<NodeBundle>::new()
                                         .with_style(|style| {
@@ -496,11 +505,7 @@ fn inventory() -> impl Element {
                                         })
                                         .background_color(Color::BLACK.into()),
                                 )
-                                .item(
-                                    Column::<NodeBundle>::new()
-                                        .with_style(|style| style.row_gap = Val::Px(CELL_GAP))
-                                        .items((0..4).into_iter().map(|_| bern_cell(0.5, true))),
-                                ),
+                                .item(side_column())
                         )
                         .item(
                             El::<NodeBundle>::new()
@@ -516,7 +521,16 @@ fn inventory() -> impl Element {
                                     let output: Mutable<Option<CellData>> = default();
                                     let outputter = spawn(clone!((parts, output) async move {
                                         parts.signal_vec_cloned()
-                                        .map_signal(|part| part.signal_cloned().map_some(|cell_data| map_ref! { let _ = cell_data.index.signal_ref(|_|()), let _ = cell_data.count.signal_ref(|_|()) => {()} }).map(signal::option).flatten())
+                                        .map_signal(|part|
+                                            part.signal_cloned()
+                                            // this says "retrigger" the outputter every time any of the part's
+                                            // texture atlas index or count changes
+                                            .map_some(|cell_data| map_ref! {
+                                                let _ = cell_data.index.signal_ref(|_|()),
+                                                let _ = cell_data.count.signal_ref(|_|()) => ()
+                                            })
+                                            .switch(signal::option)
+                                        )
                                         .to_signal_map(|filleds| filleds.iter().map(Option::is_some).all(identity))
                                         .for_each_sync(move |all_filled| {
                                             if all_filled {
@@ -537,16 +551,22 @@ fn inventory() -> impl Element {
                                             style.row_gap = Val::Px(CELL_GAP * 2.);
                                         })
                                         .item(
-                                            cell(output.clone(), false).align(Align::center())
+                                            // need to add another wrapping node here so the special output `Down`
+                                            // handler doesn't overwrite the default `cell` `Down` handler
+                                            El::<NodeBundle>::new()
+                                            .child(cell(output.clone(), false).align(Align::center()))
                                             .update_raw_el(clone!((parts) move |raw_el| {
                                                 raw_el
-                                                .component_signal::<On::<Pointer<Down>>>(signal::and(dragging_option().signal_ref(Option::is_none), output.signal_ref(Option::is_some)).dedupe().map_true(move || {
-                                                    On::<Pointer<Down>>::run(clone!((parts) move || {
-                                                        for part in parts.lock_ref().iter() {
-                                                            part.take();
-                                                        }
-                                                    }))
-                                                }))
+                                                .component_signal::<On::<Pointer<Down>>>(
+                                                    signal::and(dragging_option().signal_ref(Option::is_none), output.signal_ref(Option::is_some)).dedupe()
+                                                    .map_true(move || {
+                                                        On::<Pointer<Down>>::run(clone!((parts) move || {
+                                                            for part in parts.lock_ref().iter() {
+                                                                part.take();
+                                                            }
+                                                        }))
+                                                    })
+                                                )
                                             }))
                                         )
                                         .item(arrow())
@@ -619,8 +639,7 @@ fn spawn_ui_root(world: &mut World) {
             dragging_option()
                 .signal_cloned()
                 .map_some(|cell_data_option| cell_data_option.signal_cloned())
-                .map(signal::option)
-                .flatten()
+                .switch(signal::option)
                 .map(Option::flatten)
                 .map_some(move |cell_data| {
                     icon(cell_data.index.signal(), cell_data.count.signal())

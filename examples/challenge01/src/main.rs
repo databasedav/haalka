@@ -229,7 +229,9 @@ fn dropdown_showing_option() -> &'static Mutable<Option<Mutable<bool>>> {
 }
 
 fn lil_baby_button() -> Button {
-    Button::new().width(Val::Px(30.)).height(Val::Px(30.))
+    Button::new()
+        .width(Val::Px(LIL_BABY_BUTTON_SIZE))
+        .height(Val::Px(LIL_BABY_BUTTON_SIZE))
 }
 
 trait Controllable: ElementWrapper

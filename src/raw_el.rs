@@ -172,7 +172,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
         self.on_signal(signal, move |entity, value| {
             async_world().apply(clone!((f) move |world: &mut World| {
                 if let Some(mut entity) = world.get_entity_mut(entity) {
-                    // safe because commands are run serially  // TODO: confirm, otherwise f must be clone
+                    // safe because commands are run serially  // TODO: confirm, otherwise f must be Clone
                     (f.lock().expect("expected on_signal commands to run serially"))(&mut entity, value);
                 }
             }))
