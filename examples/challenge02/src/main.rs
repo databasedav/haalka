@@ -399,15 +399,19 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
         )
 }
 
+fn random_cell_data(rng: &mut impl Rng) -> CellData {
+    CellData {
+        index: Mutable::new(rng.gen_range(0..item_names().len())),
+        count: Mutable::new(rng.gen_range(1..=64)),
+    }
+}
+
 fn bern_cell_data_option(bern: f64) -> Mutable<Option<CellData>> {
     Mutable::new('block: {
         let distribution = Bernoulli::new(bern).unwrap();
         let mut rng = rand::thread_rng();
         if distribution.sample(&mut rng) {
-            break 'block Some(CellData {
-                index: Mutable::new(rng.gen_range(0..item_names().len())),
-                count: Mutable::new(rng.gen_range(1..=64)),
-            });
+            break 'block Some(random_cell_data(&mut rng));
         }
         None
     })
@@ -520,6 +524,7 @@ fn inventory() -> impl Element {
                                     );
                                     let output: Mutable<Option<CellData>> = default();
                                     let outputter = spawn(clone!((parts, output) async move {
+                                        // TODO: explain every step of this signal
                                         parts.signal_vec_cloned()
                                         .map_signal(|part|
                                             part.signal_cloned()
@@ -534,11 +539,7 @@ fn inventory() -> impl Element {
                                         .to_signal_map(|filleds| filleds.iter().map(Option::is_some).all(identity))
                                         .for_each_sync(move |all_filled| {
                                             if all_filled {
-                                                let mut rng = rand::thread_rng();
-                                                output.set(Some(CellData {
-                                                    index: Mutable::new(rng.gen_range(0..item_names().len())),
-                                                    count: Mutable::new(rng.gen_range(1..=64)),
-                                                }));
+                                                output.set(Some(random_cell_data(&mut rand::thread_rng())));
                                             } else {
                                                 output.set(None);
                                             }
