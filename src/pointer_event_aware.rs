@@ -12,7 +12,7 @@ use futures_signals_ext::SignalExtBool;
 
 use crate::{sleep, spawn, RawElWrapper};
 
-pub trait MouseInteractionAware: RawElWrapper {
+pub trait PointerEventAware: RawElWrapper {
     fn on_hovered_change(self, handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
         let handler = Arc::new(Mutex::new(handler));
         self.update_raw_el(|raw_el| {
@@ -24,10 +24,30 @@ pub trait MouseInteractionAware: RawElWrapper {
         })
     }
 
-    fn on_click(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
+    fn on_click_with_system<Marker>(self, handler: impl IntoSystem<(), (), Marker>) -> Self {
         self.update_raw_el(|raw_el| raw_el.insert((Pickable::default(), On::<Pointer<Click>>::run(handler))))
     }
 
+    fn on_click(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
+        self.on_click_with_system(move |click: Listener<Pointer<Click>>| {
+            if matches!(click.button, PointerButton::Primary) {
+                handler()
+            }
+        })
+    }
+
+    fn on_right_click(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
+        self.on_click_with_system(move |click: Listener<Pointer<Click>>| {
+            if matches!(click.button, PointerButton::Secondary) {
+                handler()
+            }
+        })
+    }
+
+    // TODO: there's still problems with this, `Up` doesn't trigger outside of the element + pressable
+    // system isn't sensitive to left clicks only, so e.g. downing a button, upping outside it, then
+    // holding right click over it will incorrectly show a pressed state
+    // TODO: add right click pressing convenience methods if someone wants them ...
     fn on_pressed_change(self, handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
         self.update_raw_el(|raw_el| {
             let down = Mutable::new(false);
@@ -39,8 +59,8 @@ pub trait MouseInteractionAware: RawElWrapper {
                 }))
                 .insert((
                     Pickable::default(),
-                    On::<Pointer<Down>>::run(clone!((down) move || down.set_neq(true))),
-                    On::<Pointer<Up>>::run(move || down.set_neq(false)),
+                    On::<Pointer<Down>>::run(clone!((down) move |pointer_down: Listener<Pointer<Down>>| if matches!(pointer_down.button, PointerButton::Primary) { down.set_neq(true) })),
+                    On::<Pointer<Up>>::run(move |pointer_up: Listener<Pointer<Up>>| if matches!(pointer_up.button, PointerButton::Primary) { down.set_neq(false) }),
                 ))
         })
     }
@@ -100,7 +120,7 @@ pub trait MouseInteractionAware: RawElWrapper {
 pub(crate) struct Pressable(Box<dyn FnMut(bool) + Send + Sync + 'static>);
 
 pub(crate) fn pressable_system(
-    mut interaction_query: Query<(&PickingInteraction, &mut Pressable), Changed<PickingInteraction>>, /* TODO: does Changed actually do anything here ? */
+    mut interaction_query: Query<(&PickingInteraction, &mut Pressable), Changed<PickingInteraction>>,
 ) {
     for (interaction, mut pressable) in &mut interaction_query {
         pressable.0(matches!(interaction, PickingInteraction::Pressed));
@@ -112,6 +132,12 @@ struct PointerOverSet;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
 struct PointerOutSet;
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
+struct PointerDownSet;
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
+struct PointerUpSet;
 
 struct PointerOverPlugin;
 impl Plugin for PointerOverPlugin {
@@ -153,6 +179,46 @@ impl Plugin for PointerOutPlugin {
     }
 }
 
+struct PointerDownPlugin;
+impl Plugin for PointerDownPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_event::<Pointer<Down>>()
+            .insert_resource(EventDispatcher::<Pointer<Down>>::default())
+            .add_systems(
+                PreUpdate,
+                (
+                    EventDispatcher::<Pointer<Down>>::build,
+                    EventDispatcher::<Pointer<Down>>::bubble_events,
+                    EventDispatcher::<Pointer<Down>>::cleanup,
+                )
+                    .chain()
+                    .run_if(on_event::<Pointer<Down>>())
+                    .in_set(EventListenerSet)
+                    .in_set(PointerDownSet),
+            );
+    }
+}
+
+struct PointerUpPlugin;
+impl Plugin for PointerUpPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_event::<Pointer<Up>>()
+            .insert_resource(EventDispatcher::<Pointer<Up>>::default())
+            .add_systems(
+                PreUpdate,
+                (
+                    EventDispatcher::<Pointer<Up>>::build,
+                    EventDispatcher::<Pointer<Up>>::bubble_events,
+                    EventDispatcher::<Pointer<Up>>::cleanup,
+                )
+                    .chain()
+                    .run_if(on_event::<Pointer<Up>>())
+                    .in_set(EventListenerSet)
+                    .in_set(PointerUpSet),
+            );
+    }
+}
+
 struct RiggedInteractionPlugin;
 impl Plugin for RiggedInteractionPlugin {
     fn build(&self, app: &mut App) {
@@ -175,13 +241,16 @@ impl Plugin for RiggedInteractionPlugin {
                     .chain()
                     .in_set(PickSet::Focus),
             )
-            // so bubbling hover is always true last
-            .configure_sets(PreUpdate, (PointerOutSet, PointerOverSet).chain())
+            // so exits always run last
+            .configure_sets(
+                PreUpdate,
+                (PointerDownSet, PointerUpSet, PointerOutSet, PointerOverSet).chain(),
+            )
             .add_plugins((
                 PointerOverPlugin,
                 PointerOutPlugin,
-                EventListenerPlugin::<Pointer<Down>>::default(),
-                EventListenerPlugin::<Pointer<Up>>::default(),
+                PointerDownPlugin,
+                PointerUpPlugin,
                 EventListenerPlugin::<Pointer<Click>>::default(),
                 EventListenerPlugin::<Pointer<Move>>::default(),
                 EventListenerPlugin::<Pointer<DragStart>>::default(),

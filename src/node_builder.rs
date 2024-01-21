@@ -360,14 +360,10 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
             on_spawn(world, id);
         }
         if !self.task_wrappers.is_empty() {
-            let mut tasks = vec![];
-            for task_wrapper in self.task_wrappers {
-                tasks.push(task_wrapper(id));
-            }
             if let Some(mut entity) = world.get_entity_mut(id) {
                 if let Some(mut task_holder) = entity.get_mut::<TaskHolder>() {
-                    for task in tasks {
-                        task_holder.hold(task);
+                    for task_wrapper in self.task_wrappers {
+                        task_holder.hold(task_wrapper(id));
                     }
                 }
             }

@@ -40,9 +40,9 @@ impl<NodeType: Bundle + Default> RawElWrapper for Grid<NodeType> {
     }
 
     fn into_raw_el(self) -> RawHaalkaEl<NodeType> {
-        // TODO: why won't grid_template_columns not work without a grid wrapper ?
+        // TODO: why won't grid_template_columns work without a grid wrapper ?
         // this forces me to require `NodeType: Default` so i can create the appropriate wrapper node
-        // only having a single unified node type would  also avoid this
+        // only having a single unified node type would also avoid this
         RawHaalkaEl::<NodeType>::new()
             .with_component::<Style>(|style| style.display = Display::Grid)
             .child(self.raw_el.into_raw_el())

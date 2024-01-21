@@ -30,7 +30,7 @@ mod align;
 pub use align::{AddRemove, Align, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable};
 
 mod pointer_event_aware;
-pub use pointer_event_aware::MouseInteractionAware;
+pub use pointer_event_aware::PointerEventAware;
 use pointer_event_aware::{pressable_system, RiggedPickingPlugin};
 
 mod derive;

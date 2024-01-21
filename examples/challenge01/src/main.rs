@@ -446,6 +446,9 @@ impl IterableOptions {
                         element,
                         controlling_signal,
                         clone!((options, selected, left_pressed, right_pressed) move || {
+                            // TODO: only allowing one flasher like this doesn't prevent desyncing either ...
+                            let left_flasher = Mutable::new(None);
+                            let right_flasher = Mutable::new(None);
                             On::<MenuInputEvent>::run(clone!((options, selected, left_pressed, right_pressed) move |event: ListenerMut<MenuInputEvent>| {
                                 match event.input {
                                     MenuInput::Left | MenuInput::Right => {
@@ -454,19 +457,19 @@ impl IterableOptions {
                                             let step = {
                                                 (if matches!(event.input, MenuInput::Left) {
                                                     left_pressed.set(true);
-                                                    spawn(clone!((left_pressed) async move {
+                                                    left_flasher.set(Some(spawn(clone!((left_pressed) async move {
                                                         sleep(Duration::from_millis(FLASH_MS as u64)).await;
                                                         left_pressed.signal().wait_for(true).await;  // TODO: this doesn't prevent desyncing, could be lower level issue ...
                                                         left_pressed.set(false);
-                                                    })).detach();
+                                                    }))));
                                                     -1
                                                 } else {
                                                     right_pressed.set(true);
-                                                    spawn(clone!((right_pressed) async move {
+                                                    right_flasher.set(Some(spawn(clone!((right_pressed) async move {
                                                         sleep(Duration::from_millis(FLASH_MS as u64)).await;
                                                         right_pressed.signal().wait_for(true).await;
                                                         right_pressed.set(false);
-                                                    })).detach();
+                                                    }))));
                                                     1
                                                 })
                                                 as isize

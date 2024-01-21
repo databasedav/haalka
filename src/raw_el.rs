@@ -6,17 +6,19 @@ use std::{
 use bevy::{prelude::*, tasks::Task};
 use enclose::enclose as clone;
 use futures_signals::{
-    signal::{Signal, SignalExt},
+    signal::{self, Mutable, Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
+use futures_signals_ext::*;
 use futures_util::Future;
+use async_lock;
 
 use crate::{
     align::{AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable},
     async_world,
     node_builder::TaskHolder,
-    pointer_event_aware::MouseInteractionAware,
-    NodeBuilder,
+    pointer_event_aware::PointerEventAware,
+    spawn, NodeBuilder,
 };
 
 // TODO: how can i make use of this default ? should i just remove it ?
@@ -208,6 +210,77 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
             },
         )
     }
+
+    pub fn on_signal_send_event<T, E: Event>(
+        self,
+        signal: impl Signal<Item = T> + Send + 'static,
+        mut event_f: impl FnMut(Entity, T) -> E + Send + 'static,
+    ) -> Self {
+        self.on_signal(signal, move |entity, value| {
+            async_world().send_event(event_f(entity, value))
+        })
+    }
+
+    pub fn on_signal_one_shot_io<I: Send + 'static, O: Send + 'static, M, Fut: Future<Output = ()> + Send + 'static>(
+        self,
+        signal: impl Signal<Item = I> + Send + 'static,
+        system: impl IntoSystem<(Entity, I), O, M> + Send + 'static,
+        f: impl FnMut(Entity, O) -> Fut + Send + 'static,
+    ) -> Self {
+        let system_holder = Mutable::new(None);
+        let f = Arc::new(async_lock::Mutex::new(f));
+        self.hold_tasks([spawn(clone!((system_holder) async move {
+            system_holder.set(Some(async_world().register_io_system(system).await));
+        }))])
+        .on_signal(
+            signal,
+            move |entity, input| {
+                clone!((system_holder, f) async move {
+                    system_holder.signal_ref(Option::is_some).wait_for(true).await;
+                    let output = system_holder.get_cloned().unwrap().run((entity, input)).await;
+                    // need async mutex because sync mutex guards are not `Send`
+                    f.lock().await(entity, output).await;
+                })
+            }
+        )
+    }
+
+    pub fn on_signal_one_shot_io_with_entity<I: Send + 'static, O: Send + 'static, M>(
+        self,
+        signal: impl Signal<Item = I> + Send + 'static,
+        system: impl IntoSystem<(Entity, I), O, M> + Send + 'static,
+        f: impl FnMut(&mut EntityWorldMut, O) + Send + 'static,
+    ) -> Self {
+        let f = Arc::new(Mutex::new(f));
+        self.on_signal_one_shot_io(signal, system, move |entity, value| {
+            async_world().apply(clone!((f) move |world: &mut World| {
+                if let Some(mut entity) = world.get_entity_mut(entity) {
+                    f.lock().unwrap()(&mut entity, value);
+                }
+            }))
+        })
+    }
+
+    pub fn on_signal_one_shot_io_with_component<I: Send + 'static, O: Send + 'static, M, C: Component>(
+        self,
+        signal: impl Signal<Item = I> + Send + 'static,
+        system: impl IntoSystem<(Entity, I), O, M> + Send + 'static,
+        mut f: impl FnMut(&mut C, O) + Send + 'static,
+    ) -> Self {
+        self.on_signal_one_shot_io_with_entity(signal, system, move |entity, value| {
+            if let Some(mut component) = entity.get_mut::<C>() {
+                f(&mut component, value);
+            }
+        })
+    }
+
+    pub fn on_signal_one_shot<I: Send + 'static, M>(
+        self,
+        signal: impl Signal<Item = I> + Send + 'static,
+        system: impl IntoSystem<(Entity, I), (), M> + Send + 'static,
+    ) -> Self {
+        self.on_signal_one_shot_io(signal, system, |_, _| async {})
+    }
 }
 
 pub trait RawElement: Sized {
@@ -350,7 +423,7 @@ pub trait Spawnable: RawElWrapper {
 
 impl<REW: RawElWrapper> Spawnable for REW {}
 
-impl<REW: RawElWrapper> MouseInteractionAware for REW {}
+impl<REW: RawElWrapper> PointerEventAware for REW {}
 
 pub trait Element: RawElement + ChildProcessable {}
 

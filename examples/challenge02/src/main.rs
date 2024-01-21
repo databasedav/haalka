@@ -538,11 +538,7 @@ fn inventory() -> impl Element {
                                         )
                                         .to_signal_map(|filleds| filleds.iter().map(Option::is_some).all(identity))
                                         .for_each_sync(move |all_filled| {
-                                            if all_filled {
-                                                output.set(Some(random_cell_data(&mut rand::thread_rng())));
-                                            } else {
-                                                output.set(None);
-                                            }
+                                            output.set(all_filled.then(|| random_cell_data(&mut rand::thread_rng())));
                                         })
                                         .await;
                                     }));
