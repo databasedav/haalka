@@ -62,7 +62,7 @@ impl<NodeType: Bundle + Default> Grid<NodeType> {
         mut self,
         cell_width_signal: impl Signal<Item = impl Into<Option<f32>> + Send> + Send + 'static,
     ) -> Self {
-        self.raw_el = self.raw_el.on_signal_with_component::<Style, Option<f32>>(
+        self.raw_el = self.raw_el.on_signal_with_component::<Option<f32>, Style>(
             cell_width_signal.map(|cell_width_option| cell_width_option.into()),
             |style, cell_width_option| {
                 if let Some(cell_width) = cell_width_option {

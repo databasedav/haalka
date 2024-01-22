@@ -82,6 +82,15 @@ impl<NodeType: Bundle> Row<NodeType> {
             .children_signal_vec(children_options_signal_vec.map(Self::process_child));
         self
     }
+
+    pub fn multiline(mut self) -> Self {
+        self.raw_el = self.raw_el.with_component::<Style>(|style| {
+            style.flex_wrap = FlexWrap::Wrap;
+            style.flex_basis = Val::Px(0.);
+            style.flex_grow = 1.;
+        });
+        self
+    }
 }
 
 impl<NodeType: Bundle> RawElWrapper for Row<NodeType> {

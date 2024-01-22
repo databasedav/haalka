@@ -35,8 +35,8 @@ fn main() {
                 .continue_to_state(AssetState::Loaded)
                 .load_collection::<RpgIconSheet>(),
         )
-        .add_systems(Startup, setup)
-        .add_systems(OnEnter(AssetState::Loaded), spawn_ui_root)
+        .add_systems(Startup, camera)
+        .add_systems(OnEnter(AssetState::Loaded), (set_icon_texture_atlas, ui_root).chain())
         .run();
 }
 
@@ -440,7 +440,13 @@ where
         )
 }
 
-fn setup(mut commands: Commands) {
+fn set_icon_texture_atlas(rpg_icon_sheet: Res<RpgIconSheet>) {
+    ICON_TEXTURE_ATLAS
+        .set(rpg_icon_sheet.atlas.clone())
+        .expect("failed to initialize ICON_TEXTURE_ATLAS");
+}
+
+fn camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 }
 
@@ -604,16 +610,7 @@ fn pointer_position() -> &'static Mutable<(f32, f32)> {
     Mutable::new(default())
 }
 
-fn spawn_ui_root(world: &mut World) {
-    ICON_TEXTURE_ATLAS
-        .set(
-            world
-                .get_resource::<RpgIconSheet>()
-                .expect("expected rpg icon sheet to be loaded")
-                .atlas
-                .clone(),
-        )
-        .expect("failed to initialize ICON_TEXTURE_ATLAS");
+fn ui_root(world: &mut World) {
     Stack::<NodeBundle>::new()
         .with_style(|style| {
             style.width = Val::Percent(100.);

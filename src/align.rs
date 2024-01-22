@@ -89,7 +89,7 @@ fn register_align_signal<REW: RawElWrapper>(
 ) -> REW {
     let mut last_alignments_option: Option<Vec<Alignment>> = None;
     element.update_raw_el(|raw_el| {
-        raw_el.on_signal_with_component::<Style, Option<Vec<Alignment>>>(align_signal, move |style, aligns_option| {
+        raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Style>(align_signal, move |style, aligns_option| {
             if let Some(alignments) = aligns_option {
                 if let Some(mut last_alignments) = last_alignments_option.take() {
                     last_alignments.retain(|align| !alignments.contains(align));

@@ -38,7 +38,7 @@ macro_rules! impl_node_methods {
                                     f: impl FnMut(&mut $field_type, T) + Send + 'static,
                                 ) -> Self {
                                     self.update_raw_el(|raw_el| {
-                                        raw_el.on_signal_with_component::<$field_type, T>(signal, f)
+                                        raw_el.on_signal_with_component::<T, $field_type>(signal, f)
                                     })
                                 }
                             }

@@ -40,6 +40,7 @@ pub use utils::{sleep, spawn};
 
 pub use enclose::enclose as clone;
 pub use futures_signals_ext::*;
+pub use paste::paste;
 pub use static_ref_macro::static_ref;
 
 pub use bevy_mod_picking::prelude::*;

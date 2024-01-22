@@ -1,0 +1,10 @@
+[package]
+name = "challenge04"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+haalka = { path = "../../" }
+bevy = "0.12.1"
+bevy_nine_slice_ui = "0.5.0"
