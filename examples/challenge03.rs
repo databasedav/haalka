@@ -5,7 +5,7 @@
 // in Bevy ECS. When reaching 0 HP, the character should be despawned together with UI.
 
 use bevy::prelude::*;
-use futures_signals::signal::{Mutable, SignalExt};
+use futures_signals::signal::Mutable;
 use futures_signals_ext::*;
 use haalka::*;
 

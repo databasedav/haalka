@@ -92,6 +92,7 @@ just example ecs_world_ui_world_sync
 # ui challenges from https://github.com/bevyengine/bevy/discussions/11100
 just example challenge01  # game menu
 just example challenge02  # inventory
+just example challenge04  # responsive menu
 ```
 
 ## license

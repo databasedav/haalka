@@ -1,3 +1,7 @@
+// A simple game menu, with buttons that use a nine-patch system for design (i.e., composed of images for the corners and middle segments) and an image to the right of the buttons.
+// For normal screen sizes, the menu is centered in the middle of the screen
+// For 400px width and lower, the buttons fill the screen width and the image is above the buttons.
+
 use std::sync::OnceLock;
 
 use bevy::{prelude::*, window::WindowResized};

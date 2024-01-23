@@ -7,7 +7,7 @@ use async_lock;
 use bevy::{prelude::*, tasks::Task};
 use enclose::enclose as clone;
 use futures_signals::{
-    signal::{self, Mutable, Signal, SignalExt},
+    signal::{Mutable, Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
 use futures_signals_ext::*;
