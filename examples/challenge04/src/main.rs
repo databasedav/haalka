@@ -50,6 +50,15 @@ pub fn image() -> &'static Handle<Image> {
 
 struct NineSliceEl<Bundle = NineSliceUiMaterialBundle>(El<Bundle>);
 
+impl_haalka_methods! {
+    NineSliceEl => {
+        NineSliceUiMaterialBundle => [
+            style: Style,
+            nine_slice_texture: NineSliceUiTexture,
+        ],
+    },
+}
+
 impl NineSliceEl {
     pub fn new(frame_signal: impl Signal<Item = usize> + Send + 'static) -> Self {
         Self(
@@ -75,15 +84,6 @@ impl ElementWrapper for NineSliceEl {
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.0
     }
-}
-
-impl_node_methods! {
-    NineSliceEl => {
-        NineSliceUiMaterialBundle => [
-            style: Style,
-            nine_slice_texture: NineSliceUiTexture,
-        ],
-    },
 }
 
 fn nine_slice_button() -> impl Element {

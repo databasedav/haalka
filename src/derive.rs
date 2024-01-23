@@ -12,7 +12,7 @@ use paste::paste;
 use crate::{Column, El, Grid, RawElWrapper, Row, Stack};
 
 #[macro_export]
-macro_rules! impl_node_methods {
+macro_rules! impl_haalka_methods {
     ($($el_type:ty => { $($node_type:ty => [$($field:ident: $field_type:ty),* $(,)?]),+ $(,)? }),+ $(,)?) => {
         $(
             $(
@@ -50,7 +50,7 @@ macro_rules! impl_node_methods {
     };
 }
 
-impl_node_methods! {
+impl_haalka_methods! {
     El => {
         NodeBundle => [
             node: bevy::ui::Node,

@@ -42,7 +42,7 @@ impl RawElWrapper for PointLightEl {
     }
 }
 
-impl_node_methods! {
+impl_haalka_methods! {
     PointLightEl => {
         PointLightBundle => [
             point_light: PointLight,
