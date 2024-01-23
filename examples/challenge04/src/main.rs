@@ -1,6 +1,7 @@
-// A simple game menu, with buttons that use a nine-patch system for design (i.e., composed of images for the corners and middle segments) and an image to the right of the buttons.
-// For normal screen sizes, the menu is centered in the middle of the screen
-// For 400px width and lower, the buttons fill the screen width and the image is above the buttons.
+// A simple game menu, with buttons that use a nine-patch system for design (i.e., composed of
+// images for the corners and middle segments) and an image to the right of the buttons. For normal
+// screen sizes, the menu is centered in the middle of the screen For 400px width and lower, the
+// buttons fill the screen width and the image is above the buttons.
 
 use std::sync::OnceLock;
 
@@ -59,15 +60,13 @@ impl NineSliceEl {
                 ),
                 ..default()
             })
-            .update_raw_el(|raw_el| {
-                raw_el.on_signal_with_component::<_, NineSliceUiTexture>(frame_signal, |nine_slice, frame| {
-                    if let Some(bounds) = &mut nine_slice.bounds {
-                        bounds.min.x = frame as f32 * 32.;
-                        bounds.max.x = 32. + frame as f32 * 32.;
-                    }
-                })
-            }),
         )
+        .on_signal_with_nine_slice_texture(frame_signal, |nine_slice, frame| {
+            if let Some(bounds) = &mut nine_slice.bounds {
+                bounds.min.x = frame as f32 * 32.;
+                bounds.max.x = 32. + frame as f32 * 32.;
+            }
+        })
     }
 }
 
@@ -162,9 +161,10 @@ fn menu(width: Mutable<f32>) -> impl Element {
             style.height = Val::Px(BASE_SIZE);
             style.padding = UiRect::all(Val::Px(GAP));
         })
-        .on_signal_with_style(width.signal(), |style, width| {
-            style.width = Val::Px(BASE_SIZE.min(width))
-        })
+        .on_signal_with_style(
+            width.signal().map(|width| BASE_SIZE.min(width)).dedupe(),
+            |style, width| style.width = Val::Px(width),
+        )
         .update_raw_el(|raw_el| {
             raw_el.child_signal(
                 width
