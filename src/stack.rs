@@ -1,12 +1,13 @@
 use bevy::prelude::*;
+use bevy_mod_picking::picking_core::Pickable;
 use futures_signals::{
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
 
 use crate::{
-    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement, RawElWrapper,
-    RawElement, RawHaalkaEl, Row,
+    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement,
+    PointerEventAware, RawElWrapper, RawElement, RawHaalkaEl, Row,
 };
 
 pub struct Stack<NodeType> {
@@ -18,13 +19,15 @@ impl<NodeType: Bundle> From<NodeType> for Stack<NodeType> {
     fn from(node_bundle: NodeType) -> Self {
         Self {
             raw_el: {
-                RawHaalkaEl::from(node_bundle).with_component::<Style>(|style| {
-                    style.display = Display::Grid;
-                    style.grid_auto_columns =
-                        GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
-                    style.grid_auto_rows =
-                        GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
-                })
+                RawHaalkaEl::from(node_bundle)
+                    .with_component::<Style>(|style| {
+                        style.display = Display::Grid;
+                        style.grid_auto_columns =
+                            GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
+                        style.grid_auto_rows =
+                            GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
+                    })
+                    .insert(Pickable::IGNORE)
             },
             align: None,
         }
@@ -36,6 +39,15 @@ impl<NodeType: Bundle + Default> Stack<NodeType> {
         Self::from(NodeType::default())
     }
 }
+
+impl<NodeType: Bundle> RawElWrapper for Stack<NodeType> {
+    type NodeType = NodeType;
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
+        self.raw_el.raw_el_mut()
+    }
+}
+
+impl<NodeType: Bundle> PointerEventAware for Stack<NodeType> {}
 
 impl<NodeType: Bundle> Stack<NodeType> {
     pub fn layer<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
@@ -83,13 +95,6 @@ impl<NodeType: Bundle> Stack<NodeType> {
             .raw_el
             .children_signal_vec(children_options_signal_vec.map(Self::process_child));
         self
-    }
-}
-
-impl<NodeType: Bundle> RawElWrapper for Stack<NodeType> {
-    type NodeType = NodeType;
-    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
-        self.raw_el.raw_el_mut()
     }
 }
 

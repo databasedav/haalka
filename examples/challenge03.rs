@@ -44,10 +44,10 @@ impl RawElWrapper for PointLightEl {
 
 impl_haalka_methods! {
     PointLightEl => {
-        PointLightBundle => [
+        PointLightBundle => {
             point_light: PointLight,
             transform: Transform,
-        ],
+        },
     },
 }
 

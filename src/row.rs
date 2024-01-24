@@ -1,12 +1,13 @@
 use bevy::prelude::*;
+use bevy_mod_picking::picking_core::Pickable;
 use futures_signals::{
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
 
 use crate::{
-    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement, RawElWrapper,
-    RawElement, RawHaalkaEl,
+    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement,
+    PointerEventAware, RawElWrapper, RawElement, RawHaalkaEl,
 };
 
 pub struct Row<NodeType> {
@@ -18,11 +19,13 @@ impl<NodeType: Bundle> From<NodeType> for Row<NodeType> {
     fn from(node_bundle: NodeType) -> Self {
         Self {
             raw_el: {
-                RawHaalkaEl::from(node_bundle).with_component::<Style>(|style| {
-                    style.display = Display::Flex;
-                    style.flex_direction = FlexDirection::Row;
-                    style.align_items = AlignItems::Center;
-                })
+                RawHaalkaEl::from(node_bundle)
+                    .with_component::<Style>(|style| {
+                        style.display = Display::Flex;
+                        style.flex_direction = FlexDirection::Row;
+                        style.align_items = AlignItems::Center;
+                    })
+                    .insert(Pickable::IGNORE)
             },
             align: None,
         }
@@ -34,6 +37,15 @@ impl<NodeType: Bundle + Default> Row<NodeType> {
         Self::from(NodeType::default())
     }
 }
+
+impl<NodeType: Bundle> RawElWrapper for Row<NodeType> {
+    type NodeType = NodeType;
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
+        self.raw_el.raw_el_mut()
+    }
+}
+
+impl<NodeType: Bundle> PointerEventAware for Row<NodeType> {}
 
 impl<NodeType: Bundle> Row<NodeType> {
     pub fn item<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
@@ -90,13 +102,6 @@ impl<NodeType: Bundle> Row<NodeType> {
             style.flex_grow = 1.;
         });
         self
-    }
-}
-
-impl<NodeType: Bundle> RawElWrapper for Row<NodeType> {
-    type NodeType = NodeType;
-    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
-        self.raw_el.raw_el_mut()
     }
 }
 

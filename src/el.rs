@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_mod_picking::picking_core::Pickable;
 use futures_signals::{
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
@@ -6,7 +7,7 @@ use futures_signals::{
 
 use crate::{
     AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, Column, IntoOptionElement,
-    RawElWrapper, RawElement, RawHaalkaEl,
+    PointerEventAware, RawElWrapper, RawElement, RawHaalkaEl,
 };
 
 pub struct El<NodeType> {
@@ -18,10 +19,12 @@ impl<NodeType: Bundle> From<NodeType> for El<NodeType> {
     fn from(node_bundle: NodeType) -> Self {
         Self {
             raw_el: {
-                RawHaalkaEl::from(node_bundle).with_component::<Style>(|style| {
-                    style.display = Display::Flex;
-                    style.flex_direction = FlexDirection::Column;
-                })
+                RawHaalkaEl::from(node_bundle)
+                    .with_component::<Style>(|style| {
+                        style.display = Display::Flex;
+                        style.flex_direction = FlexDirection::Column;
+                    })
+                    .insert(Pickable::IGNORE)
             },
             align: None,
         }
@@ -40,6 +43,8 @@ impl<NodeType: Bundle> RawElWrapper for El<NodeType> {
         self.raw_el.raw_el_mut()
     }
 }
+
+impl<NodeType: Bundle> PointerEventAware for El<NodeType> {}
 
 impl<NodeType: Bundle> El<NodeType> {
     pub fn child<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self

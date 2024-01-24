@@ -1,7 +1,7 @@
 // A simple game menu, with buttons that use a nine-patch system for design (i.e., composed of
-// images for the corners and middle segments) and an image to the right of the buttons. For normal
-// screen sizes, the menu is centered in the middle of the screen For 400px width and lower, the
-// buttons fill the screen width and the image is above the buttons.
+//     images for the corners and middle segments) and an image to the right of the buttons.
+// For normal screen sizes, the menu is centered in the middle of the screen
+// For 400px width and lower, the buttons fill the screen width and the image is above the buttons.
 
 use std::sync::OnceLock;
 
@@ -52,24 +52,22 @@ struct NineSliceEl<Bundle = NineSliceUiMaterialBundle>(El<Bundle>);
 
 impl_haalka_methods! {
     NineSliceEl => {
-        NineSliceUiMaterialBundle => [
+        NineSliceUiMaterialBundle => {
             style: Style,
             nine_slice_texture: NineSliceUiTexture,
-        ],
+        },
     },
 }
 
 impl NineSliceEl {
     pub fn new(frame_signal: impl Signal<Item = usize> + Send + 'static) -> Self {
-        Self(
-            El::from(NineSliceUiMaterialBundle {
-                nine_slice_texture: NineSliceUiTexture::from_slice(
-                    nine_slice_texture_atlas().clone(),
-                    Rect::new(0., 0., 32., 32.),
-                ),
-                ..default()
-            })
-        )
+        Self(El::from(NineSliceUiMaterialBundle {
+            nine_slice_texture: NineSliceUiTexture::from_slice(
+                nine_slice_texture_atlas().clone(),
+                Rect::new(0., 0., 32., 32.),
+            ),
+            ..default()
+        }))
         .on_signal_with_nine_slice_texture(frame_signal, |nine_slice, frame| {
             if let Some(bounds) = &mut nine_slice.bounds {
                 bounds.min.x = frame as f32 * 32.;
@@ -85,6 +83,8 @@ impl ElementWrapper for NineSliceEl {
         &mut self.0
     }
 }
+
+impl PointerEventAware for NineSliceEl {}
 
 fn nine_slice_button() -> impl Element {
     let hovered = Mutable::new(false);

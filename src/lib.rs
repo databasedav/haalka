@@ -6,10 +6,10 @@ use node_builder::init_async_world;
 pub use node_builder::{async_world, NodeBuilder, TaskHolder};
 
 mod raw_el;
-pub use raw_el::{
-    Element, ElementWrapper, IntoElement, IntoOptionElement, IntoOptionRawElement, IntoRawElement, RawElWrapper,
-    RawElement, RawHaalkaEl, Spawnable,
-};
+pub use raw_el::{IntoOptionRawElement, IntoRawElement, RawElWrapper, RawElement, RawHaalkaEl, Spawnable};
+
+mod element;
+pub use element::{Element, ElementWrapper, IntoElement, IntoOptionElement};
 
 mod el;
 pub use el::El;
@@ -31,7 +31,7 @@ pub use align::{AddRemove, Align, AlignHolder, Alignable, Alignment, ChildAligna
 
 mod pointer_event_aware;
 pub use pointer_event_aware::PointerEventAware;
-use pointer_event_aware::{pressable_system, RiggedPickingPlugin};
+use pointer_event_aware::{pressable_system, Pressable, RiggedPickingPlugin};
 
 mod derive;
 
@@ -53,6 +53,6 @@ impl Plugin for HaalkaPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((AsyncEcsPlugin, RiggedPickingPlugin.build()))
             .add_systems(PreStartup, init_async_world)
-            .add_systems(Update, pressable_system);
+            .add_systems(Update, pressable_system.run_if(any_with_component::<Pressable>()));
     }
 }

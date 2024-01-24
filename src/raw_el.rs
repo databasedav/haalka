@@ -356,76 +356,6 @@ pub trait RawElWrapper: Sized {
     }
 }
 
-pub trait ElementWrapper {
-    type EL: RawElWrapper + ChildAlignable;
-    fn element_mut(&mut self) -> &mut Self::EL;
-}
-
-impl<EW: ElementWrapper> RawElWrapper for EW {
-    type NodeType = <<EW as ElementWrapper>::EL as RawElWrapper>::NodeType;
-    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<Self::NodeType> {
-        self.element_mut().raw_el_mut()
-    }
-}
-
-pub trait IntoElement {
-    type EL: Element;
-    fn into_element(self) -> Self::EL;
-}
-
-impl<T: Element> IntoElement for T {
-    type EL = T;
-    fn into_element(self) -> Self::EL {
-        self
-    }
-}
-
-pub trait IntoOptionElement {
-    type EL: Element;
-    fn into_option_element(self) -> Option<Self::EL>;
-}
-
-impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for Option<IE> {
-    type EL = E;
-    fn into_option_element(self) -> Option<Self::EL> {
-        self.map(|into_element| into_element.into_element())
-    }
-}
-
-impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
-    type EL = E;
-    fn into_option_element(self) -> Option<Self::EL> {
-        Some(self.into_element())
-    }
-}
-
-impl<EW: ElementWrapper> Alignable for EW {
-    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
-        self.element_mut().align_mut()
-    }
-
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
-        EW::EL::apply_content_alignment(style, alignment, action);
-    }
-}
-
-impl<EW: ElementWrapper + Alignable + 'static> ChildAlignable for EW {
-    fn update_style(style: &mut Style) {
-        EW::EL::update_style(style);
-    }
-
-    fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove) {
-        EW::EL::apply_alignment(style, align, action);
-    }
-}
-
-impl<NodeType: Bundle> RawElWrapper for RawHaalkaEl<NodeType> {
-    type NodeType = NodeType;
-    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
-        self
-    }
-}
-
 pub trait Spawnable: RawElWrapper {
     fn spawn(self, world: &mut World) -> Entity {
         self.into_raw_el().into_node_builder().spawn(world)
@@ -433,9 +363,3 @@ pub trait Spawnable: RawElWrapper {
 }
 
 impl<REW: RawElWrapper> Spawnable for REW {}
-
-impl<REW: RawElWrapper> PointerEventAware for REW {}
-
-pub trait Element: RawElement + ChildProcessable {}
-
-impl<T: RawElement + ChildProcessable> Element for T {}

@@ -1,12 +1,13 @@
 use bevy::prelude::*;
+use bevy_mod_picking::picking_core::Pickable;
 use futures_signals::{
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
 
 use crate::{
-    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement, RawElWrapper,
-    RawElement, RawHaalkaEl, Stack,
+    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement,
+    PointerEventAware, RawElWrapper, RawElement, RawHaalkaEl, Stack,
 };
 
 pub struct Grid<NodeType> {
@@ -18,9 +19,11 @@ impl<NodeType: Bundle> From<NodeType> for Grid<NodeType> {
     fn from(node_bundle: NodeType) -> Self {
         Self {
             raw_el: {
-                RawHaalkaEl::from(node_bundle).with_component::<Style>(|style| {
-                    style.display = Display::Grid;
-                })
+                RawHaalkaEl::from(node_bundle)
+                    .with_component::<Style>(|style| {
+                        style.display = Display::Grid;
+                    })
+                    .insert(Pickable::IGNORE)
             },
             align: None,
         }
@@ -49,6 +52,8 @@ impl<NodeType: Bundle + Default> RawElWrapper for Grid<NodeType> {
             .into_raw_el()
     }
 }
+
+impl<NodeType: Bundle + Default> PointerEventAware for Grid<NodeType> {}
 
 impl<NodeType: Bundle + Default> Grid<NodeType> {
     pub fn row_wrap_cell_width(mut self, cell_width: f32) -> Self {

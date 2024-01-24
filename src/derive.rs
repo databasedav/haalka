@@ -13,7 +13,7 @@ use crate::{Column, El, Grid, RawElWrapper, Row, Stack};
 
 #[macro_export]
 macro_rules! impl_haalka_methods {
-    ($($el_type:ty => { $($node_type:ty => [$($field:ident: $field_type:ty),* $(,)?]),+ $(,)? }),+ $(,)?) => {
+    ($($el_type:ty => { $($node_type:ty => {$($field:ident: $field_type:ty),* $(,)?}),+ $(,)? }),+ $(,)?) => {
         $(
             $(
                 paste! {
@@ -52,7 +52,7 @@ macro_rules! impl_haalka_methods {
 
 impl_haalka_methods! {
     El => {
-        NodeBundle => [
+        NodeBundle => {
             node: bevy::ui::Node,
             style: Style,
             background_color: BackgroundColor,
@@ -64,8 +64,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        ImageBundle => [
+        },
+        ImageBundle => {
             node: bevy::ui::Node,
             style: Style,
             calculated_size: ContentSize,
@@ -79,8 +79,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        AtlasImageBundle => [
+        },
+        AtlasImageBundle => {
             node: bevy::ui::Node,
             style: Style,
             calculated_size: ContentSize,
@@ -95,8 +95,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        TextBundle => [
+        },
+        TextBundle => {
             node: bevy::ui::Node,
             style: Style,
             text: Text,
@@ -111,8 +111,8 @@ impl_haalka_methods! {
             view_visibility: ViewVisibility,
             z_index: ZIndex,
             background_color: BackgroundColor,
-        ],
-        ButtonBundle => [
+        },
+        ButtonBundle => {
             node: bevy::ui::Node,
             button: Button,
             style: Style,
@@ -127,10 +127,10 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
+        },
     },
     Column => {
-        NodeBundle => [
+        NodeBundle => {
             node: bevy::ui::Node,
             style: Style,
             background_color: BackgroundColor,
@@ -142,8 +142,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        ImageBundle => [
+        },
+        ImageBundle => {
             node: bevy::ui::Node,
             style: Style,
             calculated_size: ContentSize,
@@ -157,8 +157,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        AtlasImageBundle => [
+        },
+        AtlasImageBundle => {
             node: bevy::ui::Node,
             style: Style,
             calculated_size: ContentSize,
@@ -173,8 +173,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        TextBundle => [
+        },
+        TextBundle => {
             node: bevy::ui::Node,
             style: Style,
             text: Text,
@@ -189,8 +189,8 @@ impl_haalka_methods! {
             view_visibility: ViewVisibility,
             z_index: ZIndex,
             background_color: BackgroundColor,
-        ],
-        ButtonBundle => [
+        },
+        ButtonBundle => {
             node: bevy::ui::Node,
             button: Button,
             style: Style,
@@ -205,10 +205,10 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
+        },
     },
     Row => {
-        NodeBundle => [
+        NodeBundle => {
             node: bevy::ui::Node,
             style: Style,
             background_color: BackgroundColor,
@@ -220,8 +220,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        ImageBundle => [
+        },
+        ImageBundle => {
             node: bevy::ui::Node,
             style: Style,
             calculated_size: ContentSize,
@@ -235,8 +235,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        AtlasImageBundle => [
+        },
+        AtlasImageBundle => {
             node: bevy::ui::Node,
             style: Style,
             calculated_size: ContentSize,
@@ -251,8 +251,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        TextBundle => [
+        },
+        TextBundle => {
             node: bevy::ui::Node,
             style: Style,
             text: Text,
@@ -267,8 +267,8 @@ impl_haalka_methods! {
             view_visibility: ViewVisibility,
             z_index: ZIndex,
             background_color: BackgroundColor,
-        ],
-        ButtonBundle => [
+        },
+        ButtonBundle => {
             node: bevy::ui::Node,
             button: Button,
             style: Style,
@@ -283,10 +283,10 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
+        },
     },
     Stack => {
-        NodeBundle => [
+        NodeBundle => {
             node: bevy::ui::Node,
             style: Style,
             background_color: BackgroundColor,
@@ -298,8 +298,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        ImageBundle => [
+        },
+        ImageBundle => {
             node: bevy::ui::Node,
             style: Style,
             calculated_size: ContentSize,
@@ -313,8 +313,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        AtlasImageBundle => [
+        },
+        AtlasImageBundle => {
             node: bevy::ui::Node,
             style: Style,
             calculated_size: ContentSize,
@@ -329,8 +329,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        TextBundle => [
+        },
+        TextBundle => {
             node: bevy::ui::Node,
             style: Style,
             text: Text,
@@ -345,8 +345,8 @@ impl_haalka_methods! {
             view_visibility: ViewVisibility,
             z_index: ZIndex,
             background_color: BackgroundColor,
-        ],
-        ButtonBundle => [
+        },
+        ButtonBundle => {
             node: bevy::ui::Node,
             button: Button,
             style: Style,
@@ -361,10 +361,10 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
+        },
     },
     Grid => {
-        NodeBundle => [
+        NodeBundle => {
             node: bevy::ui::Node,
             style: Style,
             background_color: BackgroundColor,
@@ -376,8 +376,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        ImageBundle => [
+        },
+        ImageBundle => {
             node: bevy::ui::Node,
             style: Style,
             calculated_size: ContentSize,
@@ -391,8 +391,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        AtlasImageBundle => [
+        },
+        AtlasImageBundle => {
             node: bevy::ui::Node,
             style: Style,
             calculated_size: ContentSize,
@@ -407,8 +407,8 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
-        TextBundle => [
+        },
+        TextBundle => {
             node: bevy::ui::Node,
             style: Style,
             text: Text,
@@ -423,8 +423,8 @@ impl_haalka_methods! {
             view_visibility: ViewVisibility,
             z_index: ZIndex,
             background_color: BackgroundColor,
-        ],
-        ButtonBundle => [
+        },
+        ButtonBundle => {
             node: bevy::ui::Node,
             button: Button,
             style: Style,
@@ -439,10 +439,10 @@ impl_haalka_methods! {
             inherited_visibility: InheritedVisibility,
             view_visibility: ViewVisibility,
             z_index: ZIndex,
-        ],
+        },
     },
     // TODO: macros don't play nice with generics
-    // MaterialNodeBundle<M: UiMaterial> => [
+    // MaterialNodeBundle<M: UiMaterial> => {
     //     node: bevy::ui::Node,
     //     style: Style,
     //     focus_policy: FocusPolicy,
@@ -452,5 +452,5 @@ impl_haalka_methods! {
     //     inherited_visibility: InheritedVisibility,
     //     view_visibility: ViewVisibility,
     //     z_index: ZIndex,
-    // ],
+    // },
 }

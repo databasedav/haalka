@@ -1,12 +1,13 @@
 use bevy::prelude::*;
+use bevy_mod_picking::picking_core::Pickable;
 use futures_signals::{
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
 
 use crate::{
-    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement, RawElWrapper,
-    RawElement, RawHaalkaEl,
+    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement,
+    PointerEventAware, RawElWrapper, RawElement, RawHaalkaEl,
 };
 
 pub struct Column<NodeType> {
@@ -18,10 +19,12 @@ impl<NodeType: Bundle> From<NodeType> for Column<NodeType> {
     fn from(node_bundle: NodeType) -> Self {
         Self {
             raw_el: {
-                RawHaalkaEl::from(node_bundle).with_component::<Style>(|style| {
-                    style.display = Display::Flex;
-                    style.flex_direction = FlexDirection::Column;
-                })
+                RawHaalkaEl::from(node_bundle)
+                    .with_component::<Style>(|style| {
+                        style.display = Display::Flex;
+                        style.flex_direction = FlexDirection::Column;
+                    })
+                    .insert(Pickable::IGNORE)
             },
             align: None,
         }
@@ -33,6 +36,15 @@ impl<NodeType: Bundle + Default> Column<NodeType> {
         Self::from(NodeType::default())
     }
 }
+
+impl<NodeType: Bundle> RawElWrapper for Column<NodeType> {
+    type NodeType = NodeType;
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
+        self.raw_el.raw_el_mut()
+    }
+}
+
+impl<NodeType: Bundle> PointerEventAware for Column<NodeType> {}
 
 impl<NodeType: Bundle> Column<NodeType> {
     pub fn item<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
@@ -170,12 +182,5 @@ impl<NodeType: Bundle> ChildAlignable for Column<NodeType> {
                 }
             }
         }
-    }
-}
-
-impl<NodeType: Bundle> RawElWrapper for Column<NodeType> {
-    type NodeType = NodeType;
-    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
-        self.raw_el.raw_el_mut()
     }
 }

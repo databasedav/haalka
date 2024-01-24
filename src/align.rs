@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use bevy::prelude::*;
 use futures_signals::signal::{BoxSignal, Signal, SignalExt};
 
-use crate::{IntoOptionElement, RawElWrapper, RawElement};
+use crate::{ElementWrapper, IntoOptionElement, RawElWrapper, RawElement};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Alignment {
@@ -182,6 +182,26 @@ where
             }
         }
         child
+    }
+}
+
+impl<EW: ElementWrapper> Alignable for EW {
+    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
+        self.element_mut().align_mut()
+    }
+
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+        EW::EL::apply_content_alignment(style, alignment, action);
+    }
+}
+
+impl<EW: ElementWrapper + Alignable + 'static> ChildAlignable for EW {
+    fn update_style(style: &mut Style) {
+        EW::EL::update_style(style);
+    }
+
+    fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove) {
+        EW::EL::apply_alignment(style, align, action);
     }
 }
 

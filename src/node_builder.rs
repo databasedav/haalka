@@ -352,7 +352,6 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
                 .spawn((
                     self.raw_node,
                     TaskHolder::new(), // include so tasks can be added on spawn
-                    Pickable::IGNORE,
                 ))
                 .id()
         };
