@@ -36,7 +36,7 @@ use pointer_event_aware::{pressable_system, Pressable, RiggedPickingPlugin};
 mod derive;
 
 mod utils;
-pub use utils::{sleep, spawn, element_type_erase_wrapper};
+pub use utils::{naive_type_erase, sleep, spawn};
 
 pub use enclose::enclose as clone;
 pub use futures_signals_ext::*;

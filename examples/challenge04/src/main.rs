@@ -165,8 +165,8 @@ fn menu(width: Mutable<f32>) -> impl Element {
         )
         .0
         .child_signal(width.signal().map(|width| width > 400.).dedupe().map_bool(
-            || horizontal().apply(element_type_erase_wrapper),
-            || vertical().apply(element_type_erase_wrapper),
+            || horizontal().apply(naive_type_erase),
+            || vertical().apply(naive_type_erase),
         ))
 }
 

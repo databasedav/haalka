@@ -2,7 +2,8 @@
 //     Can be moved around with WASD/arrow keys.
 // A health bar and character name is anchored to the character in world-space.
 // The health starts at 10 and decreases by 1 every second. The health should be stored and managed
-// in Bevy ECS. When reaching 0 HP, the character should be despawned together with UI.
+//     in Bevy ECS.
+// When reaching 0 HP, the character should be despawned together with UI.
 
 use bevy::prelude::*;
 use colorgrad::{self, Gradient};
@@ -34,22 +35,25 @@ fn main() {
                 .chain()
                 .run_if(any_with_component::<Player>()),
         )
+        .add_systems(Update, spawn_player.run_if(any_with_component::<Player>().map(|p| !p)))
         .insert_resource(StyleDataResource::default())
         .insert_resource(HealthTickTimer(Timer::from_seconds(
             HEALTH_TICK_RATE,
             TimerMode::Repeating,
         )))
+        .insert_resource(HealthOptionMutable(default()))
+        .add_event::<SpawnPlayer>()
         .run();
 }
 
 const SPEED: f32 = 10.0;
 const RADIUS: f32 = 0.5;
-const MINI: (f32, f32) = (200., 15.);
-const MAXI: (f32, f32) = (500., 30.);
-const NAME: &str = "league_of_legends_enjoyer";
+const MINI: (f32, f32) = (200., 30.);
+const MAXI: (f32, f32) = (500., 60.);
+const NAME: &str = "avi";
 const CAMERA_POSITION: Vec3 = Vec3::new(8., 10.5, 8.);
 const PLAYER_POSITION: Vec3 = Vec3::new(0., RADIUS, 0.);
-const PLAYER_HEALTH: u32 = 1;
+const PLAYER_HEALTH: u32 = 10;
 const HEALTH_TICK_RATE: f32 = 1.;
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -77,26 +81,17 @@ fn sync_health_mutable(health_query: Query<(&Health, &HealthMutable), Changed<He
 #[derive(Component)]
 struct Player;
 
-fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>) {
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawn_player: EventWriter<SpawnPlayer>,
+) {
     commands.spawn(PbrBundle {
         mesh: meshes.add(shape::Plane::from_size(50.0).into()),
         material: materials.add(Color::rgb_u8(87, 108, 50).into()),
         ..default()
     });
-    commands.spawn((
-        Player,
-        Health(PLAYER_HEALTH),
-        HealthMutable(Mutable::new(PLAYER_HEALTH)),
-        PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::UVSphere {
-                radius: RADIUS,
-                ..default()
-            })),
-            transform: Transform::from_translation(PLAYER_POSITION),
-            material: materials.add(Color::rgb_u8(228, 147, 58).into()),
-            ..default()
-        },
-    ));
     commands.spawn(PointLightBundle {
         point_light: PointLight {
             intensity: 1500.0,
@@ -110,6 +105,7 @@ fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials
         transform: Transform::from_translation(CAMERA_POSITION).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
     });
+    spawn_player.send_default();
 }
 
 fn wasd(
@@ -142,7 +138,7 @@ fn sync_tracking_healthbar_position(
     style_data_resource: Res<StyleDataResource>,
     player: Query<(&Transform, With<Player>), Changed<Transform>>,
     camera: Query<(&Camera, &Transform), (With<Camera3d>, Without<Player>)>,
-    mut ui_scale: ResMut<UiScale>,
+    // mut ui_scale: ResMut<UiScale>,
 ) {
     let (camera, camera_transform) = camera.single();
     let player_transform = player.single().0;
@@ -153,23 +149,27 @@ fn sync_tracking_healthbar_position(
     {
         style_data_resource.0.set_neq(StyleData { left, top, scale });
     }
-    let starting_distance = CAMERA_POSITION.distance(PLAYER_POSITION);
+    // let starting_distance = CAMERA_POSITION.distance(PLAYER_POSITION);
     // ui_scale.0 = starting_distance as f64 / scale as f64;
 }
 
 fn healthbar(
     max: u32,
     health: impl Signal<Item = u32> + Send + Sync + 'static,
+    height: f32,
     color_gradient: Gradient,
 ) -> Stack<NodeBundle> {
     let health = health.broadcast();
     let percent_health = health.signal().map(move |h| h as f32 / max as f32).broadcast();
     Stack::<NodeBundle>::new()
+        .with_style(move |style| {
+            style.height = Val::Px(height);
+            style.border = UiRect::all(Val::Px(height / 12.));
+        })
+        .border_color(Color::BLACK.into())
         .layer(
             El::<NodeBundle>::new()
-                .with_style(|style| {
-                    style.height = Val::Percent(100.);
-                })
+                .with_style(move |style| style.height = Val::Percent(100.))
                 .on_signal_with_style(percent_health.signal(), move |style, percent_health| {
                     style.width = Val::Percent(percent_health as f32 * 100.)
                 })
@@ -180,13 +180,18 @@ fn healthbar(
         )
         .layer(
             El::<TextBundle>::new()
-                .with_style(|style| style.height = Val::Percent(100.).clone())
+                .with_style(move |style| {
+                    style.height = Val::Percent(100.);
+                    style.bottom = Val::Px(height / 8.);
+                    style.left = Val::Px(height / 6.); // TODO: padding doesn't work here?
+                })
                 .align(Align::new().left())
-                .text_signal(health.signal().map(|health| {
+                .text_signal(health.signal().map(move |health| {
                     Text::from_section(
                         health.to_string(),
                         TextStyle {
-                            color: Color::WHITE,
+                            font_size: height,
+                            color: Color::BLACK,
                             ..default()
                         },
                     )
@@ -194,108 +199,161 @@ fn healthbar(
         )
 }
 
+#[derive(Resource)]
+struct HealthOptionMutable(Mutable<Option<Mutable<u32>>>);
+
+#[derive(Event, Default)]
+struct SpawnPlayer;
+
+fn spawn_player(
+    mut commands: Commands,
+    mut reader: EventReader<SpawnPlayer>,
+    health_option: Res<HealthOptionMutable>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    if reader.read().next().is_some() {
+        let health = Mutable::new(PLAYER_HEALTH);
+        commands.spawn((
+            Player,
+            Health(PLAYER_HEALTH),
+            HealthMutable(health.clone()),
+            PbrBundle {
+                mesh: meshes.add(Mesh::from(shape::UVSphere {
+                    radius: RADIUS,
+                    ..default()
+                })),
+                transform: Transform::from_translation(PLAYER_POSITION),
+                material: materials.add(Color::rgb_u8(228, 147, 58).into()),
+                ..default()
+            },
+        ));
+        health_option.0.set(Some(health));
+    }
+}
+
+fn respawn_button() -> impl Element {
+    let hovered = Mutable::new(false);
+    El::<NodeBundle>::new()
+        .align(Align::center())
+        .with_style(|style| {
+            style.width = Val::Px(250.);
+            style.height = Val::Px(80.);
+        })
+        .background_color_signal(
+            hovered
+                .signal()
+                .map_bool(|| Color::GRAY, || Color::BLACK)
+                .map(BackgroundColor),
+        )
+        .hovered_sync(hovered)
+        .align_content(Align::center())
+        .on_click(|| spawn(async_world().send_event(SpawnPlayer)).detach())
+        .child(El::<TextBundle>::new().text(Text::from_section(
+            "respawn",
+            TextStyle {
+                font_size: 60.,
+                color: Color::WHITE,
+                ..default()
+            },
+        )))
+}
+
 fn ui_root(world: &mut World) {
     let style_data = world.resource::<StyleDataResource>().0.clone();
-    let health = world.query::<&HealthMutable>().single(&world).0.clone();
+    let health_option = world.resource::<HealthOptionMutable>().0.clone();
     let starting_distance = CAMERA_POSITION.distance(PLAYER_POSITION);
     El::<NodeBundle>::new()
         .with_style(|style| {
             style.width = Val::Percent(100.);
             style.height = Val::Percent(100.);
         })
-        .child_signal(health.signal().map(|health| health == 0).dedupe().map_bool(
-            || {
-                El::<NodeBundle>::new()
-                    .align(Align::center())
-                    .with_style(|style| {
-                        style.width = Val::Px(250.);
-                        style.height = Val::Px(80.);
-                    })
-                    .background_color(Color::BLACK.into())
-                    .align_content(Align::center())
-                    .child(El::<TextBundle>::new().text(Text::from_section(
-                        "respawn",
-                        TextStyle {
-                            font_size: 60.,
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                    )))
-            },
-            move || {
-                Stack::<NodeBundle>::new()
-                    .with_style(|style| {
-                        style.width = Val::Percent(100.);
-                        style.height = Val::Percent(100.);
-                        style.padding.bottom = Val::Px(10.);
-                    })
-                    .layer(
-                        Column::<NodeBundle>::new()
-                            .with_style(|style| {
-                                style.row_gap = Val::Px(MINI.1 / 2.);
-                                // style.width = Val::Px(MINI.0);
-                                // style.height = Val::Px(MINI.1);
-                            })
-                            .on_signal_with_style(style_data.signal(), |style, StyleData { left, top, .. }| {
-                                style.left = Val::Px(left - MINI.0 / 2.);
-                                style.top = Val::Px(top - 30. * 2. - MINI.1);
-                                // style.
-                                // println!("scale: {}", scale);
-                            })
-                            // .on_signal_with_transform(style_data.signal(), move |transform, StyleData { scale, .. }|
-                            // {     transform.scale = Vec3::splat(starting_distance /
-                            // scale); })
-                            .item(
-                                El::<TextBundle>::new()
-                                    .with_style(|style| {
-                                        // style.width = Val::Percent(100.);
-                                        style.width = Val::Px(MINI.0);
-                                    })
-                                    .text(
-                                        Text::from_section(
-                                            NAME,
-                                            TextStyle {
-                                                font_size: 14.0,
-                                                color: Color::WHITE,
-                                                ..default()
-                                            },
+        .child_signal(
+            health_option
+                .signal_cloned()
+                .map_option(
+                    move |health| {
+                        health
+                            .signal()
+                            .map(|health| health > 0)
+                            .dedupe()
+                            .map_bool(
+                                clone!((style_data) move || {
+                                    Stack::<NodeBundle>::new()
+                                        .with_style(|style| {
+                                            style.width = Val::Percent(100.);
+                                            style.height = Val::Percent(100.);
+                                            style.padding.bottom = Val::Px(10.);
+                                        })
+                                        .layer(
+                                            Column::<NodeBundle>::new()
+                                                .with_style(|style| style.row_gap = Val::Px(MINI.1 / 4.))
+                                                .on_signal_with_style(
+                                                    style_data.signal(),
+                                                    |style, StyleData { left, top, .. }| {
+                                                        style.left = Val::Px(left - MINI.0 / 2.);
+                                                        style.top = Val::Px(top - 30. * 2. - MINI.1 * 1.5);
+                                                    },
+                                                )
+                                                // .on_signal_with_transform(style_data.signal(), move |transform, StyleData { scale, .. }| {
+                                                //     transform.scale = Vec3::splat(starting_distance / scale);
+                                                // })
+                                                .item(
+                                                    El::<TextBundle>::new()
+                                                    .with_style(|style| style.left = Val::Px(MINI.1 / 4.))
+                                                        .text(
+                                                            Text::from_section(
+                                                                NAME,
+                                                                TextStyle {
+                                                                    font_size: MINI.1 * 3. / 4.,
+                                                                    color: Color::WHITE,
+                                                                    ..default()
+                                                                },
+                                                            )
+                                                        ),
+                                                )
+                                                .item(
+                                                    healthbar(
+                                                        PLAYER_HEALTH,
+                                                        health.signal(),
+                                                        MINI.1,
+                                                        colorgrad::CustomGradient::new()
+                                                            .html_colors(&["purple", "yellow"])
+                                                            .build()
+                                                            .unwrap(),
+                                                    )
+                                                    .with_style(|style| {
+                                                        style.width = Val::Px(MINI.0);
+                                                        style.height = Val::Px(MINI.1);
+                                                    }),
+                                                ),
                                         )
-                                        .with_alignment(TextAlignment::Center),
-                                    ),
-                            )
-                            .item(
-                                healthbar(
-                                    PLAYER_HEALTH,
-                                    health.signal(),
-                                    colorgrad::CustomGradient::new()
-                                        .html_colors(&["purple", "yellow"])
-                                        .build()
-                                        .unwrap(),
-                                )
-                                .with_style(|style| {
-                                    style.width = Val::Px(MINI.0);
-                                    style.height = Val::Px(MINI.1);
+                                        .layer(
+                                            healthbar(
+                                                PLAYER_HEALTH,
+                                                health.signal(),
+                                                MAXI.1,
+                                                colorgrad::CustomGradient::new()
+                                                    .html_colors(&["red", "green"])
+                                                    .build()
+                                                    .unwrap(),
+                                            )
+                                            .align(Align::new().bottom().center_x())
+                                            .with_style(|style| {
+                                                style.width = Val::Px(MAXI.0);
+                                                style.height = Val::Px(MAXI.1);
+                                            }),
+                                        )
+                                        .apply(naive_type_erase)
                                 }),
-                            ),
-                    )
-                    .layer(
-                        healthbar(
-                            PLAYER_HEALTH,
-                            health.signal(),
-                            colorgrad::CustomGradient::new()
-                                .html_colors(&["red", "green"])
-                                .build()
-                                .unwrap(),
-                        )
-                        .align(Align::new().bottom().center_x())
-                        .with_style(|style| {
-                            style.width = Val::Px(MAXI.0);
-                            style.height = Val::Px(MAXI.1);
-                        }),
-                    )
-                    .apply(|el| El::<NodeBundle>::new().child(el))
-            },
-        ))
+                                || naive_type_erase(respawn_button()),
+                            )
+                            .boxed()
+                    },
+                    || always(naive_type_erase(respawn_button())).boxed(),
+                )
+                .flatten(),
+        )
         .spawn(world);
 }
 
