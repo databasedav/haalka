@@ -6,7 +6,7 @@ use node_builder::init_async_world;
 pub use node_builder::{async_world, NodeBuilder, TaskHolder};
 
 mod raw_el;
-pub use raw_el::{IntoOptionRawElement, IntoRawElement, RawElWrapper, RawElement, RawHaalkaEl, Spawnable};
+pub use raw_el::{IntoOptionRawElement, IntoRawElement, RawElWrapper, RawElement, RawHaalkaEl, Spawnable, RawEl};
 
 mod element;
 pub use element::{Element, ElementWrapper, IntoElement, IntoOptionElement};

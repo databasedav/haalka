@@ -164,9 +164,10 @@ fn menu(width: Mutable<f32>) -> impl Element {
             |style, width| style.width = Val::Px(width),
         )
         .0
+        // TODO: this doesn't end up working out because we need to pass in a higher level child processable struct ... rip
         .child_signal(width.signal().map(|width| width > 400.).dedupe().map_bool(
-            || horizontal().apply(element_type_erase_wrapper),
-            || vertical().apply(element_type_erase_wrapper),
+            || horizontal().into_raw().into_node_builder(),
+            || vertical().into_raw().into_node_builder(),
         ))
 }
 

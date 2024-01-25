@@ -9,7 +9,7 @@ use bevy::{
 use futures_signals::signal::Signal;
 use paste::paste;
 
-use crate::{Column, El, Grid, RawElWrapper, Row, Stack};
+use crate::{Column, El, Grid, RawElWrapper, Row, Stack, RawEl};
 
 #[macro_export]
 macro_rules! impl_haalka_methods {

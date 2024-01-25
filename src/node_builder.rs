@@ -24,18 +24,20 @@ pub(crate) fn init_async_world(world: &mut World) {
         .expect("failed to initialize ASYNC_WORLD");
 }
 
-#[derive(Default)]
-pub struct NodeBuilder<NodeType> {
-    raw_node: NodeType,
+// #[derive(Default)]
+pub struct NodeBuilder {
+    // raw_node: NodeType,
+    spawner: Box<dyn FnOnce(&mut World) -> EntityWorldMut + Send>,
     on_spawns: Vec<Box<dyn FnOnce(&mut World, Entity) + Send>>,
     task_wrappers: Vec<Box<dyn FnOnce(Entity) -> Task<()> + Send>>,
     contiguous_child_block_populations: MutableVec<Option<usize>>,
 }
 
-impl<T: Bundle> From<T> for NodeBuilder<T> {
+impl<T: Bundle> From<T> for NodeBuilder {
     fn from(node_bundle: T) -> Self {
         NodeBuilder {
-            raw_node: node_bundle,
+            // raw_node: node_bundle,
+            spawner: Box::new(|world| world.spawn(node_bundle)),
             on_spawns: default(),
             task_wrappers: default(),
             contiguous_child_block_populations: default(),
@@ -43,7 +45,7 @@ impl<T: Bundle> From<T> for NodeBuilder<T> {
     }
 }
 
-impl<NodeType: Bundle> NodeBuilder<NodeType> {
+impl NodeBuilder {
     pub fn on_spawn(mut self, on_spawn: impl FnOnce(&mut World, Entity) + Send + 'static) -> Self {
         self.on_spawns.push(Box::new(on_spawn));
         self
@@ -62,7 +64,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
 
     // TODO: list out limitations; limitation: if multiple children are added to entity, they must
     // be registered thru this abstraction because of the way siblings are tracked
-    pub fn child<ChildNodeType: Bundle>(mut self, child: NodeBuilder<ChildNodeType>) -> Self {
+    pub fn child(mut self, child: NodeBuilder) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
@@ -89,9 +91,9 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn child_signal<ChildNodeType: Bundle>(
+    pub fn child_signal(
         mut self,
-        child_option: impl Signal<Item = impl Into<Option<NodeBuilder<ChildNodeType>>> + Send> + Send + 'static,
+        child_option: impl Signal<Item = impl Into<Option<NodeBuilder>> + Send> + Send + 'static,
     ) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(None);
@@ -142,9 +144,9 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn children<ChildNodeType: Bundle>(
+    pub fn children(
         mut self,
-        children: impl IntoIterator<Item = NodeBuilder<ChildNodeType>> + Send + 'static,
+        children: impl IntoIterator<Item = NodeBuilder> + Send + 'static,
     ) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(None);
@@ -178,9 +180,9 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn children_signal_vec<ChildNodeType: Bundle>(
+    pub fn children_signal_vec(
         mut self,
-        children_signal_vec: impl SignalVec<Item = NodeBuilder<ChildNodeType>> + Send + 'static,
+        children_signal_vec: impl SignalVec<Item = NodeBuilder> + Send + 'static,
     ) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(None);
@@ -346,14 +348,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
     }
 
     pub fn spawn(self, world: &mut World) -> Entity {
-        let id = {
-            world
-                .spawn((
-                    self.raw_node,
-                    TaskHolder::new(), // include so tasks can be added on spawn
-                ))
-                .id()
-        };
+        let id = (self.spawner)(world).insert(TaskHolder::new()).id();
         for on_spawn in self.on_spawns {
             on_spawn(world, id);
         }

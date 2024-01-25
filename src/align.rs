@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use bevy::prelude::*;
 use futures_signals::signal::{BoxSignal, Signal, SignalExt};
 
-use crate::{ElementWrapper, IntoOptionElement, RawElWrapper, RawElement};
+use crate::{ElementWrapper, IntoOptionElement, RawElWrapper, RawElement, RawEl};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Alignment {

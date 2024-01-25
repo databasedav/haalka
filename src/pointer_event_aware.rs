@@ -10,7 +10,7 @@ use enclose::enclose as clone;
 use futures_signals::signal::{Mutable, SignalExt};
 use futures_signals_ext::SignalExtBool;
 
-use crate::{sleep, spawn, RawElWrapper};
+use crate::{sleep, spawn, RawElWrapper, RawEl};
 
 pub trait PointerEventAware: RawElWrapper {
     fn on_hovered_change(self, handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {

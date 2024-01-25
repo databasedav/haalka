@@ -6,8 +6,7 @@ use futures_signals::{
 };
 
 use crate::{
-    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement,
-    PointerEventAware, RawElWrapper, RawElement, RawHaalkaEl,
+    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement, PointerEventAware, RawEl, RawElWrapper, RawElement, RawHaalkaEl
 };
 
 pub struct Row<NodeType> {

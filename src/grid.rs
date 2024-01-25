@@ -7,7 +7,7 @@ use futures_signals::{
 
 use crate::{
     AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement,
-    PointerEventAware, RawElWrapper, RawElement, RawHaalkaEl, Stack,
+    PointerEventAware, RawElWrapper, RawElement, RawHaalkaEl, Stack, RawEl
 };
 
 pub struct Grid<NodeType> {

@@ -7,7 +7,7 @@ use futures_signals::{
 
 use crate::{
     AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement,
-    PointerEventAware, RawElWrapper, RawElement, RawHaalkaEl,
+    PointerEventAware, RawElWrapper, RawElement, RawHaalkaEl, RawEl
 };
 
 pub struct Column<NodeType> {
