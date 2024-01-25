@@ -16,8 +16,6 @@ powered by the incredible FRP signals of https://github.com/Pauan/rust-signals a
 write bevy ui's with the signal semantics you're used to from [MoonZoon](https://github.com/MoonZoon/MoonZoon) and [Dominator](https://github.com/Pauan/rust-dominator) !
 ```rust
 use bevy::prelude::*;
-use futures_signals::signal::{Mutable, SignalExt};
-use futures_signals_ext::*;
 use haalka::*;
 
 fn main() {
@@ -92,6 +90,7 @@ just example ecs_world_ui_world_sync
 # ui challenges from https://github.com/bevyengine/bevy/discussions/11100
 just example challenge01  # game menu
 just example challenge02  # inventory
+just example challenge03  # health bar
 just example challenge04  # responsive menu
 ```
 

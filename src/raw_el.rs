@@ -13,13 +13,7 @@ use futures_signals::{
 use futures_signals_ext::*;
 use futures_util::Future;
 
-use crate::{
-    align::{AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable},
-    async_world,
-    node_builder::TaskHolder,
-    pointer_event_aware::PointerEventAware,
-    spawn, NodeBuilder,
-};
+use crate::{async_world, node_builder::TaskHolder, spawn, NodeBuilder};
 
 // TODO: how can i make use of this default ? should i just remove it ?
 pub struct RawHaalkaEl<NodeType = NodeBundle> {
@@ -167,7 +161,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
 
     pub fn on_signal_with_entity<T: Send + 'static>(
         self,
-        signal: impl Signal<Item = T> + 'static + Send,
+        signal: impl Signal<Item = T> + Send + 'static,
         f: impl FnMut(&mut EntityWorldMut, T) + Send + 'static,
     ) -> Self {
         let f = Arc::new(Mutex::new(f));
@@ -183,7 +177,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
 
     pub fn on_signal_with_component<T: Send + 'static, C: Component>(
         self,
-        signal: impl Signal<Item = T> + 'static + Send,
+        signal: impl Signal<Item = T> + Send + 'static,
         mut f: impl FnMut(&mut C, T) + Send + 'static,
     ) -> Self {
         self.on_signal_with_entity(signal, move |entity, value| {
@@ -195,7 +189,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
 
     pub fn component_signal<C: Component>(
         self,
-        component_signal: impl Signal<Item = impl Into<Option<C>>> + 'static + Send,
+        component_signal: impl Signal<Item = impl Into<Option<C>>> + Send + 'static,
     ) -> Self {
         // TODO: need partial_eq derivations for all the node related components to minimize updates
         // with .dedupe

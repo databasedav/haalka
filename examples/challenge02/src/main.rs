@@ -10,7 +10,6 @@ use std::{collections::HashMap, convert::identity, sync::OnceLock};
 
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
-use futures_signals::signal::Mutable;
 use haalka::*;
 use rand::{
     distributions::{Bernoulli, Distribution},
@@ -50,8 +49,7 @@ const CELL_BORDER_WIDTH: f32 = 2.;
 const CELL_DARK_BORDER_COLOR: Color = Color::hsl(0., 0., 0.19);
 const CELL_LIGHT_BORDER_COLOR: Color = Color::hsl(0., 0., 0.98);
 
-#[static_ref]
-fn item_names() -> &'static HashMap<usize, &'static str> {
+static ITEM_NAMES: Lazy<HashMap<usize, &'static str>> = Lazy::new(|| {
     HashMap::from([
         (0, "copper dagger"),
         (1, "copper sword"),
@@ -184,7 +182,7 @@ fn item_names() -> &'static HashMap<usize, &'static str> {
         (128, "fish_1"),
         (129, "fish_2"),
     ])
-}
+});
 
 static ICON_TEXTURE_ATLAS: OnceLock<Handle<TextureAtlas>> = OnceLock::new();
 
@@ -259,7 +257,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                     .map_true(clone!((cell_data_option) move || {
                         On::<Pointer<Click>>::run(clone!((cell_data_option => self_cell_data_option) move |click: Listener<Pointer<Click>>| {
                             let mut consume = false;
-                            if let Some(dragging_cell_data_option) = &*dragging_option().lock_ref() {
+                            if let Some(dragging_cell_data_option) = &*DRAGGING_OPTION.lock_ref() {
                                 if self_cell_data_option.lock_ref().is_none() {
                                     if let Some(dragging_cell_data) = &*dragging_cell_data_option.lock_ref() {
                                         self_cell_data_option.set(Some(CellData {
@@ -291,7 +289,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                 }
                             }
                             if consume {
-                                if let Some(cell_data_option) = dragging_option().take() {
+                                if let Some(cell_data_option) = DRAGGING_OPTION.take() {
                                     cell_data_option.take();
                                 }
                             }
@@ -301,7 +299,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             }
             raw_el
             .component_signal::<On::<Pointer<Down>>>(
-                signal::and(dragging_option().signal_ref(Option::is_none), cell_data_option.signal_ref(Option::is_some)).dedupe()
+                signal::and(DRAGGING_OPTION.signal_ref(Option::is_none), cell_data_option.signal_ref(Option::is_some)).dedupe()
                 .map_true(clone!((cell_data_option, down) move ||
                     On::<Pointer<Down>>::run(clone!((cell_data_option, down) move |pointer_down: Listener<Pointer<Down>>| {
                         let to_drag_option = {
@@ -323,8 +321,8 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                         if cell_data_option.lock_ref().as_ref().map(|cell_data| cell_data.count.get() == 0).unwrap_or(false) {
                             cell_data_option.take();
                         }
-                        dragging_option().set(Some(Mutable::new(to_drag_option)));
-                        pointer_position().set(pointer_down.pointer_location.position.into());
+                        DRAGGING_OPTION.set(Some(Mutable::new(to_drag_option)));
+                        POINTER_POSITION.set(pointer_down.pointer_location.position.into());
                         down.set_neq(true);
                     }))
                 ))
@@ -348,7 +346,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                     Stack::<NodeBundle>::new()
                     .layer(icon(cell_data.index.signal(), cell_data.count.signal()))
                     .layer_signal(
-                        signal::and(hovered.signal(), dragging_option().signal_ref(Option::is_none)).dedupe()
+                        signal::and(hovered.signal(), DRAGGING_OPTION.signal_ref(Option::is_none)).dedupe()
                         .map_true(clone!((original_position) move ||
                             El::<NodeBundle>::new()
                                 // TODO: global transform isn't populated on spawn
@@ -361,7 +359,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                 })
                                 .update_raw_el(clone!((original_position) move |raw_el| {
                                     raw_el
-                                    .on_signal_with_entity(pointer_position().signal(), move |entity, (mut left, mut top)| {
+                                    .on_signal_with_entity(POINTER_POSITION.signal(), move |entity, (mut left, mut top)| {
                                         if let Some(transform) = entity.get::<GlobalTransform>() {
                                             // TODO: global transform isn't populated on spawn so we have to set it here
                                             if original_position.get().is_none() {
@@ -386,7 +384,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                         cell_data.index.signal()
                                         .map(|i|
                                             Text::from_section(
-                                                item_names().get(&i).unwrap().to_string(),
+                                                ITEM_NAMES.get(&i).unwrap().to_string(),
                                                 TextStyle { font_size: 50., ..default() }
                                             )
                                             .with_no_wrap()
@@ -401,7 +399,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
 
 fn random_cell_data(rng: &mut impl Rng) -> CellData {
     CellData {
-        index: Mutable::new(rng.gen_range(0..item_names().len())),
+        index: Mutable::new(rng.gen_range(0..ITEM_NAMES.len())),
         count: Mutable::new(rng.gen_range(1..=64)),
     }
 }
@@ -561,7 +559,7 @@ fn inventory() -> impl Element {
                                             .update_raw_el(clone!((inputs) move |raw_el| {
                                                 raw_el
                                                 .component_signal::<On::<Pointer<Down>>>(
-                                                    signal::and(dragging_option().signal_ref(Option::is_none), output.signal_ref(Option::is_some)).dedupe()
+                                                    signal::and(DRAGGING_OPTION.signal_ref(Option::is_none), output.signal_ref(Option::is_some)).dedupe()
                                                     .map_true(move || {
                                                         On::<Pointer<Down>>::run(clone!((inputs) move || {
                                                             for input in inputs.lock_ref().iter() {
@@ -600,15 +598,9 @@ fn inventory() -> impl Element {
         )
 }
 
-#[static_ref]
-fn dragging_option() -> &'static Mutable<Option<Mutable<Option<CellData>>>> {
-    Mutable::new(None)
-}
+static DRAGGING_OPTION: Lazy<Mutable<Option<Mutable<Option<CellData>>>>> = Lazy::new(default);
 
-#[static_ref]
-fn pointer_position() -> &'static Mutable<(f32, f32)> {
-    Mutable::new(default())
-}
+static POINTER_POSITION: Lazy<Mutable<(f32, f32)>> = Lazy::new(default);
 
 fn ui_root(world: &mut World) {
     Stack::<NodeBundle>::new()
@@ -619,10 +611,10 @@ fn ui_root(world: &mut World) {
         .update_raw_el(|raw_el| {
             raw_el
                 .insert(On::<Pointer<Move>>::run(|move_: Listener<Pointer<Move>>| {
-                    pointer_position().set(move_.pointer_location.position.into());
+                    POINTER_POSITION.set(move_.pointer_location.position.into());
                 }))
                 .component_signal::<Pickable>(
-                    dragging_option()
+                    DRAGGING_OPTION
                         .signal_ref(Option::is_some)
                         .map_true(|| Pickable::default()),
                 )
@@ -630,7 +622,7 @@ fn ui_root(world: &mut World) {
         .align_content(Align::center())
         .layer(inventory())
         .layer_signal(
-            dragging_option()
+            DRAGGING_OPTION
                 .signal_cloned()
                 .map_some(|cell_data_option| cell_data_option.signal_cloned())
                 .switch(signal::option)
@@ -643,7 +635,7 @@ fn ui_root(world: &mut World) {
                             style.height = Val::Px(CELL_WIDTH);
                         })
                         .z_index(ZIndex::Global(1))
-                        .on_signal_with_style(pointer_position().signal(), move |style, pointer_position| {
+                        .on_signal_with_style(POINTER_POSITION.signal(), move |style, pointer_position| {
                             style.left = Val::Px(pointer_position.0 - CELL_WIDTH / 2.);
                             style.top = Val::Px(pointer_position.1 - CELL_WIDTH / 2.);
                         })

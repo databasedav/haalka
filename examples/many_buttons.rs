@@ -2,10 +2,6 @@ use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     prelude::*,
 };
-use futures_signals::{
-    map_ref,
-    signal::{Mutable, SignalExt},
-};
 use haalka::*;
 
 fn main() {

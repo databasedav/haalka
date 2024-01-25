@@ -112,7 +112,7 @@ fn nine_slice_button() -> impl Element {
 #[derive(Resource)]
 struct Width(Mutable<f32>);
 
-fn horizontal() -> RawHaalkaEl<NodeBundle> {
+fn horizontal() -> impl Element {
     Row::<NodeBundle>::new()
         .with_style(|style| {
             style.width = Val::Percent(100.);
@@ -130,10 +130,9 @@ fn horizontal() -> RawHaalkaEl<NodeBundle> {
                 .items((0..8).into_iter().map(|_| nine_slice_button())),
         )
         .item(El::<ImageBundle>::new().image(UiImage::new(image().clone())))
-        .into_raw()
 }
 
-fn vertical() -> RawHaalkaEl<NodeBundle> {
+fn vertical() -> impl Element {
     Column::<NodeBundle>::new()
         .with_style(|style| {
             style.width = Val::Percent(100.);
@@ -152,7 +151,6 @@ fn vertical() -> RawHaalkaEl<NodeBundle> {
                 })
                 .items((0..8).into_iter().map(|_| nine_slice_button())),
         )
-        .into_raw()
 }
 
 fn menu(width: Mutable<f32>) -> impl Element {
@@ -165,15 +163,11 @@ fn menu(width: Mutable<f32>) -> impl Element {
             width.signal().map(|width| BASE_SIZE.min(width)).dedupe(),
             |style, width| style.width = Val::Px(width),
         )
-        .update_raw_el(|raw_el| {
-            raw_el.child_signal(
-                width
-                    .signal()
-                    .map(|width| width > 400.)
-                    .dedupe()
-                    .map_bool(horizontal, vertical),
-            )
-        })
+        .0
+        .child_signal(width.signal().map(|width| width > 400.).dedupe().map_bool(
+            || horizontal().apply(element_type_erase_wrapper),
+            || vertical().apply(element_type_erase_wrapper),
+        ))
 }
 
 fn ui_root(world: &mut World) {

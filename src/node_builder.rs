@@ -2,7 +2,6 @@ use std::{convert::identity, sync::OnceLock};
 
 use bevy::{prelude::*, tasks::Task};
 use bevy_async_ecs::AsyncWorld;
-use bevy_mod_picking::picking_core::Pickable;
 use enclose::enclose as clone;
 use futures_signals::{
     signal::{Mutable, Signal, SignalExt},

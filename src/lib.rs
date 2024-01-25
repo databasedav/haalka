@@ -36,12 +36,12 @@ use pointer_event_aware::{pressable_system, Pressable, RiggedPickingPlugin};
 mod derive;
 
 mod utils;
-pub use utils::{sleep, spawn};
+pub use utils::{sleep, spawn, element_type_erase_wrapper};
 
 pub use enclose::enclose as clone;
 pub use futures_signals_ext::*;
+pub use once_cell::sync::Lazy;
 pub use paste::paste;
-pub use static_ref_macro::static_ref;
 
 pub use bevy_mod_picking::prelude::*;
 

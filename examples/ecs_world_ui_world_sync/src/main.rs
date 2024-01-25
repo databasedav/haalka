@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 use bevy_rand::prelude::*;
-use futures_signals::signal::{Mutable, SignalExt};
 use haalka::*;
 use rand::prelude::{IteratorRandom, Rng};
 
@@ -234,22 +233,10 @@ fn ui_root(world: &mut World) {
                                 .item(
                                     Column::<NodeBundle>::new()
                                         .with_style(|style| style.row_gap = Val::Px(10.))
-                                        .item(category_count(
-                                            ColorCategory::Blue,
-                                            blue_count.signal(),
-                                        ))
-                                        .item(category_count(
-                                            ColorCategory::Green,
-                                            green_count.signal(),
-                                        ))
-                                        .item(category_count(
-                                            ColorCategory::Red,
-                                            red_count.signal(),
-                                        ))
-                                        .item(category_count(
-                                            ColorCategory::Yellow,
-                                            yellow_count.signal(),
-                                        )),
+                                        .item(category_count(ColorCategory::Blue, blue_count.signal()))
+                                        .item(category_count(ColorCategory::Green, green_count.signal()))
+                                        .item(category_count(ColorCategory::Red, red_count.signal()))
+                                        .item(category_count(ColorCategory::Yellow, yellow_count.signal())),
                                 )
                                 .item(text_labeled_count("total", {
                                     counts
@@ -263,10 +250,7 @@ fn ui_root(world: &mut World) {
                             Column::<NodeBundle>::new()
                                 .with_style(|style| style.row_gap = Val::Px(10.))
                                 .item(text_labeled_element("spawn rate", rate_element(spawn_rate)))
-                                .item(text_labeled_element(
-                                    "despawn rate",
-                                    rate_element(despawn_rate),
-                                )),
+                                .item(text_labeled_element("despawn rate", rate_element(despawn_rate))),
                         ),
                 ),
         )

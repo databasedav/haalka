@@ -1,8 +1,4 @@
 use bevy::prelude::*;
-use futures_signals::{
-    map_ref,
-    signal::{Mutable, SignalExt},
-};
 use haalka::*;
 
 fn main() {

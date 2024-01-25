@@ -9,7 +9,6 @@
 use std::{convert::identity, fmt::Display, hash::Hash, time::Duration};
 
 use bevy::prelude::*;
-use futures_signals::map_ref;
 use haalka::*;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
@@ -26,8 +25,20 @@ fn main() {
             HaalkaPlugin,
         ))
         .add_plugins(EventListenerPlugin::<MenuInputEvent>::default())
-        .add_systems(Startup, (setup, spawn_ui_root))
+        .add_systems(Startup, (setup, ui_root))
         .add_systems(Update, (keyboard_menu_input_events, gamepad_menu_input_events))
+        .insert_resource(AUDIO_SETTINGS.clone())
+        .insert_resource(GRAPHICS_SETTINGS.clone())
+        .insert_resource(MISC_DEMO_SETTINGS.clone())
+        .insert_resource(FocusedEntity(Entity::PLACEHOLDER))
+        .insert_resource(MenuInputRateLimiter(Timer::from_seconds(
+            MENU_INPUT_RATE_LIMIT,
+            TimerMode::Repeating,
+        )))
+        .insert_resource(SliderRateLimiter(Timer::from_seconds(
+            SLIDER_RATE_LIMIT,
+            TimerMode::Repeating,
+        )))
         .run();
 }
 
@@ -138,7 +149,7 @@ impl Button {
         self
     }
 
-    fn on_click(mut self, on_click: impl FnMut() + 'static + Send + Sync) -> Self {
+    fn on_click(mut self, on_click: impl FnMut() + Send + Sync + 'static) -> Self {
         self.el = self.el.on_click(on_click);
         self
     }
@@ -178,7 +189,7 @@ fn text(text: &str) -> Text {
 
 fn text_button(
     text_signal: impl Signal<Item = String> + Send + 'static,
-    on_click: impl FnMut() + 'static + Send + Sync,
+    on_click: impl FnMut() + Send + Sync + 'static,
 ) -> Button {
     Button::new()
         .width(Val::Px(200.))
@@ -188,7 +199,7 @@ fn text_button(
 
 fn sub_menu_button(sub_menu: SubMenu) -> Button {
     text_button(always(sub_menu.to_string()), move || {
-        show_sub_menu().set_neq(Some(sub_menu))
+        SHOW_SUB_MENU.set_neq(Some(sub_menu))
     })
 }
 
@@ -223,10 +234,7 @@ fn flip(mutable_bool: &Mutable<bool>) {
 // here, we use a global to keep track of any dropdowns that are dropped down, passing it to
 // `only_one_up_flipper` to ensure only one is dropped down at a time; a mutable for this can be
 // managed more locally, but adds significant unwieldiness
-#[static_ref]
-fn dropdown_showing_option() -> &'static Mutable<Option<Mutable<bool>>> {
-    Mutable::new(None)
-}
+static DROPDOWN_SHOWING_OPTION: Lazy<Mutable<Option<Mutable<bool>>>> = Lazy::new(default);
 
 fn lil_baby_button() -> Button {
     Button::new()
@@ -640,10 +648,7 @@ fn only_one_up_flipper<'a>(
     to_flip.set(!cur);
 }
 
-#[static_ref]
-fn menu_item_hovered_option() -> &'static Mutable<Option<Mutable<bool>>> {
-    Mutable::new(None)
-}
+static MENU_ITEM_HOVERED_OPTION: Lazy<Mutable<Option<Mutable<bool>>>> = Lazy::new(default);
 
 fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<NodeBundle> {
     Stack::<NodeBundle>::new()
@@ -653,9 +658,7 @@ fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<N
                 .map_bool(|| NORMAL_BUTTON.with_l(NORMAL_BUTTON.l() + 0.1), || NORMAL_BUTTON)
                 .map(BackgroundColor),
         )
-        .on_hovered_change(move |is_hovered| {
-            only_one_up_flipper(&hovered, menu_item_hovered_option(), Some(is_hovered))
-        })
+        .on_hovered_change(move |is_hovered| only_one_up_flipper(&hovered, &MENU_ITEM_HOVERED_OPTION, Some(is_hovered)))
         .with_style(|style| {
             style.width = Val::Percent(100.);
             style.padding = UiRect::axes(Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.));
@@ -821,7 +824,7 @@ impl Dropdown {
                     )
                 )
                 .on_click(clone!((show_dropdown) move || {
-                    only_one_up_flipper(&show_dropdown, dropdown_showing_option(), None);
+                    only_one_up_flipper(&show_dropdown, &DROPDOWN_SHOWING_OPTION, None);
                 }))
             )
             .child_signal(
@@ -922,7 +925,7 @@ fn sub_menu_child_hover_manager<E: Element>(element: E, hovereds: MutableVec<Mut
                                     hovered.set(false)
                                 }
                             } else {
-                                show_sub_menu().set(None);
+                                SHOW_SUB_MENU.set(None);
                             }
                         },
                         _ => ()
@@ -945,7 +948,7 @@ fn audio_menu() -> Column<NodeBundle> {
                 "item 1",
                 Dropdown::new(
                     MutableVec::new_with_values(options(4)),
-                    misc_demo_settings().dropdown.clone(),
+                    MISC_DEMO_SETTINGS.dropdown.clone(),
                     true,
                 )
                 .controlling_signal(hovered.signal()),
@@ -957,7 +960,7 @@ fn audio_menu() -> Column<NodeBundle> {
                 "item 2",
                 MutuallyExclusiveOptions::new(
                     MutableVec::new_with_values(options(3)),
-                    misc_demo_settings().mutually_exclusive_options.clone(),
+                    MISC_DEMO_SETTINGS.mutually_exclusive_options.clone(),
                 )
                 .controlling_signal(hovered.signal()),
                 hovered,
@@ -966,7 +969,7 @@ fn audio_menu() -> Column<NodeBundle> {
         |hovered: Mutable<bool>| {
             menu_item(
                 "item 3",
-                Checkbox::new(misc_demo_settings().checkbox.clone()).controlling_signal(hovered.signal()),
+                Checkbox::new(MISC_DEMO_SETTINGS.checkbox.clone()).controlling_signal(hovered.signal()),
                 hovered,
             )
         },
@@ -975,7 +978,7 @@ fn audio_menu() -> Column<NodeBundle> {
                 "item 4",
                 IterableOptions::new(
                     MutableVec::new_with_values(options(4)),
-                    misc_demo_settings().iterable_options.clone(),
+                    MISC_DEMO_SETTINGS.iterable_options.clone(),
                 )
                 .controlling_signal(hovered.signal()),
                 hovered,
@@ -984,28 +987,28 @@ fn audio_menu() -> Column<NodeBundle> {
         |hovered: Mutable<bool>| {
             menu_item(
                 "master volume",
-                Slider::new(audio_settings().master_volume.clone()).controlling_signal(hovered.signal()),
+                Slider::new(AUDIO_SETTINGS.master_volume.clone()).controlling_signal(hovered.signal()),
                 hovered,
             )
         },
         |hovered: Mutable<bool>| {
             menu_item(
                 "effect volume",
-                Slider::new(audio_settings().effect_volume.clone()).controlling_signal(hovered.signal()),
+                Slider::new(AUDIO_SETTINGS.effect_volume.clone()).controlling_signal(hovered.signal()),
                 hovered,
             )
         },
         |hovered: Mutable<bool>| {
             menu_item(
                 "music volume",
-                Slider::new(audio_settings().music_volume.clone()).controlling_signal(hovered.signal()),
+                Slider::new(AUDIO_SETTINGS.music_volume.clone()).controlling_signal(hovered.signal()),
                 hovered,
             )
         },
         |hovered: Mutable<bool>| {
             menu_item(
                 "voice volume",
-                Slider::new(audio_settings().voice_volume.clone()).controlling_signal(hovered.signal()),
+                Slider::new(AUDIO_SETTINGS.voice_volume.clone()).controlling_signal(hovered.signal()),
                 hovered,
             )
         },
@@ -1026,10 +1029,10 @@ fn audio_menu() -> Column<NodeBundle> {
 }
 
 fn graphics_menu() -> Column<NodeBundle> {
-    let preset_quality = graphics_settings().preset_quality.clone();
-    let texture_quality = graphics_settings().texture_quality.clone();
-    let shadow_quality = graphics_settings().shadow_quality.clone();
-    let bloom_quality = graphics_settings().bloom_quality.clone();
+    let preset_quality = GRAPHICS_SETTINGS.preset_quality.clone();
+    let texture_quality = GRAPHICS_SETTINGS.texture_quality.clone();
+    let shadow_quality = GRAPHICS_SETTINGS.shadow_quality.clone();
+    let bloom_quality = GRAPHICS_SETTINGS.bloom_quality.clone();
     let non_preset_qualities = MutableVec::new_with_values(vec![
         texture_quality.clone(),
         shadow_quality.clone(),
@@ -1108,7 +1111,7 @@ fn graphics_menu() -> Column<NodeBundle> {
                 })
                 .on_hovered_change(|is_hovered| {
                     if is_hovered {
-                        if let Some(hovered) = menu_item_hovered_option().take() {
+                        if let Some(hovered) = MENU_ITEM_HOVERED_OPTION.take() {
                             hovered.set(false);
                         }
                     }
@@ -1116,7 +1119,7 @@ fn graphics_menu() -> Column<NodeBundle> {
         )
 }
 
-fn x_button(mut on_click: impl FnMut() + 'static + Send + Sync) -> impl Element {
+fn x_button(mut on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
     let hovered = Mutable::new(false);
     El::<NodeBundle>::new()
         .background_color(BackgroundColor(Color::NONE))
@@ -1141,10 +1144,7 @@ fn x_button(mut on_click: impl FnMut() + 'static + Send + Sync) -> impl Element 
         ))
 }
 
-#[static_ref]
-fn sub_menu_selected() -> &'static Mutable<Option<SubMenu>> {
-    Mutable::new(None)
-}
+static SUB_MENU_SELECTED: Lazy<Mutable<Option<SubMenu>>> = Lazy::new(default);
 
 fn input_event_listener_controller<E: Element>(
     element: E,
@@ -1162,31 +1162,28 @@ fn input_event_listener_controller<E: Element>(
     })
 }
 
-#[static_ref]
-fn show_sub_menu() -> &'static Mutable<Option<SubMenu>> {
-    Mutable::new(None)
-}
+static SHOW_SUB_MENU: Lazy<Mutable<Option<SubMenu>>> = Lazy::new(default);
 
 fn menu() -> impl Element {
     Stack::<NodeBundle>::new()
         .layer(
             menu_base(MAIN_MENU_SIDES, MAIN_MENU_SIDES, "main menu")
-                .apply(|element| focus_on_signal(element, show_sub_menu().signal_ref(Option::is_none)))
+                .apply(|element| focus_on_signal(element, SHOW_SUB_MENU.signal_ref(Option::is_none)))
                 .apply(move |element| {
-                    input_event_listener_controller(element, show_sub_menu().signal_ref(Option::is_none), move || {
+                    input_event_listener_controller(element, SHOW_SUB_MENU.signal_ref(Option::is_none), move || {
                         On::<MenuInputEvent>::run(move |event: ListenerMut<MenuInputEvent>| match event.input {
                             MenuInput::Up | MenuInput::Down => {
-                                if let Some(cur_sub_menu) = sub_menu_selected().get() {
+                                if let Some(cur_sub_menu) = SUB_MENU_SELECTED.get() {
                                     if let Some(i) = SubMenu::iter().position(|sub_menu| cur_sub_menu == sub_menu) {
                                         let sub_menus = SubMenu::iter().collect::<Vec<_>>();
-                                        sub_menu_selected().set(if matches!(event.input, MenuInput::Down) {
+                                        SUB_MENU_SELECTED.set(if matches!(event.input, MenuInput::Down) {
                                             sub_menus.iter().rev().cycle().skip(sub_menus.len() - i).next().copied()
                                         } else {
                                             sub_menus.iter().cycle().skip(i + 1).next().copied()
                                         })
                                     }
                                 } else {
-                                    sub_menu_selected().set_neq(Some(if matches!(event.input, MenuInput::Up) {
+                                    SUB_MENU_SELECTED.set_neq(Some(if matches!(event.input, MenuInput::Up) {
                                         SubMenu::iter().last().unwrap()
                                     } else {
                                         SubMenu::iter().next().unwrap()
@@ -1194,12 +1191,12 @@ fn menu() -> impl Element {
                                 }
                             }
                             MenuInput::Select => {
-                                if let Some(sub_menu) = sub_menu_selected().get() {
-                                    show_sub_menu().set_neq(Some(sub_menu));
+                                if let Some(sub_menu) = SUB_MENU_SELECTED.get() {
+                                    SHOW_SUB_MENU.set_neq(Some(sub_menu));
                                 }
                             }
                             MenuInput::Back => {
-                                sub_menu_selected().take();
+                                SUB_MENU_SELECTED.take();
                             }
                             _ => (),
                         })
@@ -1212,13 +1209,12 @@ fn menu() -> impl Element {
                         .align_content(Align::center())
                         .items(SubMenu::iter().map(|sub_menu| {
                             sub_menu_button(sub_menu).hovered_signal(
-                                sub_menu_selected()
-                                    .signal_ref(move |selected_option| selected_option == &Some(sub_menu)),
+                                SUB_MENU_SELECTED.signal_ref(move |selected_option| selected_option == &Some(sub_menu)),
                             )
                         })),
                 ),
         )
-        .layer_signal(show_sub_menu().signal().map_some(move |sub_menu| {
+        .layer_signal(SHOW_SUB_MENU.signal().map_some(move |sub_menu| {
             let menu = match sub_menu {
                 SubMenu::Audio => audio_menu(),
                 SubMenu::Graphics => graphics_menu(),
@@ -1234,14 +1230,16 @@ fn menu() -> impl Element {
                 .align(Align::center())
                 .layer(menu.align(Align::center()))
                 .layer(
-                    x_button(clone!((show_sub_menu) move || { show_sub_menu().take(); }))
-                        .align(Align::new().top().right())
-                        .update_raw_el(|raw_el| {
-                            raw_el.with_component::<Style>(|style| {
-                                style.padding.right = Val::Px(BASE_PADDING);
-                                style.padding.top = Val::Px(BASE_PADDING / 2.);
-                            })
-                        }),
+                    x_button(|| {
+                        SHOW_SUB_MENU.take();
+                    })
+                    .align(Align::new().top().right())
+                    .update_raw_el(|raw_el| {
+                        raw_el.with_component::<Style>(|style| {
+                            style.padding.right = Val::Px(BASE_PADDING);
+                            style.padding.top = Val::Px(BASE_PADDING / 2.);
+                        })
+                    }),
                 )
         }))
 }
@@ -1258,15 +1256,12 @@ struct AudioSettings {
     voice_volume: Mutable<f32>,
 }
 
-#[static_ref]
-fn audio_settings() -> &'static AudioSettings {
-    AudioSettings {
-        master_volume: Mutable::new(100.),
-        effect_volume: Mutable::new(50.),
-        music_volume: Mutable::new(50.),
-        voice_volume: Mutable::new(50.),
-    }
-}
+static AUDIO_SETTINGS: Lazy<AudioSettings> = Lazy::new(|| AudioSettings {
+    master_volume: Mutable::new(100.),
+    effect_volume: Mutable::new(50.),
+    music_volume: Mutable::new(50.),
+    voice_volume: Mutable::new(50.),
+});
 
 #[derive(Resource, Clone)]
 struct GraphicsSettings {
@@ -1276,15 +1271,12 @@ struct GraphicsSettings {
     bloom_quality: Mutable<Option<Quality>>,
 }
 
-#[static_ref]
-fn graphics_settings() -> &'static GraphicsSettings {
-    GraphicsSettings {
-        preset_quality: Mutable::new(Some(Quality::Medium)),
-        texture_quality: Mutable::new(Some(Quality::Medium)),
-        shadow_quality: Mutable::new(Some(Quality::Medium)),
-        bloom_quality: Mutable::new(Some(Quality::Medium)),
-    }
-}
+static GRAPHICS_SETTINGS: Lazy<GraphicsSettings> = Lazy::new(|| GraphicsSettings {
+    preset_quality: Mutable::new(Some(Quality::Medium)),
+    texture_quality: Mutable::new(Some(Quality::Medium)),
+    shadow_quality: Mutable::new(Some(Quality::Medium)),
+    bloom_quality: Mutable::new(Some(Quality::Medium)),
+});
 
 #[derive(Resource, Clone)]
 struct MiscDemoSettings {
@@ -1294,15 +1286,12 @@ struct MiscDemoSettings {
     iterable_options: Mutable<String>,
 }
 
-#[static_ref]
-fn misc_demo_settings() -> &'static MiscDemoSettings {
-    MiscDemoSettings {
-        dropdown: Mutable::new(None),
-        mutually_exclusive_options: Mutable::new(None),
-        checkbox: Mutable::new(false),
-        iterable_options: Mutable::new("option 1".to_string()),
-    }
-}
+static MISC_DEMO_SETTINGS: Lazy<MiscDemoSettings> = Lazy::new(|| MiscDemoSettings {
+    dropdown: Mutable::new(None),
+    mutually_exclusive_options: Mutable::new(None),
+    checkbox: Mutable::new(false),
+    iterable_options: Mutable::new("option 1".to_string()),
+});
 
 #[derive(Clone, Copy)]
 enum MenuInput {
@@ -1469,19 +1458,7 @@ struct FocusedEntity(Entity);
 const MENU_INPUT_RATE_LIMIT: f32 = 0.15;
 const SLIDER_RATE_LIMIT: f32 = 0.001;
 
-fn spawn_ui_root(world: &mut World) {
-    world.insert_resource(audio_settings().clone());
-    world.insert_resource(graphics_settings().clone());
-    world.insert_resource(misc_demo_settings().clone());
-    world.insert_resource(FocusedEntity(Entity::PLACEHOLDER));
-    world.insert_resource(MenuInputRateLimiter(Timer::from_seconds(
-        MENU_INPUT_RATE_LIMIT,
-        TimerMode::Repeating,
-    )));
-    world.insert_resource(SliderRateLimiter(Timer::from_seconds(
-        SLIDER_RATE_LIMIT,
-        TimerMode::Repeating,
-    )));
+fn ui_root(world: &mut World) {
     El::<NodeBundle>::new()
         .with_style(|style| {
             style.width = Val::Percent(100.0);
