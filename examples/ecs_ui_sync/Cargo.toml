@@ -1,5 +1,5 @@
 [package]
-name = "ecs_world_ui_world_sync"
+name = "ecs_ui_sync"
 version = "0.1.0"
 edition = "2021"
 publish = false
