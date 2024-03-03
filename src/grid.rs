@@ -55,6 +55,9 @@ impl<NodeType: Bundle + Default> RawElWrapper for Grid<NodeType> {
 
 impl<NodeType: Bundle + Default> PointerEventAware for Grid<NodeType> {}
 
+// must substract this from the total row width due to float precision shenanigans https://github.com/bevyengine/bevy/issues/12152
+pub const GRID_TRACK_FLOAT_PRECISION_SLACK: f32 = 0.0001;
+
 impl<NodeType: Bundle + Default> Grid<NodeType> {
     pub fn row_wrap_cell_width(mut self, cell_width: f32) -> Self {
         self.raw_el = self.raw_el.with_component::<Style>(move |style| {

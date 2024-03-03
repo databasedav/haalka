@@ -94,6 +94,7 @@ just example challenge02  # inventory
 just example challenge03  # health bar
 just example challenge04  # responsive menu
 ```
+append `-r` to the `just` command to run the example in release mode e.g. `just example snake -r`
 
 ## license
 all code in this repository is dual-licensed under either:

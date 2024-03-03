@@ -1,4 +1,7 @@
-use std::{collections::{BTreeMap, HashMap, VecDeque}, convert::identity};
+use std::{
+    collections::{BTreeMap, HashMap, VecDeque},
+    convert::identity,
+};
 
 use bevy::prelude::*;
 use bevy_rand::prelude::*;
@@ -39,7 +42,7 @@ fn main() {
                 )
                     .chain()
                     .run_if(resource_exists::<Paused>().map(|paused| !paused)),
-                grid_size_changer,
+                grid_size_changer.run_if(on_event::<GridSizeChange>()),
             )
                 .chain(),
         )
@@ -101,7 +104,10 @@ type CellsType = MutableBTreeMap<(usize, usize), Mutable<Cell>>;
 struct Cells(CellsType);
 
 fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
-    let cell_size = size.signal().map(|size| SIDE as f32 / size as f32).broadcast();
+    let cell_size = size
+        .signal()
+        .map(|size| (SIDE as f32 - GRID_TRACK_FLOAT_PRECISION_SLACK) / size as f32)
+        .broadcast();
     Grid::<NodeBundle>::new()
         .with_style(|style| {
             style.width = Val::Px(SIDE as f32);
@@ -129,23 +135,18 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
             style.width = Val::Px((WIDTH - SIDE) as f32);
             style.row_gap = Val::Px(10.);
         })
-        .align(Align::center())
-        .item(
-            El::<TextBundle>::new()
-                .align(Align::center())
-                .text_signal(score.signal().map(|score| {
-                    Text::from_section(
-                        score.to_string(),
-                        TextStyle {
-                            font_size: 300.,
-                            ..default()
-                        },
-                    )
-                })),
-        )
+        .align_content(Align::center())
+        .item(El::<TextBundle>::new().text_signal(score.signal().map(|score| {
+            Text::from_section(
+                score.to_string(),
+                TextStyle {
+                    font_size: 300.,
+                    ..default()
+                },
+            )
+        })))
         .item(
             Row::<NodeBundle>::new()
-                .align(Align::center())
                 .with_style(|style| style.column_gap = Val::Px(10.))
                 .item(El::<TextBundle>::new().text(text("grid size:")))
                 .item(El::<TextBundle>::new().text_signal(size.signal().map(|size| text(&size.to_string()))))
@@ -158,7 +159,6 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
         )
         .item(
             Row::<NodeBundle>::new()
-                .align(Align::center())
                 .with_style(|style| style.column_gap = Val::Px(10.))
                 .item(El::<TextBundle>::new().text(text("tick rate:")))
                 .item(El::<TextBundle>::new().text_signal(tick_rate.signal().map(|size| text(&size.to_string()))))
@@ -252,7 +252,12 @@ enum GridSizeChange {
     Decr,
 }
 
-fn grid_size_changer(mut events: EventReader<GridSizeChange>, size: Res<GridSize>, cells: Res<Cells>, mut spawn_food: EventWriter<SpawnFood>) {
+fn grid_size_changer(
+    mut events: EventReader<GridSizeChange>,
+    size: Res<GridSize>,
+    cells: Res<Cells>,
+    mut spawn_food: EventWriter<SpawnFood>,
+) {
     for event in events.read() {
         let cur_size = size.0.get();
         match event {
@@ -267,13 +272,25 @@ fn grid_size_changer(mut events: EventReader<GridSizeChange>, size: Res<GridSize
             GridSizeChange::Decr => {
                 if cur_size > 2 {
                     let mut cells_lock = cells.0.lock_mut();
-                    let indices = (0..cur_size).map(|i| (i, cur_size - 1)).chain((0..cur_size).map(|i| (cur_size - 1, i))).collect::<Vec<_>>();
-                    if indices.iter().all(|index| cells_lock.get(index).map(|cell| !matches!(cell.get(), Cell::Snake)).unwrap_or(false)) {
+                    let indices = (0..cur_size)
+                        .map(|i| (i, cur_size - 1))
+                        .chain((0..cur_size).map(|i| (cur_size - 1, i)))
+                        .collect::<Vec<_>>();
+                    if indices.iter().all(|index| {
+                        cells_lock
+                            .get(index)
+                            .map(|cell| !matches!(cell.get(), Cell::Snake))
+                            .unwrap_or(false)
+                    }) {
                         let mut removed = vec![];
                         for index in indices {
                             removed.push(cells_lock.remove(&index));
                         }
-                        if removed.into_iter().filter_map(identity).any(|removed| matches!(removed.get(), Cell::Food)) {
+                        if removed
+                            .into_iter()
+                            .filter_map(identity)
+                            .any(|removed| matches!(removed.get(), Cell::Food))
+                        {
                             spawn_food.send_default();
                         }
                         size.0.update(|size| size - 1);
@@ -284,7 +301,7 @@ fn grid_size_changer(mut events: EventReader<GridSizeChange>, size: Res<GridSize
     }
 }
 
-fn text_button(text: &str, on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
+fn text_button(text_: &str, on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
     let hovered = Mutable::new(false);
     El::<NodeBundle>::new()
         .with_style(|style| style.width = Val::Px(45.0))
@@ -297,13 +314,7 @@ fn text_button(text: &str, on_click: impl FnMut() + Send + Sync + 'static) -> im
         )
         .hovered_sync(hovered)
         .on_click(on_click)
-        .child(El::<TextBundle>::new().text(Text::from_section(
-            text,
-            TextStyle {
-                font_size: 30.0,
-                ..default()
-            },
-        )))
+        .child(El::<TextBundle>::new().text(text(text_)))
 }
 
 // u could also just scan the cells every tick, but i'm just caching it

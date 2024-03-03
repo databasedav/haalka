@@ -26,7 +26,7 @@ fn main() {
         .add_systems(
             Update,
             (
-                wasd,
+                movement,
                 sync_tracking_healthbar_position,
                 decay,
                 sync_health_mutable,
@@ -35,7 +35,7 @@ fn main() {
                 .chain()
                 .run_if(any_with_component::<Player>()),
         )
-        .add_systems(Update, spawn_player.run_if(any_with_component::<Player>().map(|p| !p)))
+        .add_systems(Update, spawn_player.run_if(on_event::<SpawnPlayer>()))
         .insert_resource(StyleDataResource::default())
         .insert_resource(HealthTickTimer(Timer::from_seconds(
             HEALTH_TICK_RATE,
@@ -108,7 +108,7 @@ fn setup(
     spawn_player.send_default();
 }
 
-fn wasd(
+fn movement(
     keys: Res<Input<KeyCode>>,
     camera: Query<&Transform, (With<Camera3d>, Without<Player>)>,
     mut player: Query<&mut Transform, With<Player>>,
@@ -117,16 +117,16 @@ fn wasd(
     let mut direction = Vec3::ZERO;
     let mut player = player.single_mut();
     let camera = camera.single();
-    if keys.pressed(KeyCode::W) {
+    if keys.pressed(KeyCode::W) || keys.pressed(KeyCode::Up) {
         direction += camera.forward();
     }
-    if keys.pressed(KeyCode::A) {
+    if keys.pressed(KeyCode::A) || keys.pressed(KeyCode::Left) {
         direction += camera.left();
     }
-    if keys.pressed(KeyCode::S) {
+    if keys.pressed(KeyCode::S) || keys.pressed(KeyCode::Down) {
         direction += camera.back();
     }
-    if keys.pressed(KeyCode::D) {
+    if keys.pressed(KeyCode::D) || keys.pressed(KeyCode::Right) {
         direction += camera.right();
     }
     let movement = direction.normalize_or_zero() * SPEED * time.delta_seconds();
@@ -138,7 +138,7 @@ fn sync_tracking_healthbar_position(
     style_data_resource: Res<StyleDataResource>,
     player: Query<(&Transform, With<Player>), Changed<Transform>>,
     camera: Query<(&Camera, &Transform), (With<Camera3d>, Without<Player>)>,
-    // mut ui_scale: ResMut<UiScale>,
+    // mut ui_scale: ResMut<UiScale>,  // wanted more local ui scaling
 ) {
     let (camera, camera_transform) = camera.single();
     let player_transform = player.single().0;
@@ -364,7 +364,6 @@ fn decay(mut health: Query<&mut Health>, mut health_tick_timer: ResMut<HealthTic
     if health_tick_timer.0.tick(time.delta()).finished() {
         let mut health = health.single_mut();
         health.0 = health.0.saturating_sub(1);
-        health_tick_timer.0.reset();
     }
 }
 

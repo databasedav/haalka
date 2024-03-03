@@ -24,7 +24,7 @@ mod stack;
 pub use stack::Stack;
 
 mod grid;
-pub use grid::Grid;
+pub use grid::{Grid, GRID_TRACK_FLOAT_PRECISION_SLACK};
 
 mod align;
 pub use align::{AddRemove, Align, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable};
