@@ -44,6 +44,15 @@ impl<T: Bundle> From<T> for NodeBuilder<T> {
 }
 
 impl<NodeType: Bundle> NodeBuilder<NodeType> {
+    pub(crate) fn map<NewNodeType>(self, f: impl FnOnce(NodeType) -> NewNodeType) -> NodeBuilder<NewNodeType> {
+        NodeBuilder {
+            raw_node: f(self.raw_node),
+            on_spawns: self.on_spawns,
+            task_wrappers: self.task_wrappers,
+            contiguous_child_block_populations: self.contiguous_child_block_populations,
+        }
+    }
+
     pub fn on_spawn(mut self, on_spawn: impl FnOnce(&mut World, Entity) + Send + 'static) -> Self {
         self.on_spawns.push(Box::new(on_spawn));
         self

@@ -123,22 +123,43 @@ fn ui_root(world: &mut World) {
                     style.height = Val::Percent(100.);
                 })
                 .layer(
-                    El::<NodeBundle>::new()
+                    Column::<NodeBundle>::new()
                         .align(Align::new().center_y().right())
                         .with_style(|style| {
                             style.padding.right = Val::Percent(20.);
-                            style.height = Val::Px(200.);
-                            style.overflow = Overflow::clip_y();
+                            style.row_gap = Val::Px(10.);
                         })
-                        .child({
-                            let position = Mutable::new(0.);
-                            Column::<NodeBundle>::new()
-                                .on_signal_with_style(position.signal(), |style, position| {
-                                    style.top = Val::Px(position);
+                        .item(
+                            El::<NodeBundle>::new()
+                                .align(Align::new().top().center_x())
+                                .with_style(|style| {
+                                    style.padding.right = Val::Percent(20.);
                                 })
-                                .update_raw_el(|raw_el| raw_el.insert(Scrollable { position }))
-                                .items(Shape::iter().map(move |shape| button(shape, selected_shape.clone())))
-                        }),
+                                .child(El::<TextBundle>::new().text(Text::from_section(
+                                    "character name",
+                                    TextStyle {
+                                        font_size: 40.0,
+                                        color: Color::WHITE,
+                                        ..default()
+                                    },
+                                ))),
+                        )
+                        .item(
+                            El::<NodeBundle>::new()
+                                .with_style(|style| {
+                                    style.height = Val::Px(200.);
+                                    style.overflow = Overflow::clip_y();
+                                })
+                                .child({
+                                    let position = Mutable::new(0.);
+                                    Column::<NodeBundle>::new()
+                                        .on_signal_with_style(position.signal(), |style, position| {
+                                            style.top = Val::Px(position);
+                                        })
+                                        .update_raw_el(|raw_el| raw_el.insert(Scrollable { position }))
+                                        .items(Shape::iter().map(move |shape| button(shape, selected_shape.clone())))
+                                }),
+                        ),
                 ),
         )
         .spawn(world);
@@ -186,7 +207,7 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>
     .detach();
     commands.spawn(PbrBundle {
         material: materials.add(Color::rgb_u8(87, 108, 50).into()),
-        transform: Transform::from_xyz(-5., 1., 0.).looking_at(Vec3::new(4.0, 0., 12.0), Vec3::Y),
+        transform: Transform::from_xyz(-1., 0., 1.), //.looking_at(Vec3::new(-4., 0., 12.), Vec3::Y),
         ..default()
     });
     commands.spawn(PointLightBundle {
@@ -199,7 +220,7 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>
         ..default()
     });
     commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 6., 12.0).looking_at(Vec3::new(-5., 1., 0.), Vec3::Y),
+        transform: Transform::from_xyz(3., 3., 3.).looking_at(Vec3::new(0., 0., 0.), Vec3::Y),
         ..default()
     });
 }

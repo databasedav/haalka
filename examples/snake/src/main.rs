@@ -106,6 +106,7 @@ struct Cells(CellsType);
 fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
     let cell_size = size
         .signal()
+        // TODO: see https://github.com/bevyengine/bevy/issues/12152 for why this slack is necessary
         .map(|size| (SIDE as f32 - GRID_TRACK_FLOAT_PRECISION_SLACK) / size as f32)
         .broadcast();
     Grid::<NodeBundle>::new()
@@ -252,6 +253,8 @@ enum GridSizeChange {
     Decr,
 }
 
+// TODO: move this back inside the on_click ? (initial motivation for moving to event was
+// potentially addressing the grid float precision shenanigans)
 fn grid_size_changer(
     mut events: EventReader<GridSizeChange>,
     size: Res<GridSize>,

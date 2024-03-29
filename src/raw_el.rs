@@ -17,7 +17,7 @@ use crate::{async_world, node_builder::TaskHolder, spawn, NodeBuilder};
 
 // TODO: how can i make use of this default ? should i just remove it ?
 pub struct RawHaalkaEl<NodeType = NodeBundle> {
-    node_builder: Option<NodeBuilder<NodeType>>,
+    pub(crate) node_builder: Option<NodeBuilder<NodeType>>,
 }
 
 impl<NodeType: Bundle> From<NodeType> for RawHaalkaEl<NodeType> {
@@ -38,6 +38,15 @@ impl<NodeType: Bundle + Default> RawHaalkaEl<NodeType> {
 impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
     fn new_dummy() -> Self {
         Self { node_builder: None }
+    }
+
+    pub(crate) fn map<NewNodeType>(
+        mut self,
+        f: impl FnOnce(NodeBuilder<NodeType>) -> NodeBuilder<NewNodeType>,
+    ) -> RawHaalkaEl<NewNodeType> {
+        RawHaalkaEl {
+            node_builder: Some(f(self.node_builder.take().unwrap())),
+        }
     }
 
     pub fn update_node_builder(mut self, updater: impl FnOnce(NodeBuilder<NodeType>) -> NodeBuilder<NodeType>) -> Self {

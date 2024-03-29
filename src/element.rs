@@ -1,4 +1,5 @@
-use bevy::ecs::bundle::Bundle;
+use bevy::prelude::*;
+use disjoint_impls::disjoint_impls;
 
 use crate::{ChildAlignable, ChildProcessable, RawElWrapper, RawElement, RawHaalkaEl};
 
@@ -55,3 +56,48 @@ impl<NodeType: Bundle> RawElWrapper for RawHaalkaEl<NodeType> {
 pub trait Element: RawElement + ChildProcessable {}
 
 impl<T: RawElement + ChildProcessable> Element for T {}
+
+#[derive(Component)]
+pub enum NodeTypeIndirector {
+    Node(NodeBundle),
+    Image(ImageBundle),
+    AtlasImage(AtlasImageBundle),
+    Text(TextBundle),
+    Button(ButtonBundle),
+}
+
+disjoint_impls! {
+    pub trait TypeEraseable {
+        fn type_erase(self) -> RawHaalkaEl<NodeTypeIndirector>;
+    }
+
+    impl<REW: RawElWrapper<NodeType = NodeBundle>> TypeEraseable for REW {
+        fn type_erase(self) -> RawHaalkaEl<NodeTypeIndirector> {
+            self.into_raw_el().map(|node_builder| node_builder.map(|raw_node| NodeTypeIndirector::Node(raw_node)))
+        }
+    }
+
+    impl<REW: RawElWrapper<NodeType = ImageBundle>> TypeEraseable for REW {
+        fn type_erase(self) -> RawHaalkaEl<NodeTypeIndirector> {
+            self.into_raw_el().map(|node_builder| node_builder.map(|raw_node| NodeTypeIndirector::Image(raw_node)))
+        }
+    }
+
+    impl<REW: RawElWrapper<NodeType = AtlasImageBundle>> TypeEraseable for REW {
+        fn type_erase(self) -> RawHaalkaEl<NodeTypeIndirector> {
+            self.into_raw_el().map(|node_builder| node_builder.map(|raw_node| NodeTypeIndirector::AtlasImage(raw_node)))
+        }
+    }
+
+    impl<REW: RawElWrapper<NodeType = TextBundle>> TypeEraseable for REW {
+        fn type_erase(self) -> RawHaalkaEl<NodeTypeIndirector> {
+            self.into_raw_el().map(|node_builder| node_builder.map(|raw_node| NodeTypeIndirector::Text(raw_node)))
+        }
+    }
+
+    impl<REW: RawElWrapper<NodeType = ButtonBundle>> TypeEraseable for REW {
+        fn type_erase(self) -> RawHaalkaEl<NodeTypeIndirector> {
+            self.into_raw_el().map(|node_builder| node_builder.map(|raw_node| NodeTypeIndirector::Button(raw_node)))
+        }
+    }
+}

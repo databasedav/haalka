@@ -937,96 +937,56 @@ fn sub_menu_child_hover_manager<E: Element>(element: E, hovereds: MutableVec<Mut
     })
 }
 
+fn make_controlling_menu_item(label: &str, el: impl Controllable + Element) -> (Stack<NodeBundle>, Mutable<bool>) {
+    let hovered = Mutable::new(false);
+    (
+        menu_item(label, el.controlling_signal(hovered.signal()), hovered.clone()),
+        hovered,
+    )
+}
+
 fn audio_menu() -> Column<NodeBundle> {
-    let item_funcs = [
-        // TODO: figure out a way to type erase so vecs of diff widgets can be constructed ...
-        // MoonZoon's .into_raw_element strat doesn't work because NodeBuilder isn't type erased;
-        // this wouldn't be an issue if there was only a single node type ... i could just
-        // manually count the menu items at compile time, but we want this to be dynamic so it's
-        // easy to add new items
-        |hovered: Mutable<bool>| {
-            menu_item(
-                "item 1",
-                Dropdown::new(
-                    MutableVec::new_with_values(options(4)),
-                    MISC_DEMO_SETTINGS.dropdown.clone(),
-                    true,
-                )
-                .controlling_signal(hovered.signal()),
-                hovered,
-            )
-        },
-        |hovered: Mutable<bool>| {
-            menu_item(
-                "item 2",
-                MutuallyExclusiveOptions::new(
-                    MutableVec::new_with_values(options(3)),
-                    MISC_DEMO_SETTINGS.mutually_exclusive_options.clone(),
-                )
-                .controlling_signal(hovered.signal()),
-                hovered,
-            )
-        },
-        |hovered: Mutable<bool>| {
-            menu_item(
-                "item 3",
-                Checkbox::new(MISC_DEMO_SETTINGS.checkbox.clone()).controlling_signal(hovered.signal()),
-                hovered,
-            )
-        },
-        |hovered: Mutable<bool>| {
-            menu_item(
-                "item 4",
-                IterableOptions::new(
-                    MutableVec::new_with_values(options(4)),
-                    MISC_DEMO_SETTINGS.iterable_options.clone(),
-                )
-                .controlling_signal(hovered.signal()),
-                hovered,
-            )
-        },
-        |hovered: Mutable<bool>| {
-            menu_item(
-                "master volume",
-                Slider::new(AUDIO_SETTINGS.master_volume.clone()).controlling_signal(hovered.signal()),
-                hovered,
-            )
-        },
-        |hovered: Mutable<bool>| {
-            menu_item(
-                "effect volume",
-                Slider::new(AUDIO_SETTINGS.effect_volume.clone()).controlling_signal(hovered.signal()),
-                hovered,
-            )
-        },
-        |hovered: Mutable<bool>| {
-            menu_item(
-                "music volume",
-                Slider::new(AUDIO_SETTINGS.music_volume.clone()).controlling_signal(hovered.signal()),
-                hovered,
-            )
-        },
-        |hovered: Mutable<bool>| {
-            menu_item(
-                "voice volume",
-                Slider::new(AUDIO_SETTINGS.voice_volume.clone()).controlling_signal(hovered.signal()),
-                hovered,
-            )
-        },
+    let items_hovereds = [
+        make_controlling_menu_item(
+            "dropdown",
+            Dropdown::new(
+                MutableVec::new_with_values(options(4)),
+                MISC_DEMO_SETTINGS.dropdown.clone(),
+                true,
+            ),
+        ),
+        make_controlling_menu_item(
+            "mutually exclusive options",
+            MutuallyExclusiveOptions::new(
+                MutableVec::new_with_values(options(3)),
+                MISC_DEMO_SETTINGS.mutually_exclusive_options.clone(),
+            ),
+        ),
+        make_controlling_menu_item("checkbox", Checkbox::new(MISC_DEMO_SETTINGS.checkbox.clone())),
+        make_controlling_menu_item(
+            "iterable options",
+            IterableOptions::new(
+                MutableVec::new_with_values(options(4)),
+                MISC_DEMO_SETTINGS.iterable_options.clone(),
+            ),
+        ),
+        make_controlling_menu_item("master volume", Slider::new(AUDIO_SETTINGS.master_volume.clone())),
+        make_controlling_menu_item("effect volume", Slider::new(AUDIO_SETTINGS.effect_volume.clone())),
+        make_controlling_menu_item("music volume", Slider::new(AUDIO_SETTINGS.music_volume.clone())),
+        make_controlling_menu_item("voice volume", Slider::new(AUDIO_SETTINGS.voice_volume.clone())),
     ];
-    let l = item_funcs.len();
-    let hovereds = MutableVec::new_with_values((0..l).into_iter().map(|_| Mutable::new(false)).collect());
+    let l = items_hovereds.len();
+    let (items, hovereds): (Vec<_>, Vec<_>) = items_hovereds.into_iter().unzip();
+    let hovereds = MutableVec::new_with_values(hovereds);
     menu_base(SUB_MENU_WIDTH, SUB_MENU_HEIGHT, "audio menu")
         .apply(|element| focus_on_no_child_hovered(element, hovereds.signal_vec_cloned()))
         .apply(|element| sub_menu_child_hover_manager(element, hovereds.clone()))
-        .items({
-            let hovereds = hovereds.lock_ref().into_iter().cloned().collect::<Vec<_>>();
-            item_funcs
+        .items(
+            items
                 .into_iter()
-                .zip(hovereds)
                 .enumerate()
-                .map(move |(i, (f, hovered))| f(hovered).z_index(ZIndex::Local((l - i) as i32)))
-        })
+                .map(move |(i, item)| item.z_index(ZIndex::Local((l - i) as i32))),
+        )
 }
 
 fn graphics_menu() -> Column<NodeBundle> {
