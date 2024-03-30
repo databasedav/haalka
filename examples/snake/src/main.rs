@@ -28,7 +28,7 @@ fn main() {
         .add_systems(
             Startup,
             (ui_root, camera, |mut restart: EventWriter<Restart>| {
-                restart.send_default()
+                restart.send_default();
             }),
         )
         .add_systems(Update, (direction, restart.run_if(on_event::<Restart>())))
@@ -41,7 +41,7 @@ fn main() {
                     tick,
                 )
                     .chain()
-                    .run_if(resource_exists::<Paused>().map(|paused| !paused)),
+                    .run_if(not(resource_exists::<Paused>)),
                 grid_size_changer.run_if(on_event::<GridSizeChange>()),
             )
                 .chain(),
@@ -448,16 +448,16 @@ fn restart(
 #[derive(Resource)]
 struct QueuedDirectionOption(Option<Direction>);
 
-fn direction(keys: ResMut<Input<KeyCode>>, mut queued_direction_option: ResMut<QueuedDirectionOption>) {
+fn direction(keys: ResMut<ButtonInput<KeyCode>>, mut queued_direction_option: ResMut<QueuedDirectionOption>) {
     let map = HashMap::from([
-        (KeyCode::W, Direction::Up),
-        (KeyCode::A, Direction::Left),
-        (KeyCode::S, Direction::Down),
-        (KeyCode::D, Direction::Right),
-        (KeyCode::Up, Direction::Up),
-        (KeyCode::Left, Direction::Left),
-        (KeyCode::Down, Direction::Down),
-        (KeyCode::Right, Direction::Right),
+        (KeyCode::KeyW, Direction::Up),
+        (KeyCode::KeyA, Direction::Left),
+        (KeyCode::KeyS, Direction::Down),
+        (KeyCode::KeyD, Direction::Right),
+        (KeyCode::ArrowUp, Direction::Up),
+        (KeyCode::ArrowLeft, Direction::Left),
+        (KeyCode::ArrowDown, Direction::Down),
+        (KeyCode::ArrowRight, Direction::Right),
     ]);
     for (key, key_dir) in map.iter() {
         if keys.pressed(*key) {

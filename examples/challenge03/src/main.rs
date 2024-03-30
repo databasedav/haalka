@@ -33,7 +33,7 @@ fn main() {
                 despawn_when_dead,
             )
                 .chain()
-                .run_if(any_with_component::<Player>()),
+                .run_if(any_with_component::<Player>),
         )
         .add_systems(Update, spawn_player.run_if(on_event::<SpawnPlayer>()))
         .insert_resource(StyleDataResource::default())
@@ -88,14 +88,15 @@ fn setup(
     mut spawn_player: EventWriter<SpawnPlayer>,
 ) {
     commands.spawn(PbrBundle {
-        mesh: meshes.add(shape::Plane::from_size(50.0).into()),
-        material: materials.add(Color::rgb_u8(87, 108, 50).into()),
+        mesh: meshes.add(Plane3d::default().mesh().size(50.0, 50.0)),
+        material: materials.add(Color::rgb_u8(87, 108, 50)),
         ..default()
     });
     commands.spawn(PointLightBundle {
         point_light: PointLight {
-            intensity: 1500.0,
             shadows_enabled: true,
+            intensity: 1_500_000.,
+            range: 100.,
             ..default()
         },
         transform: Transform::from_xyz(0., 8., 0.),
@@ -109,7 +110,7 @@ fn setup(
 }
 
 fn movement(
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     camera: Query<&Transform, (With<Camera3d>, Without<Player>)>,
     mut player: Query<&mut Transform, With<Player>>,
     time: Res<Time>,
@@ -117,17 +118,17 @@ fn movement(
     let mut direction = Vec3::ZERO;
     let mut player = player.single_mut();
     let camera = camera.single();
-    if keys.pressed(KeyCode::W) || keys.pressed(KeyCode::Up) {
-        direction += camera.forward();
+    if keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) {
+        direction += Vec3::from(camera.forward());
     }
-    if keys.pressed(KeyCode::A) || keys.pressed(KeyCode::Left) {
-        direction += camera.left();
+    if keys.pressed(KeyCode::KeyA) || keys.pressed(KeyCode::ArrowLeft) {
+        direction += Vec3::from(camera.left());
     }
-    if keys.pressed(KeyCode::S) || keys.pressed(KeyCode::Down) {
-        direction += camera.back();
+    if keys.pressed(KeyCode::KeyS) || keys.pressed(KeyCode::ArrowDown) {
+        direction += Vec3::from(camera.back());
     }
-    if keys.pressed(KeyCode::D) || keys.pressed(KeyCode::Right) {
-        direction += camera.right();
+    if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) {
+        direction += Vec3::from(camera.right());
     }
     let movement = direction.normalize_or_zero() * SPEED * time.delta_seconds();
     player.translation.x += movement.x;
@@ -136,12 +137,12 @@ fn movement(
 
 fn sync_tracking_healthbar_position(
     style_data_resource: Res<StyleDataResource>,
-    player: Query<(&Transform, With<Player>), Changed<Transform>>,
+    player: Query<&Transform, (With<Player>, Changed<Transform>)>,
     camera: Query<(&Camera, &Transform), (With<Camera3d>, Without<Player>)>,
     // mut ui_scale: ResMut<UiScale>,  // wanted more local ui scaling
 ) {
     let (camera, camera_transform) = camera.single();
-    let player_transform = player.single().0;
+    let player_transform = player.single();
     let scale = camera_transform.translation.distance(player_transform.translation);
     if let Some((left, top)) = camera
         .world_to_viewport(&GlobalTransform::from(*camera_transform), player_transform.translation)
@@ -219,12 +220,12 @@ fn spawn_player(
             Health(PLAYER_HEALTH),
             HealthMutable(health.clone()),
             PbrBundle {
-                mesh: meshes.add(Mesh::from(shape::UVSphere {
+                mesh: meshes.add(Mesh::from(Sphere {
                     radius: RADIUS,
                     ..default()
                 })),
                 transform: Transform::from_translation(PLAYER_POSITION),
-                material: materials.add(Color::rgb_u8(228, 147, 58).into()),
+                material: materials.add(Color::rgb_u8(228, 147, 58)),
                 ..default()
             },
         ));

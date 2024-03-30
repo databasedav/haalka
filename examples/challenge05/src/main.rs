@@ -15,7 +15,7 @@ use haalka::*;
 use strum::{self, IntoEnumIterator};
 
 fn main() {
-    let selected_shape = Mutable::new(Shape::Cube);
+    let selected_shape = Mutable::new(Shape::Cuboid);
     App::new()
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
@@ -40,12 +40,12 @@ const CLICKED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
 #[derive(Clone, Copy, PartialEq, strum::Display, strum::EnumIter)]
 #[strum(serialize_all = "lowercase")]
 enum Shape {
-    Cube,
-    Box,
-    Capsule,
-    Torus,
-    Cylinder,
     Sphere,
+    Plane,
+    Cuboid,
+    Cylinder,
+    Capsule3d,
+    Torus,
 }
 
 #[derive(Resource)]
@@ -195,24 +195,24 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>
         async_world().apply(move |world: &mut World| {
             let mut meshes = world.resource_mut::<Assets<Mesh>>();
             *world.query::<&mut Handle<Mesh>>().single_mut(world) = meshes.add(match shape {
-                Shape::Cube => shape::Cube::default().into(),
-                Shape::Box => shape::Box::default().into(),
-                Shape::Capsule => shape::Capsule::default().into(),
-                Shape::Torus => shape::Torus::default().into(),
-                Shape::Cylinder => shape::Cylinder::default().into(),
-                Shape::Sphere => shape::Icosphere::default().try_into().unwrap(),
+                Shape::Sphere => Sphere::default().mesh().ico(5).unwrap(),
+                Shape::Plane => Plane3d::default().mesh().size(1., 1.).into(),
+                Shape::Cuboid => Cuboid::default().into(),
+                Shape::Cylinder => Cylinder::default().into(),
+                Shape::Capsule3d => Capsule3d::default().into(),
+                Shape::Torus => Torus::default().into(),
             });
         })
     }))
     .detach();
     commands.spawn(PbrBundle {
-        material: materials.add(Color::rgb_u8(87, 108, 50).into()),
-        transform: Transform::from_xyz(-1., 0., 1.), //.looking_at(Vec3::new(-4., 0., 12.), Vec3::Y),
+        material: materials.add(Color::rgb_u8(87, 108, 50)),
+        transform: Transform::from_xyz(-1., 0., 1.),
         ..default()
     });
     commands.spawn(PointLightBundle {
         point_light: PointLight {
-            intensity: 1500.0,
+            intensity: 1_500_000.,
             shadows_enabled: true,
             ..default()
         },

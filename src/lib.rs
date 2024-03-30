@@ -53,6 +53,6 @@ impl Plugin for HaalkaPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((AsyncEcsPlugin, RiggedPickingPlugin.build()))
             .add_systems(PreStartup, init_async_world)
-            .add_systems(Update, pressable_system.run_if(any_with_component::<Pressable>()));
+            .add_systems(Update, pressable_system.run_if(any_with_component::<Pressable>));
     }
 }

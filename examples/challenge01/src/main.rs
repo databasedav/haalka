@@ -1266,6 +1266,7 @@ enum MenuInput {
 }
 
 #[derive(Clone, Event, EntityEvent)]
+#[can_bubble]
 struct MenuInputEvent {
     #[target]
     entity: Entity,
@@ -1282,7 +1283,7 @@ fn rate_limited_menu_input<T: Copy + Eq + Hash + Send + Sync>(
     key: T,
     input: MenuInput,
     entity: Entity,
-    keys: &Res<Input<T>>,
+    keys: &Res<ButtonInput<T>>,
     menu_input_events: &mut EventWriter<MenuInputEvent>,
     rate_limiter: &mut Timer,
     time: &Res<Time>,
@@ -1307,7 +1308,7 @@ struct SliderTag;
 fn keyboard_menu_input_events(
     sliders: Query<Entity, With<SliderTag>>,
     focused_entity: Res<FocusedEntity>,
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     mut menu_input_events: EventWriter<MenuInputEvent>,
     mut menu_input_rate_limiter: ResMut<MenuInputRateLimiter>,
     mut slider_rate_limiter: ResMut<SliderRateLimiter>,
@@ -1329,17 +1330,17 @@ fn keyboard_menu_input_events(
     }
     let slider_focused = sliders.get(focused_entity.0).is_ok();
     for (key, input) in [
-        (KeyCode::Up, MenuInput::Up),
-        (KeyCode::Down, MenuInput::Down),
-        (KeyCode::Left, MenuInput::Left),
-        (KeyCode::Right, MenuInput::Right),
-        (KeyCode::W, MenuInput::Up),
-        (KeyCode::S, MenuInput::Down),
-        (KeyCode::A, MenuInput::Left),
-        (KeyCode::D, MenuInput::Right),
-        (KeyCode::Return, MenuInput::Select),
+        (KeyCode::ArrowUp, MenuInput::Up),
+        (KeyCode::ArrowDown, MenuInput::Down),
+        (KeyCode::ArrowLeft, MenuInput::Left),
+        (KeyCode::ArrowRight, MenuInput::Right),
+        (KeyCode::KeyW, MenuInput::Up),
+        (KeyCode::KeyS, MenuInput::Down),
+        (KeyCode::KeyA, MenuInput::Left),
+        (KeyCode::KeyD, MenuInput::Right),
+        (KeyCode::Enter, MenuInput::Select),
         (KeyCode::Escape, MenuInput::Back),
-        (KeyCode::Back, MenuInput::Back),
+        (KeyCode::Backspace, MenuInput::Back),
         (KeyCode::Tab, MenuInput::Down),
         (KeyCode::Space, MenuInput::Select),
         (KeyCode::Delete, MenuInput::Delete),
@@ -1367,7 +1368,7 @@ fn gamepad_menu_input_events(
     sliders: Query<Entity, With<SliderTag>>,
     focused_entity: Res<FocusedEntity>,
     gamepads: Res<Gamepads>,
-    buttons: Res<Input<GamepadButton>>,
+    buttons: Res<ButtonInput<GamepadButton>>,
     mut menu_input_events: EventWriter<MenuInputEvent>,
     mut menu_input_rate_limiter: ResMut<MenuInputRateLimiter>,
     mut slider_rate_limiter: ResMut<SliderRateLimiter>,

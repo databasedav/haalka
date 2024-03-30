@@ -333,7 +333,7 @@ fn dot_spawner(
     if spawner.0.timer.tick(time.delta()).finished() {
         commands.spawn((
             MaterialMesh2dBundle {
-                mesh: meshes.add(shape::Circle::new(10.).into()).into(),
+                mesh: meshes.add(Circle::new(10.)).into(),
                 material: materials.add(ColorMaterial::from(Color::BLACK)),
                 transform: Transform::from_translation(
                     Vec3::new(rng.gen::<f32>() * HEIGHT, rng.gen::<f32>() * HEIGHT, 0.)
@@ -351,7 +351,7 @@ fn dot_despawner(
     mut commands: Commands,
     mut despawner: ResMut<Despawner>,
     time: Res<Time>,
-    dots: Query<Entity, &Dot>,
+    dots: Query<Entity, With<Dot>>,
     mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>,
 ) {
     if despawner.0.timer.tick(time.delta()).finished() {

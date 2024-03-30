@@ -6,6 +6,6 @@ publish = false
 
 [dependencies]
 haalka = { path = "../../" }
-bevy = "0.12.1"
-bevy_rand = { version = "0.4.0", features = ["rand_chacha"] }
+bevy = "0.13.1"
+bevy_rand = { version = "0.5.0", features = ["rand_chacha"] }
 rand = "0.8.5"

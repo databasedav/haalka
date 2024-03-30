@@ -28,7 +28,7 @@ fn main() {
             }),
             HaalkaPlugin,
         ))
-        .add_state::<AssetState>()
+        .init_state::<AssetState>()
         .add_loading_state(
             LoadingState::new(AssetState::Loading)
                 .continue_to_state(AssetState::Loaded)
@@ -184,22 +184,23 @@ static ITEM_NAMES: Lazy<HashMap<usize, &'static str>> = Lazy::new(|| {
     ])
 });
 
-static ICON_TEXTURE_ATLAS: OnceLock<Handle<TextureAtlas>> = OnceLock::new();
+static ICON_TEXTURE_ATLAS: OnceLock<RpgIconSheet> = OnceLock::new();
 
 // using a global handle for this so we don't need to thread the texture atlas handle through the
 // ui tree when we can guarantee it exists before any cells are inserted
-pub fn icon_texture_atlas() -> &'static Handle<TextureAtlas> {
+fn icon_sheet() -> &'static RpgIconSheet {
     ICON_TEXTURE_ATLAS
         .get()
         .expect("expected ICON_TEXTURE_ATLAS to be initialized")
 }
 
-#[derive(AssetCollection, Resource)]
+#[derive(AssetCollection, Resource, Clone, Debug)]
 struct RpgIconSheet {
     #[asset(texture_atlas(tile_size_x = 48., tile_size_y = 48., columns = 10, rows = 27))]
+    layout: Handle<TextureAtlasLayout>,
     #[asset(image(sampler = nearest))]
     #[asset(path = "rpg_icon_sheet.png")]
-    atlas: Handle<TextureAtlas>,
+    image: Handle<Image>,
 }
 
 fn icon(
@@ -209,8 +210,9 @@ fn icon(
     Stack::<NodeBundle>::new()
         .layer(
             El::<AtlasImageBundle>::new()
-                .texture_atlas(icon_texture_atlas().clone())
-                .on_signal_with_texture_atlas_image(index_signal, |image, index| image.index = index),
+                .image(icon_sheet().image.clone().into())
+                .texture_atlas(icon_sheet().layout.clone().into())
+                .on_signal_with_texture_atlas(index_signal, |image, index| image.index = index),
         )
         .layer(
             El::<TextBundle>::new()
@@ -440,7 +442,7 @@ where
 
 fn set_icon_texture_atlas(rpg_icon_sheet: Res<RpgIconSheet>) {
     ICON_TEXTURE_ATLAS
-        .set(rpg_icon_sheet.atlas.clone())
+        .set(rpg_icon_sheet.clone())
         .expect("failed to initialize ICON_TEXTURE_ATLAS");
 }
 

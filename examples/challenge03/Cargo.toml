@@ -6,5 +6,5 @@ publish = false
 
 [dependencies]
 haalka = { path = "../../" }
-bevy = "0.12.1"
+bevy = "0.13.1"
 colorgrad = "0.6.2"
