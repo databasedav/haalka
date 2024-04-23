@@ -398,17 +398,15 @@ fn tick(
 #[derive(Event, Default)]
 struct SpawnFood;
 
-fn spawn_food(cells: Res<Cells>, mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>, mut events: EventReader<SpawnFood>) {
-    if events.read().next().is_some() {
-        let cells_lock = cells.0.lock_ref();
-        let empty_cells = cells_lock
-            .iter()
-            .filter_map(|(position, cell)| matches!(cell.get(), Cell::Empty).then_some(position));
-        cells_lock
-            .get(&empty_cells.choose(&mut *rng).unwrap())
-            .unwrap()
-            .set(Cell::Food);
-    }
+fn spawn_food(cells: Res<Cells>, mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>) {
+    let cells_lock = cells.0.lock_ref();
+    let empty_cells = cells_lock
+        .iter()
+        .filter_map(|(position, cell)| matches!(cell.get(), Cell::Empty).then_some(position));
+    cells_lock
+        .get(&empty_cells.choose(&mut *rng).unwrap())
+        .unwrap()
+        .set(Cell::Food);
 }
 
 #[derive(Event, Default)]
@@ -416,7 +414,6 @@ struct Restart;
 
 fn restart(
     mut commands: Commands,
-    mut events: EventReader<Restart>,
     cells: Res<Cells>,
     grid_size: Res<GridSize>,
     game_over: Res<GameOver>,
@@ -425,24 +422,22 @@ fn restart(
     mut queued_direction_option: ResMut<QueuedDirectionOption>,
     mut direction: ResMut<DirectionResource>,
 ) {
-    if events.read().next().is_some() {
-        for (_, cell) in cells.0.lock_ref().iter() {
-            cell.set(Cell::Empty);
-        }
-        let size = grid_size.0.get();
-        let init_snake = vec![(size / 2, size / 2 - 1), (size / 2 - 1, size / 2 - 1)];
-        let cells_lock = cells.0.lock_ref();
-        for (x, y) in init_snake.iter() {
-            cells_lock.get(&(*x, *y)).unwrap().set_neq(Cell::Snake);
-        }
-        commands.insert_resource(Snake(VecDeque::from(init_snake)));
-        queued_direction_option.0 = None;
-        direction.0 = Direction::Right;
-        spawn_food.send_default();
-        score.0.set_neq(0);
-        game_over.0.set_neq(false);
-        commands.remove_resource::<Paused>();
+    for (_, cell) in cells.0.lock_ref().iter() {
+        cell.set(Cell::Empty);
     }
+    let size = grid_size.0.get();
+    let init_snake = vec![(size / 2, size / 2 - 1), (size / 2 - 1, size / 2 - 1)];
+    let cells_lock = cells.0.lock_ref();
+    for (x, y) in init_snake.iter() {
+        cells_lock.get(&(*x, *y)).unwrap().set_neq(Cell::Snake);
+    }
+    commands.insert_resource(Snake(VecDeque::from(init_snake)));
+    queued_direction_option.0 = None;
+    direction.0 = Direction::Right;
+    spawn_food.send_default();
+    score.0.set_neq(0);
+    game_over.0.set_neq(false);
+    commands.remove_resource::<Paused>();
 }
 
 #[derive(Resource)]

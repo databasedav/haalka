@@ -6,13 +6,14 @@ use futures_signals::{
 };
 
 use crate::{
-    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable, IntoOptionElement,
-    PointerEventAware, RawElWrapper, RawElement, RawHaalkaEl, Row,
+    AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, IntoOptionElement, PointerEventAware, RawElWrapper,
+    RawHaalkaEl, Row,
 };
 
 pub struct Stack<NodeType> {
-    raw_el: RawHaalkaEl<NodeType>,
-    align: Option<AlignHolder>,
+    pub(crate) raw_el: RawHaalkaEl,
+    pub(crate) align: Option<AlignHolder>,
+    pub(crate) _node_type: std::marker::PhantomData<NodeType>,
 }
 
 impl<NodeType: Bundle> From<NodeType> for Stack<NodeType> {
@@ -30,6 +31,7 @@ impl<NodeType: Bundle> From<NodeType> for Stack<NodeType> {
                     .insert(Pickable::IGNORE)
             },
             align: None,
+            _node_type: std::marker::PhantomData,
         }
     }
 }
@@ -41,8 +43,7 @@ impl<NodeType: Bundle + Default> Stack<NodeType> {
 }
 
 impl<NodeType: Bundle> RawElWrapper for Stack<NodeType> {
-    type NodeType = NodeType;
-    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<NodeType> {
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
         self.raw_el.raw_el_mut()
     }
 }
@@ -50,50 +51,42 @@ impl<NodeType: Bundle> RawElWrapper for Stack<NodeType> {
 impl<NodeType: Bundle> PointerEventAware for Stack<NodeType> {}
 
 impl<NodeType: Bundle> Stack<NodeType> {
-    pub fn layer<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self
-    where
-        <IOE::EL as RawElement>::NodeType: Bundle,
-        IOE::EL: ChildProcessable,
-    {
-        self.raw_el = self.raw_el.child(Self::process_child(child_option));
+    pub fn layer<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self {
+        self.raw_el = self
+            .raw_el
+            .child(child_option.into_option_element().map(Self::process_child));
         self
     }
 
     pub fn layer_signal<IOE: IntoOptionElement + 'static>(
         mut self,
-        child_option_signal: impl Signal<Item = IOE> + Send + 'static,
-    ) -> Self
-    where
-        <IOE::EL as RawElement>::NodeType: Bundle,
-        IOE::EL: ChildProcessable,
-    {
-        self.raw_el = self.raw_el.child_signal(child_option_signal.map(Self::process_child));
+        child_option: impl Signal<Item = IOE> + Send + 'static,
+    ) -> Self {
+        self.raw_el = self
+            .raw_el
+            .child_signal(child_option.map(|child_option| child_option.into_option_element().map(Self::process_child)));
         self
     }
 
     pub fn layers<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
     where
-        <IOE::EL as RawElement>::NodeType: Bundle,
         I::IntoIter: Send + 'static,
-        IOE::EL: ChildProcessable,
     {
-        self.raw_el = self
-            .raw_el
-            .children(children_options.into_iter().map(Self::process_child));
+        self.raw_el = self.raw_el.children(
+            children_options
+                .into_iter()
+                .map(|child_option| child_option.into_option_element().map(Self::process_child)),
+        );
         self
     }
 
     pub fn layers_signal_vec<IOE: IntoOptionElement + 'static>(
         mut self,
         children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static,
-    ) -> Self
-    where
-        <IOE::EL as RawElement>::NodeType: Bundle,
-        IOE::EL: ChildProcessable,
-    {
-        self.raw_el = self
-            .raw_el
-            .children_signal_vec(children_options_signal_vec.map(Self::process_child));
+    ) -> Self {
+        self.raw_el = self.raw_el.children_signal_vec(
+            children_options_signal_vec.map(|child_option| child_option.into_option_element().map(Self::process_child)),
+        );
         self
     }
 }

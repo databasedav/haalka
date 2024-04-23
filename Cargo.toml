@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 async-io = "2.3.1"
-bevy = "0.13.1"
+bevy = "0.13.2"
 bevy-async-ecs = "0.5.0"
 bevy_eventlistener = "0.7.0"
 bevy_mod_picking = { version = "0.18.0", default-features = false, features = ["backend_bevy_ui"] }

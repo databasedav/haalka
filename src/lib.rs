@@ -9,7 +9,7 @@ mod raw_el;
 pub use raw_el::{IntoOptionRawElement, IntoRawElement, RawElWrapper, RawElement, RawHaalkaEl, Spawnable};
 
 mod element;
-pub use element::{Element, ElementWrapper, IntoElement, IntoOptionElement, NodeTypeIndirector, TypeEraseable};
+pub use element::{Element, ElementWrapper, IntoElement, IntoOptionElement, TypeEraseable};
 
 mod el;
 pub use el::El;
@@ -27,7 +27,7 @@ mod grid;
 pub use grid::{Grid, GRID_TRACK_FLOAT_PRECISION_SLACK};
 
 mod align;
-pub use align::{AddRemove, Align, AlignHolder, Alignable, Alignment, ChildAlignable, ChildProcessable};
+pub use align::{AddRemove, Align, AlignHolder, Alignable, Alignment, ChildAlignable};
 
 mod pointer_event_aware;
 pub use pointer_event_aware::PointerEventAware;
@@ -36,7 +36,7 @@ use pointer_event_aware::{pressable_system, Pressable, RiggedPickingPlugin};
 mod derive;
 
 mod utils;
-pub use utils::{naive_type_erase, sleep, spawn};
+pub use utils::{sleep, spawn};
 
 pub use enclose::enclose as clone;
 pub use futures_signals_ext::*;

@@ -6,6 +6,6 @@ publish = false
 
 [dependencies]
 haalka = { path = "../../" }
-bevy = "0.13.1"
+bevy = "0.13.2"
 bevy_asset_loader = { version = "0.20.0", features = ["2d"] }
 rand = "0.8.5"

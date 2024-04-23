@@ -208,29 +208,26 @@ struct SpawnPlayer;
 
 fn spawn_player(
     mut commands: Commands,
-    mut reader: EventReader<SpawnPlayer>,
     health_option: Res<HealthOptionMutable>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    if reader.read().next().is_some() {
-        let health = Mutable::new(PLAYER_HEALTH);
-        commands.spawn((
-            Player,
-            Health(PLAYER_HEALTH),
-            HealthMutable(health.clone()),
-            PbrBundle {
-                mesh: meshes.add(Mesh::from(Sphere {
-                    radius: RADIUS,
-                    ..default()
-                })),
-                transform: Transform::from_translation(PLAYER_POSITION),
-                material: materials.add(Color::rgb_u8(228, 147, 58)),
+    let health = Mutable::new(PLAYER_HEALTH);
+    commands.spawn((
+        Player,
+        Health(PLAYER_HEALTH),
+        HealthMutable(health.clone()),
+        PbrBundle {
+            mesh: meshes.add(Mesh::from(Sphere {
+                radius: RADIUS,
                 ..default()
-            },
-        ));
-        health_option.0.set(Some(health));
-    }
+            })),
+            transform: Transform::from_translation(PLAYER_POSITION),
+            material: materials.add(Color::rgb_u8(228, 147, 58)),
+            ..default()
+        },
+    ));
+    health_option.0.set(Some(health));
 }
 
 fn respawn_button() -> impl Element {
@@ -345,13 +342,13 @@ fn ui_root(world: &mut World) {
                                                 style.height = Val::Px(MAXI.1);
                                             }),
                                         )
-                                        .apply(naive_type_erase)
+                                        .type_erase()
                                 }),
-                                || naive_type_erase(respawn_button()),
+                                || respawn_button().type_erase(),
                             )
                             .boxed()
                     },
-                    || always(naive_type_erase(respawn_button())).boxed(),
+                    || always(respawn_button().type_erase()).boxed(),
                 )
                 .flatten(),
         )

@@ -6,6 +6,6 @@ publish = false
 
 [dependencies]
 haalka = { path = "../../" }
-bevy = "0.13.1"
+bevy = "0.13.2"
 strum = { version = "0.26.1", features = ["derive"] }
 bevy_cosmic_edit = "0.16.0"

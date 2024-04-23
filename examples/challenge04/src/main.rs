@@ -79,6 +79,9 @@ impl NineSliceEl {
 
 impl ElementWrapper for NineSliceEl {
     type EL = El<NineSliceUiMaterialBundle>;
+    fn element_ref(&self) -> &Self::EL {
+        &self.0
+    }
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.0
     }
@@ -164,10 +167,13 @@ fn menu(width: Mutable<f32>) -> impl Element {
             |style, width| style.width = Val::Px(width),
         )
         .0
-        .child_signal(width.signal().map(|width| width > 400.).dedupe().map_bool(
-            || horizontal().apply(naive_type_erase),
-            || vertical().apply(naive_type_erase),
-        ))
+        .child_signal(
+            width
+                .signal()
+                .map(|width| width > 400.)
+                .dedupe()
+                .map_bool(|| horizontal().type_erase(), || vertical().type_erase()),
+        )
 }
 
 fn ui_root(world: &mut World) {

@@ -1,9 +1,9 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, ops::Not};
 
 use bevy::prelude::*;
 use futures_signals::signal::{BoxSignal, Signal, SignalExt};
 
-use crate::{ElementWrapper, IntoOptionElement, RawElWrapper, RawElement};
+use crate::{Column, El, ElementWrapper, Grid, RawElWrapper, RawHaalkaEl, Row, Stack};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Alignment {
@@ -17,7 +17,7 @@ pub enum Alignment {
 
 #[derive(Clone, Default)]
 pub struct Align {
-    alignments: BTreeSet<Alignment>,
+    pub alignments: BTreeSet<Alignment>,
 }
 
 impl Align {
@@ -82,7 +82,7 @@ pub enum AddRemove {
     Remove,
 }
 
-fn register_align_signal<REW: RawElWrapper>(
+pub(crate) fn register_align_signal<REW: RawElWrapper>(
     element: REW,
     align_signal: impl Signal<Item = Option<Vec<Alignment>>> + Send + 'static,
     apply_alignment: fn(&mut Style, Alignment, AddRemove),
@@ -100,7 +100,7 @@ fn register_align_signal<REW: RawElWrapper>(
                 for alignment in &alignments {
                     apply_alignment(style, *alignment, AddRemove::Add)
                 }
-                last_alignments_option = (!alignments.is_empty()).then_some(alignments);
+                last_alignments_option = alignments.is_empty().not().then_some(alignments);
             } else {
                 if let Some(last_aligns) = last_alignments_option.take() {
                     for align in last_aligns {
@@ -113,19 +113,33 @@ fn register_align_signal<REW: RawElWrapper>(
 }
 
 pub trait Alignable: RawElWrapper {
+    fn alignable_type(&self) -> Option<AlignableType> {
+        None
+    }
+
     fn align_mut(&mut self) -> &mut Option<AlignHolder>;
 
-    fn align(mut self, align: Align) -> Self {
+    fn align(mut self, align: Align) -> Self
+    where
+        Self: Sized,
+    {
         *self.align_mut() = Some(AlignHolder::Align(align));
         self
     }
 
-    fn align_signal(mut self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self {
+    fn align_signal(mut self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self
+    where
+        Self: Sized,
+    {
         *self.align_mut() = Some(AlignHolder::AlignSignal(align_option_signal.boxed()));
         self
     }
 
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove);
+    fn apply_content_alignment_wrapper(&self, style: &mut Style, alignment: Alignment, action: AddRemove) {
+        Self::apply_content_alignment(style, alignment, action);
+    }
+
+    fn apply_content_alignment(_style: &mut Style, _alignment: Alignment, _action: AddRemove) {}
 
     fn align_content(self, align: Align) -> Self {
         self.update_raw_el(|raw_el| {
@@ -146,15 +160,19 @@ pub trait Alignable: RawElWrapper {
     }
 }
 
-pub trait ChildAlignable: Alignable
+pub trait ChildAlignable
 where
     Self: 'static,
 {
     fn update_style(_style: &mut Style) {} // only some require base updates
 
+    fn apply_alignment_wrapper(&self, style: &mut Style, align: Alignment, action: AddRemove) {
+        Self::apply_alignment(style, align, action);
+    }
+
     fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove);
 
-    fn manage<NodeType: Bundle, Child: RawElWrapper + Alignable>(mut child: Child) -> Child {
+    fn process_child<Child: RawElWrapper + Alignable>(mut child: Child) -> Child {
         child = child.update_raw_el(|raw_el| raw_el.with_component::<Style>(Self::update_style));
         // TODO: this .take means that child can't be passed around parents without losing align
         // info, but this can be easily added if desired
@@ -186,6 +204,10 @@ where
 }
 
 impl<EW: ElementWrapper> Alignable for EW {
+    fn alignable_type(&self) -> Option<AlignableType> {
+        self.element_ref().alignable_type()
+    }
+
     fn align_mut(&mut self) -> &mut Option<AlignHolder> {
         self.element_mut().align_mut()
     }
@@ -195,7 +217,7 @@ impl<EW: ElementWrapper> Alignable for EW {
     }
 }
 
-impl<EW: ElementWrapper + Alignable + 'static> ChildAlignable for EW {
+impl<EW: ElementWrapper + 'static> ChildAlignable for EW {
     fn update_style(style: &mut Style) {
         EW::EL::update_style(style);
     }
@@ -205,20 +227,67 @@ impl<EW: ElementWrapper + Alignable + 'static> ChildAlignable for EW {
     }
 }
 
-// TODO: ideally want to be able to process raw el's as well (e.g. processability should not depend
-// on alignability) if they need some, but this is convenient for now ...
-pub trait ChildProcessable: Alignable {
-    fn process_child<IOE: IntoOptionElement>(child_option: IOE) -> std::option::Option<<IOE as IntoOptionElement>::EL>;
+#[derive(Clone, Copy)]
+pub enum AlignableType {
+    El,
+    Column,
+    Row,
+    Stack,
+    Grid,
 }
 
-impl<CA: ChildAlignable> ChildProcessable for CA {
-    fn process_child<IOE: IntoOptionElement>(child_option: IOE) -> std::option::Option<<IOE as IntoOptionElement>::EL> {
-        child_option.into_option_element().map(|mut child| {
-            child = <Self as ChildAlignable>::manage::<
-                <<IOE as IntoOptionElement>::EL as RawElement>::NodeType,
-                <IOE as IntoOptionElement>::EL,
-            >(child);
-            child
-        })
+pub struct AlignabilityFacade {
+    raw_el: RawHaalkaEl,
+    align: Option<AlignHolder>,
+    alignable_type: AlignableType,
+}
+
+impl AlignabilityFacade {
+    pub(crate) fn new(raw_el: RawHaalkaEl, align: Option<AlignHolder>, alignable_type: AlignableType) -> Self {
+        Self {
+            raw_el,
+            align,
+            alignable_type,
+        }
     }
+}
+
+impl RawElWrapper for AlignabilityFacade {
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
+        self.raw_el.raw_el_mut()
+    }
+}
+
+impl Alignable for AlignabilityFacade {
+    fn alignable_type(&self) -> Option<AlignableType> {
+        Some(self.alignable_type)
+    }
+
+    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
+        &mut self.align
+    }
+
+    fn apply_content_alignment_wrapper(&self, style: &mut Style, alignment: Alignment, action: AddRemove) {
+        match self.alignable_type {
+            AlignableType::El => El::<NodeBundle>::apply_content_alignment(style, alignment, action),
+            AlignableType::Column => Column::<NodeBundle>::apply_content_alignment(style, alignment, action),
+            AlignableType::Row => Row::<NodeBundle>::apply_content_alignment(style, alignment, action),
+            AlignableType::Stack => Stack::<NodeBundle>::apply_content_alignment(style, alignment, action),
+            AlignableType::Grid => Grid::<NodeBundle>::apply_content_alignment(style, alignment, action),
+        }
+    }
+}
+
+impl ChildAlignable for AlignabilityFacade {
+    fn apply_alignment_wrapper(&self, style: &mut Style, align: Alignment, action: AddRemove) {
+        match self.alignable_type {
+            AlignableType::El => El::<NodeBundle>::apply_content_alignment(style, align, action),
+            AlignableType::Column => Column::<NodeBundle>::apply_content_alignment(style, align, action),
+            AlignableType::Row => Row::<NodeBundle>::apply_content_alignment(style, align, action),
+            AlignableType::Stack => Stack::<NodeBundle>::apply_content_alignment(style, align, action),
+            AlignableType::Grid => Grid::<NodeBundle>::apply_content_alignment(style, align, action),
+        }
+    }
+
+    fn apply_alignment(_style: &mut Style, _align: Alignment, _action: AddRemove) {}
 }

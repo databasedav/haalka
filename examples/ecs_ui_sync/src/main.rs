@@ -9,7 +9,7 @@ fn main() {
     App::new()
         .add_plugins((DefaultPlugins, HaalkaPlugin, EntropyPlugin::<ChaCha8Rng>::default()))
         .add_systems(Startup, (ui_root, setup))
-        .add_systems(Update, (sync_timer, dot_spawner, dot_despawner, count_dots))
+        .add_systems(Update, (sync_timer, dot_spawner, dot_despawner))
         .run();
 }
 
@@ -329,20 +329,27 @@ fn dot_spawner(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>,
+    counts: Res<Counts>,
 ) {
     if spawner.0.timer.tick(time.delta()).finished() {
+        let translation = Vec3::new(rng.gen::<f32>() * HEIGHT, rng.gen::<f32>() * HEIGHT, 0.)
+            - Vec3::new(WIDTH / 2., HEIGHT / 2., -1.);
         commands.spawn((
             MaterialMesh2dBundle {
                 mesh: meshes.add(Circle::new(10.)).into(),
                 material: materials.add(ColorMaterial::from(Color::BLACK)),
-                transform: Transform::from_translation(
-                    Vec3::new(rng.gen::<f32>() * HEIGHT, rng.gen::<f32>() * HEIGHT, 0.)
-                        - Vec3::new(WIDTH / 2., HEIGHT / 2., -1.),
-                ),
+                transform: Transform::from_translation(translation),
                 ..default()
             },
             Dot,
         ));
+        let count = match position_to_color(translation) {
+            ColorCategory::Blue => &counts.blue,
+            ColorCategory::Green => &counts.green,
+            ColorCategory::Red => &counts.red,
+            ColorCategory::Yellow => &counts.yellow,
+        };
+        count.update(|count| count + 1);
         spawner.0.timer.reset();
     }
 }
@@ -351,12 +358,20 @@ fn dot_despawner(
     mut commands: Commands,
     mut despawner: ResMut<Despawner>,
     time: Res<Time>,
-    dots: Query<Entity, With<Dot>>,
+    dots: Query<(Entity, &Transform), With<Dot>>,
     mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>,
+    counts: Res<Counts>,
 ) {
     if despawner.0.timer.tick(time.delta()).finished() {
-        if let Some(dot) = dots.iter().choose(rng.as_mut()) {
+        if let Some((dot, transform)) = dots.iter().choose(rng.as_mut()) {
             commands.entity(dot).despawn_recursive();
+            let count = match position_to_color(transform.translation) {
+                ColorCategory::Blue => &counts.blue,
+                ColorCategory::Green => &counts.green,
+                ColorCategory::Red => &counts.red,
+                ColorCategory::Yellow => &counts.yellow,
+            };
+            count.update(|count| count - 1);
         }
         despawner.0.timer.reset();
     }
@@ -380,23 +395,4 @@ fn position_to_color(position: Vec3) -> ColorCategory {
         }
     }
     panic!("Invalid position: {:?}", position);
-}
-
-fn count_dots(dots: Query<&Transform, With<Dot>>, counts: Res<Counts>) {
-    let mut blue = 0;
-    let mut green = 0;
-    let mut red = 0;
-    let mut yellow = 0;
-    for transform in dots.iter() {
-        match position_to_color(transform.translation) {
-            ColorCategory::Blue => blue += 1,
-            ColorCategory::Green => green += 1,
-            ColorCategory::Red => red += 1,
-            ColorCategory::Yellow => yellow += 1,
-        }
-    }
-    counts.blue.set_neq(blue);
-    counts.green.set_neq(green);
-    counts.red.set_neq(red);
-    counts.yellow.set_neq(yellow);
 }

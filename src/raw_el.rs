@@ -15,12 +15,11 @@ use futures_util::Future;
 
 use crate::{async_world, node_builder::TaskHolder, spawn, NodeBuilder};
 
-// TODO: how can i make use of this default ? should i just remove it ?
-pub struct RawHaalkaEl<NodeType = NodeBundle> {
-    pub(crate) node_builder: Option<NodeBuilder<NodeType>>,
+pub struct RawHaalkaEl {
+    pub(crate) node_builder: Option<NodeBuilder>,
 }
 
-impl<NodeType: Bundle> From<NodeType> for RawHaalkaEl<NodeType> {
+impl<NodeType: Bundle> From<NodeType> for RawHaalkaEl {
     fn from(node_bundle: NodeType) -> Self {
         Self {
             node_builder: Some(NodeBuilder::from(node_bundle)),
@@ -29,39 +28,31 @@ impl<NodeType: Bundle> From<NodeType> for RawHaalkaEl<NodeType> {
     }
 }
 
-impl<NodeType: Bundle + Default> RawHaalkaEl<NodeType> {
-    pub fn new() -> Self {
-        Self::from(NodeType::default())
-    }
-}
-
-impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
+impl RawHaalkaEl {
     fn new_dummy() -> Self {
         Self { node_builder: None }
     }
 
-    pub(crate) fn map<NewNodeType>(
-        mut self,
-        f: impl FnOnce(NodeBuilder<NodeType>) -> NodeBuilder<NewNodeType>,
-    ) -> RawHaalkaEl<NewNodeType> {
-        RawHaalkaEl {
-            node_builder: Some(f(self.node_builder.take().unwrap())),
+    pub fn new() -> Self {
+        Self {
+            node_builder: Some(default()),
         }
     }
 
-    pub fn update_node_builder(mut self, updater: impl FnOnce(NodeBuilder<NodeType>) -> NodeBuilder<NodeType>) -> Self {
+    pub fn update_node_builder(mut self, updater: impl FnOnce(NodeBuilder) -> NodeBuilder) -> Self {
         self.node_builder = Some(updater(self.node_builder.unwrap()));
         self
     }
 
-    pub fn into_node_builder(self) -> NodeBuilder<NodeType> {
+    pub fn into_node_builder(self) -> NodeBuilder {
         self.node_builder.unwrap()
     }
 
-    pub fn child<IORE: IntoOptionRawElement>(self, child_option: IORE) -> Self
-    where
-        <IORE::EL as RawElement>::NodeType: Bundle,
-    {
+    pub fn insert<B: Bundle>(self, bundle: B) -> Self {
+        self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.insert(bundle)))
+    }
+
+    pub fn child<IORE: IntoOptionRawElement>(self, child_option: IORE) -> Self {
         if let Some(child) = child_option.into_option_element() {
             return self.update_node_builder(|node_builder| node_builder.child(child.into_raw().into_node_builder()));
         }
@@ -71,10 +62,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
     pub fn child_signal<IORE: IntoOptionRawElement>(
         self,
         child_option_signal: impl Signal<Item = IORE> + Send + 'static,
-    ) -> Self
-    where
-        <IORE::EL as RawElement>::NodeType: Bundle,
-    {
+    ) -> Self {
         self.update_node_builder(|node_builder| {
             node_builder.child_signal(child_option_signal.map(|child_option| {
                 child_option
@@ -86,7 +74,6 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
 
     pub fn children<IORE: IntoOptionRawElement, I: IntoIterator<Item = IORE>>(self, children_options: I) -> Self
     where
-        <IORE::EL as RawElement>::NodeType: Bundle,
         I::IntoIter: Send + 'static,
     {
         self.update_node_builder(|node_builder| {
@@ -102,10 +89,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
     pub fn children_signal_vec<IORE: IntoOptionRawElement>(
         self,
         children_options_signal_vec: impl SignalVec<Item = IORE> + Send + 'static,
-    ) -> Self
-    where
-        <IORE::EL as RawElement>::NodeType: Bundle,
-    {
+    ) -> Self {
         self.update_node_builder(|node_builder| {
             node_builder.children_signal_vec(
                 children_options_signal_vec
@@ -139,11 +123,7 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
     }
 
     pub fn with_entity(self, f: impl FnOnce(&mut EntityWorldMut) + Send + 'static) -> Self {
-        self.on_spawn(move |world, entity| {
-            if let Some(mut entity) = world.get_entity_mut(entity) {
-                f(&mut entity);
-            }
-        })
+        self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.with_entity(f)))
     }
 
     pub fn with_component<C: Component>(self, f: impl FnOnce(&mut C) + Send + 'static) -> Self {
@@ -151,12 +131,6 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
             if let Some(mut component) = entity.get_mut::<C>() {
                 f(&mut component);
             }
-        })
-    }
-
-    pub fn insert<B: Bundle>(self, bundle: B) -> Self {
-        self.with_entity(|entity| {
-            entity.insert(bundle);
         })
     }
 
@@ -298,13 +272,11 @@ impl<NodeType: Bundle> RawHaalkaEl<NodeType> {
 }
 
 pub trait RawElement: Sized {
-    type NodeType: Bundle;
-    fn into_raw(self) -> RawHaalkaEl<Self::NodeType>;
+    fn into_raw(self) -> RawHaalkaEl;
 }
 
 impl<REW: RawElWrapper> RawElement for REW {
-    type NodeType = REW::NodeType;
-    fn into_raw(self) -> RawHaalkaEl<Self::NodeType> {
+    fn into_raw(self) -> RawHaalkaEl {
         self.into_raw_el().into()
     }
 }
@@ -341,21 +313,16 @@ impl<E: RawElement, IE: IntoRawElement<EL = E>> IntoOptionRawElement for IE {
 }
 
 pub trait RawElWrapper: Sized {
-    type NodeType: Bundle;
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl;
 
-    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl<Self::NodeType>;
-
-    fn update_raw_el(
-        mut self,
-        updater: impl FnOnce(RawHaalkaEl<Self::NodeType>) -> RawHaalkaEl<Self::NodeType>,
-    ) -> Self {
-        let raw_el = mem::replace(self.raw_el_mut(), RawHaalkaEl::<Self::NodeType>::new_dummy());
+    fn update_raw_el(mut self, updater: impl FnOnce(RawHaalkaEl) -> RawHaalkaEl) -> Self {
+        let raw_el = mem::replace(self.raw_el_mut(), RawHaalkaEl::new_dummy());
         mem::swap(self.raw_el_mut(), &mut updater(raw_el));
         self
     }
 
-    fn into_raw_el(mut self) -> RawHaalkaEl<Self::NodeType> {
-        mem::replace(self.raw_el_mut(), RawHaalkaEl::<Self::NodeType>::new_dummy())
+    fn into_raw_el(mut self) -> RawHaalkaEl {
+        mem::replace(self.raw_el_mut(), RawHaalkaEl::new_dummy())
     }
 }
 

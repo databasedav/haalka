@@ -21,7 +21,7 @@ const FONT_SIZE: f32 = 7.0;
 const HOVERED_COLOR: Color = Color::rgb(0.25, 0.25, 0.25);
 const PRESSED_COLOR: Color = Color::rgb(0.35, 0.75, 0.35);
 
-fn button(i: usize, j: usize) -> RawHaalkaEl<NodeBundle> {
+fn button(i: usize, j: usize) -> RawHaalkaEl {
     let color = as_rainbow(j % i.max(1));
     let (pressed, pressed_signal) = Mutable::new_and_signal(false);
     let (hovered, hovered_signal) = Mutable::new_and_signal(false);
@@ -39,7 +39,8 @@ fn button(i: usize, j: usize) -> RawHaalkaEl<NodeBundle> {
     };
     let total = SIZE as f32;
     let width = 90. / total;
-    RawHaalkaEl::<NodeBundle>::new()
+    RawHaalkaEl::new()
+        .insert(NodeBundle::default())
         .with_component::<Style>(move |style| {
             style.width = Val::Percent(width);
             style.height = Val::Percent(width);
@@ -53,7 +54,7 @@ fn button(i: usize, j: usize) -> RawHaalkaEl<NodeBundle> {
         .insert(BorderColor(as_rainbow(i % j.max(1))))
         // .hovered_sync(hovered)
         // .pressed_sync(pressed)
-        .child(RawHaalkaEl::<TextBundle>::new().insert(Text::from_section(
+        .child(RawHaalkaEl::new().insert(TextBundle::from_section(
             format!("{i} {j}"),
             TextStyle {
                 font_size: FONT_SIZE,
@@ -72,7 +73,8 @@ fn as_rainbow(i: usize) -> Color {
 }
 
 fn spawn_ui_root(world: &mut World) {
-    RawHaalkaEl::<NodeBundle>::new()
+    RawHaalkaEl::new()
+        .insert(NodeBundle::default())
         .with_component::<Style>(|style| {
             style.flex_direction = FlexDirection::Column;
             style.justify_content = JustifyContent::Center;

@@ -25,37 +25,36 @@ pub(crate) fn init_async_world(world: &mut World) {
 }
 
 #[derive(Default)]
-pub struct NodeBuilder<NodeType> {
-    raw_node: NodeType,
+pub struct NodeBuilder {
     on_spawns: Vec<Box<dyn FnOnce(&mut World, Entity) + Send>>,
     task_wrappers: Vec<Box<dyn FnOnce(Entity) -> Task<()> + Send>>,
     contiguous_child_block_populations: MutableVec<Option<usize>>,
 }
 
-impl<T: Bundle> From<T> for NodeBuilder<T> {
-    fn from(node_bundle: T) -> Self {
-        NodeBuilder {
-            raw_node: node_bundle,
-            on_spawns: default(),
-            task_wrappers: default(),
-            contiguous_child_block_populations: default(),
-        }
+impl<T: Bundle> From<T> for NodeBuilder {
+    fn from(bundle: T) -> Self {
+        default::<NodeBuilder>().insert(bundle)
     }
 }
 
-impl<NodeType: Bundle> NodeBuilder<NodeType> {
-    pub(crate) fn map<NewNodeType>(self, f: impl FnOnce(NodeType) -> NewNodeType) -> NodeBuilder<NewNodeType> {
-        NodeBuilder {
-            raw_node: f(self.raw_node),
-            on_spawns: self.on_spawns,
-            task_wrappers: self.task_wrappers,
-            contiguous_child_block_populations: self.contiguous_child_block_populations,
-        }
-    }
-
+impl NodeBuilder {
     pub fn on_spawn(mut self, on_spawn: impl FnOnce(&mut World, Entity) + Send + 'static) -> Self {
         self.on_spawns.push(Box::new(on_spawn));
         self
+    }
+
+    pub fn with_entity(self, f: impl FnOnce(&mut EntityWorldMut) + Send + 'static) -> Self {
+        self.on_spawn(move |world, entity| {
+            if let Some(mut entity) = world.get_entity_mut(entity) {
+                f(&mut entity);
+            }
+        })
+    }
+
+    pub fn insert<B: Bundle>(self, bundle: B) -> Self {
+        self.with_entity(|entity| {
+            entity.insert(bundle);
+        })
     }
 
     pub fn on_signal<T, Fut: Future<Output = ()> + Send + 'static>(
@@ -71,7 +70,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
 
     // TODO: list out limitations; limitation: if multiple children are added to entity, they must
     // be registered thru this abstraction because of the way siblings are tracked
-    pub fn child<ChildNodeType: Bundle>(mut self, child: NodeBuilder<ChildNodeType>) -> Self {
+    pub fn child(mut self, child: NodeBuilder) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
@@ -98,9 +97,9 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn child_signal<ChildNodeType: Bundle>(
+    pub fn child_signal(
         mut self,
-        child_option: impl Signal<Item = impl Into<Option<NodeBuilder<ChildNodeType>>> + Send> + Send + 'static,
+        child_option: impl Signal<Item = impl Into<Option<NodeBuilder>> + Send> + Send + 'static,
     ) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(None);
@@ -151,10 +150,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn children<ChildNodeType: Bundle>(
-        mut self,
-        children: impl IntoIterator<Item = NodeBuilder<ChildNodeType>> + Send + 'static,
-    ) -> Self {
+    pub fn children(mut self, children: impl IntoIterator<Item = NodeBuilder> + Send + 'static) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(None);
         let contiguous_child_block_populations = self.contiguous_child_block_populations.clone();
@@ -187,9 +183,9 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
         self
     }
 
-    pub fn children_signal_vec<ChildNodeType: Bundle>(
+    pub fn children_signal_vec(
         mut self,
-        children_signal_vec: impl SignalVec<Item = NodeBuilder<ChildNodeType>> + Send + 'static,
+        children_signal_vec: impl SignalVec<Item = NodeBuilder> + Send + 'static,
     ) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(None);
@@ -355,14 +351,7 @@ impl<NodeType: Bundle> NodeBuilder<NodeType> {
     }
 
     pub fn spawn(self, world: &mut World) -> Entity {
-        let id = {
-            world
-                .spawn((
-                    self.raw_node,
-                    TaskHolder::new(), // include so tasks can be added on spawn
-                ))
-                .id()
-        };
+        let id = world.spawn(TaskHolder::new()).id();
         for on_spawn in self.on_spawns {
             on_spawn(world, id);
         }
