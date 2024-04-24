@@ -49,9 +49,10 @@ impl<NodeType: Bundle> PointerEventAware for Column<NodeType> {}
 
 impl<NodeType: Bundle> Column<NodeType> {
     pub fn item<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self {
+        let apply_alignment = self.apply_alignment_wrapper();
         self.raw_el = self
             .raw_el
-            .child(child_option.into_option_element().map(Self::process_child));
+            .child(child_option.into_option_element().map(|child| Self::align_child(child, apply_alignment)));
         self
     }
 
@@ -59,9 +60,10 @@ impl<NodeType: Bundle> Column<NodeType> {
         mut self,
         child_option: impl Signal<Item = IOE> + Send + 'static,
     ) -> Self {
+        let apply_alignment = self.apply_alignment_wrapper();
         self.raw_el = self
             .raw_el
-            .child_signal(child_option.map(|child_option| child_option.into_option_element().map(Self::process_child)));
+            .child_signal(child_option.map(move |child_option| child_option.into_option_element().map(|child| Self::align_child(child, apply_alignment))));
         self
     }
 
@@ -69,10 +71,11 @@ impl<NodeType: Bundle> Column<NodeType> {
     where
         I::IntoIter: Send + 'static,
     {
+        let apply_alignment = self.apply_alignment_wrapper();
         self.raw_el = self.raw_el.children(
             children_options
                 .into_iter()
-                .map(|child_option| child_option.into_option_element().map(Self::process_child)),
+                .map(move |child_option| child_option.into_option_element().map(|child| Self::align_child(child, apply_alignment))),
         );
         self
     }
@@ -81,8 +84,9 @@ impl<NodeType: Bundle> Column<NodeType> {
         mut self,
         children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static,
     ) -> Self {
+        let apply_alignment = self.apply_alignment_wrapper();
         self.raw_el = self.raw_el.children_signal_vec(
-            children_options_signal_vec.map(|child_option| child_option.into_option_element().map(Self::process_child)),
+            children_options_signal_vec.map(move |child_option| child_option.into_option_element().map(|child| Self::align_child(child, apply_alignment))),
         );
         self
     }

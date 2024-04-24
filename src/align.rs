@@ -85,7 +85,7 @@ pub enum AddRemove {
 pub(crate) fn register_align_signal<REW: RawElWrapper>(
     element: REW,
     align_signal: impl Signal<Item = Option<Vec<Alignment>>> + Send + 'static,
-    apply_alignment: fn(&mut Style, Alignment, AddRemove),
+    mut apply_alignment: impl FnMut(&mut Style, Alignment, AddRemove) + Send + 'static,
 ) -> REW {
     let mut last_alignments_option: Option<Vec<Alignment>> = None;
     element.update_raw_el(|raw_el| {
@@ -135,27 +135,30 @@ pub trait Alignable: RawElWrapper {
         self
     }
 
-    fn apply_content_alignment_wrapper(&self, style: &mut Style, alignment: Alignment, action: AddRemove) {
-        Self::apply_content_alignment(style, alignment, action);
+    // exists for the `AlignabilityFacade`
+    fn apply_content_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {
+        Self::apply_content_alignment
     }
 
-    fn apply_content_alignment(_style: &mut Style, _alignment: Alignment, _action: AddRemove) {}
+    fn apply_content_alignment(_style: &mut Style, _alignment: Alignment, _action: AddRemove);
 
     fn align_content(self, align: Align) -> Self {
-        self.update_raw_el(|raw_el| {
-            raw_el.with_component::<Style>(|style| {
+        let apply_content_alignment = self.apply_content_alignment_wrapper();
+        self.update_raw_el(move |raw_el| {
+            raw_el.with_component::<Style>(move |style| {
                 for alignment in align.alignments {
-                    Self::apply_content_alignment(style, alignment, AddRemove::Add)
+                    apply_content_alignment(style, alignment, AddRemove::Add);
                 }
             })
         })
     }
 
     fn align_content_signal(self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self {
+        let apply_content_alignment = self.apply_content_alignment_wrapper();
         register_align_signal(
             self,
             align_option_signal.map(|align_option| align_option.map(|align| align.alignments.into_iter().collect())),
-            Self::apply_content_alignment,
+            apply_content_alignment,
         )
     }
 }
@@ -166,13 +169,14 @@ where
 {
     fn update_style(_style: &mut Style) {} // only some require base updates
 
-    fn apply_alignment_wrapper(&self, style: &mut Style, align: Alignment, action: AddRemove) {
-        Self::apply_alignment(style, align, action);
+    // exists for the `AlignabilityFacade`
+    fn apply_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {
+        Self::apply_alignment
     }
 
     fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove);
 
-    fn process_child<Child: RawElWrapper + Alignable>(mut child: Child) -> Child {
+    fn align_child<Child: RawElWrapper + Alignable>(mut child: Child, apply_alignment: fn(&mut Style, Alignment, AddRemove)) -> Child {
         child = child.update_raw_el(|raw_el| raw_el.with_component::<Style>(Self::update_style));
         // TODO: this .take means that child can't be passed around parents without losing align
         // info, but this can be easily added if desired
@@ -182,7 +186,7 @@ where
                     child = child.update_raw_el(|raw_el| {
                         raw_el.with_component::<Style>(move |style| {
                             for align in align.alignments {
-                                Self::apply_alignment(style, align, AddRemove::Add)
+                                apply_alignment(style, align, AddRemove::Add)
                             }
                         })
                     })
@@ -194,7 +198,7 @@ where
                             align_option_signal
                                 .map(|align_option| align_option.map(|align| align.alignments.into_iter().collect()))
                         },
-                        Self::apply_alignment,
+                        apply_alignment,
                     )
                 }
             }
@@ -234,6 +238,7 @@ pub enum AlignableType {
     Row,
     Stack,
     Grid,
+    // TODO: allow specifying custom alignment functions
 }
 
 pub struct AlignabilityFacade {
@@ -267,25 +272,27 @@ impl Alignable for AlignabilityFacade {
         &mut self.align
     }
 
-    fn apply_content_alignment_wrapper(&self, style: &mut Style, alignment: Alignment, action: AddRemove) {
+    fn apply_content_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {
         match self.alignable_type {
-            AlignableType::El => El::<NodeBundle>::apply_content_alignment(style, alignment, action),
-            AlignableType::Column => Column::<NodeBundle>::apply_content_alignment(style, alignment, action),
-            AlignableType::Row => Row::<NodeBundle>::apply_content_alignment(style, alignment, action),
-            AlignableType::Stack => Stack::<NodeBundle>::apply_content_alignment(style, alignment, action),
-            AlignableType::Grid => Grid::<NodeBundle>::apply_content_alignment(style, alignment, action),
+            AlignableType::El => El::<NodeBundle>::apply_content_alignment,
+            AlignableType::Column => Column::<NodeBundle>::apply_content_alignment,
+            AlignableType::Row => Row::<NodeBundle>::apply_content_alignment,
+            AlignableType::Stack => Stack::<NodeBundle>::apply_content_alignment,
+            AlignableType::Grid => Grid::<NodeBundle>::apply_content_alignment,
         }
     }
+
+    fn apply_content_alignment(_style: &mut Style, _alignment: Alignment, _action: AddRemove) {}
 }
 
 impl ChildAlignable for AlignabilityFacade {
-    fn apply_alignment_wrapper(&self, style: &mut Style, align: Alignment, action: AddRemove) {
+    fn apply_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {
         match self.alignable_type {
-            AlignableType::El => El::<NodeBundle>::apply_content_alignment(style, align, action),
-            AlignableType::Column => Column::<NodeBundle>::apply_content_alignment(style, align, action),
-            AlignableType::Row => Row::<NodeBundle>::apply_content_alignment(style, align, action),
-            AlignableType::Stack => Stack::<NodeBundle>::apply_content_alignment(style, align, action),
-            AlignableType::Grid => Grid::<NodeBundle>::apply_content_alignment(style, align, action),
+            AlignableType::El => El::<NodeBundle>::apply_alignment,
+            AlignableType::Column => Column::<NodeBundle>::apply_alignment,
+            AlignableType::Row => Row::<NodeBundle>::apply_alignment,
+            AlignableType::Stack => Stack::<NodeBundle>::apply_alignment,
+            AlignableType::Grid => Grid::<NodeBundle>::apply_alignment,
         }
     }
 

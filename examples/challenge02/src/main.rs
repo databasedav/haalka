@@ -417,11 +417,11 @@ fn bern_cell_data_option(bern: f64) -> Mutable<Option<CellData>> {
     })
 }
 
-fn bern_cell(bern: f64, insertable: bool) -> impl Element + Alignable {
+fn bern_cell(bern: f64, insertable: bool) -> impl Element {
     cell(bern_cell_data_option(bern), insertable)
 }
 
-fn grid<I: IntoIterator<Item = Mutable<Option<CellData>>>>(cell_data_options: I) -> Grid<NodeBundle>
+fn grid<I: IntoIterator<Item = Mutable<Option<CellData>>>>(cell_data_options: I) -> impl Element
 where
     <I as IntoIterator>::IntoIter: std::marker::Send + 'static,
 {
