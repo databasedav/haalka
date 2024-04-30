@@ -207,7 +207,7 @@ fn icon(
     index_signal: impl Signal<Item = usize> + Send + 'static,
     count_signal: impl Signal<Item = usize> + Send + 'static,
 ) -> Stack<NodeBundle> {
-    Stack::<NodeBundle>::new()
+    Stack::new()
         .layer(
             El::<AtlasImageBundle>::new()
                 .image(icon_sheet().image.clone().into())
@@ -236,7 +236,7 @@ struct CellData {
     count: Mutable<usize>,
 }
 
-fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl Element + Alignable {
+fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl Element {
     let hovered = Mutable::new(false);
     let original_position = Mutable::new(None);
     let down = Mutable::new(false);

@@ -7,7 +7,17 @@ use rand::prelude::{IteratorRandom, Rng};
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins, HaalkaPlugin, EntropyPlugin::<ChaCha8Rng>::default()))
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    position: WindowPosition::Centered(MonitorSelection::Primary),
+                    ..default()
+                }),
+                ..default()
+            }),
+            HaalkaPlugin,
+            EntropyPlugin::<ChaCha8Rng>::default(),
+        ))
         .add_systems(Startup, (ui_root, setup))
         .add_systems(Update, (sync_timer, dot_spawner, dot_despawner))
         .run();

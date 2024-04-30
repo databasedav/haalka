@@ -27,7 +27,7 @@ mod grid;
 pub use grid::{Grid, GRID_TRACK_FLOAT_PRECISION_SLACK};
 
 mod align;
-pub use align::{AddRemove, Align, AlignHolder, Alignable, Alignment, ChildAlignable};
+pub use align::{AddRemove, Align, AlignHolder, AlignabilityFacade, Alignable, Alignment, ChildAlignable};
 
 mod pointer_event_aware;
 pub use pointer_event_aware::PointerEventAware;

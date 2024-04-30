@@ -5,7 +5,7 @@ use futures_signals::signal::{BoxSignal, Signal, SignalExt};
 
 use crate::{Column, El, ElementWrapper, Grid, RawElWrapper, RawHaalkaEl, Row, Stack};
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Alignment {
     Top,
     Bottom,
@@ -85,7 +85,7 @@ pub enum AddRemove {
 pub(crate) fn register_align_signal<REW: RawElWrapper>(
     element: REW,
     align_signal: impl Signal<Item = Option<Vec<Alignment>>> + Send + 'static,
-    mut apply_alignment: impl FnMut(&mut Style, Alignment, AddRemove) + Send + 'static,
+    apply_alignment: fn(&mut Style, Alignment, AddRemove),
 ) -> REW {
     let mut last_alignments_option: Option<Vec<Alignment>> = None;
     element.update_raw_el(|raw_el| {
@@ -176,7 +176,10 @@ where
 
     fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove);
 
-    fn align_child<Child: RawElWrapper + Alignable>(mut child: Child, apply_alignment: fn(&mut Style, Alignment, AddRemove)) -> Child {
+    fn align_child<Child: RawElWrapper + Alignable>(
+        mut child: Child,
+        apply_alignment: fn(&mut Style, Alignment, AddRemove),
+    ) -> Child {
         child = child.update_raw_el(|raw_el| raw_el.with_component::<Style>(Self::update_style));
         // TODO: this .take means that child can't be passed around parents without losing align
         // info, but this can be easily added if desired

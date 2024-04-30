@@ -3,7 +3,7 @@ use crate::{
     Alignable, ChildAlignable, RawElWrapper, RawElement, RawHaalkaEl,
 };
 
-pub trait ElementWrapper {
+pub trait ElementWrapper: Sized {
     type EL: RawElWrapper + Alignable + ChildAlignable;
     fn element_ref(&self) -> &Self::EL;
     fn element_mut(&mut self) -> &mut Self::EL;
