@@ -6,7 +6,8 @@ use futures_signals::{
 };
 
 use crate::{
-    align::AlignableType, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, IntoOptionElement, PointerEventAware, RawElWrapper, RawHaalkaEl, Stack
+    align::AlignableType, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, IntoOptionElement,
+    PointerEventAware, RawElWrapper, RawHaalkaEl, Stack,
 };
 
 pub struct Grid<NodeType> {
@@ -44,12 +45,9 @@ impl<NodeType: Bundle> RawElWrapper for Grid<NodeType> {
 
     fn into_raw_el(self) -> RawHaalkaEl {
         // TODO: why won't grid_template_columns work without a grid wrapper ?
-        // this forces me to require `NodeType: Default` so i can create the appropriate wrapper node
-        // only having a single unified node type would also avoid this
         RawHaalkaEl::from(NodeBundle::default())
             .with_component::<Style>(|style| style.display = Display::Grid)
-            .child(self.raw_el.into_raw_el())
-            .into_raw_el()
+            .child(self.raw_el)
     }
 }
 

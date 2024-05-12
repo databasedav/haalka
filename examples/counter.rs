@@ -13,28 +13,25 @@ struct Counter(Mutable<i32>);
 
 fn ui_root(world: &mut World) {
     let counter = Mutable::new(0);
-    El::<NodeBundle>::new()
+    Row::<NodeBundle>::new()
         .with_style(|style| {
             style.width = Val::Percent(100.);
             style.height = Val::Percent(100.);
+            style.column_gap = Val::Px(15.0);
         })
         .align_content(Align::center())
-        .child(
-            Row::<NodeBundle>::new()
-                .with_style(|style| style.column_gap = Val::Px(15.0))
-                .item(counter_button(counter.clone(), "-", -1))
-                .item(El::<TextBundle>::new().text_signal(counter.signal().map(|count| {
-                    Text::from_section(
-                        count.to_string(),
-                        TextStyle {
-                            font_size: 30.0,
-                            ..default()
-                        },
-                    )
-                })))
-                .item(counter_button(counter.clone(), "+", 1))
-                .update_raw_el(move |raw_el| raw_el.insert(Counter(counter))),
-        )
+        .item(counter_button(counter.clone(), "-", -1))
+        .item(El::<TextBundle>::new().text_signal(counter.signal().map(|count| {
+            Text::from_section(
+                count.to_string(),
+                TextStyle {
+                    font_size: 30.0,
+                    ..default()
+                },
+            )
+        })))
+        .item(counter_button(counter.clone(), "+", 1))
+        .update_raw_el(move |raw_el| raw_el.insert(Counter(counter)))
         .spawn(world);
 }
 

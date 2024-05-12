@@ -6,7 +6,8 @@ use futures_signals::{
 };
 
 use crate::{
-    align::AlignableType, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, IntoOptionElement, PointerEventAware, RawElWrapper, RawHaalkaEl, Row
+    align::AlignableType, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, IntoOptionElement,
+    PointerEventAware, RawElWrapper, RawHaalkaEl, Row,
 };
 
 pub struct Stack<NodeType> {
@@ -120,8 +121,8 @@ impl<NodeType: Bundle> Alignable for Stack<NodeType> {
 
 impl<NodeType: Bundle> ChildAlignable for Stack<NodeType> {
     fn update_style(style: &mut Style) {
-        style.grid_column = GridPlacement::start(1);
-        style.grid_row = GridPlacement::start(1);
+        style.grid_column = GridPlacement::start_end(1, 1);
+        style.grid_row = GridPlacement::start_end(1, 1);
     }
 
     fn apply_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {

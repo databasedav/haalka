@@ -18,7 +18,7 @@ fn main() {
         .run();
 }
 
-#[derive(Clone, Copy, EnumIter, Display)]
+#[derive(Clone, Copy, EnumIter, Display, PartialEq)]
 #[strum(crate = "strum")]
 enum RectangleAlignment {
     TopLeft,
@@ -67,9 +67,14 @@ fn alignment_button(alignment: Alignment) -> impl Element {
             style.height = Val::Px(80.);
         })
         .background_color_signal(
-            signal::or(hovered.signal(), ALIGNMENT.signal().map(move |other_alignment| alignment == other_alignment))
-                .map_bool(|| Color::GRAY, || Color::BLACK)
-                .map(BackgroundColor),
+            signal::or(
+                hovered.signal(),
+                ALIGNMENT
+                    .signal()
+                    .map(move |other_alignment| alignment == other_alignment),
+            )
+            .map_bool(|| Color::GRAY, || Color::BLACK)
+            .map(BackgroundColor),
         )
         .hovered_sync(hovered)
         .align_content(Align::center())
@@ -95,18 +100,10 @@ fn ui_root(world: &mut World) {
         .item(
             Row::<NodeBundle>::new()
                 .with_style(|style| style.column_gap = Val::Px(15.))
-                .item(container(
-                    "Column",
-                    Column::<NodeBundle>::new().items(rectangles()).type_erase(),
-                ))
-                .item(container(
-                    "El",
-                    El::<NodeBundle>::new().child(rectangle(1)).type_erase(),
-                ))
-                .item(container(
-                    "Grid",
-                    Grid::<NodeBundle>::new().cells(rectangles()).type_erase(),
-                )),
+                .item(container("Column", Column::<NodeBundle>::new().items(rectangles())))
+                .item(container("El", El::<NodeBundle>::new().child(rectangle(1))))
+                // TODO: is this align content behavior buggy?
+                .item(container("Grid", Grid::<NodeBundle>::new().cells(rectangles()))),
         )
         .item(
             Row::<NodeBundle>::new()
@@ -126,14 +123,9 @@ fn ui_root(world: &mut World) {
         .item(
             Row::<NodeBundle>::new()
                 .with_style(|style| style.column_gap = Val::Px(15.))
-                .item(container(
-                    "Row",
-                    Row::<NodeBundle>::new().items(rectangles()).type_erase(),
-                ))
-                .item(container(
-                    "Stack",
-                    Stack::<NodeBundle>::new().layers(rectangles()).type_erase(),
-                )),
+                .item(container("Row", Row::<NodeBundle>::new().items(rectangles())))
+                // TODO: is this align content behavior buggy?
+                .item(container("Stack", Stack::<NodeBundle>::new().layers(rectangles()))),
         )
         .spawn(world);
 }
@@ -154,7 +146,7 @@ fn text(text: &str, font_size: f32) -> Text {
     Text::from_section(text, TextStyle { font_size, ..default() })
 }
 
-fn container(name: &str, element: AlignabilityFacade) -> impl Element {
+fn container(name: &str, element: impl Element) -> impl Element {
     Column::<NodeBundle>::new()
         .item(
             El::<TextBundle>::new()
@@ -166,14 +158,12 @@ fn container(name: &str, element: AlignabilityFacade) -> impl Element {
                 .align_content_signal(
                     ALIGNMENT
                         .signal()
-                        // TODO: .map_true_signal typing here is being problematic, shouldn't have to use `always(None)`
-                        .map(|alignment| match alignment {
-                            Alignment::Self_ => always(None).boxed(),
-                            Alignment::Content => RECTANGLE_CONTENT_ALIGNMENT
+                        .map(|alignment| matches!(alignment, Alignment::Content))
+                        .map_true_signal(|| {
+                            RECTANGLE_CONTENT_ALIGNMENT
                                 .signal_ref(|alignment| alignment.map(|alignment| alignment.to_align()))
-                                .boxed(),
                         })
-                        .flatten(),
+                        .map(Option::flatten),
                 )
                 .apply(container_style),
         )
@@ -190,13 +180,11 @@ fn rectangle(index: i32) -> impl Element {
         .align_signal(
             ALIGNMENT
                 .signal()
-                .map(|alignment| match alignment {
-                    Alignment::Self_ => RECTANGLE_SELF_ALIGNMENT
-                        .signal_ref(|alignment| alignment.map(|alignment| alignment.to_align()))
-                        .boxed(),
-                    Alignment::Content => always(None).boxed(),
+                .map(|alignment| matches!(alignment, Alignment::Self_))
+                .map_true_signal(|| {
+                    RECTANGLE_SELF_ALIGNMENT.signal_ref(|alignment| alignment.map(|alignment| alignment.to_align()))
                 })
-                .flatten(),
+                .map(Option::flatten),
         )
         .child(
             El::<TextBundle>::new()
@@ -213,7 +201,20 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
     let (hovered, hovered_signal) = Mutable::new_and_signal(false);
     El::<NodeBundle>::new()
         .align(rectangle_alignment.to_align())
-        .background_color_signal(hovered_signal.map_bool(|| Color::BLUE.into(), || Color::MIDNIGHT_BLUE.into()))
+        .background_color_signal(
+            signal::or(
+                ALIGNMENT
+                    .signal()
+                    .map(|alignment| match alignment {
+                        Alignment::Self_ => RECTANGLE_SELF_ALIGNMENT.signal(),
+                        Alignment::Content => RECTANGLE_CONTENT_ALIGNMENT.signal(),
+                    })
+                    .flatten()
+                    .map(move |selected_option| selected_option == Some(rectangle_alignment)),
+                hovered_signal,
+            )
+            .map_bool(|| Color::BLUE.into(), || Color::MIDNIGHT_BLUE.into()),
+        )
         .with_style(|style| style.padding = UiRect::all(Val::Px(5.)))
         .child(El::<TextBundle>::new().text(text(&rectangle_alignment.to_string(), 14.)))
         .hovered_sync(hovered)
@@ -221,7 +222,8 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
             match ALIGNMENT.get() {
                 Alignment::Self_ => &RECTANGLE_SELF_ALIGNMENT,
                 Alignment::Content => &RECTANGLE_CONTENT_ALIGNMENT,
-            }.set(Some(rectangle_alignment));
+            }
+            .set(Some(rectangle_alignment));
         })
 }
 

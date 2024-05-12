@@ -6,7 +6,8 @@ use futures_signals::{
 };
 
 use crate::{
-    align::AlignableType, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, Column, IntoOptionElement, PointerEventAware, RawElWrapper, RawHaalkaEl
+    align::AlignableType, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, Column, IntoOptionElement,
+    PointerEventAware, RawElWrapper, RawHaalkaEl,
 };
 
 pub struct El<NodeType> {

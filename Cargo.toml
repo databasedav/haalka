@@ -16,7 +16,7 @@ bevy_mod_picking = { version = "0.18.0", default-features = false, features = ["
 enclose = "1.1.8"
 futures-signals = "0.3.33"
 futures-util = { version = "0.3.30", features = ["sink"] }  # TODO: need to add sink feature upstream in futures signal ext
-futures_signals_ext = { git = "https://github.com/MoonZoon/MoonZoon", rev = "4bf101bd5ace83281bf570cc6fb601d1ad608a75" }
+futures_signals_ext = { git = "https://github.com/MoonZoon/MoonZoon", rev = "a8b351ca68b85bc30d245496899235fd87a26c79" }
 paste = "1.0.14"
 apply = "0.3.0"
 async-lock = "3.3.0"
