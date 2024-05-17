@@ -1441,8 +1441,8 @@ const SLIDER_RATE_LIMIT: f32 = 0.001;
 fn ui_root(world: &mut World) {
     El::<NodeBundle>::new()
         .with_style(|style| {
-            style.width = Val::Percent(100.0);
-            style.height = Val::Percent(100.0);
+            style.width = Val::Percent(100.);
+            style.height = Val::Percent(100.);
         })
         .align_content(Align::center())
         .child(menu())

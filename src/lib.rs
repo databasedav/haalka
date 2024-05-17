@@ -21,6 +21,7 @@ mod row;
 pub use row::Row;
 
 mod stack;
+use scrollable::ScrollablePlugin;
 pub use stack::Stack;
 
 mod grid;
@@ -31,7 +32,13 @@ pub use align::{AddRemove, Align, AlignHolder, AlignabilityFacade, Alignable, Al
 
 mod pointer_event_aware;
 pub use pointer_event_aware::PointerEventAware;
-use pointer_event_aware::{pressable_system, Pressable, RiggedPickingPlugin};
+use pointer_event_aware::{PointerEventAwarePlugin, RiggedPickingPlugin};
+
+mod scrollable;
+pub use scrollable::{BasicScrollHandler, HoverableScrollable, ScrollDirection, ScrollabilitySettings, Scrollable};
+
+mod sizable;
+pub use sizable::Sizable;
 
 mod derive;
 
@@ -51,8 +58,12 @@ pub struct HaalkaPlugin;
 
 impl Plugin for HaalkaPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((AsyncEcsPlugin, RiggedPickingPlugin.build()))
-            .add_systems(PreStartup, init_async_world)
-            .add_systems(Update, pressable_system.run_if(any_with_component::<Pressable>));
+        app.add_plugins((
+            AsyncEcsPlugin,
+            RiggedPickingPlugin.build(),
+            PointerEventAwarePlugin,
+            ScrollablePlugin,
+        ))
+        .add_systems(PreStartup, init_async_world);
     }
 }

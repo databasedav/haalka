@@ -44,8 +44,8 @@ fn button(i: usize, j: usize) -> RawHaalkaEl {
         .with_component::<Style>(move |style| {
             style.width = Val::Percent(width);
             style.height = Val::Percent(width);
-            style.bottom = Val::Percent(100.0 / total * i as f32);
-            style.left = Val::Percent(100.0 / total * j as f32);
+            style.bottom = Val::Percent(100. / total * i as f32);
+            style.left = Val::Percent(100. / total * j as f32);
             style.align_items = AlignItems::Center;
             style.position_type = PositionType::Absolute;
             style.border = UiRect::all(Val::Percent(10. / total));
@@ -79,8 +79,8 @@ fn spawn_ui_root(world: &mut World) {
             style.flex_direction = FlexDirection::Column;
             style.justify_content = JustifyContent::Center;
             style.align_items = AlignItems::Center;
-            style.width = Val::Percent(100.0);
-            style.height = Val::Percent(100.0);
+            style.width = Val::Percent(100.);
+            style.height = Val::Percent(100.);
         })
         .children((0..SIZE).flat_map(|i| (0..SIZE).map(move |j| button(i, j))))
         .spawn(world);

@@ -278,3 +278,10 @@ impl PluginGroup for RiggedPickingPlugin {
         builder
     }
 }
+
+pub(crate) struct PointerEventAwarePlugin;
+impl Plugin for PointerEventAwarePlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, pressable_system.run_if(any_with_component::<Pressable>));
+    }
+}

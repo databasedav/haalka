@@ -17,6 +17,7 @@ use crate::{async_world, node_builder::TaskHolder, spawn, NodeBuilder};
 
 pub struct RawHaalkaEl {
     pub(crate) node_builder: Option<NodeBuilder>,
+    pub(crate) deferred_updaters: Vec<Box<dyn FnOnce(RawHaalkaEl) -> RawHaalkaEl + Send + 'static>>,
 }
 
 impl<NodeType: Bundle> From<NodeType> for RawHaalkaEl {
@@ -28,15 +29,36 @@ impl<NodeType: Bundle> From<NodeType> for RawHaalkaEl {
     }
 }
 
+pub enum AppendDirection {
+    Front,
+    Back,
+}
+
 impl RawHaalkaEl {
     fn new_dummy() -> Self {
-        Self { node_builder: None }
+        Self {
+            node_builder: None,
+            deferred_updaters: default(),
+        }
     }
 
     pub fn new() -> Self {
         Self {
             node_builder: Some(default()),
+            deferred_updaters: default(),
         }
+    }
+
+    pub fn defer_update(
+        mut self,
+        append_direction: AppendDirection,
+        updater: impl FnOnce(RawHaalkaEl) -> RawHaalkaEl + Send + 'static,
+    ) -> Self {
+        match append_direction {
+            AppendDirection::Front => self.deferred_updaters.insert(0, Box::new(updater)),
+            AppendDirection::Back => self.deferred_updaters.push(Box::new(updater)),
+        }
+        self
     }
 
     pub fn update_node_builder(mut self, updater: impl FnOnce(NodeBuilder) -> NodeBuilder) -> Self {
@@ -44,8 +66,13 @@ impl RawHaalkaEl {
         self
     }
 
-    pub fn into_node_builder(self) -> NodeBuilder {
-        self.node_builder.unwrap()
+    pub fn into_node_builder(mut self) -> NodeBuilder {
+        let deferred_updaters = self.deferred_updaters.drain(..).collect::<Vec<_>>();
+        let mut self_ = self;
+        for updater in deferred_updaters {
+            self_ = self_.update_raw_el(updater);
+        }
+        self_.node_builder.unwrap()
     }
 
     pub fn insert<B: Bundle>(self, bundle: B) -> Self {

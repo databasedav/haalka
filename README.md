@@ -84,6 +84,7 @@ run the examples with [`just`](https://github.com/casey/just) (`cargo install ju
 just example counter  # the example above
 just example button  # port of https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs
 just example align  # alignment abstraction demo, port of https://github.com/MoonZoon/MoonZoon/tree/main/examples/align and https://github.com/MoonZoon/MoonZoon/tree/main/examples/align_content
+just example scroll  # scrollability abstraction demo, inspired by https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs
 just example snake  # snek
 just example ecs_ui_sync
 # ui challenges from https://github.com/bevyengine/bevy/discussions/11100

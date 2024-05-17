@@ -6,8 +6,8 @@ use futures_signals::{
 };
 
 use crate::{
-    align::AlignableType, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, IntoOptionElement,
-    PointerEventAware, RawElWrapper, RawHaalkaEl,
+    align::AlignableType, scrollable::Scrollable, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable,
+    IntoOptionElement, PointerEventAware, RawElWrapper, RawHaalkaEl, Sizable,
 };
 
 pub struct Row<NodeType> {
@@ -47,6 +47,8 @@ impl<NodeType: Bundle> RawElWrapper for Row<NodeType> {
 }
 
 impl<NodeType: Bundle> PointerEventAware for Row<NodeType> {}
+impl<NodeType: Bundle> Scrollable for Row<NodeType> {}
+impl<NodeType: Bundle> Sizable for Row<NodeType> {}
 
 impl<NodeType: Bundle> Row<NodeType> {
     pub fn item<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self {

@@ -6,8 +6,8 @@ use futures_signals::{
 };
 
 use crate::{
-    align::AlignableType, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, IntoOptionElement,
-    PointerEventAware, RawElWrapper, RawHaalkaEl, Stack,
+    align::AlignableType, scrollable::Scrollable, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable,
+    IntoOptionElement, PointerEventAware, RawElWrapper, RawHaalkaEl, Sizable, Stack,
 };
 
 pub struct Grid<NodeType> {
@@ -52,6 +52,8 @@ impl<NodeType: Bundle> RawElWrapper for Grid<NodeType> {
 }
 
 impl<NodeType: Bundle> PointerEventAware for Grid<NodeType> {}
+impl<NodeType: Bundle> Scrollable for Grid<NodeType> {}
+impl<NodeType: Bundle> Sizable for Grid<NodeType> {}
 
 // must substract this from the total row width due to float precision shenanigans https://github.com/bevyengine/bevy/issues/12152
 pub const GRID_TRACK_FLOAT_PRECISION_SLACK: f32 = 0.0001;

@@ -3,7 +3,16 @@ use haalka::*;
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins, HaalkaPlugin))
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    position: WindowPosition::Centered(MonitorSelection::Primary),
+                    ..default()
+                }),
+                ..default()
+            }),
+            HaalkaPlugin,
+        ))
         .add_systems(Startup, (setup, spawn_ui_root))
         .run();
 }
@@ -91,8 +100,8 @@ fn setup(mut commands: Commands) {
 fn spawn_ui_root(world: &mut World) {
     El::<NodeBundle>::new()
         .with_style(|style| {
-            style.width = Val::Percent(100.0);
-            style.height = Val::Percent(100.0);
+            style.width = Val::Percent(100.);
+            style.height = Val::Percent(100.);
         })
         .align_content(Align::center())
         .child(button(world.resource::<AssetServer>().load("fonts/FiraSans-Bold.ttf")))

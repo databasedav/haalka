@@ -167,7 +167,6 @@ impl MutableTimer {
             let cur = self.timer.duration().as_secs_f32();
             if !close(new, cur) {
                 self.timer.set_duration(Duration::from_secs_f32(new));
-                println!("rate changed from {:.1} to {:.1}", 1. / cur, rate);
             }
         } else {
             self.timer.pause();

@@ -7,10 +7,9 @@
 // Changing the selection in the UI changes the 3D shapes in the 3D scene.
 // On the top of the UI is a text field for the character name.
 
-use bevy::{
-    input::mouse::{MouseScrollUnit, MouseWheel},
-    prelude::*,
-};
+use std::convert::identity;
+
+use bevy::prelude::*;
 use haalka::*;
 use strum::{self, IntoEnumIterator};
 
@@ -28,7 +27,6 @@ fn main() {
             HaalkaPlugin,
         ))
         .add_systems(Startup, (setup, ui_root).chain())
-        .add_systems(Update, mouse_scroll)
         .insert_resource(SelectedShape(selected_shape))
         .run();
 }
@@ -36,6 +34,7 @@ fn main() {
 const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
 const CLICKED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
+const BUTTON_HEIGHT: Val = Val::Px(65.);
 
 #[derive(Clone, Copy, PartialEq, strum::Display, strum::EnumIter)]
 #[strum(serialize_all = "lowercase")]
@@ -51,10 +50,10 @@ enum Shape {
 #[derive(Resource)]
 struct SelectedShape(Mutable<Shape>);
 
-fn button(shape: Shape, selected_shape: Mutable<Shape>) -> impl Element {
+fn button(shape: Shape, selected_shape: Mutable<Shape>, hovered: Mutable<bool>) -> impl Element {
     let selected = selected_shape.signal().eq(shape);
     let (pressed, pressed_signal) = Mutable::new_and_signal(false);
-    let (hovered, hovered_signal) = Mutable::new_and_signal(false);
+    let hovered_signal = hovered.signal();
     let selected_hovered_broadcaster =
         map_ref!(selected, pressed_signal, hovered_signal => (*selected || *pressed_signal, *hovered_signal))
             .broadcast();
@@ -89,7 +88,7 @@ fn button(shape: Shape, selected_shape: Mutable<Shape>) -> impl Element {
     El::<NodeBundle>::new()
         .with_style(|style| {
             style.width = Val::Px(250.);
-            style.height = Val::Px(65.);
+            style.height = BUTTON_HEIGHT;
             style.border = UiRect::all(Val::Px(5.));
         })
         .align_content(Align::center())
@@ -127,7 +126,7 @@ fn ui_root(world: &mut World) {
                         .align(Align::new().center_y().right())
                         .with_style(|style| {
                             style.padding.right = Val::Percent(20.);
-                            style.row_gap = Val::Px(10.);
+                            style.row_gap = Val::Px(20.);
                         })
                         .item(
                             El::<NodeBundle>::new()
@@ -144,50 +143,40 @@ fn ui_root(world: &mut World) {
                                     },
                                 ))),
                         )
-                        .item(
-                            El::<NodeBundle>::new()
-                                .with_style(|style| {
-                                    style.height = Val::Px(200.);
-                                    style.overflow = Overflow::clip_y();
+                        .item({
+                            let hovereds = MutableVec::new_with_values(
+                                (0..Shape::iter().count()).map(|_| Mutable::new(false)).collect(),
+                            );
+                            Column::<NodeBundle>::new()
+                                .height(Val::Px(200.))
+                                .align(Align::new().center_x())
+                                // TODO: hovering must be manually managed when children have their own hover handlers until mouseenter/mouseleave events in mod picking https://discord.com/channels/691052431525675048/1038322714320052304/1240468289512276000
+                                // .scrollable_on_hover(...)
+                                .scrollable(
+                                    ScrollabilitySettings {
+                                        flex_direction: FlexDirection::Column,
+                                        overflow: Overflow::clip_y(),
+                                        scroll_handler: BasicScrollHandler::new()
+                                            .direction(ScrollDirection::Vertical)
+                                            .pixels(20.)
+                                            .into(),
+                                    },
+                                    hovereds
+                                        .signal_vec_cloned()
+                                        .map_signal(|hovered| hovered.signal())
+                                        .to_signal_map(|hovereds| hovereds.iter().copied().any(identity))
+                                        .dedupe(),
+                                )
+                                .items({
+                                    let hovereds = hovereds.lock_ref().into_iter().cloned().collect::<Vec<_>>();
+                                    Shape::iter()
+                                        .zip(hovereds)
+                                        .map(move |(shape, hovered)| button(shape, selected_shape.clone(), hovered))
                                 })
-                                .child({
-                                    let position = Mutable::new(0.);
-                                    Column::<NodeBundle>::new()
-                                        .on_signal_with_style(position.signal(), |style, position| {
-                                            style.top = Val::Px(position);
-                                        })
-                                        .update_raw_el(|raw_el| raw_el.insert(Scrollable { position }))
-                                        .items(Shape::iter().map(move |shape| button(shape, selected_shape.clone())))
-                                }),
-                        ),
+                        }),
                 ),
         )
         .spawn(world);
-}
-
-#[derive(Component, Default)]
-struct Scrollable {
-    position: Mutable<f32>,
-}
-
-fn mouse_scroll(
-    mut mouse_wheel_events: EventReader<MouseWheel>,
-    mut query_list: Query<(&Scrollable, &Parent, &Node)>,
-    query_node: Query<&Node>,
-) {
-    for mouse_wheel_event in mouse_wheel_events.read() {
-        for (scrollable, parent, list_node) in &mut query_list {
-            let items_height = list_node.size().y;
-            let container_height = query_node.get(parent.get()).unwrap().size().y;
-            let max_scroll = (items_height - container_height).max(0.);
-            let dy = match mouse_wheel_event.unit {
-                MouseScrollUnit::Line => mouse_wheel_event.y * 20.,
-                MouseScrollUnit::Pixel => mouse_wheel_event.y,
-            };
-            let mut position = scrollable.position.lock_mut();
-            *position = (*position + dy).clamp(-max_scroll, 0.);
-        }
-    }
 }
 
 fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>, selected_shape: Res<SelectedShape>) {
