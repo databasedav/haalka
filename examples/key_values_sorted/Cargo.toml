@@ -1,0 +1,10 @@
+[package]
+name = "key_values_sorted"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+haalka = { path = "../../" }
+bevy = "0.13.2"
+bevy_cosmic_edit = "0.16.0"

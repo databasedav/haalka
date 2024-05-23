@@ -5,6 +5,7 @@ use std::{
 
 use async_lock;
 use bevy::{prelude::*, tasks::Task};
+use bevy_mod_picking::prelude::*;
 use enclose::enclose as clone;
 use futures_signals::{
     signal::{Mutable, Signal, SignalExt},
@@ -130,6 +131,48 @@ impl RawHaalkaEl {
         self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn)))
     }
 
+    // TODO: requires bevy 0.14
+    // pub fn on_remove(self, on_remove: impl FnOnce(&mut World, Entity) + Send + Sync + 'static) ->
+    // Self {     self.on_spawn(|world, entity| {
+    //         if let Some(mut on_remove_component) = world.entity_mut(entity).get_mut::<OnRemove>() {
+    //             on_remove_component.0.push(Box::new(on_remove));
+    //         } else {
+    //             world.entity_mut(entity).insert(OnRemove(vec![Box::new(on_remove)]));
+    //         }
+    //     })
+    // }
+
+    pub fn on_event_with_system<E: EntityEvent, Marker>(self, handler: impl IntoSystem<(), (), Marker>) -> Self {
+        self.insert(On::<E>::run(handler))
+    }
+
+    pub fn on_event<E: EntityEvent>(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
+        self.on_event_with_system::<E, _>(handler)
+    }
+
+    pub fn on_event_propagation_stoppable<E: EntityEvent>(
+        self,
+        mut handler: impl FnMut() + Send + Sync + 'static,
+        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        let propagation_stopped_mutable = Mutable::new(false);
+        let syncer = spawn(propagation_stopped
+            .for_each_sync(clone!((propagation_stopped_mutable) move |propagation_stopped| propagation_stopped_mutable.set_neq(propagation_stopped))));
+        self.hold_tasks([syncer])
+            .on_event_with_system::<E, _>(move |mut event: ListenerMut<E>| {
+                if propagation_stopped_mutable.get() {
+                    event.stop_propagation();
+                }
+                handler();
+            })
+    }
+
+    pub fn on_event_stop_propagation<E: EntityEvent>(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
+        self.on_event_propagation_stoppable::<E>(handler, always(true))
+    }
+
+    // TODO: global event listeners
+
     pub fn on_signal<T, Fut: Future<Output = ()> + Send + 'static>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
@@ -236,6 +279,12 @@ impl RawHaalkaEl {
         self.hold_tasks([spawn(clone!((system_holder) async move {
             system_holder.set(Some(async_world().register_io_system(system).await));
         }))])
+        // .on_remove(move |world, entity| {
+        //     if let Some(system) = system_holder.take() {
+        //         // https://github.com/dlom/bevy-async-ecs/issues/5#issuecomment-2119180363
+        //         async_world().apply(|world| world.remove_system(system.id))
+        //     }
+        // })
         .on_signal(signal, move |entity, input| {
             clone!((system_holder, f) async move {
                 system_holder.signal_ref(Option::is_some).wait_for(true).await;
@@ -297,6 +346,21 @@ impl RawHaalkaEl {
         })
     }
 }
+
+// struct OnRemove(Vec<Box<dyn FnOnce(&mut World, Entity) + Send + Sync + 'static>>);
+
+// TODO: requires bevy 0.14
+// impl Component for OnRemove {
+//     const STORAGE_TYPE: StorageType = StorageType::Table;
+
+//     fn register_component_hooks(hooks: &mut ComponentHooks) {
+//         hooks.on_remove.(|mut world, entity, component_id| {
+//             for f in world.get_mut::<OnRemove>(entity).unwrap().0.drain(..) {
+//                 f(&mut world, entity);
+//             }
+//         })
+//     }
+// }
 
 pub trait RawElement: Sized {
     fn into_raw(self) -> RawHaalkaEl;

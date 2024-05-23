@@ -101,6 +101,9 @@ impl BasicScrollHandler {
     }
 }
 
+const DEFAULT_SCROLL_DIRECTION: ScrollDirection = ScrollDirection::Vertical;
+const DEFAULT_SCROLL_MAGNITUDE: f32 = 10.;
+
 impl From<BasicScrollHandler>
     for Box<dyn FnMut(&MouseWheel, &mut Style, &Parent, &Node, &Query<&Node>) + Send + Sync + 'static>
 {
@@ -109,8 +112,8 @@ impl From<BasicScrollHandler>
             direction: direction_signal_option,
             magnitude: magnitude_signal_option,
         } = handler;
-        let direction = Mutable::new(ScrollDirection::Vertical);
-        let magnitude = Mutable::new(10.);
+        let direction = Mutable::new(DEFAULT_SCROLL_DIRECTION);
+        let magnitude = Mutable::new(DEFAULT_SCROLL_MAGNITUDE);
         if let Some(direction_signal) = direction_signal_option {
             // TODO: these "leak" for as long as the source mutable is alive, is this an issue? revert to less
             // ergonomic task collection strat if so

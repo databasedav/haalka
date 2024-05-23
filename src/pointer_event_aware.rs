@@ -1,4 +1,5 @@
 use std::{
+    future::Future,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -7,8 +8,8 @@ use bevy::{app::PluginGroupBuilder, prelude::*};
 use bevy_eventlistener::{event_dispatcher::EventDispatcher, EventListenerPlugin, EventListenerSet};
 use bevy_mod_picking::{picking_core::PickSet, prelude::*};
 use enclose::enclose as clone;
-use futures_signals::signal::{Mutable, SignalExt};
-use futures_signals_ext::SignalExtBool;
+use futures_signals::signal::{self, always, Mutable, Signal, SignalExt};
+use futures_signals_ext::{SignalExtBool, SignalExtExt};
 
 use crate::{sleep, spawn, RawElWrapper};
 
@@ -16,16 +17,19 @@ pub trait PointerEventAware: RawElWrapper {
     fn on_hovered_change(self, handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
         let handler = Arc::new(Mutex::new(handler));
         self.update_raw_el(|raw_el| {
-            raw_el.insert((
-                Pickable::default(),
-                On::<Pointer<Over>>::run(clone!((mut handler) move || handler.lock().unwrap()(true))),
-                On::<Pointer<Out>>::run(move || handler.lock().unwrap()(false)),
-            ))
+            raw_el
+                .insert(Pickable::default())
+                .on_event::<Pointer<Over>>(clone!((mut handler) move || handler.lock().unwrap()(true)))
+                .on_event::<Pointer<Out>>(move || handler.lock().unwrap()(false))
         })
     }
 
     fn on_click_with_system<Marker>(self, handler: impl IntoSystem<(), (), Marker>) -> Self {
-        self.update_raw_el(|raw_el| raw_el.insert((Pickable::default(), On::<Pointer<Click>>::run(handler))))
+        self.update_raw_el(|raw_el| {
+            raw_el
+                .insert(Pickable::default())
+                .on_event_with_system::<Pointer<Click>, _>(handler)
+        })
     }
 
     fn on_click(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
@@ -34,6 +38,22 @@ pub trait PointerEventAware: RawElWrapper {
                 handler()
             }
         })
+    }
+
+    fn on_click_propagation_stoppable(
+        self,
+        handler: impl FnMut() + Send + Sync + 'static,
+        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.update_raw_el(|raw_el| {
+            raw_el
+                .insert(Pickable::default())
+                .on_event_propagation_stoppable::<Pointer<Click>>(handler, propagation_stopped)
+        })
+    }
+
+    fn on_click_stop_propagation(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
+        self.on_click_propagation_stoppable(handler, always(true))
     }
 
     fn on_right_click(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
@@ -48,52 +68,61 @@ pub trait PointerEventAware: RawElWrapper {
     // system isn't sensitive to left clicks only, so e.g. downing a button, upping outside it, then
     // holding right click over it will incorrectly show a pressed state
     // TODO: add right click pressing convenience methods if someone wants them ...
-    fn on_pressed_change(self, handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
+    fn on_pressed_change_blockable(
+        self,
+        handler: impl FnMut(bool) + Send + Sync + 'static,
+        blocked: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
         self.update_raw_el(|raw_el| {
             let down = Mutable::new(false);
             let handler = Arc::new(Mutex::new(handler));
             raw_el
-                .component_signal::<Pressable>(down.signal().map_true(move || {
+                .component_signal::<Pressable>(signal::and(signal::not(blocked), down.signal()).map_true(move || {
                     Pressable(Box::new(clone!((handler) move |is_pressed|
                         (handler.lock().unwrap())(is_pressed))))
                 }))
-                .insert((
-                    Pickable::default(),
-                    On::<Pointer<Down>>::run(clone!((down) move |pointer_down: Listener<Pointer<Down>>| if matches!(pointer_down.button, PointerButton::Primary) { down.set_neq(true) })),
-                    On::<Pointer<Up>>::run(move |pointer_up: Listener<Pointer<Up>>| if matches!(pointer_up.button, PointerButton::Primary) { down.set_neq(false) }),
-                ))
+                .insert(Pickable::default())
+                .on_event_with_system::<Pointer<Down>, _>(clone!((down) move |pointer_down: Listener<Pointer<Down>>| if matches!(pointer_down.button, PointerButton::Primary) { down.set_neq(true) }))
+                .on_event_with_system::<Pointer<Up>, _>(move |pointer_up: Listener<Pointer<Up>>| if matches!(pointer_up.button, PointerButton::Primary) { down.set_neq(false) })
         })
     }
 
-    fn on_pressing(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.on_pressed_change(move |is_pressed| {
-            if is_pressed {
-                handler()
-            }
-        })
+    fn on_pressed_change(self, handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
+        self.on_pressed_change_blockable(handler, always(false))
     }
 
-    fn on_pressing_blockable(self, mut handler: impl FnMut() + Send + Sync + 'static, blocked: Mutable<bool>) -> Self {
-        // TODO: should instead track pickability and just add/remove the Pressable on blocked
-        // change to minimize spurious handler calls, also blocked can then be a signal
-        self.on_pressed_change(move |is_pressed| {
-            if is_pressed && !blocked.get() {
-                handler()
-            }
-        })
+    fn on_pressing_blockable(
+        self,
+        mut handler: impl FnMut() + Send + Sync + 'static,
+        blocked: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.on_pressed_change_blockable(
+            move |is_pressed| {
+                if is_pressed {
+                    handler()
+                }
+            },
+            blocked,
+        )
     }
 
-    fn on_pressing_throttled(self, mut handler: impl FnMut() + Send + Sync + 'static, duration: Duration) -> Self {
+    fn on_pressing(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
+        self.on_pressing_blockable(handler, always(false))
+    }
+
+    fn on_pressing_throttled<Fut: Future<Output = ()> + Send>(
+        self,
+        mut handler: impl FnMut() + Send + Sync + 'static,
+        throttle: impl FnMut() -> Fut + Send + 'static,
+    ) -> Self {
         let blocked = Mutable::new(false);
         let throttler = spawn(clone!((blocked) async move {
             blocked.signal()
-            .for_each(move |b| {
-                clone!((blocked) async move {
-                    if b {
-                        sleep(duration).await;
-                        blocked.set_neq(false);
-                    }
-                })
+            .throttle(throttle)
+            .for_each_sync(move |b| {
+                if b {
+                    blocked.set_neq(false);
+                }
             })
             .await;
         }));
@@ -103,8 +132,16 @@ pub trait PointerEventAware: RawElWrapper {
                     handler();
                     blocked.set_neq(true);
                 }),
-                blocked,
+                blocked.signal(),
             )
+    }
+
+    fn on_pressing_with_sleep_throttle(
+        self,
+        handler: impl FnMut() + Send + Sync + 'static,
+        duration: Duration,
+    ) -> Self {
+        self.on_pressing_throttled(handler, move || sleep(duration))
     }
 
     fn hovered_sync(self, hovered: Mutable<bool>) -> Self {

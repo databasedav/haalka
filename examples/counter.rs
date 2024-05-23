@@ -13,32 +13,33 @@ struct Counter(Mutable<i32>);
 
 fn ui_root(world: &mut World) {
     let counter = Mutable::new(0);
-    Row::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
-            style.column_gap = Val::Px(15.0);
-        })
+    El::<NodeBundle>::new()
+        .height(Val::Percent(100.))
+        .width(Val::Percent(100.))
         .align_content(Align::center())
-        .item(counter_button(counter.clone(), "-", -1))
-        .item(El::<TextBundle>::new().text_signal(counter.signal().map(|count| {
-            Text::from_section(
-                count.to_string(),
-                TextStyle {
-                    font_size: 30.0,
-                    ..default()
-                },
-            )
-        })))
-        .item(counter_button(counter.clone(), "+", 1))
-        .update_raw_el(move |raw_el| raw_el.insert(Counter(counter)))
+        .child(
+            Row::<NodeBundle>::new()
+                .with_style(|style| style.column_gap = Val::Px(15.0))
+                .item(counter_button(counter.clone(), "-", -1))
+                .item(El::<TextBundle>::new().text_signal(counter.signal().map(|count| {
+                    Text::from_section(
+                        count.to_string(),
+                        TextStyle {
+                            font_size: 30.0,
+                            ..default()
+                        },
+                    )
+                })))
+                .item(counter_button(counter.clone(), "+", 1))
+                .update_raw_el(move |raw_el| raw_el.insert(Counter(counter))),
+        )
         .spawn(world);
 }
 
 fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element {
     let hovered = Mutable::new(false);
     El::<NodeBundle>::new()
-        .with_style(|style| style.width = Val::Px(45.0))
+        .width(Val::Px(45.0))
         .align_content(Align::center())
         .background_color_signal(
             hovered

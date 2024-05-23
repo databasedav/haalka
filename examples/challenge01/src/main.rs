@@ -1098,21 +1098,14 @@ fn graphics_menu() -> Column<NodeBundle> {
         )
 }
 
-fn x_button(mut on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
+fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
     let hovered = Mutable::new(false);
     El::<NodeBundle>::new()
         .background_color(BackgroundColor(Color::NONE))
         .hovered_sync(hovered.clone())
-        .update_raw_el(move |raw_el| {
-            raw_el.insert(On::<Pointer<Click>>::run(
-                move |mut event: ListenerMut<Pointer<Click>>| {
-                    // otherwise, e.g. clearing the dropdown will drop down the options too; the x
-                    // should eat the click
-                    event.stop_propagation();
-                    on_click();
-                },
-            ))
-        })
+        // stop propagation because otherwise clearing the dropdown will drop down the
+        // options too; the x should eat the click
+        .on_click_stop_propagation(on_click)
         .child(El::<TextBundle>::new().text(text("x")).on_signal_with_text(
             hovered.signal().map_bool(|| Color::RED, || TEXT_COLOR),
             |text, color| {

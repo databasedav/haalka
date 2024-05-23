@@ -6,7 +6,7 @@ use std::{
 use bevy::prelude::*;
 use bevy_rand::prelude::*;
 use haalka::*;
-use rand::prelude::{IteratorRandom, Rng, RngCore};
+use rand::prelude::*;
 use strum::{EnumIter, IntoEnumIterator};
 
 fn main() {

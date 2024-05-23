@@ -66,8 +66,8 @@ fn ui_root(world: &mut World) {
         .align_content(Align::center())
         .child(
             Row::<NodeBundle>::new()
-                .with_style(|style| style.column_gap = Val::Px(15.))
-                .width(Val::Px(225.))
+                .with_style(|style| style.column_gap = Val::Px(30.))
+                .width(Val::Px(300.))
                 .scrollable(
                     ScrollabilitySettings {
                         flex_direction: FlexDirection::Row,
@@ -75,7 +75,7 @@ fn ui_root(world: &mut World) {
                         scroll_handler: BasicScrollHandler::new()
                             .direction(ScrollDirection::Horizontal)
                             // TODO: special handler for auto discrete like rectray https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs
-                            .pixels(48.)
+                            .pixels(63.)
                             .into(),
                     },
                     SHIFTED.signal(),
