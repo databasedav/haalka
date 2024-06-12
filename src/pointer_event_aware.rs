@@ -1,10 +1,6 @@
-use std::{
-    future::Future,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{fmt::Debug, future::Future, time::Duration};
 
-use bevy::{app::PluginGroupBuilder, prelude::*};
+use bevy::{app::PluginGroupBuilder, ecs::system::SystemId, prelude::*};
 use bevy_eventlistener::{event_dispatcher::EventDispatcher, EventListenerPlugin, EventListenerSet};
 use bevy_mod_picking::{picking_core::PickSet, prelude::*};
 use enclose::enclose as clone;
@@ -14,14 +10,27 @@ use futures_signals_ext::{SignalExtBool, SignalExtExt};
 use crate::{sleep, spawn, RawElWrapper};
 
 pub trait PointerEventAware: RawElWrapper {
-    fn on_hovered_change(self, handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
-        let handler = Arc::new(Mutex::new(handler));
+    fn on_hovered_change_with_system<Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
+    ) -> Self {
         self.update_raw_el(|raw_el| {
             raw_el
+                .with_entity(move |mut entity| {
+                    let system = entity.world_scope(|world| world.register_system(handler));
+                    entity.insert(Hoverable {
+                        system,
+                        is_hovered: false,
+                    });
+                })
+                // TODO: bevy 0.14, remove the system
+                // .on_remove
                 .insert(Pickable::default())
-                .on_event::<Pointer<Over>>(clone!((mut handler) move || handler.lock().unwrap()(true)))
-                .on_event::<Pointer<Out>>(move || handler.lock().unwrap()(false))
         })
+    }
+
+    fn on_hovered_change(self, mut handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
+        self.on_hovered_change_with_system(move |In((_, is_hovered))| handler(is_hovered))
     }
 
     fn on_click_with_system<Marker>(self, handler: impl IntoSystem<(), (), Marker>) -> Self {
@@ -32,17 +41,9 @@ pub trait PointerEventAware: RawElWrapper {
         })
     }
 
-    fn on_click(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.on_click_with_system(move |click: Listener<Pointer<Click>>| {
-            if matches!(click.button, PointerButton::Primary) {
-                handler()
-            }
-        })
-    }
-
-    fn on_click_propagation_stoppable(
+    fn on_click_event_propagation_stoppable(
         self,
-        handler: impl FnMut() + Send + Sync + 'static,
+        handler: impl FnMut(&Pointer<Click>) + Send + Sync + 'static,
         propagation_stopped: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
@@ -52,16 +53,96 @@ pub trait PointerEventAware: RawElWrapper {
         })
     }
 
+    fn on_click_event(self, mut handler: impl FnMut(&Pointer<Click>) + Send + Sync + 'static) -> Self {
+        self.update_raw_el(|raw_el| {
+            raw_el
+                .insert(Pickable::default())
+                .on_event::<Pointer<Click>>(move |listener| handler(&*listener))
+        })
+    }
+
+    fn on_click(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
+        self.on_click_event(move |click| {
+            if matches!(click.button, PointerButton::Primary) {
+                handler()
+            }
+        })
+    }
+
+    fn on_click_propagation_stoppable(
+        self,
+        mut handler: impl FnMut() + Send + Sync + 'static,
+        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.on_click_event_propagation_stoppable(move |_| handler(), propagation_stopped)
+    }
+
     fn on_click_stop_propagation(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
         self.on_click_propagation_stoppable(handler, always(true))
     }
 
     fn on_right_click(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.on_click_with_system(move |click: Listener<Pointer<Click>>| {
+        self.on_click_event(move |click| {
             if matches!(click.button, PointerButton::Secondary) {
                 handler()
             }
         })
+    }
+
+    // TODO: this doesn't make sense until the event listener supports registering multiple listeners https://discord.com/channels/691052431525675048/1236111180624297984/1250245547756093465
+    // per event fn on_click_outside_event(self, mut handler: impl FnMut(&Pointer<Click>) + Send +
+    // Sync + 'static) -> Self {     self.update_raw_el(|raw_el| {
+    //         let entity_holder = Mutable::new(None);
+    //         raw_el
+    //             .on_spawn(clone!((entity_holder) move |_, entity| entity_holder.set(Some(entity))))
+    //             .on_global_event_with_system::<Pointer<Click>, _>(
+    //                 move |click: Listener<Pointer<Click>>, children_query: Query<&Children>| {
+    //                     if !is_inside_or_removed_from_dom(
+    //                         entity_holder.get().unwrap(),
+    //                         &click,
+    //                         click.listener(),
+    //                         &children_query,
+    //                     ) {
+    //                         handler(&*click);
+    //                     }
+    //                 },
+    //             )
+    //     })
+    // }
+
+    // fn on_click_outside(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
+    //     self.on_click_outside_event(move |_| handler())
+    // }
+
+    fn on_pressed_change_blockable_with_system<Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
+        blocked: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.update_raw_el(|raw_el| {
+            let down = Mutable::new(false);
+            let system_holder = Mutable::new(None);
+            raw_el
+                .on_spawn(clone!((system_holder) move |world, _| {
+                    let system = world.register_system(handler);
+                    system_holder.set(Some(system));
+                }))
+                .component_signal::<Pressable, _>(
+                    signal::and(system_holder.signal_ref(Option::is_some), signal::and(signal::not(blocked), down.signal())).dedupe().map_true(move || {
+                    Pressable(system_holder.get().unwrap())
+                }))
+                .insert(Pickable::default())
+                .on_event_with_system::<Pointer<Down>, _>(clone!((down) move |pointer_down: Listener<Pointer<Down>>| if matches!(pointer_down.button, PointerButton::Primary) { down.set_neq(true) }))
+                // TODO: up should trigger even outside of element
+                .on_event_with_system::<Pointer<Up>, _>(move |pointer_up: Listener<Pointer<Up>>| if matches!(pointer_up.button, PointerButton::Primary) { down.set_neq(false) })
+        })
+    }
+
+    fn on_pressed_change_with_system<Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
+    ) -> Self {
+        self.on_pressed_change_blockable_with_system(handler, always(false))
     }
 
     // TODO: there's still problems with this, `Up` doesn't trigger outside of the element + pressable
@@ -70,21 +151,10 @@ pub trait PointerEventAware: RawElWrapper {
     // TODO: add right click pressing convenience methods if someone wants them ...
     fn on_pressed_change_blockable(
         self,
-        handler: impl FnMut(bool) + Send + Sync + 'static,
+        mut handler: impl FnMut(bool) + Send + Sync + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.update_raw_el(|raw_el| {
-            let down = Mutable::new(false);
-            let handler = Arc::new(Mutex::new(handler));
-            raw_el
-                .component_signal::<Pressable>(signal::and(signal::not(blocked), down.signal()).map_true(move || {
-                    Pressable(Box::new(clone!((handler) move |is_pressed|
-                        (handler.lock().unwrap())(is_pressed))))
-                }))
-                .insert(Pickable::default())
-                .on_event_with_system::<Pointer<Down>, _>(clone!((down) move |pointer_down: Listener<Pointer<Down>>| if matches!(pointer_down.button, PointerButton::Primary) { down.set_neq(true) }))
-                .on_event_with_system::<Pointer<Up>, _>(move |pointer_up: Listener<Pointer<Up>>| if matches!(pointer_up.button, PointerButton::Primary) { down.set_neq(false) })
-        })
+        self.on_pressed_change_blockable_with_system(move |In((_, is_pressed))| handler(is_pressed), blocked)
     }
 
     fn on_pressed_change(self, handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
@@ -154,15 +224,75 @@ pub trait PointerEventAware: RawElWrapper {
 }
 
 #[derive(Component)]
-pub(crate) struct Pressable(Box<dyn FnMut(bool) + Send + Sync + 'static>);
+struct Hoverable {
+    system: SystemId<(Entity, bool)>,
+    is_hovered: bool,
+}
 
-pub(crate) fn pressable_system(
-    mut interaction_query: Query<(&PickingInteraction, &mut Pressable), Changed<PickingInteraction>>,
+fn update_hover_states(
+    hover_map: Res<bevy_mod_picking::focus::HoverMap>,
+    mut hovers: Query<(Entity, &mut Hoverable)>,
+    parent_query: Query<&Parent>,
+    mut commands: Commands,
 ) {
-    for (interaction, mut pressable) in &mut interaction_query {
-        pressable.0(matches!(interaction, PickingInteraction::Pressed));
+    let hover_set = hover_map.get(&PointerId::Mouse);
+    for (entity, mut hoverable) in hovers.iter_mut() {
+        let is_hovering = match hover_set {
+            Some(map) => map
+                .iter()
+                .any(|(ha, _)| *ha == entity || parent_query.iter_ancestors(*ha).any(|e| e == entity)),
+            None => false,
+        };
+        if hoverable.is_hovered != is_hovering {
+            hoverable.is_hovered = is_hovering;
+            commands.run_system_with_input(hoverable.system, (entity, is_hovering));
+        }
     }
 }
+
+#[derive(Component)]
+struct Pressable(SystemId<(Entity, bool)>);
+
+fn pressable_system(
+    mut interaction_query: Query<(Entity, &PickingInteraction, &Pressable), Changed<PickingInteraction>>,
+    mut commands: Commands,
+) {
+    for (entity, interaction, pressable) in &mut interaction_query {
+        commands.run_system_with_input(
+            pressable.0,
+            (entity, matches!(interaction, PickingInteraction::Pressed)),
+        );
+    }
+}
+
+// TODO: used in on_click_outside_event, but requires being able to register multiple handlers per event https://discord.com/channels/691052431525675048/1236111180624297984/1250245547756093465
+// fn contains(left: Entity, right: Entity, children_query: &Query<&Children>) -> bool {
+//     children_query.iter_descendants(left).any(|e| e == right)
+// }
+
+// // TODO: add support for some sort of exclusion
+// fn is_inside_or_removed_from_dom(
+//     element: Entity,
+//     event: &Listener<Pointer<Click>>,
+//     ui_root: Entity,
+//     children_query: &Query<&Children>,
+// ) -> bool {
+//     let target = event.target();
+//     if contains(element, target, children_query) {
+//         return true;
+//     }
+//     if !contains(ui_root, target, children_query) {
+//         return true;
+//     }
+//     false
+// }
+
+/// TODO: requires being able to register multipe callbacks for the same event type in event
+/// listener, since otherwise would overwrite any other on hovered listeners
+// trait Cursorable: PointerEventAware {
+//     fn cursor(self, cursor_option: impl Into<Option<CursorIcon>>) -> Self {
+//     }
+// }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
 struct PointerOverSet;
@@ -256,6 +386,7 @@ impl Plugin for PointerUpPlugin {
     }
 }
 
+// TODO: don't need to manually order like this once mod picking has event ordering
 struct RiggedInteractionPlugin;
 impl Plugin for RiggedInteractionPlugin {
     fn build(&self, app: &mut App) {
@@ -319,6 +450,15 @@ impl PluginGroup for RiggedPickingPlugin {
 pub(crate) struct PointerEventAwarePlugin;
 impl Plugin for PointerEventAwarePlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, pressable_system.run_if(any_with_component::<Pressable>));
+        app.add_systems(
+            Update,
+            (
+                pressable_system.run_if(any_with_component::<Pressable>),
+                update_hover_states.run_if(
+                    any_with_component::<Hoverable>
+                        .and_then(resource_exists_and_changed::<bevy_mod_picking::focus::HoverMap>),
+                ),
+            ),
+        );
     }
 }

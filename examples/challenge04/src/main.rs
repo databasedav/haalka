@@ -79,15 +79,13 @@ impl NineSliceEl {
 
 impl ElementWrapper for NineSliceEl {
     type EL = El<NineSliceUiMaterialBundle>;
-    fn element_ref(&self) -> &Self::EL {
-        &self.0
-    }
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.0
     }
 }
 
 impl PointerEventAware for NineSliceEl {}
+impl Sizeable for NineSliceEl {}
 
 fn nine_slice_button() -> impl Element {
     let hovered = Mutable::new(false);
@@ -104,10 +102,8 @@ fn nine_slice_button() -> impl Element {
             }
         }
     })
-    .with_style(|style| {
-        style.width = Val::Px(100.);
-        style.height = Val::Px(50.);
-    })
+    .width(Val::Px(100.))
+    .height(Val::Px(50.))
     .hovered_sync(hovered)
     .pressed_sync(pressed)
 }
@@ -117,18 +113,14 @@ struct Width(Mutable<f32>);
 
 fn horizontal() -> impl Element {
     Row::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
-            style.column_gap = Val::Px(GAP);
-        })
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
+        .with_style(|style| style.column_gap = Val::Px(GAP))
         .item(
             Column::<NodeBundle>::new()
-                .with_style(|style| {
-                    style.width = Val::Percent(50.);
-                    style.height = Val::Percent(100.);
-                    style.row_gap = Val::Px(GAP);
-                })
+                .width(Val::Percent(50.))
+                .height(Val::Percent(100.))
+                .with_style(|style| style.row_gap = Val::Px(GAP))
                 .align_content(Align::center())
                 .items((0..8).into_iter().map(|_| nine_slice_button())),
         )
@@ -137,35 +129,28 @@ fn horizontal() -> impl Element {
 
 fn vertical() -> impl Element {
     Column::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
-            style.row_gap = Val::Px(GAP);
-        })
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
+        .with_style(|style| style.row_gap = Val::Px(GAP))
         .item(El::<ImageBundle>::new().image(UiImage::new(image().clone())))
         .item(
             Row::<NodeBundle>::new()
                 .multiline()
                 .align_content(Align::center())
-                .with_style(|style| {
-                    style.width = Val::Percent(100.);
-                    style.height = Val::Percent(50.);
-                    style.column_gap = Val::Px(GAP);
-                })
+                .width(Val::Percent(100.))
+                .height(Val::Percent(50.))
+                .with_style(|style| style.column_gap = Val::Px(GAP))
                 .items((0..8).into_iter().map(|_| nine_slice_button())),
         )
 }
 
 fn menu(width: Mutable<f32>) -> impl Element {
     NineSliceEl::new(always(3))
+        .height(Val::Px(BASE_SIZE))
         .with_style(|style| {
-            style.height = Val::Px(BASE_SIZE);
             style.padding = UiRect::all(Val::Px(GAP));
         })
-        .on_signal_with_style(
-            width.signal().map(|width| BASE_SIZE.min(width)).dedupe(),
-            |style, width| style.width = Val::Px(width),
-        )
+        .width_signal(width.signal().map(|width| BASE_SIZE.min(width)).dedupe().map(Val::Px))
         .0
         .child_signal(
             width
@@ -179,10 +164,8 @@ fn menu(width: Mutable<f32>) -> impl Element {
 fn ui_root(world: &mut World) {
     let width = world.resource::<Width>().0.clone();
     El::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
-        })
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
             Column::<NodeBundle>::new()

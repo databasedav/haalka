@@ -7,7 +7,7 @@ use futures_signals::{
 
 use crate::{
     align::AlignableType, scrollable::Scrollable, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable,
-    IntoOptionElement, PointerEventAware, RawElWrapper, RawHaalkaEl, Row, Sizable,
+    IntoOptionElement, PointerEventAware, RawElWrapper, RawHaalkaEl, Row, Sizeable,
 };
 
 pub struct Stack<NodeType> {
@@ -50,65 +50,74 @@ impl<NodeType: Bundle> RawElWrapper for Stack<NodeType> {
 
 impl<NodeType: Bundle> PointerEventAware for Stack<NodeType> {}
 impl<NodeType: Bundle> Scrollable for Stack<NodeType> {}
-impl<NodeType: Bundle> Sizable for Stack<NodeType> {}
+impl<NodeType: Bundle> Sizeable for Stack<NodeType> {}
 
 impl<NodeType: Bundle> Stack<NodeType> {
-    pub fn layer<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self {
+    pub fn layer<IOE: IntoOptionElement>(mut self, layer_option: IOE) -> Self {
         let apply_alignment = self.apply_alignment_wrapper();
         self.raw_el = self.raw_el.child(
-            child_option
+            layer_option
                 .into_option_element()
-                .map(|child| Self::align_child(child, apply_alignment)),
+                .map(|layer| Self::align_child(layer, apply_alignment)),
         );
         self
     }
 
-    pub fn layer_signal<IOE: IntoOptionElement + 'static>(
+    pub fn layer_signal<IOE: IntoOptionElement + 'static, S: Signal<Item = IOE> + Send + 'static>(
         mut self,
-        child_option: impl Signal<Item = IOE> + Send + 'static,
+        layer_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
-        let apply_alignment = self.apply_alignment_wrapper();
-        self.raw_el = self.raw_el.child_signal(child_option.map(move |child_option| {
-            child_option
-                .into_option_element()
-                .map(|child| Self::align_child(child, apply_alignment))
-        }));
+        if let Some(layer_option_signal) = layer_option_signal_option.into() {
+            let apply_alignment = self.apply_alignment_wrapper();
+            self.raw_el = self.raw_el.child_signal(layer_option_signal.map(move |layer_option| {
+                layer_option
+                    .into_option_element()
+                    .map(|layer| Self::align_child(layer, apply_alignment))
+            }));
+        }
         self
     }
 
-    pub fn layers<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
+    pub fn layers<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(
+        mut self,
+        layers_options_option: impl Into<Option<I>>,
+    ) -> Self
     where
         I::IntoIter: Send + 'static,
     {
-        let apply_alignment = self.apply_alignment_wrapper();
-        self.raw_el = self
-            .raw_el
-            .children(children_options.into_iter().map(move |child_option| {
-                child_option
-                    .into_option_element()
-                    .map(|child| Self::align_child(child, apply_alignment))
-            }));
+        if let Some(layers_options) = layers_options_option.into() {
+            let apply_alignment = self.apply_alignment_wrapper();
+            self.raw_el = self
+                .raw_el
+                .children(layers_options.into_iter().map(move |layer_option| {
+                    layer_option
+                        .into_option_element()
+                        .map(|layer| Self::align_child(layer, apply_alignment))
+                }));
+        }
         self
     }
 
-    pub fn layers_signal_vec<IOE: IntoOptionElement + 'static>(
+    pub fn layers_signal_vec<IOE: IntoOptionElement + 'static, S: SignalVec<Item = IOE> + Send + 'static>(
         mut self,
-        children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static,
+        layers_options_signal_vec_option: impl Into<Option<S>>,
     ) -> Self {
-        let apply_alignment = self.apply_alignment_wrapper();
-        self.raw_el = self
-            .raw_el
-            .children_signal_vec(children_options_signal_vec.map(move |child_option| {
-                child_option
-                    .into_option_element()
-                    .map(|child| Self::align_child(child, apply_alignment))
-            }));
+        if let Some(layers_options_signal_vec) = layers_options_signal_vec_option.into() {
+            let apply_alignment = self.apply_alignment_wrapper();
+            self.raw_el = self
+                .raw_el
+                .children_signal_vec(layers_options_signal_vec.map(move |layer_option| {
+                    layer_option
+                        .into_option_element()
+                        .map(|layer| Self::align_child(layer, apply_alignment))
+                }));
+        }
         self
     }
 }
 
 impl<NodeType: Bundle> Alignable for Stack<NodeType> {
-    fn alignable_type(&self) -> Option<AlignableType> {
+    fn alignable_type(&mut self) -> Option<AlignableType> {
         Some(AlignableType::Stack)
     }
 

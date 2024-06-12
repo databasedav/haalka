@@ -2,10 +2,10 @@ use crate::{
     align::{AlignabilityFacade, AlignableType},
     Alignable, ChildAlignable, RawElWrapper, RawElement, RawHaalkaEl,
 };
+use bevy::prelude::*;
 
 pub trait ElementWrapper: Sized {
     type EL: RawElWrapper + Alignable + ChildAlignable;
-    fn element_ref(&self) -> &Self::EL;
     fn element_mut(&mut self) -> &mut Self::EL;
 }
 
@@ -65,5 +65,22 @@ impl<T: Alignable> TypeEraseable for T {
         let alignable_type = self.alignable_type().unwrap_or(AlignableType::El);
         let (align_option, raw_el) = (self.align_mut().take(), self.into_raw());
         AlignabilityFacade::new(raw_el, align_option, alignable_type)
+    }
+}
+
+#[derive(Resource)]
+pub struct UiRoot(pub Entity);
+
+pub trait UiRootable {
+    fn ui_root(self) -> Self;
+}
+
+impl<E: Element> UiRootable for E {
+    fn ui_root(self) -> Self {
+        self.update_raw_el(|raw_el| {
+            raw_el.on_spawn(|world, entity| {
+                world.insert_resource(UiRoot(entity));
+            })
+        })
     }
 }

@@ -210,8 +210,8 @@ fn icon(
     Stack::new()
         .layer(
             El::<AtlasImageBundle>::new()
-                .image(icon_sheet().image.clone().into())
-                .texture_atlas(icon_sheet().layout.clone().into())
+                .image(UiImage::from(icon_sheet().image.clone()))
+                .texture_atlas(TextureAtlas::from(icon_sheet().layout.clone()))
                 .on_signal_with_texture_atlas(index_signal, |image, index| image.index = index),
         )
         .layer(
@@ -252,7 +252,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                 // if the provided signal returns `None`, then the component is removed; but the
                 // signal below doesn't look like it returns an `Option`? actually it does thanks to
                 // `.map_true` which is syntactic sugar for `.map(|bool| if bool { Some(...) } else { None }))`
-                .component_signal::<On::<Pointer<Click>>>(
+                .component_signal::<On::<Pointer<Click>>, _>(
                     // we don't want the click listener to trigger if we've just grabbed some of
                     // the stack as it would immediately drop one down, so we track the `Down` state
                     signal::and(signal::not(down.signal()), hovered.signal()).dedupe()
@@ -300,7 +300,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                 );
             }
             raw_el
-            .component_signal::<On::<Pointer<Down>>>(
+            .component_signal::<On::<Pointer<Down>>, _>(
                 signal::and(DRAGGING_OPTION.signal_ref(Option::is_none), cell_data_option.signal_ref(Option::is_some)).dedupe()
                 .map_true(clone!((cell_data_option, down) move ||
                     On::<Pointer<Down>>::run(clone!((cell_data_option, down) move |pointer_down: Listener<Pointer<Down>>| {
@@ -331,16 +331,14 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             )
         }))
         .hovered_sync(hovered.clone())
-        .with_style(|style| {
-            style.width = Val::Px(CELL_WIDTH);
-            style.height = Val::Px(CELL_WIDTH);
-            style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
-        })
+        .width(Val::Px(CELL_WIDTH))
+        .height(Val::Px(CELL_WIDTH))
+        .with_style(|style| style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH)))
         .background_color_signal(
             hovered.signal()
                 .map_bool(|| CELL_HIGHLIGHT_COLOR.into(), || CELL_BACKGROUND_COLOR.into()),
         )
-        .border_color(CELL_DARK_BORDER_COLOR.into())
+        .border_color(BorderColor(CELL_DARK_BORDER_COLOR))
         .child_signal(
             cell_data_option
                 .signal_cloned()
@@ -353,15 +351,15 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                             El::<NodeBundle>::new()
                                 // TODO: global transform isn't populated on spawn
                                 // .with_global_transform(clone!((original_position) move |transform| original_position.set(Some(transform.compute_transform().translation.xy()))))
+                                .height(Val::Px(CELL_WIDTH))
                                 .with_style(|style| {
                                     style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
                                     style.position_type = PositionType::Absolute;
-                                    style.height = Val::Px(CELL_WIDTH);
                                     style.padding = UiRect::horizontal(Val::Px(10.));
                                 })
                                 .update_raw_el(clone!((original_position) move |raw_el| {
                                     raw_el
-                                    .on_signal_with_entity(POINTER_POSITION.signal(), move |entity, (mut left, mut top)| {
+                                    .on_signal_with_entity(POINTER_POSITION.signal(), move |mut entity, (mut left, mut top)| {
                                         if let Some(transform) = entity.get::<GlobalTransform>() {
                                             // TODO: global transform isn't populated on spawn so we have to set it here
                                             if original_position.get().is_none() {
@@ -377,8 +375,8 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                     })
                                 }))
                                 .z_index(ZIndex::Global(1))
-                                .background_color(CELL_BACKGROUND_COLOR.into())
-                                .border_color(CELL_DARK_BORDER_COLOR.into())
+                                .background_color(BackgroundColor(CELL_BACKGROUND_COLOR))
+                                .border_color(BorderColor(CELL_DARK_BORDER_COLOR))
                                 .child(
                                     El::<TextBundle>::new()
                                     .align(Align::center())
@@ -426,9 +424,9 @@ where
     <I as IntoIterator>::IntoIter: std::marker::Send + 'static,
 {
     Grid::<NodeBundle>::new()
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
         .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
             style.column_gap = Val::Px(CELL_GAP);
             style.row_gap = Val::Px(CELL_GAP);
         })
@@ -452,11 +450,9 @@ fn camera(mut commands: Commands) {
 
 fn dot() -> impl Element {
     El::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Px(CELL_BORDER_WIDTH * 2.);
-            style.height = Val::Px(CELL_BORDER_WIDTH * 2.);
-        })
-        .background_color(CELL_BACKGROUND_COLOR.into())
+        .width(Val::Px(CELL_BORDER_WIDTH * 2.))
+        .height(Val::Px(CELL_BORDER_WIDTH * 2.))
+        .background_color(BackgroundColor(CELL_BACKGROUND_COLOR))
 }
 
 fn dot_row(n: usize) -> impl Element {
@@ -479,50 +475,40 @@ fn side_column() -> impl Element {
 fn inventory() -> impl Element {
     El::<NodeBundle>::new()
         .align(Align::center())
-        .with_style(|style| {
-            style.height = Val::Px(INVENTORY_SIZE);
-            style.width = Val::Px(INVENTORY_SIZE);
-        })
+        .height(Val::Px(INVENTORY_SIZE))
+        .width(Val::Px(INVENTORY_SIZE))
         .child(
             Column::<NodeBundle>::new()
-                .with_style(|style| {
-                    style.height = Val::Percent(100.);
-                    style.width = Val::Percent(100.);
-                    style.row_gap = Val::Px(CELL_GAP * 4.);
-                })
-                .background_color(INVENTORY_BACKGROUND_COLOR.into())
+            .height(Val::Percent(100.))
+            .width(Val::Percent(100.))
+                .with_style(|style| style.row_gap = Val::Px(CELL_GAP * 4.))
+                .background_color(BackgroundColor(INVENTORY_BACKGROUND_COLOR))
                 .align_content(Align::center())
                 .item(
                     Row::<NodeBundle>::new()
-                        .with_style(|style| {
-                            style.column_gap = Val::Px(CELL_GAP);
-                            style.width = Val::Percent(100.);
-                        })
+                    .width(Val::Percent(100.))
+                        .with_style(|style| style.column_gap = Val::Px(CELL_GAP))
                         .item(
                             Row::<NodeBundle>::new()
                                 .align_content(Align::center())
+                                .width(Val::Percent(60.))
                                 .with_style(|style| {
                                     style.column_gap = Val::Px(CELL_GAP);
-                                    style.width = Val::Percent(60.);
                                     style.padding = UiRect::horizontal(Val::Px(CELL_GAP * 3.));
                                 })
                                 .item(side_column())
                                 .item(
                                     El::<NodeBundle>::new()
-                                        .with_style(|style| {
-                                            style.height = Val::Px(CELL_WIDTH * 4. + CELL_GAP * 3.);
-                                            style.width = Val::Percent(100.);
-                                        })
-                                        .background_color(Color::BLACK.into()),
+                                        .height(Val::Px(CELL_WIDTH * 4. + CELL_GAP * 3.))
+                                        .width(Val::Percent(100.))
+                                        .background_color(BackgroundColor(Color::BLACK)),
                                 )
                                 .item(side_column())
                         )
                         .item(
                             El::<NodeBundle>::new()
-                                .with_style(|style| {
-                                    style.width = Val::Percent(40.);
-                                    style.height = Val::Percent(100.);
-                                })
+                            .width(Val::Percent(40.))
+                            .height(Val::Percent(100.))
                                 .align_content(Align::center())
                                 .child({
                                     let inputs = MutableVec::new_with_values(
@@ -560,7 +546,7 @@ fn inventory() -> impl Element {
                                             .child(cell(output.clone(), false).align(Align::center()))
                                             .update_raw_el(clone!((inputs) move |raw_el| {
                                                 raw_el
-                                                .component_signal::<On::<Pointer<Down>>>(
+                                                .component_signal::<On::<Pointer<Down>>, _>(
                                                     signal::and(DRAGGING_OPTION.signal_ref(Option::is_none), output.signal_ref(Option::is_some)).dedupe()
                                                     .map_true(move || {
                                                         On::<Pointer<Down>>::run(clone!((inputs) move || {
@@ -576,7 +562,7 @@ fn inventory() -> impl Element {
                                         .item({
                                             let cell_data_options = inputs.lock_ref().into_iter().cloned().collect::<Vec<_>>();
                                             El::<NodeBundle>::new()
-                                                .with_style(|style| style.width = Val::Px(CELL_WIDTH * 2. + CELL_GAP))
+                                                .width(Val::Px(CELL_WIDTH * 2. + CELL_GAP))
                                                 .child(grid(cell_data_options).align_content(Align::new().center_x()))
                                         })
                                 }),
@@ -584,7 +570,7 @@ fn inventory() -> impl Element {
                 )
                 .item(
                     El::<NodeBundle>::new()
-                        .with_style(|style| style.width = Val::Percent(100.))
+                        .width(Val::Percent(100.))
                         .child(
                             grid((0..27).into_iter().map(|_| bern_cell_data_option(0.5)))
                                 .align_content(Align::new().center_x()),
@@ -606,16 +592,14 @@ static POINTER_POSITION: Lazy<Mutable<(f32, f32)>> = Lazy::new(default);
 
 fn ui_root(world: &mut World) {
     Stack::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
-        })
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
         .update_raw_el(|raw_el| {
             raw_el
                 .insert(On::<Pointer<Move>>::run(|move_: Listener<Pointer<Move>>| {
                     POINTER_POSITION.set(move_.pointer_location.position.into());
                 }))
-                .component_signal::<Pickable>(
+                .component_signal::<Pickable, _>(
                     DRAGGING_OPTION
                         .signal_ref(Option::is_some)
                         .map_true(|| Pickable::default()),
@@ -631,11 +615,9 @@ fn ui_root(world: &mut World) {
                 .map(Option::flatten)
                 .map_some(move |cell_data| {
                     icon(cell_data.index.signal(), cell_data.count.signal())
-                        .with_style(move |style| {
-                            style.position_type = PositionType::Absolute;
-                            style.width = Val::Px(CELL_WIDTH);
-                            style.height = Val::Px(CELL_WIDTH);
-                        })
+                        .width(Val::Px(CELL_WIDTH))
+                        .height(Val::Px(CELL_WIDTH))
+                        .with_style(move |style| style.position_type = PositionType::Absolute)
                         .z_index(ZIndex::Global(1))
                         .on_signal_with_style(POINTER_POSITION.signal(), move |style, pointer_position| {
                             style.left = Val::Px(pointer_position.0 - CELL_WIDTH / 2.);

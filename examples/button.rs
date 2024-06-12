@@ -55,11 +55,9 @@ fn button(font: Handle<Font>) -> impl Element {
             .map(BackgroundColor)
     };
     El::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Px(150.0);
-            style.height = Val::Px(65.);
-            style.border = UiRect::all(Val::Px(5.0));
-        })
+        .width(Val::Px(150.0))
+        .height(Val::Px(65.))
+        .with_style(|style| style.border = UiRect::all(Val::Px(5.0)))
         .align_content(Align::center())
         .border_color_signal(border_color_signal)
         .background_color_signal(background_color_signal)
@@ -99,10 +97,8 @@ fn setup(mut commands: Commands) {
 
 fn spawn_ui_root(world: &mut World) {
     El::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
-        })
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(button(world.resource::<AssetServer>().load("fonts/FiraSans-Bold.ttf")))
         .spawn(world);

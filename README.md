@@ -87,13 +87,15 @@ just example button  # port of https://github.com/bevyengine/bevy/blob/main/exam
 just example align  # alignment API demo, port of https://github.com/MoonZoon/MoonZoon/tree/main/examples/align and https://github.com/MoonZoon/MoonZoon/tree/main/examples/align_content
 just example scroll  # scrollability API demo, inspired by https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs
 just example scroll_grid  # i can't believe it's not scrolling !
-just example snake  # snek
-just example ecs_ui_sync
+just example snake  # with adjustable grid size and tick rate
+just example ecs_ui_sync  # forward ecs changes to the ui
+just example key_values_sorted  # text inputs, scrolling/viewport control, and dynamic lists; promises made promises kept ! https://discord.com/channels/691052431525675048/1192585689460658348/1193431789465776198 (yes i take requests)
 # ui challenges from https://github.com/bevyengine/bevy/discussions/11100
 just example challenge01  # game menu
 just example challenge02  # inventory
 just example challenge03  # health bar
 just example challenge04  # responsive menu
+just example challenge05  # character editor
 ```
 append `-r` to the `just` command to run the example in release mode e.g. `just example snake -r`
 

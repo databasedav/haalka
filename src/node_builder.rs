@@ -43,16 +43,16 @@ impl NodeBuilder {
         self
     }
 
-    pub fn with_entity(self, f: impl FnOnce(&mut EntityWorldMut) + Send + 'static) -> Self {
+    pub fn with_entity(self, f: impl FnOnce(EntityWorldMut) + Send + 'static) -> Self {
         self.on_spawn(move |world, entity| {
-            if let Some(mut entity) = world.get_entity_mut(entity) {
-                f(&mut entity);
+            if let Some(entity) = world.get_entity_mut(entity) {
+                f(entity);
             }
         })
     }
 
     pub fn insert<B: Bundle>(self, bundle: B) -> Self {
-        self.with_entity(|entity| {
+        self.with_entity(|mut entity| {
             entity.insert(bundle);
         })
     }
@@ -280,7 +280,7 @@ impl NodeBuilder {
                                     let mut children_lock = children_entities.lock_mut();
                                     children_lock.swap(old_index, new_index);
                                     // porting the swap implementation above
-                                    fn move_from_to(parent: &mut EntityWorldMut<'_>, children_entities: &[Entity], old_index: usize, new_index: usize) {
+                                    fn move_from_to(parent: &mut EntityWorldMut, children_entities: &[Entity], old_index: usize, new_index: usize) {
                                         if old_index != new_index {
                                             if let Some(old_entity) = children_entities.get(old_index).copied() {
                                                 parent.remove_children(&[old_entity]);
@@ -288,13 +288,13 @@ impl NodeBuilder {
                                             }
                                         }
                                     }
-                                    fn swap(parent: &mut EntityWorldMut<'_>, children_entities: &[Entity], a: usize, b: usize) {
-                                        move_from_to(parent, children_entities, a, b);
+                                    fn swap(mut parent: &mut EntityWorldMut, children_entities: &[Entity], a: usize, b: usize) {
+                                        move_from_to(&mut parent, children_entities, a, b);
                                         if a < b {
-                                            move_from_to(parent, children_entities, b - 1, a);
+                                            move_from_to(&mut parent, children_entities, b - 1, a);
 
                                         } else if a > b {
-                                            move_from_to(parent, children_entities, b + 1, a);
+                                            move_from_to(&mut parent, children_entities, b + 1, a);
                                         }
                                     }
                                     if let Some(mut parent) = world.get_entity_mut(parent) {

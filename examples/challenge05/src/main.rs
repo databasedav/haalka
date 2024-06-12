@@ -7,14 +7,11 @@
 // Changing the selection in the UI changes the 3D shapes in the 3D scene.
 // On the top of the UI is a text field for the character name.
 
-use std::convert::identity;
-
 use bevy::prelude::*;
 use haalka::*;
 use strum::{self, IntoEnumIterator};
 
 fn main() {
-    let selected_shape = Mutable::new(Shape::Cuboid);
     App::new()
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
@@ -27,13 +24,13 @@ fn main() {
             HaalkaPlugin,
         ))
         .add_systems(Startup, (setup, ui_root).chain())
-        .insert_resource(SelectedShape(selected_shape))
         .run();
 }
 
 const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
 const CLICKED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
+const BUTTON_WIDTH: Val = Val::Px(250.);
 const BUTTON_HEIGHT: Val = Val::Px(65.);
 
 #[derive(Clone, Copy, PartialEq, strum::Display, strum::EnumIter)]
@@ -47,11 +44,11 @@ enum Shape {
     Torus,
 }
 
-#[derive(Resource)]
-struct SelectedShape(Mutable<Shape>);
+static SELECTED_SHAPE: Lazy<Mutable<Shape>> = Lazy::new(|| Mutable::new(Shape::Cuboid));
+static SCROLL_POSITION: Lazy<Mutable<f32>> = Lazy::new(default);
 
-fn button(shape: Shape, selected_shape: Mutable<Shape>, hovered: Mutable<bool>) -> impl Element {
-    let selected = selected_shape.signal().eq(shape);
+fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
+    let selected = SELECTED_SHAPE.signal().eq(shape);
     let (pressed, pressed_signal) = Mutable::new_and_signal(false);
     let hovered_signal = hovered.signal();
     let selected_hovered_broadcaster =
@@ -86,17 +83,15 @@ fn button(shape: Shape, selected_shape: Mutable<Shape>, hovered: Mutable<bool>) 
             .map(BackgroundColor)
     };
     El::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Px(250.);
-            style.height = BUTTON_HEIGHT;
-            style.border = UiRect::all(Val::Px(5.));
-        })
+        .width(BUTTON_WIDTH)
+        .height(BUTTON_HEIGHT)
+        .with_style(|style| style.border = UiRect::all(Val::Px(5.)))
         .align_content(Align::center())
         .border_color_signal(border_color_signal)
         .background_color_signal(background_color_signal)
         .hovered_sync(hovered)
         .pressed_sync(pressed)
-        .on_click(move || selected_shape.set_neq(shape))
+        .on_click(move || SELECTED_SHAPE.set_neq(shape))
         .child(El::<TextBundle>::new().text(Text::from_section(
             shape.to_string(),
             TextStyle {
@@ -108,19 +103,14 @@ fn button(shape: Shape, selected_shape: Mutable<Shape>, hovered: Mutable<bool>) 
 }
 
 fn ui_root(world: &mut World) {
-    let selected_shape = world.resource::<SelectedShape>().0.clone();
     El::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
-        })
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
             Stack::<NodeBundle>::new()
-                .with_style(|style| {
-                    style.width = Val::Percent(100.);
-                    style.height = Val::Percent(100.);
-                })
+                .width(Val::Percent(100.))
+                .height(Val::Percent(100.))
                 .layer(
                     Column::<NodeBundle>::new()
                         .align(Align::new().center_y().right())
@@ -128,21 +118,37 @@ fn ui_root(world: &mut World) {
                             style.padding.right = Val::Percent(20.);
                             style.row_gap = Val::Px(20.);
                         })
-                        .item(
-                            El::<NodeBundle>::new()
-                                .align(Align::new().top().center_x())
-                                .with_style(|style| {
-                                    style.padding.right = Val::Percent(20.);
-                                })
-                                .child(El::<TextBundle>::new().text(Text::from_section(
-                                    "character name",
-                                    TextStyle {
-                                        font_size: 40.0,
-                                        color: Color::WHITE,
-                                        ..default()
-                                    },
-                                ))),
-                        )
+                        .item({
+                            let focused = Mutable::new(false);
+                            let name = Mutable::new(String::new());
+                            let name_shape_syncer = name.signal_cloned().for_each_sync(|name| {
+                                if let Some((i, shape)) =
+                                    Shape::iter().enumerate().find(|(_, shape)| shape.to_string() == name)
+                                {
+                                    SELECTED_SHAPE.set_neq(shape);
+                                    if let Val::Px(height) = BUTTON_HEIGHT {
+                                        SCROLL_POSITION.set_neq(i as f32 * -height);
+                                    }
+                                }
+                            });
+                            TextInput::new()
+                                .update_raw_el(move |raw_el| raw_el.hold_tasks([spawn(name_shape_syncer)]))
+                                .width(BUTTON_WIDTH)
+                                .height(Val::Px(40.))
+                                .mode(CosmicWrap::InfiniteLine)
+                                .scroll_disabled()
+                                .cursor_color(CursorColor(Color::WHITE))
+                                .fill_color(CosmicBackgroundColor(NORMAL_BUTTON))
+                                .attrs(TextAttrs::new().color(Color::WHITE))
+                                .placeholder(
+                                    PlaceHolder::new()
+                                        .text("name")
+                                        .attrs(TextAttrs::new().color(Color::GRAY)),
+                                )
+                                .focus_signal(focused.signal())
+                                .focused_sync(focused)
+                                .on_change_sync(name)
+                        })
                         .item({
                             let hovereds = MutableVec::new_with_values(
                                 (0..Shape::iter().count()).map(|_| Mutable::new(false)).collect(),
@@ -150,28 +156,20 @@ fn ui_root(world: &mut World) {
                             Column::<NodeBundle>::new()
                                 .height(Val::Px(200.))
                                 .align(Align::new().center_x())
-                                // TODO: hovering must be manually managed when children have their own hover handlers until mouseenter/mouseleave events in mod picking https://discord.com/channels/691052431525675048/1038322714320052304/1240468289512276000
-                                // .scrollable_on_hover(...)
-                                .scrollable(
-                                    ScrollabilitySettings {
-                                        flex_direction: FlexDirection::Column,
-                                        overflow: Overflow::clip_y(),
-                                        scroll_handler: BasicScrollHandler::new()
-                                            .direction(ScrollDirection::Vertical)
-                                            .pixels(20.)
-                                            .into(),
-                                    },
-                                    hovereds
-                                        .signal_vec_cloned()
-                                        .map_signal(|hovered| hovered.signal())
-                                        .to_signal_map(|hovereds| hovereds.iter().copied().any(identity))
-                                        .dedupe(),
-                                )
+                                .scrollable_on_hover(ScrollabilitySettings {
+                                    flex_direction: FlexDirection::Column,
+                                    overflow: Overflow::clip_y(),
+                                    scroll_handler: BasicScrollHandler::new()
+                                        .direction(ScrollDirection::Vertical)
+                                        .pixels(20.)
+                                        .into(),
+                                })
+                                .viewport_y_signal(SCROLL_POSITION.signal())
                                 .items({
                                     let hovereds = hovereds.lock_ref().into_iter().cloned().collect::<Vec<_>>();
                                     Shape::iter()
                                         .zip(hovereds)
-                                        .map(move |(shape, hovered)| button(shape, selected_shape.clone(), hovered))
+                                        .map(move |(shape, hovered)| button(shape, hovered))
                                 })
                         }),
                 ),
@@ -179,8 +177,8 @@ fn ui_root(world: &mut World) {
         .spawn(world);
 }
 
-fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>, selected_shape: Res<SelectedShape>) {
-    spawn(selected_shape.0.signal().for_each(|shape| {
+fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>) {
+    SELECTED_SHAPE.signal().for_each(|shape| {
         async_world().apply(move |world: &mut World| {
             let mut meshes = world.resource_mut::<Assets<Mesh>>();
             *world.query::<&mut Handle<Mesh>>().single_mut(world) = meshes.add(match shape {
@@ -192,7 +190,8 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>
                 Shape::Torus => Torus::default().into(),
             });
         })
-    }))
+    })
+    .apply(spawn)
     .detach();
     commands.spawn(PbrBundle {
         material: materials.add(Color::rgb_u8(87, 108, 50)),

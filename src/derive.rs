@@ -20,15 +20,18 @@ macro_rules! impl_haalka_methods {
                     impl $el_type<$node_type> {
                         $(
                             paste! {
-                                pub fn $field(self, $field: $field_type) -> Self {
-                                    self.update_raw_el(|raw_el| raw_el.insert($field))
+                                pub fn $field(mut self, [<$field _option>]: impl Into<Option<$field_type>>) -> Self {
+                                    if let Some($field) = [<$field _option>].into() {
+                                        self = self.update_raw_el(|raw_el| raw_el.insert($field));
+                                    }
+                                    self
                                 }
 
                                 pub fn [<with_ $field>](self, f: impl FnOnce(&mut $field_type) + Send + 'static) -> Self {
                                     self.update_raw_el(|raw_el| raw_el.with_component::<$field_type>(f))
                                 }
 
-                                pub fn [<$field _signal>](self, [<$field _signal>]: impl Signal<Item = $field_type> + Send + 'static) -> Self {
+                                pub fn [<$field _signal>]<S: Signal<Item = $field_type> + Send + 'static>(self, [<$field _signal>]: impl Into<Option<S>>) -> Self {
                                     self.update_raw_el(|raw_el| raw_el.component_signal([<$field _signal>]))
                                 }
 

@@ -7,7 +7,7 @@ use futures_signals::{
 
 use crate::{
     align::AlignableType, scrollable::Scrollable, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable,
-    IntoOptionElement, PointerEventAware, RawElWrapper, RawHaalkaEl, Sizable,
+    IntoOptionElement, PointerEventAware, RawElWrapper, RawHaalkaEl, Sizeable,
 };
 
 pub struct Row<NodeType> {
@@ -48,59 +48,66 @@ impl<NodeType: Bundle> RawElWrapper for Row<NodeType> {
 
 impl<NodeType: Bundle> PointerEventAware for Row<NodeType> {}
 impl<NodeType: Bundle> Scrollable for Row<NodeType> {}
-impl<NodeType: Bundle> Sizable for Row<NodeType> {}
+impl<NodeType: Bundle> Sizeable for Row<NodeType> {}
 
 impl<NodeType: Bundle> Row<NodeType> {
-    pub fn item<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self {
+    pub fn item<IOE: IntoOptionElement>(mut self, item_option: IOE) -> Self {
         let apply_alignment = self.apply_alignment_wrapper();
         self.raw_el = self.raw_el.child(
-            child_option
+            item_option
                 .into_option_element()
-                .map(|child| Self::align_child(child, apply_alignment)),
+                .map(|item| Self::align_child(item, apply_alignment)),
         );
         self
     }
 
-    pub fn item_signal<IOE: IntoOptionElement + 'static>(
+    pub fn item_signal<IOE: IntoOptionElement + 'static, S: Signal<Item = IOE> + Send + 'static>(
         mut self,
-        child_option: impl Signal<Item = IOE> + Send + 'static,
+        item_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
-        let apply_alignment = self.apply_alignment_wrapper();
-        self.raw_el = self.raw_el.child_signal(child_option.map(move |child_option| {
-            child_option
-                .into_option_element()
-                .map(|child| Self::align_child(child, apply_alignment))
-        }));
+        if let Some(item_option_signal) = item_option_signal_option.into() {
+            let apply_alignment = self.apply_alignment_wrapper();
+            self.raw_el = self.raw_el.child_signal(item_option_signal.map(move |item_option| {
+                item_option
+                    .into_option_element()
+                    .map(|item| Self::align_child(item, apply_alignment))
+            }));
+        }
         self
     }
 
-    pub fn items<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(mut self, children_options: I) -> Self
+    pub fn items<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(
+        mut self,
+        items_options_option: impl Into<Option<I>>,
+    ) -> Self
     where
         I::IntoIter: Send + 'static,
     {
-        let apply_alignment = self.apply_alignment_wrapper();
-        self.raw_el = self
-            .raw_el
-            .children(children_options.into_iter().map(move |child_option| {
-                child_option
+        if let Some(items_options) = items_options_option.into() {
+            let apply_alignment = self.apply_alignment_wrapper();
+            self.raw_el = self.raw_el.children(items_options.into_iter().map(move |item_option| {
+                item_option
                     .into_option_element()
-                    .map(|child| Self::align_child(child, apply_alignment))
+                    .map(|item| Self::align_child(item, apply_alignment))
             }));
+        }
         self
     }
 
-    pub fn items_signal_vec<IOE: IntoOptionElement + 'static>(
+    pub fn items_signal_vec<IOE: IntoOptionElement + 'static, S: SignalVec<Item = IOE> + Send + 'static>(
         mut self,
-        children_options_signal_vec: impl SignalVec<Item = IOE> + Send + 'static,
+        items_options_signal_vec_option: impl Into<Option<S>>,
     ) -> Self {
-        let apply_alignment = self.apply_alignment_wrapper();
-        self.raw_el = self
-            .raw_el
-            .children_signal_vec(children_options_signal_vec.map(move |child_option| {
-                child_option
-                    .into_option_element()
-                    .map(|child| Self::align_child(child, apply_alignment))
-            }));
+        if let Some(items_options_signal_vec) = items_options_signal_vec_option.into() {
+            let apply_alignment = self.apply_alignment_wrapper();
+            self.raw_el = self
+                .raw_el
+                .children_signal_vec(items_options_signal_vec.map(move |item_option| {
+                    item_option
+                        .into_option_element()
+                        .map(|item| Self::align_child(item, apply_alignment))
+                }));
+        }
         self
     }
 
@@ -115,7 +122,7 @@ impl<NodeType: Bundle> Row<NodeType> {
 }
 
 impl<NodeType: Bundle> Alignable for Row<NodeType> {
-    fn alignable_type(&self) -> Option<AlignableType> {
+    fn alignable_type(&mut self) -> Option<AlignableType> {
         Some(AlignableType::Row)
     }
 

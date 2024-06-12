@@ -163,17 +163,15 @@ fn healthbar(
     let health = health.broadcast();
     let percent_health = health.signal().map(move |h| h as f32 / max as f32).broadcast();
     Stack::<NodeBundle>::new()
+        .height(Val::Px(height))
         .with_style(move |style| {
-            style.height = Val::Px(height);
             style.border = UiRect::all(Val::Px(height / 12.));
         })
-        .border_color(Color::BLACK.into())
+        .border_color(BorderColor(Color::BLACK))
         .layer(
             El::<NodeBundle>::new()
-                .with_style(move |style| style.height = Val::Percent(100.))
-                .on_signal_with_style(percent_health.signal(), move |style, percent_health| {
-                    style.width = Val::Percent(percent_health as f32 * 100.)
-                })
+                .height(Val::Percent(100.))
+                .width_signal(percent_health.signal().map(|ph| ph * 100.).map(Val::Percent))
                 .background_color_signal(percent_health.signal().map(move |percent_health| {
                     let [r, g, b, ..] = color_gradient.at(percent_health as f64).to_rgba8();
                     Color::rgb_u8(r, g, b).into()
@@ -181,8 +179,8 @@ fn healthbar(
         )
         .layer(
             El::<TextBundle>::new()
+                .height(Val::Percent(100.))
                 .with_style(move |style| {
-                    style.height = Val::Percent(100.);
                     style.bottom = Val::Px(height / 8.);
                     style.left = Val::Px(height / 6.); // TODO: padding doesn't work here?
                 })
@@ -234,10 +232,8 @@ fn respawn_button() -> impl Element {
     let hovered = Mutable::new(false);
     El::<NodeBundle>::new()
         .align(Align::center())
-        .with_style(|style| {
-            style.width = Val::Px(250.);
-            style.height = Val::Px(80.);
-        })
+        .width(Val::Px(250.))
+        .height(Val::Px(80.))
         .background_color_signal(
             hovered
                 .signal()
@@ -262,10 +258,8 @@ fn ui_root(world: &mut World) {
     let health_option = world.resource::<HealthOptionMutable>().0.clone();
     let starting_distance = CAMERA_POSITION.distance(PLAYER_POSITION);
     El::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
-        })
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
         .child_signal(
             health_option
                 .signal_cloned()
@@ -278,11 +272,9 @@ fn ui_root(world: &mut World) {
                             .map_bool(
                                 clone!((style_data) move || {
                                     Stack::<NodeBundle>::new()
-                                        .with_style(|style| {
-                                            style.width = Val::Percent(100.);
-                                            style.height = Val::Percent(100.);
-                                            style.padding.bottom = Val::Px(10.);
-                                        })
+                                    .width(Val::Percent(100.))
+                                    .height(Val::Percent(100.))
+                                        .with_style(|style| style.padding.bottom = Val::Px(10.))
                                         .layer(
                                             Column::<NodeBundle>::new()
                                                 .with_style(|style| style.row_gap = Val::Px(MINI.1 / 4.))
@@ -320,10 +312,8 @@ fn ui_root(world: &mut World) {
                                                             .build()
                                                             .unwrap(),
                                                     )
-                                                    .with_style(|style| {
-                                                        style.width = Val::Px(MINI.0);
-                                                        style.height = Val::Px(MINI.1);
-                                                    }),
+                                                    .width(Val::Px(MINI.0))
+                                                    .height(Val::Px(MINI.1))
                                                 ),
                                         )
                                         .layer(
@@ -337,10 +327,8 @@ fn ui_root(world: &mut World) {
                                                     .unwrap(),
                                             )
                                             .align(Align::new().bottom().center_x())
-                                            .with_style(|style| {
-                                                style.width = Val::Px(MAXI.0);
-                                                style.height = Val::Px(MAXI.1);
-                                            }),
+                                            .width(Val::Px(MAXI.0))
+                                            .height(Val::Px(MAXI.1))
                                         )
                                         .type_erase()
                                 }),

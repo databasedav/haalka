@@ -6,6 +6,7 @@ use bevy::{
 };
 use futures_signals::signal::{always, BoxSignal, Mutable, Signal, SignalExt};
 use futures_signals_ext::{SignalExtBool, SignalExtExt};
+use std::convert::Into;
 
 pub trait Scrollable: RawElWrapper {
     fn scrollable(
@@ -14,18 +15,17 @@ pub trait Scrollable: RawElWrapper {
         active_signal: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
         self.update_raw_el(move |raw_el| {
-            raw_el.defer_update(AppendDirection::Front, move |raw_el| {
-                RawHaalkaEl::from(NodeBundle::default())
-                    .with_component::<Style>(move |style| {
-                        style.flex_direction = settings.flex_direction;
-                        style.overflow = settings.overflow;
-                    })
-                    .child(
-                        raw_el
-                            .insert(ScrollHandler(settings.scroll_handler))
-                            .component_signal::<ScrollableMarker>(active_signal.map_true(|| ScrollableMarker)),
-                    )
-            })
+            raw_el
+                .insert(ScrollHandler(settings.scroll_handler))
+                .component_signal::<ScrollableMarker, _>(active_signal.map_true(|| ScrollableMarker))
+                .defer_update(AppendDirection::Front, move |raw_el| {
+                    RawHaalkaEl::from(NodeBundle::default())
+                        .with_component::<Style>(move |style| {
+                            style.flex_direction = settings.flex_direction;
+                            style.overflow = settings.overflow;
+                        })
+                        .child(raw_el)
+                })
         })
     }
 }
@@ -82,22 +82,38 @@ impl BasicScrollHandler {
         }
     }
 
-    pub fn direction_signal(mut self, direction_signal: impl Signal<Item = ScrollDirection> + Send + 'static) -> Self {
-        self.direction = Some(direction_signal.boxed());
+    pub fn direction_signal<S: Signal<Item = ScrollDirection> + Send + 'static>(
+        mut self,
+        direction_signal_option: impl Into<Option<S>>,
+    ) -> Self {
+        if let Some(direction_signal) = direction_signal_option.into() {
+            self.direction = Some(direction_signal.boxed());
+        }
         self
     }
 
-    pub fn direction(self, direction: ScrollDirection) -> Self {
-        self.direction_signal(always(direction))
-    }
-
-    pub fn pixels_signal(mut self, pixels_signal: impl Signal<Item = f32> + Send + 'static) -> Self {
-        self.magnitude = Some(pixels_signal.boxed());
+    pub fn direction(mut self, direction_option: impl Into<Option<ScrollDirection>>) -> Self {
+        if let Some(direction) = direction_option.into() {
+            self = self.direction_signal(always(direction));
+        }
         self
     }
 
-    pub fn pixels(self, pixels: f32) -> Self {
-        self.pixels_signal(always(pixels))
+    pub fn pixels_signal<S: Signal<Item = f32> + Send + 'static>(
+        mut self,
+        pixels_signal_option: impl Into<Option<S>>,
+    ) -> Self {
+        if let Some(pixels_signal) = pixels_signal_option.into() {
+            self.magnitude = Some(pixels_signal.boxed());
+        }
+        self
+    }
+
+    pub fn pixels(mut self, pixels_option: impl Into<Option<f32>>) -> Self {
+        if let Some(pixels) = pixels_option.into() {
+            self = self.pixels_signal(always(pixels));
+        }
+        self
     }
 }
 
@@ -124,7 +140,7 @@ impl From<BasicScrollHandler>
             // ergonomic task collection strat if so
             spawn(magnitude_signal.for_each_sync(clone!((magnitude) move |m| magnitude.set_neq(m)))).detach();
         }
-        Box::new(
+        let f = {
             move |mouse_wheel_event: &MouseWheel,
                   style: &mut Style,
                   parent: &Parent,
@@ -133,7 +149,9 @@ impl From<BasicScrollHandler>
                 match direction.get() {
                     ScrollDirection::Vertical => {
                         let height = scrollable_node.size().y;
-                        let container_height = node_query.get(parent.get()).unwrap().size().y;
+                        let Ok(container_height) = node_query.get(parent.get()).map(|node| node.size().y) else {
+                            return;
+                        };
                         let max_scroll: f32 = (height - container_height).max(0.);
                         let dy = match mouse_wheel_event.unit {
                             MouseScrollUnit::Line => magnitude.get() * mouse_wheel_event.y,
@@ -148,7 +166,9 @@ impl From<BasicScrollHandler>
                     }
                     ScrollDirection::Horizontal => {
                         let width = scrollable_node.size().x;
-                        let container_width = node_query.get(parent.get()).unwrap().size().x;
+                        let Ok(container_width) = node_query.get(parent.get()).map(|node| node.size().x) else {
+                            return;
+                        };
                         let max_scroll: f32 = (width - container_width).max(0.);
                         let dx = match mouse_wheel_event.unit {
                             MouseScrollUnit::Line => mouse_wheel_event.y * magnitude.get(),
@@ -162,8 +182,9 @@ impl From<BasicScrollHandler>
                         }
                     }
                 }
-            },
-        )
+            }
+        };
+        Box::new(f)
     }
 }
 

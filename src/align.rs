@@ -113,25 +113,32 @@ pub(crate) fn register_align_signal<REW: RawElWrapper>(
 }
 
 pub trait Alignable: RawElWrapper {
-    fn alignable_type(&self) -> Option<AlignableType> {
+    fn alignable_type(&mut self) -> Option<AlignableType> {
         None
     }
 
     fn align_mut(&mut self) -> &mut Option<AlignHolder>;
 
-    fn align(mut self, align: Align) -> Self
+    fn align(mut self, align_option: impl Into<Option<Align>>) -> Self
     where
         Self: Sized,
     {
-        *self.align_mut() = Some(AlignHolder::Align(align));
+        if let Some(align) = align_option.into() {
+            *self.align_mut() = Some(AlignHolder::Align(align));
+        }
         self
     }
 
-    fn align_signal(mut self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self
+    fn align_signal<S: Signal<Item = Option<Align>> + Send + 'static>(
+        mut self,
+        align_option_signal_option: impl Into<Option<S>>,
+    ) -> Self
     where
         Self: Sized,
     {
-        *self.align_mut() = Some(AlignHolder::AlignSignal(align_option_signal.boxed()));
+        if let Some(align_option_signal) = align_option_signal_option.into() {
+            *self.align_mut() = Some(AlignHolder::AlignSignal(align_option_signal.boxed()));
+        }
         self
     }
 
@@ -142,24 +149,34 @@ pub trait Alignable: RawElWrapper {
 
     fn apply_content_alignment(_style: &mut Style, _alignment: Alignment, _action: AddRemove);
 
-    fn align_content(self, align: Align) -> Self {
-        let apply_content_alignment = self.apply_content_alignment_wrapper();
-        self.update_raw_el(move |raw_el| {
-            raw_el.with_component::<Style>(move |style| {
-                for alignment in align.alignments {
-                    apply_content_alignment(style, alignment, AddRemove::Add);
-                }
-            })
-        })
+    fn align_content(mut self, align_option: impl Into<Option<Align>>) -> Self {
+        if let Some(align) = align_option.into() {
+            let apply_content_alignment = self.apply_content_alignment_wrapper();
+            self = self.update_raw_el(move |raw_el| {
+                raw_el.with_component::<Style>(move |style| {
+                    for alignment in align.alignments {
+                        apply_content_alignment(style, alignment, AddRemove::Add);
+                    }
+                })
+            });
+        }
+        self
     }
 
-    fn align_content_signal(self, align_option_signal: impl Signal<Item = Option<Align>> + Send + 'static) -> Self {
-        let apply_content_alignment = self.apply_content_alignment_wrapper();
-        register_align_signal(
-            self,
-            align_option_signal.map(|align_option| align_option.map(|align| align.alignments.into_iter().collect())),
-            apply_content_alignment,
-        )
+    fn align_content_signal<S: Signal<Item = Option<Align>> + Send + 'static>(
+        mut self,
+        align_option_signal_option: impl Into<Option<S>>,
+    ) -> Self {
+        if let Some(align_option_signal) = align_option_signal_option.into() {
+            let apply_content_alignment = self.apply_content_alignment_wrapper();
+            self = register_align_signal(
+                self,
+                align_option_signal
+                    .map(|align_option| align_option.map(|align| align.alignments.into_iter().collect())),
+                apply_content_alignment,
+            );
+        }
+        self
     }
 }
 
@@ -211,8 +228,8 @@ where
 }
 
 impl<EW: ElementWrapper> Alignable for EW {
-    fn alignable_type(&self) -> Option<AlignableType> {
-        self.element_ref().alignable_type()
+    fn alignable_type(&mut self) -> Option<AlignableType> {
+        self.element_mut().alignable_type()
     }
 
     fn align_mut(&mut self) -> &mut Option<AlignHolder> {
@@ -267,7 +284,7 @@ impl RawElWrapper for AlignabilityFacade {
 }
 
 impl Alignable for AlignabilityFacade {
-    fn alignable_type(&self) -> Option<AlignableType> {
+    fn alignable_type(&mut self) -> Option<AlignableType> {
         Some(self.alignable_type)
     }
 

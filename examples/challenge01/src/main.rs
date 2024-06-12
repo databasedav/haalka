@@ -72,13 +72,13 @@ struct Button {
 // implementing `ElementWrapper` allows the struct to be passed directly to .child methods
 impl ElementWrapper for Button {
     type EL = El<NodeBundle>;
-    fn element_ref(&self) -> &Self::EL {
-        &self.el
-    }
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
 }
+
+impl Sizeable for Button {}
+impl PointerEventAware for Button {}
 
 impl Button {
     fn new() -> Self {
@@ -117,8 +117,8 @@ impl Button {
         Self {
             el: {
                 El::<NodeBundle>::new()
+                    .height(Val::Px(DEFAULT_BUTTON_HEIGHT))
                     .with_style(move |style| {
-                        style.height = Val::Px(DEFAULT_BUTTON_HEIGHT);
                         style.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH));
                     })
                     .pressed_sync(pressed)
@@ -132,28 +132,8 @@ impl Button {
         }
     }
 
-    // we only expose some methods for customization, but we can add what ever we want to be dynamic
-    fn width(mut self, width: Val) -> Self {
-        self.el = self.el.with_style(move |style| {
-            style.width = width;
-        });
-        self
-    }
-
-    fn height(mut self, height: Val) -> Self {
-        self.el = self.el.with_style(move |style| {
-            style.height = height;
-        });
-        self
-    }
-
     fn body(mut self, body: impl Element) -> Self {
         self.el = self.el.child(body);
-        self
-    }
-
-    fn on_click(mut self, on_click: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.el = self.el.on_click(on_click);
         self
     }
 
@@ -208,17 +188,15 @@ fn sub_menu_button(sub_menu: SubMenu) -> Button {
 
 fn menu_base(width: f32, height: f32, title: &str) -> Column<NodeBundle> {
     Column::<NodeBundle>::new()
-        .with_style(move |style| {
-            style.width = Val::Px(width);
-            style.height = Val::Px(height);
-            style.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH));
-        })
+        .width(Val::Px(width))
+        .height(Val::Px(height))
+        .with_style(move |style| style.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH)))
         .border_color(BorderColor(Color::BLACK))
         .background_color(BackgroundColor(NORMAL_BUTTON))
         .item(
             El::<NodeBundle>::new()
+                .height(Val::Px(MENU_ITEM_HEIGHT))
                 .with_style(|style| {
-                    style.height = Val::Px(MENU_ITEM_HEIGHT);
                     style.padding = UiRect::all(Val::Px(BASE_PADDING * 2.));
                 })
                 .child(
@@ -302,9 +280,6 @@ impl Checkbox {
 
 impl ElementWrapper for Checkbox {
     type EL = Button;
-    fn element_ref(&self) -> &Self::EL {
-        &self.el
-    }
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
@@ -407,9 +382,6 @@ impl MutuallyExclusiveOptions {
 
 impl ElementWrapper for MutuallyExclusiveOptions {
     type EL = Row<NodeBundle>;
-    fn element_ref(&self) -> &Self::EL {
-        &self.el
-    }
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
@@ -536,9 +508,6 @@ impl IterableOptions {
 
 impl ElementWrapper for IterableOptions {
     type EL = Row<NodeBundle>;
-    fn element_ref(&self) -> &Self::EL {
-        &self.el
-    }
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
@@ -594,11 +563,9 @@ impl Slider {
                     )
                     .item(
                         Stack::<NodeBundle>::new()
-                            .with_style(move |style| {
-                                style.width = Val::Px(slider_width);
-                                style.height = Val::Px(5.);
-                                style.padding = UiRect::horizontal(Val::Px(slider_padding));
-                            })
+                            .width(Val::Px(slider_width))
+                            .height(Val::Px(5.))
+                            .with_style(move |style| style.padding = UiRect::horizontal(Val::Px(slider_padding)))
                             .background_color(BackgroundColor(Color::BLACK))
                             .layer({
                                 let dragging = Mutable::new(false);
@@ -628,9 +595,6 @@ impl Slider {
 
 impl ElementWrapper for Slider {
     type EL = Row<NodeBundle>;
-    fn element_ref(&self) -> &Self::EL {
-        &self.el
-    }
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
@@ -674,11 +638,9 @@ fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<N
                 .map(BackgroundColor),
         )
         .on_hovered_change(move |is_hovered| only_one_up_flipper(&hovered, &MENU_ITEM_HOVERED_OPTION, Some(is_hovered)))
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.padding = UiRect::axes(Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.));
-            style.height = Val::Px(MENU_ITEM_HEIGHT);
-        })
+        .width(Val::Percent(100.))
+        .height(Val::Px(MENU_ITEM_HEIGHT))
+        .with_style(|style| style.padding = UiRect::axes(Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.)))
         .layer(
             El::<TextBundle>::new()
                 .text(text(label))
@@ -800,10 +762,8 @@ impl Dropdown {
                 .hovered_signal(hovered.signal())
                 .body(
                     Stack::<NodeBundle>::new()
-                    .with_style(|style| {
-                        style.width = Val::Percent(100.);
-                        style.padding = UiRect::horizontal(Val::Px(BASE_PADDING));
-                    })
+                    .width(Val::Percent(100.))
+                    .with_style(|style| style.padding = UiRect::horizontal(Val::Px(BASE_PADDING)))
                     .layer(
                         El::<TextBundle>::new()
                         .align(Align::new().left())
@@ -847,10 +807,10 @@ impl Dropdown {
                 show_dropdown.signal()
                 .map_true(clone!((options, show_dropdown, selected) move || {
                     Column::<NodeBundle>::new()
+                    .width(Val::Percent(100.))
                     .with_style(|style| {
                         style.position_type = PositionType::Absolute;
                         style.top = Val::Percent(100.);
-                        style.width = Val::Percent(100.);
                     })
                     .items_signal_vec(
                         options.signal_vec_cloned()
@@ -891,9 +851,6 @@ impl Dropdown {
 
 impl ElementWrapper for Dropdown {
     type EL = El<NodeBundle>;
-    fn element_ref(&self) -> &Self::EL {
-        &self.el
-    }
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
@@ -1085,9 +1042,9 @@ fn graphics_menu() -> Column<NodeBundle> {
             // allowing setting Over/Out order at runtime or implementing .on_hovered_outside, i
             // should do both of these
             El::<NodeBundle>::new()
-                .with_style(move |style| {
-                    style.height = Val::Px(SUB_MENU_HEIGHT - (l + 1) as f32 * MENU_ITEM_HEIGHT - BASE_PADDING * 2.)
-                })
+                .height(Val::Px(
+                    SUB_MENU_HEIGHT - (l + 1) as f32 * MENU_ITEM_HEIGHT - BASE_PADDING * 2.,
+                ))
                 .on_hovered_change(|is_hovered| {
                     if is_hovered {
                         if let Some(hovered) = MENU_ITEM_HOVERED_OPTION.take() {
@@ -1124,7 +1081,7 @@ fn input_event_listener_controller<E: Element>(
     mut callback: impl FnMut() -> On<MenuInputEvent> + Send + 'static,
 ) -> E {
     element.update_raw_el(|raw_el| {
-        raw_el.on_signal_with_entity(listening, move |entity, listening| {
+        raw_el.on_signal_with_entity(listening, move |mut entity, listening| {
             if listening {
                 entity.insert(callback());
             } else {
@@ -1192,9 +1149,9 @@ fn menu() -> impl Element {
                 SubMenu::Graphics => graphics_menu(),
             };
             Stack::<NodeBundle>::new()
+                .width(Val::Px(SUB_MENU_WIDTH))
+                .height(Val::Px(SUB_MENU_HEIGHT))
                 .with_style(|style| {
-                    style.width = Val::Px(SUB_MENU_WIDTH);
-                    style.height = Val::Px(SUB_MENU_HEIGHT);
                     // TODO: without absolute there's some weird bouncing when switching between
                     // menus, perhaps due to the layout system having to figure stuff out ?
                     style.position_type = PositionType::Absolute;
@@ -1433,10 +1390,8 @@ const SLIDER_RATE_LIMIT: f32 = 0.001;
 
 fn ui_root(world: &mut World) {
     El::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
-        })
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(menu())
         .spawn(world);

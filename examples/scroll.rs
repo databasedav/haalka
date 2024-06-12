@@ -59,10 +59,8 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
 
 fn ui_root(world: &mut World) {
     El::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
-        })
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
             Row::<NodeBundle>::new()

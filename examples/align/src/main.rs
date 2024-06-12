@@ -62,10 +62,8 @@ fn alignment_button(alignment: Alignment) -> impl Element {
     let hovered = Mutable::new(false);
     El::<NodeBundle>::new()
         .align(Align::center())
-        .with_style(|style| {
-            style.width = Val::Px(250.);
-            style.height = Val::Px(80.);
-        })
+        .width(Val::Px(250.))
+        .height(Val::Px(80.))
         .background_color_signal(
             signal::or(
                 hovered.signal(),
@@ -90,11 +88,9 @@ fn alignment_button(alignment: Alignment) -> impl Element {
 
 fn ui_root(world: &mut World) {
     Column::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
-            style.row_gap = Val::Px(15.);
-        })
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
+        .with_style(|style| style.row_gap = Val::Px(15.))
         .align_content(Align::center())
         .align(Align::center())
         .item(
@@ -130,14 +126,12 @@ fn ui_root(world: &mut World) {
         .spawn(world);
 }
 
-fn container_style<E: RawElWrapper>(el: E) -> E {
-    el.update_raw_el(|raw_el| {
+fn container_style<E: RawElWrapper + Sizeable>(el: E) -> E {
+    el.width(Val::Px(278.)).height(Val::Px(200.)).update_raw_el(|raw_el| {
         raw_el
             .insert::<BorderColor>(Color::GRAY.into())
             .with_component::<Style>(|style| {
                 style.border = UiRect::all(Val::Px(3.));
-                style.width = Val::Px(278.);
-                style.height = Val::Px(200.);
             })
     })
 }
@@ -146,7 +140,7 @@ fn text(text: &str, font_size: f32) -> Text {
     Text::from_section(text, TextStyle { font_size, ..default() })
 }
 
-fn container(name: &str, element: impl Element) -> impl Element {
+fn container(name: &str, element: impl Element + Sizeable) -> impl Element {
     Column::<NodeBundle>::new()
         .item(
             El::<TextBundle>::new()
@@ -172,11 +166,9 @@ fn container(name: &str, element: impl Element) -> impl Element {
 fn rectangle(index: i32) -> impl Element {
     let size = 40;
     El::<NodeBundle>::new()
-        .with_style(move |style| {
-            style.width = Val::Px(size as f32);
-            style.height = Val::Px(size as f32);
-        })
-        .background_color(Color::DARK_GREEN.into())
+        .width(Val::Px(size as f32))
+        .height(Val::Px(size as f32))
+        .background_color(BackgroundColor(Color::DARK_GREEN))
         .align_signal(
             ALIGNMENT
                 .signal()

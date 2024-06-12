@@ -110,10 +110,8 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
         .map(|size| (SIDE as f32 - GRID_TRACK_FLOAT_PRECISION_SLACK) / size as f32)
         .broadcast();
     Grid::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Px(SIDE as f32);
-            style.height = Val::Px(SIDE as f32);
-        })
+        .width(Val::Px(SIDE as f32))
+        .height(Val::Px(SIDE as f32))
         .row_wrap_cell_width_signal(cell_size.signal())
         .cells_signal_vec(
             cells
@@ -121,10 +119,8 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
                 .sort_by_cloned(|(left, _), (right, _)| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)))
                 .map(move |(_, cell)| {
                     El::<NodeBundle>::new()
-                        .on_signal_with_style(cell_size.signal(), |style, cell_size| {
-                            style.width = Val::Px(cell_size);
-                            style.height = Val::Px(cell_size);
-                        })
+                        .width_signal(cell_size.signal().map(Val::Px))
+                        .height_signal(cell_size.signal().map(Val::Px))
                         .background_color_signal(cell.signal().dedupe().map(Into::into))
                 }),
         )
@@ -132,10 +128,8 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
 
 fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> impl Element {
     Column::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Px((WIDTH - SIDE) as f32);
-            style.row_gap = Val::Px(10.);
-        })
+        .width(Val::Px((WIDTH - SIDE) as f32))
+        .with_style(|style| style.row_gap = Val::Px(10.))
         .align_content(Align::center())
         .item(El::<TextBundle>::new().text_signal(score.signal().map(|score| {
             Text::from_section(
@@ -193,16 +187,12 @@ fn ui_root(world: &mut World) {
     let tick_rate = world.resource::<TickRate>().0.clone();
     let game_over = world.resource::<GameOver>().0.clone();
     Stack::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
-        })
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
         .layer(
             Row::<NodeBundle>::new()
-                .with_style(|style| {
-                    style.width = Val::Percent(100.);
-                    style.height = Val::Percent(100.);
-                })
+                .width(Val::Percent(100.))
+                .height(Val::Percent(100.))
                 .item(grid(size.clone(), cells))
                 .item(hud(score, size, tick_rate)),
         )
@@ -214,10 +204,8 @@ fn restart_button() -> impl Element {
     let hovered = Mutable::new(false);
     El::<NodeBundle>::new()
         .align(Align::center())
-        .with_style(|style| {
-            style.width = Val::Px(250.);
-            style.height = Val::Px(80.);
-        })
+        .width(Val::Px(250.))
+        .height(Val::Px(80.))
         .background_color_signal(
             hovered
                 .signal()
@@ -307,7 +295,7 @@ fn grid_size_changer(
 fn text_button(text_: &str, on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
     let hovered = Mutable::new(false);
     El::<NodeBundle>::new()
-        .with_style(|style| style.width = Val::Px(45.0))
+        .width(Val::Px(45.0))
         .align_content(Align::center())
         .background_color_signal(
             hovered

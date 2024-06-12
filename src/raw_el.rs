@@ -14,7 +14,7 @@ use futures_signals::{
 use futures_signals_ext::*;
 use futures_util::Future;
 
-use crate::{async_world, node_builder::TaskHolder, spawn, NodeBuilder};
+use crate::{async_world, node_builder::TaskHolder, spawn, NodeBuilder, UiRoot};
 
 pub struct RawHaalkaEl {
     pub(crate) node_builder: Option<NodeBuilder>,
@@ -50,6 +50,8 @@ impl RawHaalkaEl {
         }
     }
 
+    // force updates to be in the back of the line, with some crude ordering
+    // TODO: allow attaching some sortable data to unlimit ordering options
     pub fn defer_update(
         mut self,
         append_direction: AppendDirection,
@@ -131,9 +133,9 @@ impl RawHaalkaEl {
         self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn)))
     }
 
-    // TODO: requires bevy 0.14
+    /// TODO: requires bevy 0.14
     // pub fn on_remove(self, on_remove: impl FnOnce(&mut World, Entity) + Send + Sync + 'static) ->
-    // Self {     self.on_spawn(|world, entity| {
+    // Self { self.on_spawn(|world, entity| {
     //         if let Some(mut on_remove_component) = world.entity_mut(entity).get_mut::<OnRemove>() {
     //             on_remove_component.0.push(Box::new(on_remove));
     //         } else {
@@ -146,32 +148,67 @@ impl RawHaalkaEl {
         self.insert(On::<E>::run(handler))
     }
 
-    pub fn on_event<E: EntityEvent>(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.on_event_with_system::<E, _>(handler)
+    pub fn on_event_with_system_disableable<E: EntityEvent, Marker>(
+        self,
+        handler: impl IntoSystem<(), (), Marker> + Send + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        let handler_holder = Mutable::new(Some(On::<E>::run(handler)));
+        self.on_signal_with_entity(disabled.dedupe(), move |mut entity, disabled| {
+            if disabled {
+                handler_holder.set(entity.take::<On<E>>());
+            } else {
+                entity.insert(handler_holder.lock_mut().take().unwrap());
+            }
+        })
+    }
+
+    pub fn on_event<E: EntityEvent>(self, mut handler: impl FnMut(Listener<E>) + Send + Sync + 'static) -> Self {
+        self.on_event_with_system::<E, _>(move |event: Listener<E>| handler(event))
+    }
+
+    pub fn on_event_mut<E: EntityEvent>(self, mut handler: impl FnMut(ListenerMut<E>) + Send + Sync + 'static) -> Self {
+        self.on_event_with_system::<E, _>(move |event: ListenerMut<E>| handler(event))
     }
 
     pub fn on_event_propagation_stoppable<E: EntityEvent>(
         self,
-        mut handler: impl FnMut() + Send + Sync + 'static,
+        mut handler: impl FnMut(&E) + Send + Sync + 'static,
         propagation_stopped: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
         let propagation_stopped_mutable = Mutable::new(false);
         let syncer = spawn(propagation_stopped
             .for_each_sync(clone!((propagation_stopped_mutable) move |propagation_stopped| propagation_stopped_mutable.set_neq(propagation_stopped))));
-        self.hold_tasks([syncer])
-            .on_event_with_system::<E, _>(move |mut event: ListenerMut<E>| {
-                if propagation_stopped_mutable.get() {
-                    event.stop_propagation();
-                }
-                handler();
-            })
+        self.hold_tasks([syncer]).on_event_mut::<E>(move |mut event| {
+            if propagation_stopped_mutable.get() {
+                event.stop_propagation();
+            }
+            handler(&**event);
+        })
     }
 
-    pub fn on_event_stop_propagation<E: EntityEvent>(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
+    pub fn on_event_stop_propagation<E: EntityEvent>(self, handler: impl FnMut(&E) + Send + Sync + 'static) -> Self {
         self.on_event_propagation_stoppable::<E>(handler, always(true))
     }
 
-    // TODO: global event listeners
+    // global in relation to the ui root
+    pub fn on_global_event_with_system<E: EntityEvent, Marker>(
+        self,
+        handler: impl IntoSystem<(), (), Marker> + Send + 'static,
+    ) -> Self {
+        self.insert_forwarded(ui_root_forwarder, On::<E>::run(handler))
+    }
+
+    pub fn on_global_event<E: EntityEvent>(self, mut handler: impl FnMut(Listener<E>) + Send + Sync + 'static) -> Self {
+        self.on_global_event_with_system::<E, _>(move |event: Listener<E>| handler(event))
+    }
+
+    pub fn on_global_event_mut<E: EntityEvent>(
+        self,
+        mut handler: impl FnMut(ListenerMut<E>) + Send + Sync + 'static,
+    ) -> Self {
+        self.on_global_event_with_system::<E, _>(move |event: ListenerMut<E>| handler(event))
+    }
 
     pub fn on_signal<T, Fut: Future<Output = ()> + Send + 'static>(
         self,
@@ -192,12 +229,50 @@ impl RawHaalkaEl {
         })
     }
 
-    pub fn with_entity(self, f: impl FnOnce(&mut EntityWorldMut) + Send + 'static) -> Self {
+    pub fn with_entity(self, f: impl FnOnce(EntityWorldMut) + Send + 'static) -> Self {
         self.update_raw_el(|raw_el| raw_el.update_node_builder(|node_builder| node_builder.with_entity(f)))
     }
 
+    pub fn with_entity_forwarded(
+        self,
+        forwarder: impl FnOnce(&mut EntityWorldMut) -> Option<Entity> + Send + 'static,
+        f: impl FnOnce(EntityWorldMut) + Send + 'static,
+    ) -> Self {
+        self.with_entity(move |mut entity| {
+            if let Some(forwardee) = forwarder(&mut entity) {
+                entity.world_scope(|world| {
+                    if let Some(forwardee) = world.get_entity_mut(forwardee) {
+                        f(forwardee)
+                    }
+                })
+            }
+        })
+    }
+
+    pub fn insert_forwarded(
+        self,
+        forwarder: impl FnOnce(&mut EntityWorldMut) -> Option<Entity> + Send + 'static,
+        bundle: impl Bundle + Send + 'static,
+    ) -> Self {
+        self.with_entity_forwarded(forwarder, move |mut entity| {
+            entity.insert(bundle);
+        })
+    }
+
     pub fn with_component<C: Component>(self, f: impl FnOnce(&mut C) + Send + 'static) -> Self {
-        self.with_entity(|entity| {
+        self.with_entity(|mut entity| {
+            if let Some(mut component) = entity.get_mut::<C>() {
+                f(&mut component);
+            }
+        })
+    }
+
+    pub fn with_component_forwarded<C: Component>(
+        self,
+        forwarder: impl FnOnce(&mut EntityWorldMut) -> Option<Entity> + Send + 'static,
+        f: impl FnOnce(&mut C) + Send + 'static,
+    ) -> Self {
+        self.with_entity_forwarded(forwarder, move |mut entity| {
             if let Some(mut component) = entity.get_mut::<C>() {
                 f(&mut component);
             }
@@ -215,16 +290,33 @@ impl RawHaalkaEl {
     pub fn on_signal_with_entity<T: Send + 'static>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
-        f: impl FnMut(&mut EntityWorldMut, T) + Send + 'static,
+        f: impl FnMut(EntityWorldMut, T) + Send + 'static,
     ) -> Self {
         let f = Arc::new(Mutex::new(f));
         self.on_signal(signal, move |entity, value| {
             async_world().apply(clone!((f) move |world: &mut World| {
-                if let Some(mut entity) = world.get_entity_mut(entity) {
+                if let Some(entity) = world.get_entity_mut(entity) {
                     // safe because commands are run serially  // TODO: confirm, otherwise f must be Clone
-                    (f.lock().expect("expected on_signal commands to run serially"))(&mut entity, value);
+                    (f.lock().expect("expected on_signal commands to run serially"))(entity, value);
                 }
             }))
+        })
+    }
+
+    pub fn on_signal_with_entity_forwarded<T: Send + 'static>(
+        self,
+        signal: impl Signal<Item = T> + Send + 'static,
+        mut forwarder: impl FnMut(&mut EntityWorldMut) -> Option<Entity> + Send + 'static,
+        mut f: impl FnMut(EntityWorldMut, T) + Send + 'static,
+    ) -> Self {
+        self.on_signal_with_entity(signal, move |mut entity, value| {
+            if let Some(forwardee) = forwarder(&mut entity) {
+                entity.world_scope(|world| {
+                    if let Some(forwardee) = world.get_entity_mut(forwardee) {
+                        f(forwardee, value);
+                    }
+                })
+            }
         })
     }
 
@@ -233,22 +325,56 @@ impl RawHaalkaEl {
         signal: impl Signal<Item = T> + Send + 'static,
         mut f: impl FnMut(&mut C, T) + Send + 'static,
     ) -> Self {
-        self.on_signal_with_entity(signal, move |entity, value| {
+        self.on_signal_with_entity(signal, move |mut entity, value| {
             if let Some(mut component) = entity.get_mut::<C>() {
                 f(&mut component, value);
             }
         })
     }
 
-    pub fn component_signal<C: Component>(
+    pub fn on_signal_with_component_forwarded<T: Send + 'static, C: Component>(
         self,
-        component_signal: impl Signal<Item = impl Into<Option<C>>> + Send + 'static,
+        signal: impl Signal<Item = T> + Send + 'static,
+        forwarder: impl FnMut(&mut EntityWorldMut) -> Option<Entity> + Send + 'static,
+        mut f: impl FnMut(&mut C, T) + Send + 'static,
     ) -> Self {
-        // TODO: need partial_eq derivations for all the node related components to minimize updates
-        // with .dedupe
-        self.on_signal_with_entity::<Option<C>>(
-            component_signal.map(|into_component_option| into_component_option.into()),
-            move |entity, component_option| {
+        self.on_signal_with_entity_forwarded(signal, forwarder, move |mut entity, value| {
+            if let Some(mut component) = entity.get_mut::<C>() {
+                f(&mut component, value);
+            }
+        })
+    }
+
+    pub fn component_signal<C: Component, S: Signal<Item = impl Into<Option<C>>> + Send + 'static>(
+        mut self,
+        component_option_signal_option: impl Into<Option<S>>,
+    ) -> Self {
+        if let Some(component_option_signal) = component_option_signal_option.into() {
+            // TODO: need partial_eq derivations for all the node related components to minimize updates
+            // with .dedupe
+            self = self.on_signal_with_entity::<Option<C>>(
+                component_option_signal.map(|into_component_option| into_component_option.into()),
+                move |mut entity, component_option| {
+                    if let Some(component) = component_option {
+                        entity.insert(component);
+                    } else {
+                        entity.remove::<C>();
+                    }
+                },
+            );
+        }
+        self
+    }
+
+    pub fn component_signal_forwarded<C: Component>(
+        self,
+        forwarder: impl FnMut(&mut EntityWorldMut) -> Option<Entity> + Send + 'static,
+        component_option_signal: impl Signal<Item = impl Into<Option<C>>> + Send + 'static,
+    ) -> Self {
+        self.on_signal_with_entity_forwarded(
+            component_option_signal.map(|into_component_option| into_component_option.into()),
+            forwarder,
+            move |mut entity, component_option| {
                 if let Some(component) = component_option {
                     entity.insert(component);
                 } else {
@@ -279,15 +405,17 @@ impl RawHaalkaEl {
         self.hold_tasks([spawn(clone!((system_holder) async move {
             system_holder.set(Some(async_world().register_io_system(system).await));
         }))])
-        // .on_remove(move |world, entity| {
+        // .on_remove(move |world, _| {
         //     if let Some(system) = system_holder.take() {
-        //         // https://github.com/dlom/bevy-async-ecs/issues/5#issuecomment-2119180363
-        //         async_world().apply(|world| world.remove_system(system.id))
+        //         // TODO: https://github.com/dlom/bevy-async-ecs/issues/5#issuecomment-2119180363
+        //         world.remove_system(system.id)
         //     }
         // })
         .on_signal(signal, move |entity, input| {
             clone!((system_holder, f) async move {
-                system_holder.signal_ref(Option::is_some).wait_for(true).await;
+                if system_holder.lock_ref().is_none() {
+                    system_holder.signal_ref(Option::is_some).wait_for(true).await;
+                }
                 let output = system_holder.get_cloned().unwrap().run((entity, input)).await;
                 // need async mutex because sync mutex guards are not `Send`
                 f.lock().await(entity, output).await;
@@ -299,13 +427,13 @@ impl RawHaalkaEl {
         self,
         signal: impl Signal<Item = I> + Send + 'static,
         system: impl IntoSystem<(Entity, I), O, M> + Send + 'static,
-        f: impl FnMut(&mut EntityWorldMut, O) + Send + 'static,
+        f: impl FnMut(EntityWorldMut, O) + Send + 'static,
     ) -> Self {
         let f = Arc::new(Mutex::new(f));
         self.on_signal_one_shot_io(signal, system, move |entity, value| {
             async_world().apply(clone!((f) move |world: &mut World| {
-                if let Some(mut entity) = world.get_entity_mut(entity) {
-                    f.lock().unwrap()(&mut entity, value);
+                if let Some(entity) = world.get_entity_mut(entity) {
+                    f.lock().unwrap()(entity, value);
                 }
             }))
         })
@@ -317,7 +445,7 @@ impl RawHaalkaEl {
         system: impl IntoSystem<(Entity, I), O, M> + Send + 'static,
         mut f: impl FnMut(&mut C, O) + Send + 'static,
     ) -> Self {
-        self.on_signal_one_shot_io_with_entity(signal, system, move |entity, value| {
+        self.on_signal_one_shot_io_with_entity(signal, system, move |mut entity, value| {
             if let Some(mut component) = entity.get_mut::<C>() {
                 f(&mut component, value);
             }
@@ -337,7 +465,7 @@ impl RawHaalkaEl {
         signal: impl Signal<Item = I> + Send + 'static,
         system: impl IntoSystem<(Entity, I), IOC, M> + Send + 'static,
     ) -> Self {
-        self.on_signal_one_shot_io_with_entity(signal, system, |entity, into_option_component| {
+        self.on_signal_one_shot_io_with_entity(signal, system, |mut entity, into_option_component| {
             if let Some(component) = into_option_component.into() {
                 entity.insert(component);
             } else {
@@ -345,6 +473,10 @@ impl RawHaalkaEl {
             }
         })
     }
+}
+
+fn ui_root_forwarder(entity: &mut EntityWorldMut) -> Option<Entity> {
+    entity.world_scope(|world| world.get_resource::<UiRoot>().map(|&UiRoot(ui_root)| ui_root))
 }
 
 // struct OnRemove(Vec<Box<dyn FnOnce(&mut World, Entity) + Send + Sync + 'static>>);

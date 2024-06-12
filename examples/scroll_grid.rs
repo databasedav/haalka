@@ -130,16 +130,12 @@ static CELLS: Lazy<Vec<Vec<Mutable<LetterColor>>>> = Lazy::new(|| {
 
 fn ui_root(world: &mut World) {
     El::<NodeBundle>::new()
-        .with_style(|style| {
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
-        })
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
             Grid::<NodeBundle>::new()
-                .with_style(|style| {
-                    style.column_gap = Val::Px(15.);
-                })
+                .with_style(|style| style.column_gap = Val::Px(15.))
                 .on_hovered_change(move |is_hovered| {
                     if !is_hovered {
                         spawn(async_world().remove_resource::<HoveredCell>()).detach();

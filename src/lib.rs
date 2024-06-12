@@ -9,7 +9,7 @@ mod raw_el;
 pub use raw_el::{IntoOptionRawElement, IntoRawElement, RawElWrapper, RawElement, RawHaalkaEl, Spawnable};
 
 mod element;
-pub use element::{Element, ElementWrapper, IntoElement, IntoOptionElement, TypeEraseable};
+pub use element::{Element, ElementWrapper, IntoElement, IntoOptionElement, TypeEraseable, UiRoot, UiRootable};
 
 mod el;
 pub use el::El;
@@ -37,22 +37,33 @@ use pointer_event_aware::{PointerEventAwarePlugin, RiggedPickingPlugin};
 mod scrollable;
 pub use scrollable::{BasicScrollHandler, HoverableScrollable, ScrollDirection, ScrollabilitySettings, Scrollable};
 
-mod sizable;
-pub use sizable::Sizable;
+mod sizeable;
+pub use sizeable::Sizeable;
+
+mod viewport_mutable;
+pub use viewport_mutable::ViewportMutable;
+
+mod text_input;
+use text_input::TextInputPlugin;
+pub use text_input::{PlaceHolder, TextAttrs, TextInput};
 
 mod derive;
 
 mod utils;
 pub use utils::{sleep, spawn};
 
+pub use apply::{Also, Apply};
+pub use bevy_cosmic_edit::{
+    CacheKeyFlags, CosmicBackgroundColor, CosmicBackgroundImage, CosmicBuffer, CosmicColor, CosmicPadding,
+    CosmicSource, CosmicTextAlign, CosmicTextChanged, CosmicWidgetSize, CosmicWrap, CursorColor, DefaultAttrs,
+    FamilyOwned, FocusedWidget as CosmicFocusedWidget, FontStyle, FontWeight, HoverCursor, MaxChars, MaxLines,
+    SelectionColor, Stretch, XOffset,
+};
+pub use bevy_mod_picking::prelude::*;
 pub use enclose::enclose as clone;
 pub use futures_signals_ext::*;
 pub use once_cell::sync::Lazy;
 pub use paste::paste;
-
-pub use bevy_mod_picking::prelude::*;
-
-pub use apply::{Also, Apply};
 
 pub struct HaalkaPlugin;
 
@@ -63,6 +74,7 @@ impl Plugin for HaalkaPlugin {
             RiggedPickingPlugin.build(),
             PointerEventAwarePlugin,
             ScrollablePlugin,
+            TextInputPlugin,
         ))
         .add_systems(PreStartup, init_async_world);
     }
