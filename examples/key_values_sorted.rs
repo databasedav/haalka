@@ -519,9 +519,12 @@ fn focus_scroller(
                                 let container_base = scrollable_container_rect.min.y - scrolled;
                                 let child_offset = child_rect.min.y - scrolled - container_base;
                                 // TODO: is there a simpler/ more general way to check for node visibility ?
-                                if child_offset + INPUT_HEIGHT - scrolled > scrollable_container_rect.height()
-                                    || child_offset < scrolled
-                                {
+                                if child_offset + INPUT_HEIGHT - scrolled > scrollable_container_rect.height() {
+                                    SCROLL_POSITION.set(
+                                        scrollable_rect.min.y - child_rect.min.y + scrollable_container_rect.height()
+                                            - INPUT_HEIGHT,
+                                    );
+                                } else if child_offset < scrolled {
                                     SCROLL_POSITION.set(scrollable_rect.min.y - child_rect.min.y);
                                 }
                             }

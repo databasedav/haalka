@@ -224,22 +224,26 @@ fn ui_root(world: &mut World) {
                         })
                         .item(
                             Row::<NodeBundle>::new()
-                                .with_style(|style| style.column_gap = Val::Px(50.))
                                 .item(
                                     Column::<NodeBundle>::new()
+                                        .align_content(Align::new().left())
                                         .with_style(|style| style.row_gap = Val::Px(10.))
                                         .item(category_count(ColorCategory::Blue, blue_count.signal()))
                                         .item(category_count(ColorCategory::Green, green_count.signal()))
                                         .item(category_count(ColorCategory::Red, red_count.signal()))
                                         .item(category_count(ColorCategory::Yellow, yellow_count.signal())),
                                 )
-                                .item(text_labeled_count("total", {
-                                    counts
-                                        .signal_vec_cloned()
-                                        .map_signal(|count| count.signal())
-                                        .to_signal_map(|counts| counts.iter().sum())
-                                        .dedupe()
-                                })),
+                                .item(
+                                    text_labeled_count("total", {
+                                        counts
+                                            .signal_vec_cloned()
+                                            .map_signal(|count| count.signal())
+                                            .to_signal_map(|counts| counts.iter().sum())
+                                            .dedupe()
+                                    })
+                                    .align(Align::new().right())
+                                    .update_raw_el(|raw_el| raw_el.with_component::<Style>(|style| style.right = Val::Px(100.)))
+                                ),
                         )
                         .item(
                             Column::<NodeBundle>::new()

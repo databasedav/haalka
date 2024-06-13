@@ -127,7 +127,7 @@ fn ui_root(world: &mut World) {
                                 {
                                     SELECTED_SHAPE.set_neq(shape);
                                     if let Val::Px(height) = BUTTON_HEIGHT {
-                                        SCROLL_POSITION.set_neq(i as f32 * -height);
+                                        SCROLL_POSITION.set(i as f32 * -height);
                                     }
                                 }
                             });
@@ -171,6 +171,9 @@ fn ui_root(world: &mut World) {
                                         .zip(hovereds)
                                         .map(move |(shape, hovered)| button(shape, hovered))
                                 })
+                                .on_click(|| {
+                                    async_world().insert_resource(CosmicFocusedWidget(None)).apply(spawn).detach();
+                                })
                         }),
                 ),
         )
@@ -178,21 +181,23 @@ fn ui_root(world: &mut World) {
 }
 
 fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>) {
-    SELECTED_SHAPE.signal().for_each(|shape| {
-        async_world().apply(move |world: &mut World| {
-            let mut meshes = world.resource_mut::<Assets<Mesh>>();
-            *world.query::<&mut Handle<Mesh>>().single_mut(world) = meshes.add(match shape {
-                Shape::Sphere => Sphere::default().mesh().ico(5).unwrap(),
-                Shape::Plane => Plane3d::default().mesh().size(1., 1.).into(),
-                Shape::Cuboid => Cuboid::default().into(),
-                Shape::Cylinder => Cylinder::default().into(),
-                Shape::Capsule3d => Capsule3d::default().into(),
-                Shape::Torus => Torus::default().into(),
-            });
+    SELECTED_SHAPE
+        .signal()
+        .for_each(|shape| {
+            async_world().apply(move |world: &mut World| {
+                let mut meshes = world.resource_mut::<Assets<Mesh>>();
+                *world.query::<&mut Handle<Mesh>>().single_mut(world) = meshes.add(match shape {
+                    Shape::Sphere => Sphere::default().mesh().ico(5).unwrap(),
+                    Shape::Plane => Plane3d::default().mesh().size(1., 1.).into(),
+                    Shape::Cuboid => Cuboid::default().into(),
+                    Shape::Cylinder => Cylinder::default().into(),
+                    Shape::Capsule3d => Capsule3d::default().into(),
+                    Shape::Torus => Torus::default().into(),
+                });
+            })
         })
-    })
-    .apply(spawn)
-    .detach();
+        .apply(spawn)
+        .detach();
     commands.spawn(PbrBundle {
         material: materials.add(Color::rgb_u8(87, 108, 50)),
         transform: Transform::from_xyz(-1., 0., 1.),
