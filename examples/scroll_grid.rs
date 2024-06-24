@@ -1,8 +1,12 @@
+//! Grid of letters that can be scrolled vertically or horizontally.
+//!
+//! i can't believe it's not scrolling !
+
 use bevy::{
     input::mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
 };
-use haalka::*;
+use haalka::prelude::*;
 
 fn main() {
     let letters = "abcdefghijklmnopqrstuvwxyz";
@@ -73,7 +77,7 @@ fn letter(
     El::<TextBundle>::new()
     .on_hovered_change(move |is_hovered| {
         if is_hovered {
-            spawn(async_world().insert_resource(HoveredCell(x, y))).detach();
+            async_world().insert_resource(HoveredCell(x, y)).apply(spawn).detach()
         }
     })
     .text_signal(
@@ -135,10 +139,10 @@ fn ui_root(world: &mut World) {
         .align_content(Align::center())
         .child(
             Grid::<NodeBundle>::new()
-                .with_style(|style| style.column_gap = Val::Px(15.))
+                .with_style(|mut style| style.column_gap = Val::Px(15.))
                 .on_hovered_change(move |is_hovered| {
                     if !is_hovered {
-                        spawn(async_world().remove_resource::<HoveredCell>()).detach();
+                        async_world().remove_resource::<HoveredCell>().apply(spawn).detach()
                     }
                 })
                 .row_wrap_cell_width(48.)

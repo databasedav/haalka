@@ -5,15 +5,21 @@ use futures_signals::{
     signal_vec::{SignalVec, SignalVecExt},
 };
 
-use crate::{
-    align::AlignableType, scrollable::Scrollable, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable,
-    IntoOptionElement, PointerEventAware, RawElWrapper, RawHaalkaEl, Sizeable,
+use super::{
+    align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
+    element::{GlobalEventAware, IntoOptionElement},
+    pointer_event_aware::PointerEventAware,
+    raw::{RawElWrapper, RawHaalkaEl},
+    scrollable::Scrollable,
+    sizeable::Sizeable,
+    viewport_mutable::ViewportMutable,
 };
 
+/// [`Element`](super::Element) with horizontally stacked children. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`Row`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/row.rs).
 pub struct Row<NodeType> {
-    pub(crate) raw_el: RawHaalkaEl,
-    pub(crate) align: Option<AlignHolder>,
-    pub(crate) _node_type: std::marker::PhantomData<NodeType>,
+    raw_el: RawHaalkaEl,
+    align: Option<AlignHolder>,
+    _node_type: std::marker::PhantomData<NodeType>,
 }
 
 impl<NodeType: Bundle> From<NodeType> for Row<NodeType> {
@@ -21,7 +27,7 @@ impl<NodeType: Bundle> From<NodeType> for Row<NodeType> {
         Self {
             raw_el: {
                 RawHaalkaEl::from(node_bundle)
-                    .with_component::<Style>(|style| {
+                    .with_component::<Style>(|mut style| {
                         style.display = Display::Flex;
                         style.flex_direction = FlexDirection::Row;
                         style.align_items = AlignItems::Center;
@@ -35,6 +41,11 @@ impl<NodeType: Bundle> From<NodeType> for Row<NodeType> {
 }
 
 impl<NodeType: Bundle + Default> Row<NodeType> {
+    /// Construct a new [`Row`] from a [`Bundle`] with a [`Default`] implementation.
+    ///
+    /// # Notes
+    /// [`Bundle`]s without the required bevy_ui node components (e.g. [`Node`], [`Style`], etc.)
+    /// will not behave as expected.
     pub fn new() -> Self {
         Self::from(NodeType::default())
     }
@@ -42,15 +53,18 @@ impl<NodeType: Bundle + Default> Row<NodeType> {
 
 impl<NodeType: Bundle> RawElWrapper for Row<NodeType> {
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
-        self.raw_el.raw_el_mut()
+        &mut self.raw_el
     }
 }
 
 impl<NodeType: Bundle> PointerEventAware for Row<NodeType> {}
 impl<NodeType: Bundle> Scrollable for Row<NodeType> {}
 impl<NodeType: Bundle> Sizeable for Row<NodeType> {}
+impl<NodeType: Bundle> ViewportMutable for Row<NodeType> {}
+impl<NodeType: Bundle> GlobalEventAware for Row<NodeType> {}
 
 impl<NodeType: Bundle> Row<NodeType> {
+    /// Declare a static horizontally stacked child.
     pub fn item<IOE: IntoOptionElement>(mut self, item_option: IOE) -> Self {
         let apply_alignment = self.apply_alignment_wrapper();
         self.raw_el = self.raw_el.child(
@@ -61,6 +75,8 @@ impl<NodeType: Bundle> Row<NodeType> {
         self
     }
 
+    /// Declare a reactive horizontally stacked child. When the [`Signal`] outputs [`None`], the
+    /// child is removed.
     pub fn item_signal<IOE: IntoOptionElement + 'static, S: Signal<Item = IOE> + Send + 'static>(
         mut self,
         item_option_signal_option: impl Into<Option<S>>,
@@ -76,6 +92,7 @@ impl<NodeType: Bundle> Row<NodeType> {
         self
     }
 
+    /// Declare static horizontally stacked children.
     pub fn items<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(
         mut self,
         items_options_option: impl Into<Option<I>>,
@@ -94,6 +111,7 @@ impl<NodeType: Bundle> Row<NodeType> {
         self
     }
 
+    /// Declare reactive horizontally stacked children.
     pub fn items_signal_vec<IOE: IntoOptionElement + 'static, S: SignalVec<Item = IOE> + Send + 'static>(
         mut self,
         items_options_signal_vec_option: impl Into<Option<S>>,
@@ -111,8 +129,10 @@ impl<NodeType: Bundle> Row<NodeType> {
         self
     }
 
+    /// When the width of the row exceeds the width of its parent, wrap the row's children to the
+    /// next line, recursively.
     pub fn multiline(mut self) -> Self {
-        self.raw_el = self.raw_el.with_component::<Style>(|style| {
+        self.raw_el = self.raw_el.with_component::<Style>(|mut style| {
             style.flex_wrap = FlexWrap::Wrap;
             style.flex_basis = Val::Px(0.);
             style.flex_grow = 1.;
@@ -122,8 +142,8 @@ impl<NodeType: Bundle> Row<NodeType> {
 }
 
 impl<NodeType: Bundle> Alignable for Row<NodeType> {
-    fn alignable_type(&mut self) -> Option<AlignableType> {
-        Some(AlignableType::Row)
+    fn aligner(&mut self) -> Option<Aligner> {
+        Some(Aligner::Row)
     }
 
     fn align_mut(&mut self) -> &mut Option<AlignHolder> {

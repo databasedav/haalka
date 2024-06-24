@@ -3,23 +3,44 @@ use std::{collections::BTreeSet, ops::Not};
 use bevy::prelude::*;
 use futures_signals::signal::{BoxSignal, Signal, SignalExt};
 
-use crate::{Column, El, ElementWrapper, Grid, RawElWrapper, RawHaalkaEl, Row, Stack};
+use super::{
+    column::Column,
+    el::El,
+    element::ElementWrapper,
+    grid::Grid,
+    raw::{RawElWrapper, RawHaalkaEl},
+    row::Row,
+    stack::Stack,
+};
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub enum Alignment {
-    Top,
-    Bottom,
-    Left,
-    Right,
-    CenterX,
-    CenterY,
-}
-
+// TODO: replace moonzoon github links with docs.rs links once moonzoon crate published
+// TODO: create and link issue for Stack and Grid content alignment behavior
+/// Simple alignment semantics ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main) ([`align`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/style/align.rs), [`align_content`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/style/align_content.rs)).
+///
+/// An [`Element`](`super::Element`) can be aligned in nine different areas in relation to its
+/// parent: top left, top center, top right, center left, center, center right, bottom left, bottom
+/// center, and bottom right. This provides a simple and clear to way to declare alignment as a thin
+/// layer on top of bevy_ui's flex implementation.
+///
+/// [`Align`]s can be specified on individual elements using [`.align`](`Alignable::align`) and
+/// [`.align_signal`](`Alignable::align_signal`) or to all children using
+/// [`.align_content`](`Alignable::align_content`) and
+/// [`.align_content_signal`](`Alignable::align_content_signal`). See the [align](https://github.com/databasedav/haalka/blob/main/examples/align.rs)
+/// example for how each [`Align`] behaves for each built-in alignable type: [`El`], [`Column`],
+/// [`Row`], [`Stack`], and [`Grid`].
+///
+/// # Notes
+/// [`Stack`] and [`Grid`] children (read: children that are either a [`Stack`] or a [`Grid`], not
+/// the children *of* [`Stack`]s or [`Grid`]s) do not behave as expected when aligned with a
+/// parent's [`.align_content`](`Alignable::align_content`) or
+/// [`.align_content_signal`](`Alignable::align_content_signal`); this is a known issue and one can
+/// simply align the [`Stack`] or [`Grid`] themselves as workaround.
 #[derive(Clone, Default)]
 pub struct Align {
-    pub alignments: BTreeSet<Alignment>,
+    alignments: BTreeSet<Alignment>,
 }
 
+#[allow(missing_docs)]
 impl Align {
     pub fn new() -> Self {
         Self::default()
@@ -72,6 +93,18 @@ impl Align {
     }
 }
 
+/// Composable alignment variants. See [`Align`].
+#[allow(missing_docs)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum Alignment {
+    Top,
+    Bottom,
+    Left,
+    Right,
+    CenterX,
+    CenterY,
+}
+
 pub enum AlignHolder {
     Align(Align),
     AlignSignal(BoxSignal<'static, Option<Align>>),
@@ -82,43 +115,52 @@ pub enum AddRemove {
     Remove,
 }
 
-pub(crate) fn register_align_signal<REW: RawElWrapper>(
+fn register_align_signal<REW: RawElWrapper>(
     element: REW,
     align_signal: impl Signal<Item = Option<Vec<Alignment>>> + Send + 'static,
     apply_alignment: fn(&mut Style, Alignment, AddRemove),
 ) -> REW {
     let mut last_alignments_option: Option<Vec<Alignment>> = None;
     element.update_raw_el(|raw_el| {
-        raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Style>(align_signal, move |style, aligns_option| {
-            if let Some(alignments) = aligns_option {
-                if let Some(mut last_alignments) = last_alignments_option.take() {
-                    last_alignments.retain(|align| !alignments.contains(align));
-                    for alignment in last_alignments {
-                        apply_alignment(style, alignment, AddRemove::Remove)
+        raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Style>(
+            align_signal,
+            move |mut style, aligns_option| {
+                if let Some(alignments) = aligns_option {
+                    // TODO: confirm that this last alignment removal strategy is working as intended
+                    if let Some(mut last_alignments) = last_alignments_option.take() {
+                        last_alignments.retain(|align| !alignments.contains(align));
+                        for alignment in last_alignments {
+                            apply_alignment(&mut style, alignment, AddRemove::Remove)
+                        }
+                    }
+                    for alignment in &alignments {
+                        apply_alignment(&mut style, *alignment, AddRemove::Add)
+                    }
+                    last_alignments_option = alignments.is_empty().not().then_some(alignments);
+                } else {
+                    if let Some(last_aligns) = last_alignments_option.take() {
+                        for align in last_aligns {
+                            apply_alignment(&mut style, align, AddRemove::Remove)
+                        }
                     }
                 }
-                for alignment in &alignments {
-                    apply_alignment(style, *alignment, AddRemove::Add)
-                }
-                last_alignments_option = alignments.is_empty().not().then_some(alignments);
-            } else {
-                if let Some(last_aligns) = last_alignments_option.take() {
-                    for align in last_aligns {
-                        apply_alignment(style, align, AddRemove::Remove)
-                    }
-                }
-            }
-        })
+            },
+        )
     })
 }
 
+/// [`Alignable`] types can align themselves (although application of self alignment is managed by
+/// [`ChildAlignable`]) and their children.
 pub trait Alignable: RawElWrapper {
-    fn alignable_type(&mut self) -> Option<AlignableType> {
+    /// The [`Aligner`] of this type. Used for indirection in [`AlignabilityFacade`].
+    fn aligner(&mut self) -> Option<Aligner> {
         None
     }
 
+    /// Mutable reference to the [`Align`] data of this type.
     fn align_mut(&mut self) -> &mut Option<AlignHolder>;
 
+    /// Statically align this element, itself. See [`Align`].
     fn align(mut self, align_option: impl Into<Option<Align>>) -> Self
     where
         Self: Sized,
@@ -129,6 +171,7 @@ pub trait Alignable: RawElWrapper {
         self
     }
 
+    /// Reactively align this element, itself. See [`Align`].
     fn align_signal<S: Signal<Item = Option<Align>> + Send + 'static>(
         mut self,
         align_option_signal_option: impl Into<Option<S>>,
@@ -142,20 +185,32 @@ pub trait Alignable: RawElWrapper {
         self
     }
 
-    // exists for the `AlignabilityFacade`
+    /// Allows implementor to overwrite the content alignment processing function. The `&self` can
+    /// be used to alter the alignment strategy based on data on the type itself. See
+    /// [`AlignabilityFacade::apply_alignment_wrapper`] for an example.
     fn apply_content_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {
         Self::apply_content_alignment
     }
 
-    fn apply_content_alignment(_style: &mut Style, _alignment: Alignment, _action: AddRemove);
+    /// How to modify the style of this element given a content alignment and whether to add or
+    /// remove it.
+    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove);
 
+    /// Statically align the children of this element. See [`Align`].
+    ///
+    /// # Notes
+    /// [`Stack`] and [`Grid`] children (read: children that are either a [`Stack`] or a [`Grid`],
+    /// not the children *of* [`Stack`]s or [`Grid`]s) do not behave as expected when aligned
+    /// with a parent's [`.align_content`](`Alignable::align_content`) or
+    /// [`.align_content_signal`](`Alignable::align_content_signal`); this is a known issue and one
+    /// can simply align the [`Stack`] or [`Grid`] themselves as workaround.
     fn align_content(mut self, align_option: impl Into<Option<Align>>) -> Self {
         if let Some(align) = align_option.into() {
             let apply_content_alignment = self.apply_content_alignment_wrapper();
             self = self.update_raw_el(move |raw_el| {
-                raw_el.with_component::<Style>(move |style| {
+                raw_el.with_component::<Style>(move |mut style| {
                     for alignment in align.alignments {
-                        apply_content_alignment(style, alignment, AddRemove::Add);
+                        apply_content_alignment(&mut style, alignment, AddRemove::Add);
                     }
                 })
             });
@@ -163,6 +218,14 @@ pub trait Alignable: RawElWrapper {
         self
     }
 
+    /// Reactively align the children of this element. See [`Align`].
+    ///
+    /// # Notes
+    /// [`Stack`] and [`Grid`] children (read: children that are either a [`Stack`] or a [`Grid`],
+    /// not the children *of* [`Stack`]s or [`Grid`]s) do not behave as expected when aligned
+    /// with a parent's [`.align_content`](`Alignable::align_content`) or
+    /// [`.align_content_signal`](`Alignable::align_content_signal`); this is a known issue and one
+    /// can simply align the [`Stack`] or [`Grid`] themselves as workaround.
     fn align_content_signal<S: Signal<Item = Option<Align>> + Send + 'static>(
         mut self,
         align_option_signal_option: impl Into<Option<S>>,
@@ -180,19 +243,26 @@ pub trait Alignable: RawElWrapper {
     }
 }
 
+/// [`ChildAlignable`] types process and apply the [`Align`] data that their children specify to self align. This is an emulation of the [CSS child combinator](https://developer.mozilla.org/en-US/docs/Web/CSS/Child_combinator).
 pub trait ChildAlignable
 where
     Self: 'static,
 {
-    fn update_style(_style: &mut Style) {} // only some require base updates
+    /// Static style modifications for children of this type.
+    fn update_style(_style: Mut<Style>) {} // only some require base updates
 
-    // exists for the `AlignabilityFacade`
+    /// Allows implementor to overwrite the self alignment processing function function. The `&self`
+    /// can be used to alter the alignment strategy based on data on the type itself. See
+    /// [`AlignabilityFacade::apply_alignment_wrapper`] for an example.
     fn apply_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {
         Self::apply_alignment
     }
 
+    /// How to modify the style of children of this element given a self alignment and whether to
+    /// add or remove it.
     fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove);
 
+    /// Align child based on its [`Align`] data and processing defined by the type of its parent.
     fn align_child<Child: RawElWrapper + Alignable>(
         mut child: Child,
         apply_alignment: fn(&mut Style, Alignment, AddRemove),
@@ -204,9 +274,9 @@ where
             match align {
                 AlignHolder::Align(align) => {
                     child = child.update_raw_el(|raw_el| {
-                        raw_el.with_component::<Style>(move |style| {
+                        raw_el.with_component::<Style>(move |mut style| {
                             for align in align.alignments {
-                                apply_alignment(style, align, AddRemove::Add)
+                                apply_alignment(&mut style, align, AddRemove::Add)
                             }
                         })
                     })
@@ -228,8 +298,8 @@ where
 }
 
 impl<EW: ElementWrapper> Alignable for EW {
-    fn alignable_type(&mut self) -> Option<AlignableType> {
-        self.element_mut().alignable_type()
+    fn aligner(&mut self) -> Option<Aligner> {
+        self.element_mut().aligner()
     }
 
     fn align_mut(&mut self) -> &mut Option<AlignHolder> {
@@ -242,7 +312,7 @@ impl<EW: ElementWrapper> Alignable for EW {
 }
 
 impl<EW: ElementWrapper + 'static> ChildAlignable for EW {
-    fn update_style(style: &mut Style) {
+    fn update_style(style: Mut<Style>) {
         EW::EL::update_style(style);
     }
 
@@ -251,41 +321,46 @@ impl<EW: ElementWrapper + 'static> ChildAlignable for EW {
     }
 }
 
+/// Exhaustive variants of alignable definitions; used for type indirection in
+/// [`AlignabilityFacade`].
 #[derive(Clone, Copy)]
-pub enum AlignableType {
+pub enum Aligner {
+    /// [`El`](`super::El`)
     El,
+    /// [`Column`](`super::Column`)
     Column,
+    /// [`Row`](`super::Row`)
     Row,
+    /// [`Stack`](`super::Stack`)
     Stack,
+    /// [`Grid`](`super::Grid`)
     Grid,
     // TODO: allow specifying custom alignment functions
 }
 
+/// Provides type indirection for built-in alignable types, enabling simple "type erasure" via
+/// [`TypeEraseable::type_erase`](`super::TypeEraseable::type_erase`).
 pub struct AlignabilityFacade {
     raw_el: RawHaalkaEl,
     align: Option<AlignHolder>,
-    alignable_type: AlignableType,
+    aligner: Aligner,
 }
 
 impl AlignabilityFacade {
-    pub(crate) fn new(raw_el: RawHaalkaEl, align: Option<AlignHolder>, alignable_type: AlignableType) -> Self {
-        Self {
-            raw_el,
-            align,
-            alignable_type,
-        }
+    pub(crate) fn new(raw_el: RawHaalkaEl, align: Option<AlignHolder>, aligner: Aligner) -> Self {
+        Self { raw_el, align, aligner }
     }
 }
 
 impl RawElWrapper for AlignabilityFacade {
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
-        self.raw_el.raw_el_mut()
+        &mut self.raw_el
     }
 }
 
 impl Alignable for AlignabilityFacade {
-    fn alignable_type(&mut self) -> Option<AlignableType> {
-        Some(self.alignable_type)
+    fn aligner(&mut self) -> Option<Aligner> {
+        Some(self.aligner)
     }
 
     fn align_mut(&mut self) -> &mut Option<AlignHolder> {
@@ -293,12 +368,12 @@ impl Alignable for AlignabilityFacade {
     }
 
     fn apply_content_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {
-        match self.alignable_type {
-            AlignableType::El => El::<NodeBundle>::apply_content_alignment,
-            AlignableType::Column => Column::<NodeBundle>::apply_content_alignment,
-            AlignableType::Row => Row::<NodeBundle>::apply_content_alignment,
-            AlignableType::Stack => Stack::<NodeBundle>::apply_content_alignment,
-            AlignableType::Grid => Grid::<NodeBundle>::apply_content_alignment,
+        match self.aligner {
+            Aligner::El => El::<NodeBundle>::apply_content_alignment,
+            Aligner::Column => Column::<NodeBundle>::apply_content_alignment,
+            Aligner::Row => Row::<NodeBundle>::apply_content_alignment,
+            Aligner::Stack => Stack::<NodeBundle>::apply_content_alignment,
+            Aligner::Grid => Grid::<NodeBundle>::apply_content_alignment,
         }
     }
 
@@ -307,12 +382,12 @@ impl Alignable for AlignabilityFacade {
 
 impl ChildAlignable for AlignabilityFacade {
     fn apply_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {
-        match self.alignable_type {
-            AlignableType::El => El::<NodeBundle>::apply_alignment,
-            AlignableType::Column => Column::<NodeBundle>::apply_alignment,
-            AlignableType::Row => Row::<NodeBundle>::apply_alignment,
-            AlignableType::Stack => Stack::<NodeBundle>::apply_alignment,
-            AlignableType::Grid => Grid::<NodeBundle>::apply_alignment,
+        match self.aligner {
+            Aligner::El => El::<NodeBundle>::apply_alignment,
+            Aligner::Column => Column::<NodeBundle>::apply_alignment,
+            Aligner::Row => Row::<NodeBundle>::apply_alignment,
+            Aligner::Stack => Stack::<NodeBundle>::apply_alignment,
+            Aligner::Grid => Grid::<NodeBundle>::apply_alignment,
         }
     }
 

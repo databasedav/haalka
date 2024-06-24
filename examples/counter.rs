@@ -1,5 +1,7 @@
+//! Simple counter.
+
 use bevy::prelude::*;
-use haalka::*;
+use haalka::prelude::*;
 
 fn main() {
     App::new()
@@ -19,7 +21,7 @@ fn ui_root(world: &mut World) {
         .align_content(Align::center())
         .child(
             Row::<NodeBundle>::new()
-                .with_style(|style| style.column_gap = Val::Px(15.0))
+                .with_style(|mut style| style.column_gap = Val::Px(15.0))
                 .item(counter_button(counter.clone(), "-", -1))
                 .item(El::<TextBundle>::new().text_signal(counter.signal().map(|count| {
                     Text::from_section(

@@ -1,7 +1,12 @@
+//! Text inputs, scrolling/viewport control, and reactive lists.
+//!
+//! promises made promises kept ! <https://discord.com/channels/691052431525675048/1192585689460658348/1193431789465776198>
+//! (yes i take requests)
+
 use std::{ops::Not, time::Duration};
 
 use bevy::prelude::*;
-use haalka::*;
+use haalka::{prelude::*, ViewportMutable};
 
 fn main() {
     App::new()
@@ -175,7 +180,7 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
     let hovered = Mutable::new(false);
     let selected = SORT_BY.signal().map(move |cur| cur == sort_by).broadcast();
     Row::<NodeBundle>::new()
-        .with_style(|style| style.column_gap = Val::Px(35.))
+        .with_style(|mut style| style.column_gap = Val::Px(35.))
         .align(Align::new().right())
         .item_signal(selected.signal().map_true(sort_by_text_element))
         .item(
@@ -285,7 +290,7 @@ static SCROLL_POSITION: Lazy<Mutable<f32>> = Lazy::new(default);
 
 fn key_values() -> impl Element + Sizeable {
     Column::<NodeBundle>::new()
-        .with_style(|style| style.row_gap = Val::Px(10.))
+        .with_style(|mut style| style.row_gap = Val::Px(10.))
         .height(Val::Percent(90.))
         .scrollable_on_hover(ScrollabilitySettings {
             flex_direction: FlexDirection::Column,
@@ -313,7 +318,7 @@ fn key_values() -> impl Element + Sizeable {
                 },
             )| {
                 Row::<NodeBundle>::new()
-                    .with_style(|style| style.column_gap = Val::Px(10.))
+                    .with_style(|mut style| style.column_gap = Val::Px(10.))
                     // without registering width up front, layout will take a frame or two to sync to size of children,
                     // making it look like the elements are expanding into place, try commenting out this line to see
                     // how it looks
@@ -343,7 +348,7 @@ fn x_button() -> impl Element + PointerEventAware {
         .hovered_sync(hovered)
         .child(
             El::<TextBundle>::new()
-                .with_style(|style| style.top = Val::Px(-3.))
+                .with_style(|mut style| style.top = Val::Px(-3.))
                 .align(Align::center())
                 .text(Text::from_section(
                     "x",
@@ -364,16 +369,16 @@ fn ui_root(world: &mut World) {
         .child(
             Row::<NodeBundle>::new()
                 .height(Val::Percent(100.))
-                .with_style(|style| style.column_gap = Val::Px(70.))
+                .with_style(|mut style| style.column_gap = Val::Px(70.))
                 .item(
                     Column::<NodeBundle>::new()
-                        .with_style(|style| style.row_gap = Val::Px(20.))
+                        .with_style(|mut style| style.row_gap = Val::Px(20.))
                         .item(sort_button(KeyValue::Key))
                         .item(sort_button(KeyValue::Value)),
                 )
                 .item(
                     Column::<NodeBundle>::new()
-                        .with_style(|style| style.row_gap = Val::Px(10.))
+                        .with_style(|mut style| style.row_gap = Val::Px(10.))
                         .height(Val::Percent(90.))
                         .width(Val::Px(INPUT_WIDTH * 2. + INPUT_HEIGHT + 10. * 2.))
                         .align_content(Align::center())

@@ -5,15 +5,22 @@ use futures_signals::{
     signal_vec::{SignalVec, SignalVecExt},
 };
 
-use crate::{
-    align::AlignableType, scrollable::Scrollable, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable,
-    IntoOptionElement, PointerEventAware, RawElWrapper, RawHaalkaEl, Row, Sizeable,
+use super::{
+    align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
+    element::{GlobalEventAware, IntoOptionElement},
+    pointer_event_aware::PointerEventAware,
+    raw::{RawElWrapper, RawHaalkaEl},
+    row::Row,
+    scrollable::Scrollable,
+    sizeable::Sizeable,
+    viewport_mutable::ViewportMutable,
 };
 
+/// [`Element`](super::Element) with children stacked on directly on top of each other (e.g. along the z-axis), with siblings ordered youngest to oldest, top to bottom. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`Stack`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/stack.rs).
 pub struct Stack<NodeType> {
-    pub(crate) raw_el: RawHaalkaEl,
-    pub(crate) align: Option<AlignHolder>,
-    pub(crate) _node_type: std::marker::PhantomData<NodeType>,
+    raw_el: RawHaalkaEl,
+    align: Option<AlignHolder>,
+    _node_type: std::marker::PhantomData<NodeType>,
 }
 
 impl<NodeType: Bundle> From<NodeType> for Stack<NodeType> {
@@ -21,7 +28,7 @@ impl<NodeType: Bundle> From<NodeType> for Stack<NodeType> {
         Self {
             raw_el: {
                 RawHaalkaEl::from(node_bundle)
-                    .with_component::<Style>(|style| {
+                    .with_component::<Style>(|mut style| {
                         style.display = Display::Grid;
                         style.grid_auto_columns =
                             GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
@@ -37,6 +44,11 @@ impl<NodeType: Bundle> From<NodeType> for Stack<NodeType> {
 }
 
 impl<NodeType: Bundle + Default> Stack<NodeType> {
+    /// Construct a new [`Stack`] from a [`Bundle`] with a [`Default`] implementation.
+    ///
+    /// # Notes
+    /// [`Bundle`]s without the required bevy_ui node components (e.g. [`Node`], [`Style`], etc.)
+    /// will not behave as expected.
     pub fn new() -> Self {
         Self::from(NodeType::default())
     }
@@ -44,15 +56,19 @@ impl<NodeType: Bundle + Default> Stack<NodeType> {
 
 impl<NodeType: Bundle> RawElWrapper for Stack<NodeType> {
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
-        self.raw_el.raw_el_mut()
+        &mut self.raw_el
     }
 }
 
 impl<NodeType: Bundle> PointerEventAware for Stack<NodeType> {}
 impl<NodeType: Bundle> Scrollable for Stack<NodeType> {}
 impl<NodeType: Bundle> Sizeable for Stack<NodeType> {}
+impl<NodeType: Bundle> ViewportMutable for Stack<NodeType> {}
+impl<NodeType: Bundle> GlobalEventAware for Stack<NodeType> {}
 
 impl<NodeType: Bundle> Stack<NodeType> {
+    /// Declare a static z-axis stacked child, e.g. subsequent calls to [`.layer`][Stack::layer]s
+    /// will be stacked on top of this one.
     pub fn layer<IOE: IntoOptionElement>(mut self, layer_option: IOE) -> Self {
         let apply_alignment = self.apply_alignment_wrapper();
         self.raw_el = self.raw_el.child(
@@ -63,6 +79,8 @@ impl<NodeType: Bundle> Stack<NodeType> {
         self
     }
 
+    /// Declare a reactive z-axis stacked child. When the [`Signal`] outputs [`None`], the child is
+    /// removed.
     pub fn layer_signal<IOE: IntoOptionElement + 'static, S: Signal<Item = IOE> + Send + 'static>(
         mut self,
         layer_option_signal_option: impl Into<Option<S>>,
@@ -78,6 +96,7 @@ impl<NodeType: Bundle> Stack<NodeType> {
         self
     }
 
+    /// Declare static z-axis stacked children.
     pub fn layers<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(
         mut self,
         layers_options_option: impl Into<Option<I>>,
@@ -98,6 +117,7 @@ impl<NodeType: Bundle> Stack<NodeType> {
         self
     }
 
+    /// Declare reactive z-axis stacked children.
     pub fn layers_signal_vec<IOE: IntoOptionElement + 'static, S: SignalVec<Item = IOE> + Send + 'static>(
         mut self,
         layers_options_signal_vec_option: impl Into<Option<S>>,
@@ -117,8 +137,8 @@ impl<NodeType: Bundle> Stack<NodeType> {
 }
 
 impl<NodeType: Bundle> Alignable for Stack<NodeType> {
-    fn alignable_type(&mut self) -> Option<AlignableType> {
-        Some(AlignableType::Stack)
+    fn aligner(&mut self) -> Option<Aligner> {
+        Some(Aligner::Stack)
     }
 
     fn align_mut(&mut self) -> &mut Option<AlignHolder> {
@@ -131,7 +151,7 @@ impl<NodeType: Bundle> Alignable for Stack<NodeType> {
 }
 
 impl<NodeType: Bundle> ChildAlignable for Stack<NodeType> {
-    fn update_style(style: &mut Style) {
+    fn update_style(mut style: Mut<Style>) {
         style.grid_column = GridPlacement::start_end(1, 1);
         style.grid_row = GridPlacement::start_end(1, 1);
     }

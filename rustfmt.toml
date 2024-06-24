@@ -11,3 +11,5 @@ imports_granularity = "Crate"
 wrap_comments = true
 comment_width = 100
 normalize_comments = true
+
+ignore = ["MoonZoon"]

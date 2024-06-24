@@ -1,8 +1,10 @@
+//! Demonstrates how to forward ECS changes to UI.
+
 use std::time::Duration;
 
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 use bevy_rand::prelude::*;
-use haalka::*;
+use haalka::prelude::*;
 use rand::prelude::{IteratorRandom, Rng};
 
 fn main() {
@@ -35,6 +37,7 @@ const HEIGHT: f32 = 720.; // default window
 const BOX_SIZE: f32 = HEIGHT / 2.;
 const FONT_SIZE: f32 = 30.;
 
+#[allow(dead_code)]
 fn box_(category: ColorCategory) -> El<NodeBundle> {
     El::<NodeBundle>::new()
         .width(Val::Px(BOX_SIZE))
@@ -61,7 +64,7 @@ fn text(string: &str) -> Text {
 
 fn labeled_element(label: impl Element, element: impl Element) -> impl Element {
     Row::<NodeBundle>::new()
-        .with_style(|style| style.column_gap = Val::Px(10.))
+        .with_style(|mut style| style.column_gap = Val::Px(10.))
         .item(label)
         .item(element)
 }
@@ -124,7 +127,7 @@ fn incrde_button(value: Mutable<f32>, incr: f32) -> impl Element {
 
 fn rate_element(rate: Mutable<f32>) -> impl Element {
     Row::<NodeBundle>::new()
-        .with_style(|style| style.column_gap = Val::Px(15.0))
+        .with_style(|mut style| style.column_gap = Val::Px(15.0))
         .item(El::<TextBundle>::new().text_signal(rate.signal().map(|rate| text(&format!("{:.1}", rate)))))
         .item(incrde_button(rate.clone(), 0.1))
         .item(incrde_button(rate, -0.1))
@@ -205,7 +208,7 @@ fn ui_root(world: &mut World) {
     .height(Val::Percent(100.))
         .child(
             Row::<NodeBundle>::new()
-                .with_style(|style| style.column_gap = Val::Px(50.))
+                .with_style(|mut style| style.column_gap = Val::Px(50.))
                 .item(
                     El::<NodeBundle>::new()
                     .width(Val::Px(HEIGHT))
@@ -218,7 +221,7 @@ fn ui_root(world: &mut World) {
                 )
                 .item(
                     Column::<NodeBundle>::new()
-                        .with_style(|style| {
+                        .with_style(|mut style| {
                             style.row_gap = Val::Px(50.);
                             style.padding.left = Val::Px(50.);
                         })
@@ -227,7 +230,7 @@ fn ui_root(world: &mut World) {
                                 .item(
                                     Column::<NodeBundle>::new()
                                         .align_content(Align::new().left())
-                                        .with_style(|style| style.row_gap = Val::Px(10.))
+                                        .with_style(|mut style| style.row_gap = Val::Px(10.))
                                         .item(category_count(ColorCategory::Blue, blue_count.signal()))
                                         .item(category_count(ColorCategory::Green, green_count.signal()))
                                         .item(category_count(ColorCategory::Red, red_count.signal()))
@@ -242,12 +245,12 @@ fn ui_root(world: &mut World) {
                                             .dedupe()
                                     })
                                     .align(Align::new().right())
-                                    .update_raw_el(|raw_el| raw_el.with_component::<Style>(|style| style.right = Val::Px(100.)))
+                                    .update_raw_el(|raw_el| raw_el.with_component::<Style>(|mut style| style.right = Val::Px(100.)))
                                 ),
                         )
                         .item(
                             Column::<NodeBundle>::new()
-                                .with_style(|style| style.row_gap = Val::Px(10.))
+                                .with_style(|mut style| style.row_gap = Val::Px(10.))
                                 .item(text_labeled_element("spawn rate", rate_element(spawn_rate)))
                                 .item(text_labeled_element("despawn rate", rate_element(despawn_rate))),
                         ),
@@ -312,14 +315,14 @@ fn sync_timer(mut spawner: ResMut<Spawner>, mut despawner: ResMut<Despawner>) {
 struct Dot;
 
 // TODO: use global async world on click to send such events
-#[derive(Event)]
-struct SpawnDot;
+// #[derive(Event)]
+// struct SpawnDot;
 
-#[derive(Event)]
-struct DepawnDot;
+// #[derive(Event)]
+// struct DepawnDot;
 
-fn spawn_dot() {}
-fn despawn_dot() {}
+// fn spawn_dot() {}
+// fn despawn_dot() {}
 
 fn dot_spawner(
     mut commands: Commands,

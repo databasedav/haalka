@@ -1,11 +1,13 @@
-use crate::Scrollable;
+use super::scrollable::Scrollable;
 use bevy::prelude::*;
 use futures_signals::signal::Signal;
 
+/// Enable reactively setting the horizontal and vertical position of a viewport.
 pub trait ViewportMutable: Scrollable {
     // TODO
     // fn on_viewport_location_change(self, mut handler: impl FnMut(Scene, Viewport) + 'static) -> Self
 
+    /// Reactively set the horizontal position of the viewport.
     fn viewport_x_signal<S: Signal<Item = f32> + Send + 'static>(
         mut self,
         x_signal_option: impl Into<Option<S>>,
@@ -35,6 +37,7 @@ pub trait ViewportMutable: Scrollable {
         self
     }
 
+    /// Reactively set the vertical position of the viewport.
     fn viewport_y_signal<S: Signal<Item = f32> + Send + 'static>(
         mut self,
         y_signal_option: impl Into<Option<S>>,

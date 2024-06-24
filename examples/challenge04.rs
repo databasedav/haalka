@@ -1,14 +1,15 @@
-// A simple game menu, with buttons that use a nine-patch system for design (i.e., composed of
-//     images for the corners and middle segments) and an image to the right of the buttons.
-// For normal screen sizes, the menu is centered in the middle of the screen
-// For 400px width and lower, the buttons fill the screen width and the image is above the buttons.
+//! - A simple game menu, with buttons that use a nine-patch system for design (i.e., composed of
+//!   images for the corners and middle segments) and an image to the right of the buttons.
+//! - For normal screen sizes, the menu is centered in the middle of the screen
+//! - For 400px width and lower, the buttons fill the screen width and the image is above the
+//!   buttons.
 
 use std::sync::OnceLock;
 
 use bevy::{prelude::*, window::WindowResized};
 use bevy_nine_slice_ui::{prelude::*, NineSliceUiMaterialBundle};
 use futures_signals::signal::Mutable;
-use haalka::*;
+use haalka::prelude::*;
 
 fn main() {
     App::new()
@@ -36,7 +37,7 @@ const GAP: f32 = 10.;
 
 static NINE_SLICE_TEXTURE_ATLAS: OnceLock<Handle<Image>> = OnceLock::new();
 
-pub fn nine_slice_texture_atlas() -> &'static Handle<Image> {
+fn nine_slice_texture_atlas() -> &'static Handle<Image> {
     NINE_SLICE_TEXTURE_ATLAS
         .get()
         .expect("expected NINE_SLICE_TEXTURE_ATLAS to be initialized")
@@ -44,20 +45,20 @@ pub fn nine_slice_texture_atlas() -> &'static Handle<Image> {
 
 static IMAGE: OnceLock<Handle<Image>> = OnceLock::new();
 
-pub fn image() -> &'static Handle<Image> {
+fn image() -> &'static Handle<Image> {
     IMAGE.get().expect("expected IMAGE to be initialized")
 }
 
-struct NineSliceEl<Bundle = NineSliceUiMaterialBundle>(El<Bundle>);
+struct NineSliceEl(El<NineSliceUiMaterialBundle>);
 
 impl_haalka_methods! {
-    NineSliceEl => {
-        NineSliceUiMaterialBundle => {
-            style: Style,
-            nine_slice_texture: NineSliceUiTexture,
-        },
-    },
+    NineSliceEl {
+        style: Style,
+        nine_slice_texture: NineSliceUiTexture,
+    }
 }
+
+// struct<T: Bundle> Test<T>;
 
 impl NineSliceEl {
     pub fn new(frame_signal: impl Signal<Item = usize> + Send + 'static) -> Self {
@@ -68,7 +69,7 @@ impl NineSliceEl {
             ),
             ..default()
         }))
-        .on_signal_with_nine_slice_texture(frame_signal, |nine_slice, frame| {
+        .on_signal_with_nine_slice_texture(frame_signal, |mut nine_slice, frame| {
             if let Some(bounds) = &mut nine_slice.bounds {
                 bounds.min.x = frame as f32 * 32.;
                 bounds.max.x = 32. + frame as f32 * 32.;
@@ -115,12 +116,12 @@ fn horizontal() -> impl Element {
     Row::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .with_style(|style| style.column_gap = Val::Px(GAP))
+        .with_style(|mut style| style.column_gap = Val::Px(GAP))
         .item(
             Column::<NodeBundle>::new()
                 .width(Val::Percent(50.))
                 .height(Val::Percent(100.))
-                .with_style(|style| style.row_gap = Val::Px(GAP))
+                .with_style(|mut style| style.row_gap = Val::Px(GAP))
                 .align_content(Align::center())
                 .items((0..8).into_iter().map(|_| nine_slice_button())),
         )
@@ -131,7 +132,7 @@ fn vertical() -> impl Element {
     Column::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .with_style(|style| style.row_gap = Val::Px(GAP))
+        .with_style(|mut style| style.row_gap = Val::Px(GAP))
         .item(El::<ImageBundle>::new().image(UiImage::new(image().clone())))
         .item(
             Row::<NodeBundle>::new()
@@ -139,7 +140,7 @@ fn vertical() -> impl Element {
                 .align_content(Align::center())
                 .width(Val::Percent(100.))
                 .height(Val::Percent(50.))
-                .with_style(|style| style.column_gap = Val::Px(GAP))
+                .with_style(|mut style| style.column_gap = Val::Px(GAP))
                 .items((0..8).into_iter().map(|_| nine_slice_button())),
         )
 }
@@ -147,7 +148,7 @@ fn vertical() -> impl Element {
 fn menu(width: Mutable<f32>) -> impl Element {
     NineSliceEl::new(always(3))
         .height(Val::Px(BASE_SIZE))
-        .with_style(|style| {
+        .with_style(|mut style| {
             style.padding = UiRect::all(Val::Px(GAP));
         })
         .width_signal(width.signal().map(|width| BASE_SIZE.min(width)).dedupe().map(Val::Px))
@@ -169,10 +170,10 @@ fn ui_root(world: &mut World) {
         .align_content(Align::center())
         .child(
             Column::<NodeBundle>::new()
-                .with_style(|style| style.row_gap = Val::Px(GAP))
+                .with_style(|mut style| style.row_gap = Val::Px(GAP))
                 .item(
                     Row::<NodeBundle>::new()
-                        .with_style(|style| style.padding.left = Val::Px(GAP))
+                        .with_style(|mut style| style.padding.left = Val::Px(GAP))
                         .item(El::<TextBundle>::new().text(Text::from_section(
                             "width: ",
                             TextStyle {

@@ -1,28 +1,122 @@
 [workspace]
-members = ["examples/*"]
+members = ["examples/*", "MoonZoon/crates/*"]
 resolver = "2"
 
 [package]
 name = "haalka"
-version = "0.1.0"
+version = "0.0.2-rc.2"
 edition = "2021"
+categories = ["ui", "reactive", "signals", "frp"]
+description = "ergonomic reactive bevy UI library powered by FRP signals"
+exclude = ["assets/", ".github/", "crates/"]
+keywords = ["ui", "reactive", "signals", "game", "bevy"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/databasedav/haalka"
+documentation = "https://docs.rs/haalka"
 
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "deny"
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+
+# TODO: use MoonZoon's futures-signals/futures-util extensions directly when it is published as a crate
 [dependencies]
+apply = "0.3.0"
 async-io = "2.3.1"
+async-lock = "3.3.0"
 bevy = "0.13.2"
-bevy-async-ecs = "0.5.0"
+bevy_cosmic_edit = { version = "0.20.1", optional = true }
 bevy_eventlistener = "0.7.0"
-bevy_mod_picking = { version = "0.18.0", default-features = false, features = ["backend_bevy_ui"] }
+bevy_mod_picking = { version = "0.19.0", default-features = false, features = ["backend_bevy_ui"], optional = true }
+bevy-async-ecs = "0.5.0"
+cfg-if = "1.0"
 enclose = "1.1.8"
 futures-signals = "0.3.33"
-futures-util = { version = "0.3.30", features = ["sink"] }  # TODO: need to add sink feature upstream in futures signal ext
-# TODO: https://discord.com/channels/797429007683158046/797429007683158051/1242791714209398875
-futures_signals_ext = { git = "https://github.com/MoonZoon/MoonZoon", rev = "fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc" }
-paste = "1.0.14"
-apply = "0.3.0"
-async-lock = "3.3.0"
+haalka_futures_signals_ext = { path = "MoonZoon/crates/futures_signals_ext", version = "0.0.1" }
 once_cell = "1.19.0"
-# TODO: remove when 0.21.0 released
-bevy_cosmic_edit = { git = "https://github.com/Dimchikkk/bevy_cosmic_edit", rev = "4066c6965b46acd83ce31349ee41ea2e316618fc" }
+paste = { version = "1.0.14", optional = true }
 
-# TODO: allow forgoing ui features entirely by disabling defaults
+[features]
+default = [
+    "text_input",
+    "utils",
+]
+text_input = ["ui", "bevy_cosmic_edit"]
+ui = ["bevy_mod_picking", "derive"]
+derive = ["paste"]
+utils = []
+
+[dev-dependencies]
+bevy_asset_loader = { version = "0.20.0", features = ["2d"] }
+bevy_nine_slice_ui = "0.6.0"
+bevy_rand = { version = "0.5.0", features = ["rand_chacha"] }
+colorgrad = "0.6.2"
+rand = "0.8.5"
+strum = { version = "0.25.0", features = ["derive"] }
+
+[[example]]
+name = "align"
+path = "examples/align.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "button"
+path = "examples/button.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "challenge01"
+path = "examples/challenge01.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "challenge02"
+path = "examples/challenge02.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "challenge03"
+path = "examples/challenge03.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "challenge04"
+path = "examples/challenge04.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "challenge05"
+path = "examples/challenge05.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "counter"
+path = "examples/counter.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "ecs_ui_sync"
+path = "examples/ecs_ui_sync.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "key_values_sorted"
+path = "examples/key_values_sorted.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "scroll_grid"
+path = "examples/scroll_grid.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "scroll"
+path = "examples/scroll.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "snake"
+path = "examples/snake.rs"
+doc-scrape-examples = true

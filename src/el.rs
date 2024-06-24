@@ -1,19 +1,29 @@
 use bevy::prelude::*;
 use bevy_mod_picking::picking_core::Pickable;
-use futures_signals::{
-    signal::{Signal, SignalExt},
-    signal_vec::{SignalVec, SignalVecExt},
+use futures_signals::signal::{Signal, SignalExt};
+
+use super::{
+    align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
+    column::Column,
+    element::{GlobalEventAware, IntoOptionElement},
+    pointer_event_aware::PointerEventAware,
+    raw::{RawElWrapper, RawHaalkaEl},
+    scrollable::Scrollable,
+    sizeable::Sizeable,
+    viewport_mutable::ViewportMutable,
 };
 
-use crate::{
-    align::AlignableType, scrollable::Scrollable, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable, Column,
-    IntoOptionElement, PointerEventAware, RawElWrapper, RawHaalkaEl, Sizeable,
-};
-
+// TODO: add the extra flag machinery that MoonZoon has to ensure that El's have exactly one child
+// (or child signal)
+/// Singleton [`Element`](super::Element) with exactly one child (not yet enforced). Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`El`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/el.rs).
+///
+/// While multiple children can still be declared with repeated calls to [`.child`](`El::child`) or
+/// [`.child_signal`](`El::child_signal`), their relative alignment was arbitrarily chosen to match
+/// [MoonZoon's implementation](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/el.rs#L41-L69) and should not be relied on.
 pub struct El<NodeType> {
-    pub(crate) raw_el: RawHaalkaEl,
-    pub(crate) align: Option<AlignHolder>,
-    pub(crate) _node_type: std::marker::PhantomData<NodeType>,
+    raw_el: RawHaalkaEl,
+    align: Option<AlignHolder>,
+    _node_type: std::marker::PhantomData<NodeType>,
 }
 
 impl<NodeType: Bundle> From<NodeType> for El<NodeType> {
@@ -21,7 +31,7 @@ impl<NodeType: Bundle> From<NodeType> for El<NodeType> {
         Self {
             raw_el: {
                 RawHaalkaEl::from(node_bundle)
-                    .with_component::<Style>(|style| {
+                    .with_component::<Style>(|mut style| {
                         style.display = Display::Flex;
                         style.flex_direction = FlexDirection::Column;
                     })
@@ -34,6 +44,11 @@ impl<NodeType: Bundle> From<NodeType> for El<NodeType> {
 }
 
 impl<NodeType: Bundle + Default> El<NodeType> {
+    /// Construct a new [`El`] from a [`Bundle`] with a [`Default`] implementation.
+    ///
+    /// # Notes
+    /// [`Bundle`]s without the required bevy_ui node components (e.g. [`Node`], [`Style`], etc.)
+    /// will not behave as expected.
     pub fn new() -> Self {
         Self::from(NodeType::default())
     }
@@ -41,15 +56,18 @@ impl<NodeType: Bundle + Default> El<NodeType> {
 
 impl<NodeType> RawElWrapper for El<NodeType> {
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
-        self.raw_el.raw_el_mut()
+        &mut self.raw_el
     }
 }
 
 impl<NodeType: Bundle> PointerEventAware for El<NodeType> {}
 impl<NodeType: Bundle> Scrollable for El<NodeType> {}
 impl<NodeType: Bundle> Sizeable for El<NodeType> {}
+impl<NodeType: Bundle> ViewportMutable for El<NodeType> {}
+impl<NodeType: Bundle> GlobalEventAware for El<NodeType> {}
 
 impl<NodeType: Bundle> El<NodeType> {
+    /// Declare a static child.
     pub fn child<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self {
         let apply_alignment = self.apply_alignment_wrapper();
         self.raw_el = self.raw_el.child(
@@ -60,6 +78,7 @@ impl<NodeType: Bundle> El<NodeType> {
         self
     }
 
+    /// Declare a reactive child. When the [`Signal`] outputs [`None`], the child is removed.
     pub fn child_signal<IOE: IntoOptionElement + 'static, S: Signal<Item = IOE> + Send + 'static>(
         mut self,
         child_option_signal_option: impl Into<Option<S>>,
@@ -74,48 +93,11 @@ impl<NodeType: Bundle> El<NodeType> {
         }
         self
     }
-
-    pub fn children<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(
-        mut self,
-        child_options_option: impl Into<Option<I>>,
-    ) -> Self
-    where
-        I::IntoIter: Send + 'static,
-    {
-        if let Some(children_options) = child_options_option.into() {
-            let apply_alignment = self.apply_alignment_wrapper();
-            self.raw_el = self
-                .raw_el
-                .children(children_options.into_iter().map(move |child_option| {
-                    child_option
-                        .into_option_element()
-                        .map(|child| Self::align_child(child, apply_alignment))
-                }));
-        }
-        self
-    }
-
-    pub fn children_signal_vec<IOE: IntoOptionElement + 'static, S: SignalVec<Item = IOE> + Send + 'static>(
-        mut self,
-        children_options_signal_vec_option: impl Into<Option<S>>,
-    ) -> Self {
-        if let Some(children_options_signal_vec) = children_options_signal_vec_option.into() {
-            let apply_alignment = self.apply_alignment_wrapper();
-            self.raw_el = self
-                .raw_el
-                .children_signal_vec(children_options_signal_vec.map(move |child_option| {
-                    child_option
-                        .into_option_element()
-                        .map(|child| Self::align_child(child, apply_alignment))
-                }));
-        }
-        self
-    }
 }
 
 impl<NodeType: Bundle> Alignable for El<NodeType> {
-    fn alignable_type(&mut self) -> Option<AlignableType> {
-        Some(AlignableType::El)
+    fn aligner(&mut self) -> Option<Aligner> {
+        Some(Aligner::El)
     }
 
     fn align_mut(&mut self) -> &mut Option<AlignHolder> {

@@ -1,8 +1,10 @@
+//! Experimental port of https://github.com/aevyrie/bevy_mod_picking/blob/main/examples/many_buttons.rs.
+
 use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     prelude::*,
 };
-use haalka::*;
+use haalka::prelude::*;
 
 fn main() {
     App::new()
@@ -23,8 +25,8 @@ const PRESSED_COLOR: Color = Color::rgb(0.35, 0.75, 0.35);
 
 fn button(i: usize, j: usize) -> RawHaalkaEl {
     let color = as_rainbow(j % i.max(1));
-    let (pressed, pressed_signal) = Mutable::new_and_signal(false);
-    let (hovered, hovered_signal) = Mutable::new_and_signal(false);
+    let (_pressed, pressed_signal) = Mutable::new_and_signal(false);
+    let (_hovered, hovered_signal) = Mutable::new_and_signal(false);
     let background_color_signal = {
         map_ref!(pressed_signal, hovered_signal => {
             if *pressed_signal {
@@ -41,7 +43,7 @@ fn button(i: usize, j: usize) -> RawHaalkaEl {
     let width = 90. / total;
     RawHaalkaEl::new()
         .insert(NodeBundle::default())
-        .with_component::<Style>(move |style| {
+        .with_component::<Style>(move |mut style| {
             style.width = Val::Percent(width);
             style.height = Val::Percent(width);
             style.bottom = Val::Percent(100. / total * i as f32);
@@ -75,7 +77,7 @@ fn as_rainbow(i: usize) -> Color {
 fn spawn_ui_root(world: &mut World) {
     RawHaalkaEl::new()
         .insert(NodeBundle::default())
-        .with_component::<Style>(|style| {
+        .with_component::<Style>(|mut style| {
             style.flex_direction = FlexDirection::Column;
             style.justify_content = JustifyContent::Center;
             style.align_items = AlignItems::Center;

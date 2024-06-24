@@ -1,5 +1,7 @@
+//! Simple button, port of <https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs>.
+
 use bevy::prelude::*;
-use haalka::*;
+use haalka::prelude::*;
 
 fn main() {
     App::new()
@@ -57,7 +59,7 @@ fn button(font: Handle<Font>) -> impl Element {
     El::<NodeBundle>::new()
         .width(Val::Px(150.0))
         .height(Val::Px(65.))
-        .with_style(|style| style.border = UiRect::all(Val::Px(5.0)))
+        .with_style(|mut style| style.border = UiRect::all(Val::Px(5.0)))
         .align_content(Align::center())
         .border_color_signal(border_color_signal)
         .background_color_signal(background_color_signal)

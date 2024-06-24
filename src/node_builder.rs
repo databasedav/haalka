@@ -7,13 +7,14 @@ use futures_signals::{
     signal::{Mutable, Signal, SignalExt},
     signal_vec::{MutableVec, SignalVec, SignalVecExt, VecDiff},
 };
-use futures_signals_ext::{MutableExt, SignalExtExt};
-use futures_util::Future;
+use haalka_futures_signals_ext::{Future, MutableExt, SignalExtExt};
 
-use crate::spawn;
+use super::utils::spawn;
 
 static ASYNC_WORLD: OnceLock<AsyncWorld> = OnceLock::new();
 
+/// Global access to [`bevy_async_ecs::AsyncWorld`], providing convenient access to the [`World`]
+/// from deeply nested async contexts.
 pub fn async_world() -> &'static AsyncWorld {
     ASYNC_WORLD.get().expect("expected ASYNC_WORLD to be initialized")
 }
@@ -24,6 +25,9 @@ pub(crate) fn init_async_world(world: &mut World) {
         .expect("failed to initialize ASYNC_WORLD");
 }
 
+/// A thin facade over a Bevy entity enabling the ergonomic registration of reactive tasks and
+/// children using a declarative builder pattern/[fluent interface](https://en.wikipedia.org/wiki/Fluent_interface).
+/// Port of [Dominator](https://github.com/Pauan/rust-dominator)'s [`DomBuilder`](https://docs.rs/dominator/latest/dominator/struct.DomBuilder.html).
 #[derive(Default)]
 pub struct NodeBuilder {
     on_spawns: Vec<Box<dyn FnOnce(&mut World, Entity) + Send>>,
@@ -38,11 +42,13 @@ impl<T: Bundle> From<T> for NodeBuilder {
 }
 
 impl NodeBuilder {
+    /// Run a function with mutable access to the [`World`] and this node's [`Entity`].
     pub fn on_spawn(mut self, on_spawn: impl FnOnce(&mut World, Entity) + Send + 'static) -> Self {
         self.on_spawns.push(Box::new(on_spawn));
         self
     }
 
+    /// Run a function with this node's [`EntityWorldMut`].
     pub fn with_entity(self, f: impl FnOnce(EntityWorldMut) + Send + 'static) -> Self {
         self.on_spawn(move |world, entity| {
             if let Some(entity) = world.get_entity_mut(entity) {
@@ -51,12 +57,15 @@ impl NodeBuilder {
         })
     }
 
+    /// Add a [`Bundle`] of components to the node.
     pub fn insert<B: Bundle>(self, bundle: B) -> Self {
         self.with_entity(|mut entity| {
             entity.insert(bundle);
         })
     }
 
+    /// Reactively run a [`Future`]-returning function with this node's [`Entity`] and the output of
+    /// the [`Signal`].
     pub fn on_signal<T, Fut: Future<Output = ()> + Send + 'static>(
         mut self,
         signal: impl Signal<Item = T> + Send + 'static,
@@ -70,6 +79,7 @@ impl NodeBuilder {
 
     // TODO: list out limitations; limitation: if multiple children are added to entity, they must
     // be registered thru this abstraction because of the way siblings are tracked
+    /// Declare a static child.
     pub fn child(mut self, child: NodeBuilder) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(None);
@@ -97,6 +107,7 @@ impl NodeBuilder {
         self
     }
 
+    /// Declare a reactive child. When the [`Signal`] outputs [`None`], the child is removed.
     pub fn child_signal(
         mut self,
         child_option: impl Signal<Item = impl Into<Option<NodeBuilder>> + Send> + Send + 'static,
@@ -150,6 +161,7 @@ impl NodeBuilder {
         self
     }
 
+    /// Declare static children.
     pub fn children(mut self, children: impl IntoIterator<Item = NodeBuilder> + Send + 'static) -> Self {
         let block = self.contiguous_child_block_populations.lock_ref().len();
         self.contiguous_child_block_populations.lock_mut().push(None);
@@ -183,6 +195,7 @@ impl NodeBuilder {
         self
     }
 
+    /// Declare reactive children.
     pub fn children_signal_vec(
         mut self,
         children_signal_vec: impl SignalVec<Item = NodeBuilder> + Send + 'static,
@@ -350,6 +363,7 @@ impl NodeBuilder {
         self
     }
 
+    /// Spawn a node into the world.
     pub fn spawn(self, world: &mut World) -> Entity {
         let id = world.spawn(TaskHolder::new()).id();
         for on_spawn in self.on_spawns {
@@ -368,6 +382,8 @@ impl NodeBuilder {
     }
 }
 
+// TODO: tasks that resolve never get cleaned up (for the lifetime of the entity)
+/// Used to tie async reactivity tasks to the lifetime of an entity.
 #[derive(Component)]
 pub struct TaskHolder(Vec<Task<()>>);
 
@@ -376,6 +392,7 @@ impl TaskHolder {
         Self(Vec::new())
     }
 
+    /// Drop the [`Task`] when the entity is despawned.
     pub fn hold(self: &mut Self, task: Task<()>) {
         self.0.push(task);
     }

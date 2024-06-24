@@ -1,5 +1,7 @@
+//! Scrollable row of scrollable letter columns.
+
 use bevy::prelude::*;
-use haalka::*;
+use haalka::prelude::*;
 
 fn main() {
     App::new()
@@ -48,7 +50,7 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
             },
             signal::and(signal::not(SHIFTED.signal()), hovered.signal()),
         )
-        .with_style(move |style| style.top = Val::Px(-LETTER_SIZE * rotate as f32))
+        .with_style(move |mut style| style.top = Val::Px(-LETTER_SIZE * rotate as f32))
         .hovered_sync(hovered)
         .items(
             "abcdefghijklmnopqrstuvwxyz"
@@ -64,7 +66,7 @@ fn ui_root(world: &mut World) {
         .align_content(Align::center())
         .child(
             Row::<NodeBundle>::new()
-                .with_style(|style| style.column_gap = Val::Px(30.))
+                .with_style(|mut style| style.column_gap = Val::Px(30.))
                 .width(Val::Px(300.))
                 .scrollable(
                     ScrollabilitySettings {

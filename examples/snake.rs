@@ -1,3 +1,5 @@
+//! Snake with adjustable grid size and tick rate.
+
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     convert::identity,
@@ -5,7 +7,7 @@ use std::{
 
 use bevy::prelude::*;
 use bevy_rand::prelude::*;
-use haalka::*;
+use haalka::prelude::*;
 use rand::prelude::*;
 use strum::{EnumIter, IntoEnumIterator};
 
@@ -129,7 +131,7 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
 fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> impl Element {
     Column::<NodeBundle>::new()
         .width(Val::Px((WIDTH - SIDE) as f32))
-        .with_style(|style| style.row_gap = Val::Px(10.))
+        .with_style(|mut style| style.row_gap = Val::Px(10.))
         .align_content(Align::center())
         .item(El::<TextBundle>::new().text_signal(score.signal().map(|score| {
             Text::from_section(
@@ -142,40 +144,44 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
         })))
         .item(
             Row::<NodeBundle>::new()
-                .with_style(|style| style.column_gap = Val::Px(10.))
+                .with_style(|mut style| style.column_gap = Val::Px(10.))
                 .item(El::<TextBundle>::new().text(text("grid size:")))
                 .item(El::<TextBundle>::new().text_signal(size.signal().map(|size| text(&size.to_string()))))
                 .item(text_button("-", || {
-                    spawn(async_world().send_event(GridSizeChange::Decr)).detach()
+                    async_world().send_event(GridSizeChange::Decr).apply(spawn).detach()
                 }))
                 .item(text_button("+", || {
-                    spawn(async_world().send_event(GridSizeChange::Incr)).detach()
+                    async_world().send_event(GridSizeChange::Incr).apply(spawn).detach()
                 })),
         )
         .item(
             Row::<NodeBundle>::new()
-                .with_style(|style| style.column_gap = Val::Px(10.))
+                .with_style(|mut style| style.column_gap = Val::Px(10.))
                 .item(El::<TextBundle>::new().text(text("tick rate:")))
                 .item(El::<TextBundle>::new().text_signal(tick_rate.signal().map(|size| text(&size.to_string()))))
                 .item(text_button("-", || {
-                    spawn(async_world().apply(|world: &mut World| {
-                        let tick_rate = &world.resource::<TickRate>().0;
-                        let cur_rate = tick_rate.get();
-                        if cur_rate > 1 {
-                            tick_rate.update(|rate| rate - 1);
-                            world.insert_resource(Time::<Fixed>::from_seconds(1. / (cur_rate - 1) as f64));
-                        }
-                    }))
-                    .detach()
+                    async_world()
+                        .apply(|world: &mut World| {
+                            let tick_rate = &world.resource::<TickRate>().0;
+                            let cur_rate = tick_rate.get();
+                            if cur_rate > 1 {
+                                tick_rate.update(|rate| rate - 1);
+                                world.insert_resource(Time::<Fixed>::from_seconds(1. / (cur_rate - 1) as f64));
+                            }
+                        })
+                        .apply(spawn)
+                        .detach()
                 }))
                 .item(text_button("+", || {
-                    spawn(async_world().apply(|world: &mut World| {
-                        let tick_rate = &world.resource::<TickRate>().0;
-                        let cur_rate = tick_rate.get();
-                        tick_rate.update(|rate| rate + 1);
-                        world.insert_resource(Time::<Fixed>::from_seconds(1. / (cur_rate + 1) as f64));
-                    }))
-                    .detach()
+                    async_world()
+                        .apply(|world: &mut World| {
+                            let tick_rate = &world.resource::<TickRate>().0;
+                            let cur_rate = tick_rate.get();
+                            tick_rate.update(|rate| rate + 1);
+                            world.insert_resource(Time::<Fixed>::from_seconds(1. / (cur_rate + 1) as f64));
+                        })
+                        .apply(spawn)
+                        .detach()
                 })),
         )
 }
@@ -214,7 +220,7 @@ fn restart_button() -> impl Element {
         )
         .hovered_sync(hovered)
         .align_content(Align::center())
-        .on_click(|| spawn(async_world().send_event(Restart)).detach())
+        .on_click(|| async_world().send_event(Restart).apply(spawn).detach())
         .child(El::<TextBundle>::new().text(Text::from_section(
             "restart",
             TextStyle {

@@ -1,13 +1,12 @@
-// Simple 3D Scene with a character (sphere).
-//     Can be moved around with WASD/arrow keys.
-// A health bar and character name is anchored to the character in world-space.
-// The health starts at 10 and decreases by 1 every second. The health should be stored and managed
-//     in Bevy ECS.
-// When reaching 0 HP, the character should be despawned together with UI.
+//! - Simple 3D Scene with a character (sphere).
+//!   - Can be moved around with WASD/arrow keys.
+//! - A health bar and character name is anchored to the character in world-space.
+//! - The health starts at 10 and decreases by 1 every second. The health should be stored and
+//!   managed in Bevy ECS. When reaching 0 HP, the character should be despawned together with UI.
 
 use bevy::prelude::*;
 use colorgrad::{self, Gradient};
-use haalka::*;
+use haalka::prelude::*;
 
 fn main() {
     App::new()
@@ -164,7 +163,7 @@ fn healthbar(
     let percent_health = health.signal().map(move |h| h as f32 / max as f32).broadcast();
     Stack::<NodeBundle>::new()
         .height(Val::Px(height))
-        .with_style(move |style| {
+        .with_style(move |mut style| {
             style.border = UiRect::all(Val::Px(height / 12.));
         })
         .border_color(BorderColor(Color::BLACK))
@@ -180,7 +179,7 @@ fn healthbar(
         .layer(
             El::<TextBundle>::new()
                 .height(Val::Percent(100.))
-                .with_style(move |style| {
+                .with_style(move |mut style| {
                     style.bottom = Val::Px(height / 8.);
                     style.left = Val::Px(height / 6.); // TODO: padding doesn't work here?
                 })
@@ -242,7 +241,7 @@ fn respawn_button() -> impl Element {
         )
         .hovered_sync(hovered)
         .align_content(Align::center())
-        .on_click(|| spawn(async_world().send_event(SpawnPlayer)).detach())
+        .on_click(|| async_world().send_event(SpawnPlayer).apply(spawn).detach())
         .child(El::<TextBundle>::new().text(Text::from_section(
             "respawn",
             TextStyle {
@@ -256,7 +255,7 @@ fn respawn_button() -> impl Element {
 fn ui_root(world: &mut World) {
     let style_data = world.resource::<StyleDataResource>().0.clone();
     let health_option = world.resource::<HealthOptionMutable>().0.clone();
-    let starting_distance = CAMERA_POSITION.distance(PLAYER_POSITION);
+    // let starting_distance = CAMERA_POSITION.distance(PLAYER_POSITION);
     El::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
@@ -274,13 +273,13 @@ fn ui_root(world: &mut World) {
                                     Stack::<NodeBundle>::new()
                                     .width(Val::Percent(100.))
                                     .height(Val::Percent(100.))
-                                        .with_style(|style| style.padding.bottom = Val::Px(10.))
+                                        .with_style(|mut style| style.padding.bottom = Val::Px(10.))
                                         .layer(
                                             Column::<NodeBundle>::new()
-                                                .with_style(|style| style.row_gap = Val::Px(MINI.1 / 4.))
+                                                .with_style(|mut style| style.row_gap = Val::Px(MINI.1 / 4.))
                                                 .on_signal_with_style(
                                                     style_data.signal(),
-                                                    |style, StyleData { left, top, .. }| {
+                                                    |mut style, StyleData { left, top, .. }| {
                                                         style.left = Val::Px(left - MINI.0 / 2.);
                                                         style.top = Val::Px(top - 30. * 2. - MINI.1 * 1.5);
                                                     },
@@ -290,7 +289,7 @@ fn ui_root(world: &mut World) {
                                                 // })
                                                 .item(
                                                     El::<TextBundle>::new()
-                                                    .with_style(|style| style.left = Val::Px(MINI.1 / 4.))
+                                                    .with_style(|mut style| style.left = Val::Px(MINI.1 / 4.))
                                                         .text(
                                                             Text::from_section(
                                                                 NAME,

@@ -1,16 +1,16 @@
-// Fixed-size grid, some spaces with items and some empty.
-// Each item slot has an image of the item and the item count overlayed on the image.
-// Items can be moved with drag and drop.
-//     Both image and item count move along with the cursor while dragging.
-//     The image and item count are not visible in the original position while dragging.
-//     You can leave the bounding box of the inventory while dragging.
-// A tooltip with the item's name is shown when hovering over an item.
+//! - Fixed-size grid, some spaces with items and some empty.
+//! - Each item slot has an image of the item and the item count overlayed on the image.
+//! - Items can be moved with drag and drop.
+//!   - Both image and item count move along with the cursor while dragging.
+//!   - The image and item count are not visible in the original position while dragging.
+//!   - You can leave the bounding box of the inventory while dragging.
+//! - A tooltip with the item's name is shown when hovering over an item.
 
 use std::{collections::HashMap, convert::identity, sync::OnceLock};
 
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
-use haalka::*;
+use haalka::prelude::*;
 use rand::{
     distributions::{Bernoulli, Distribution},
     Rng,
@@ -47,7 +47,7 @@ const CELL_GAP: f32 = 5.;
 const INVENTORY_SIZE: f32 = 700.;
 const CELL_BORDER_WIDTH: f32 = 2.;
 const CELL_DARK_BORDER_COLOR: Color = Color::hsl(0., 0., 0.19);
-const CELL_LIGHT_BORDER_COLOR: Color = Color::hsl(0., 0., 0.98);
+// const CELL_LIGHT_BORDER_COLOR: Color = Color::hsl(0., 0., 0.98);
 
 static ITEM_NAMES: Lazy<HashMap<usize, &'static str>> = Lazy::new(|| {
     HashMap::from([
@@ -212,11 +212,11 @@ fn icon(
             El::<AtlasImageBundle>::new()
                 .image(UiImage::from(icon_sheet().image.clone()))
                 .texture_atlas(TextureAtlas::from(icon_sheet().layout.clone()))
-                .on_signal_with_texture_atlas(index_signal, |image, index| image.index = index),
+                .on_signal_with_texture_atlas(index_signal, |mut image, index| image.index = index),
         )
         .layer(
             El::<TextBundle>::new()
-                .with_style(|style| style.top = Val::Px(6.))
+                .with_style(|mut style| style.top = Val::Px(6.))
                 .align(Align::new().bottom().right())
                 .text_signal(count_signal.map(|count| {
                     Text::from_section(
@@ -333,7 +333,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
         .hovered_sync(hovered.clone())
         .width(Val::Px(CELL_WIDTH))
         .height(Val::Px(CELL_WIDTH))
-        .with_style(|style| style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH)))
+        .with_style(|mut style| style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH)))
         .background_color_signal(
             hovered.signal()
                 .map_bool(|| CELL_HIGHLIGHT_COLOR.into(), || CELL_BACKGROUND_COLOR.into()),
@@ -352,7 +352,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                 // TODO: global transform isn't populated on spawn
                                 // .with_global_transform(clone!((original_position) move |transform| original_position.set(Some(transform.compute_transform().translation.xy()))))
                                 .height(Val::Px(CELL_WIDTH))
-                                .with_style(|style| {
+                                .with_style(|mut style| {
                                     style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
                                     style.position_type = PositionType::Absolute;
                                     style.padding = UiRect::horizontal(Val::Px(10.));
@@ -426,7 +426,7 @@ where
     Grid::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .with_style(|style| {
+        .with_style(|mut style| {
             style.column_gap = Val::Px(CELL_GAP);
             style.row_gap = Val::Px(CELL_GAP);
         })
@@ -468,7 +468,7 @@ fn arrow() -> impl Element {
 
 fn side_column() -> impl Element {
     Column::<NodeBundle>::new()
-        .with_style(|style| style.row_gap = Val::Px(CELL_GAP))
+        .with_style(|mut style| style.row_gap = Val::Px(CELL_GAP))
         .items((0..4).into_iter().map(|_| bern_cell(0.5, true)))
 }
 
@@ -481,18 +481,18 @@ fn inventory() -> impl Element {
             Column::<NodeBundle>::new()
             .height(Val::Percent(100.))
             .width(Val::Percent(100.))
-                .with_style(|style| style.row_gap = Val::Px(CELL_GAP * 4.))
+                .with_style(|mut style| style.row_gap = Val::Px(CELL_GAP * 4.))
                 .background_color(BackgroundColor(INVENTORY_BACKGROUND_COLOR))
                 .align_content(Align::center())
                 .item(
                     Row::<NodeBundle>::new()
                     .width(Val::Percent(100.))
-                        .with_style(|style| style.column_gap = Val::Px(CELL_GAP))
+                        .with_style(|mut style| style.column_gap = Val::Px(CELL_GAP))
                         .item(
                             Row::<NodeBundle>::new()
                                 .align_content(Align::center())
                                 .width(Val::Percent(60.))
-                                .with_style(|style| {
+                                .with_style(|mut style| {
                                     style.column_gap = Val::Px(CELL_GAP);
                                     style.padding = UiRect::horizontal(Val::Px(CELL_GAP * 3.));
                                 })
@@ -536,7 +536,7 @@ fn inventory() -> impl Element {
                                     }));
                                     Column::<NodeBundle>::new()
                                         .update_raw_el(|raw_el| raw_el.hold_tasks([outputter]))
-                                        .with_style(|style| {
+                                        .with_style(|mut style| {
                                             style.row_gap = Val::Px(CELL_GAP * 2.);
                                         })
                                         .item(
@@ -578,7 +578,7 @@ fn inventory() -> impl Element {
                 )
                 .item(
                     Row::<NodeBundle>::new()
-                        .with_style(|style| {
+                        .with_style(|mut style| {
                             style.column_gap = Val::Px(CELL_GAP);
                         })
                         .items((0..9).into_iter().map(|_| bern_cell(0.5, true))),
@@ -617,9 +617,9 @@ fn ui_root(world: &mut World) {
                     icon(cell_data.index.signal(), cell_data.count.signal())
                         .width(Val::Px(CELL_WIDTH))
                         .height(Val::Px(CELL_WIDTH))
-                        .with_style(move |style| style.position_type = PositionType::Absolute)
+                        .with_style(|mut style| style.position_type = PositionType::Absolute)
                         .z_index(ZIndex::Global(1))
-                        .on_signal_with_style(POINTER_POSITION.signal(), move |style, pointer_position| {
+                        .on_signal_with_style(POINTER_POSITION.signal(), move |mut style, pointer_position| {
                             style.left = Val::Px(pointer_position.0 - CELL_WIDTH / 2.);
                             style.top = Val::Px(pointer_position.1 - CELL_WIDTH / 2.);
                         })

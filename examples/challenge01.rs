@@ -1,15 +1,15 @@
-// Main menu with sub menus for audio and graphics.
-// Simple buttons for option selection.
-// Slider for volume.
-// Dropdown for graphics quality (low/medium/high).
-// Navigation possible with mouse, keyboard and controller.
-//     Mouse: Separate styles for hover and press.
-//     Keyboard/Controller: Separate styles for currently focused element.
+//! - Main menu with sub menus for audio and graphics.
+//! - Simple buttons for option selection.
+//! - Slider for volume.
+//! - Dropdown for graphics quality (low/medium/high).
+//! - Navigation possible with mouse, keyboard and controller.
+//!   - Mouse: Separate styles for hover and press.
+//!   - Keyboard/Controller: Separate styles for currently focused element.
 
 use std::{convert::identity, fmt::Display, hash::Hash, time::Duration};
 
 use bevy::prelude::*;
-use haalka::*;
+use haalka::prelude::*;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 fn main() {
@@ -118,7 +118,7 @@ impl Button {
             el: {
                 El::<NodeBundle>::new()
                     .height(Val::Px(DEFAULT_BUTTON_HEIGHT))
-                    .with_style(move |style| {
+                    .with_style(|mut style| {
                         style.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH));
                     })
                     .pressed_sync(pressed)
@@ -190,13 +190,13 @@ fn menu_base(width: f32, height: f32, title: &str) -> Column<NodeBundle> {
     Column::<NodeBundle>::new()
         .width(Val::Px(width))
         .height(Val::Px(height))
-        .with_style(move |style| style.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH)))
+        .with_style(|mut style| style.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH)))
         .border_color(BorderColor(Color::BLACK))
         .background_color(BackgroundColor(NORMAL_BUTTON))
         .item(
             El::<NodeBundle>::new()
                 .height(Val::Px(MENU_ITEM_HEIGHT))
-                .with_style(|style| {
+                .with_style(|mut style| {
                     style.padding = UiRect::all(Val::Px(BASE_PADDING * 2.));
                 })
                 .child(
@@ -306,12 +306,12 @@ fn signal_eq<T: PartialEq + Send>(
     map_ref!(signal1, signal2 => *signal1 == *signal2).dedupe()
 }
 
-struct MutuallyExclusiveOptions {
+struct RadioGroup {
     el: Row<NodeBundle>,
     controlling: Mutable<bool>,
 }
 
-impl MutuallyExclusiveOptions {
+impl RadioGroup {
     fn new<T: Clone + PartialEq + Display + Send + Sync + 'static>(
         options: MutableVec<T>,
         selected: Mutable<Option<usize>>,
@@ -380,14 +380,14 @@ impl MutuallyExclusiveOptions {
     }
 }
 
-impl ElementWrapper for MutuallyExclusiveOptions {
+impl ElementWrapper for RadioGroup {
     type EL = Row<NodeBundle>;
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
 }
 
-impl Controllable for MutuallyExclusiveOptions {
+impl Controllable for RadioGroup {
     fn controlling(&self) -> &Mutable<bool> {
         &self.controlling
     }
@@ -400,7 +400,7 @@ enum LeftRight {
 
 fn centered_arrow_text(direction: LeftRight) -> El<TextBundle> {
     El::<TextBundle>::new()
-        .with_style(|style| {
+        .with_style(|mut style| {
             // manually centered
             style.bottom = Val::Px(2.);
             style.right = Val::Px(2.);
@@ -473,7 +473,7 @@ impl IterableOptions {
                         })
                     )
                 })
-                .with_style(|style| style.column_gap = Val::Px(BASE_PADDING * 2.))
+                .with_style(|mut style| style.column_gap = Val::Px(BASE_PADDING * 2.))
                 .item({
                     lil_baby_button()
                     .selected_signal(left_pressed.signal())
@@ -557,7 +557,7 @@ impl Slider {
                         )
                     })
                     .update_raw_el(|raw_el| raw_el.hold_tasks([value_setter]))
-                    .with_style(|style| style.column_gap = Val::Px(10.))
+                    .with_style(|mut style| style.column_gap = Val::Px(10.))
                     .item(
                         El::<TextBundle>::new().text_signal(value.signal().map(|value| text(&format!("{:.1}", value)))),
                     )
@@ -565,14 +565,14 @@ impl Slider {
                         Stack::<NodeBundle>::new()
                             .width(Val::Px(slider_width))
                             .height(Val::Px(5.))
-                            .with_style(move |style| style.padding = UiRect::horizontal(Val::Px(slider_padding)))
+                            .with_style(move |mut style| style.padding = UiRect::horizontal(Val::Px(slider_padding)))
                             .background_color(BackgroundColor(Color::BLACK))
                             .layer({
                                 let dragging = Mutable::new(false);
                                 lil_baby_button()
                                     .selected_signal(dragging.signal())
                                     .el // we need lower level access now
-                                    .on_signal_with_style(left.signal(), |style, left| style.left = Val::Px(left))
+                                    .on_signal_with_style(left.signal(), |mut style, left| style.left = Val::Px(left))
                                     .align(Align::new().center_y())
                                     .update_raw_el(|raw_el| {
                                         raw_el.insert((
@@ -640,7 +640,7 @@ fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<N
         .on_hovered_change(move |is_hovered| only_one_up_flipper(&hovered, &MENU_ITEM_HOVERED_OPTION, Some(is_hovered)))
         .width(Val::Percent(100.))
         .height(Val::Px(MENU_ITEM_HEIGHT))
-        .with_style(|style| style.padding = UiRect::axes(Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.)))
+        .with_style(|mut style| style.padding = UiRect::axes(Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.)))
         .layer(
             El::<TextBundle>::new()
                 .text(text(label))
@@ -763,7 +763,7 @@ impl Dropdown {
                 .body(
                     Stack::<NodeBundle>::new()
                     .width(Val::Percent(100.))
-                    .with_style(|style| style.padding = UiRect::horizontal(Val::Px(BASE_PADDING)))
+                    .with_style(|mut style| style.padding = UiRect::horizontal(Val::Px(BASE_PADDING)))
                     .layer(
                         El::<TextBundle>::new()
                         .align(Align::new().left())
@@ -777,7 +777,7 @@ impl Dropdown {
                     )
                     .layer(
                         Row::<NodeBundle>::new()
-                        .with_style(|style| style.column_gap = Val::Px(BASE_PADDING))
+                        .with_style(|mut style| style.column_gap = Val::Px(BASE_PADDING))
                         .align(Align::new().right())
                         .item_signal({
                             if clearable {
@@ -808,7 +808,7 @@ impl Dropdown {
                 .map_true(clone!((options, show_dropdown, selected) move || {
                     Column::<NodeBundle>::new()
                     .width(Val::Percent(100.))
-                    .with_style(|style| {
+                    .with_style(|mut style| {
                         style.position_type = PositionType::Absolute;
                         style.top = Val::Percent(100.);
                     })
@@ -931,10 +931,10 @@ fn audio_menu() -> Column<NodeBundle> {
             ),
         ),
         make_controlling_menu_item(
-            "mutually exclusive options",
-            MutuallyExclusiveOptions::new(
+            "radio group",
+            RadioGroup::new(
                 MutableVec::new_with_values(options(3)),
-                MISC_DEMO_SETTINGS.mutually_exclusive_options.clone(),
+                MISC_DEMO_SETTINGS.radio_group.clone(),
             ),
         ),
         make_controlling_menu_item("checkbox", Checkbox::new(MISC_DEMO_SETTINGS.checkbox.clone())),
@@ -1065,7 +1065,7 @@ fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
         .on_click_stop_propagation(on_click)
         .child(El::<TextBundle>::new().text(text("x")).on_signal_with_text(
             hovered.signal().map_bool(|| Color::RED, || TEXT_COLOR),
-            |text, color| {
+            |mut text, color| {
                 if let Some(section) = text.sections.first_mut() {
                     section.style.color = color;
                 }
@@ -1131,10 +1131,10 @@ fn menu() -> impl Element {
                         })
                     })
                 })
-                .with_style(|style| style.row_gap = Val::Px(BASE_PADDING * 2.))
+                .with_style(|mut style| style.row_gap = Val::Px(BASE_PADDING * 2.))
                 .item(
                     Column::<NodeBundle>::new()
-                        .with_style(|style| style.row_gap = Val::Px(BASE_PADDING))
+                        .with_style(|mut style| style.row_gap = Val::Px(BASE_PADDING))
                         .align_content(Align::center())
                         .items(SubMenu::iter().map(|sub_menu| {
                             sub_menu_button(sub_menu).hovered_signal(
@@ -1151,7 +1151,7 @@ fn menu() -> impl Element {
             Stack::<NodeBundle>::new()
                 .width(Val::Px(SUB_MENU_WIDTH))
                 .height(Val::Px(SUB_MENU_HEIGHT))
-                .with_style(|style| {
+                .with_style(|mut style| {
                     // TODO: without absolute there's some weird bouncing when switching between
                     // menus, perhaps due to the layout system having to figure stuff out ?
                     style.position_type = PositionType::Absolute;
@@ -1164,7 +1164,7 @@ fn menu() -> impl Element {
                     })
                     .align(Align::new().top().right())
                     .update_raw_el(|raw_el| {
-                        raw_el.with_component::<Style>(|style| {
+                        raw_el.with_component::<Style>(|mut style| {
                             style.padding.right = Val::Px(BASE_PADDING);
                             style.padding.top = Val::Px(BASE_PADDING / 2.);
                         })
@@ -1210,14 +1210,14 @@ static GRAPHICS_SETTINGS: Lazy<GraphicsSettings> = Lazy::new(|| GraphicsSettings
 #[derive(Resource, Clone)]
 struct MiscDemoSettings {
     dropdown: Mutable<Option<String>>,
-    mutually_exclusive_options: Mutable<Option<usize>>,
+    radio_group: Mutable<Option<usize>>,
     checkbox: Mutable<bool>,
     iterable_options: Mutable<String>,
 }
 
 static MISC_DEMO_SETTINGS: Lazy<MiscDemoSettings> = Lazy::new(|| MiscDemoSettings {
     dropdown: Mutable::new(None),
-    mutually_exclusive_options: Mutable::new(None),
+    radio_group: Mutable::new(None),
     checkbox: Mutable::new(false),
     iterable_options: Mutable::new("option 1".to_string()),
 });

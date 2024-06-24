@@ -5,15 +5,22 @@ use futures_signals::{
     signal_vec::{SignalVec, SignalVecExt},
 };
 
-use crate::{
-    align::AlignableType, scrollable::Scrollable, AddRemove, AlignHolder, Alignable, Alignment, ChildAlignable,
-    IntoOptionElement, PointerEventAware, RawElWrapper, RawHaalkaEl, Sizeable, Stack,
+use super::{
+    align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
+    element::{GlobalEventAware, IntoOptionElement},
+    pointer_event_aware::PointerEventAware,
+    raw::{RawElWrapper, RawHaalkaEl},
+    scrollable::Scrollable,
+    sizeable::Sizeable,
+    stack::Stack,
+    viewport_mutable::ViewportMutable,
 };
 
+/// [`Element`](super::Element) with children aligned in a grid using a simple [`.row_wrap_cell_width`](Grid::row_wrap_cell_width) grid layout model. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`Grid`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/grid.rs).
 pub struct Grid<NodeType> {
-    pub(crate) raw_el: RawHaalkaEl,
-    pub(crate) align: Option<AlignHolder>,
-    pub(crate) _node_type: std::marker::PhantomData<NodeType>,
+    raw_el: RawHaalkaEl,
+    align: Option<AlignHolder>,
+    _node_type: std::marker::PhantomData<NodeType>,
 }
 
 impl<NodeType: Bundle> From<NodeType> for Grid<NodeType> {
@@ -21,7 +28,7 @@ impl<NodeType: Bundle> From<NodeType> for Grid<NodeType> {
         Self {
             raw_el: {
                 RawHaalkaEl::from(node_bundle)
-                    .with_component::<Style>(|style| {
+                    .with_component::<Style>(|mut style| {
                         style.display = Display::Grid;
                     })
                     .insert(Pickable::IGNORE)
@@ -33,6 +40,11 @@ impl<NodeType: Bundle> From<NodeType> for Grid<NodeType> {
 }
 
 impl<NodeType: Bundle + Default> Grid<NodeType> {
+    /// Construct a new [`Grid`] from a [`Bundle`] with a [`Default`] implementation.
+    ///
+    /// # Notes
+    /// [`Bundle`]s without the required bevy_ui node components (e.g. [`Node`], [`Style`], etc.)
+    /// will not behave as expected.
     pub fn new() -> Self {
         Self::from(NodeType::default())
     }
@@ -40,13 +52,13 @@ impl<NodeType: Bundle + Default> Grid<NodeType> {
 
 impl<NodeType: Bundle> RawElWrapper for Grid<NodeType> {
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
-        self.raw_el.raw_el_mut()
+        &mut self.raw_el
     }
 
     fn into_raw_el(self) -> RawHaalkaEl {
         // TODO: why won't grid_template_columns work without a grid wrapper ?
         RawHaalkaEl::from(NodeBundle::default())
-            .with_component::<Style>(|style| style.display = Display::Grid)
+            .with_component::<Style>(|mut style| style.display = Display::Grid)
             .child(self.raw_el)
     }
 }
@@ -54,39 +66,74 @@ impl<NodeType: Bundle> RawElWrapper for Grid<NodeType> {
 impl<NodeType: Bundle> PointerEventAware for Grid<NodeType> {}
 impl<NodeType: Bundle> Scrollable for Grid<NodeType> {}
 impl<NodeType: Bundle> Sizeable for Grid<NodeType> {}
+impl<NodeType: Bundle> ViewportMutable for Grid<NodeType> {}
+impl<NodeType: Bundle> GlobalEventAware for Grid<NodeType> {}
 
-// must substract this from the total row width due to float precision shenanigans https://github.com/bevyengine/bevy/issues/12152
+// TODOTODO: update example link and confirm that all github links are correct, code links should
+// point to a commit
+/// Must substract this from the total row width of a [`Grid`] due to [float precision shenanigans](https://github.com/bevyengine/bevy/issues/12152). See an example usage in the [snake example](https://github.com/databasedav/haalka/blob/main/examples/snake.rs#L110).
 pub const GRID_TRACK_FLOAT_PRECISION_SLACK: f32 = 0.0001;
 
 impl<NodeType: Bundle> Grid<NodeType> {
+    /// Simple grid layout model [ported from MooonZoon](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/grid.rs#L95).
+    /// The `cell_width` passed is simply the width all cells must occupy without overflowing their
+    /// parent; if a cell with said width does overflow its parent, it will wrap around to the next
+    /// row.
+    ///
+    /// For example, let's say our grid items where the letters A to E, where each letter occupies 1
+    /// unit of width. Then a `row_wrap_cell_width` of 3 would result in the following grid:
+    ///
+    /// ```text
+    /// A B C
+    /// D E
+    /// ```
+    ///
+    /// `row_wrap_cell_width` of 2:
+    ///
+    /// ```text
+    /// A B
+    /// C D
+    /// E
+    /// ```
+    ///
+    /// and 1:
+    /// ```text
+    /// A
+    /// B
+    /// C
+    /// D
+    /// E
+    /// ```
+    ///
+    /// While this grid layout definition is not nearly as rich as the [CSS grid layout](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout),
+    /// it may suffice for one's needs. If not, one can always use bevy_ui's CSS grid API directly
+    /// by modifiying the appropriate fields on any UI node's [`Style`] [`Component`].
     pub fn row_wrap_cell_width(mut self, cell_width_option: impl Into<Option<f32>>) -> Self {
         if let Some(cell_width) = cell_width_option.into() {
-            self.raw_el = self.raw_el.with_component::<Style>(move |style| {
+            self.raw_el = self.raw_el.with_component::<Style>(move |mut style| {
                 style.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width);
             });
         }
         self
     }
 
-    pub fn row_wrap_cell_width_signal<S: Signal<Item = impl Into<Option<f32>>> + Send + 'static>(
+    /// Reactively set the [`row_wrap_cell_width`](Self::row_wrap_cell_width).
+    pub fn row_wrap_cell_width_signal<S: Signal<Item = f32> + Send + 'static>(
         mut self,
         cell_width_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(cell_width_signal) = cell_width_signal_option.into() {
-            self.raw_el = self.raw_el.on_signal_with_component::<Option<f32>, Style>(
-                cell_width_signal.map(|cell_width_option| cell_width_option.into()),
-                |style, cell_width_option| {
-                    if let Some(cell_width) = cell_width_option {
-                        style.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width)
-                    } else {
-                        style.grid_template_columns.clear();
-                    }
+            self.raw_el = self.raw_el.on_signal_with_component::<f32, Style>(
+                cell_width_signal.map(|cell_width| cell_width.into()),
+                |mut style, cell_width| {
+                    style.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width)
                 },
             );
         }
         self
     }
 
+    /// Declare a static grid child.
     pub fn cell<IOE: IntoOptionElement>(mut self, cell_option: IOE) -> Self {
         let apply_alignment = self.apply_alignment_wrapper();
         self.raw_el = self.raw_el.child(
@@ -97,6 +144,8 @@ impl<NodeType: Bundle> Grid<NodeType> {
         self
     }
 
+    /// Declare a reactive grid child. When the [`Signal`] outputs [`None`], the child is
+    /// removed.
     pub fn cell_signal<IOE: IntoOptionElement + 'static, S: Signal<Item = IOE> + Send + 'static>(
         mut self,
         cell_option_signal_option: impl Into<Option<S>>,
@@ -112,6 +161,7 @@ impl<NodeType: Bundle> Grid<NodeType> {
         self
     }
 
+    /// Declare static grid children.
     pub fn cells<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(
         mut self,
         cells_options_option: impl Into<Option<I>>,
@@ -130,6 +180,7 @@ impl<NodeType: Bundle> Grid<NodeType> {
         self
     }
 
+    /// Declare reactive grid children.
     pub fn cells_signal_vec<IOE: IntoOptionElement + 'static, S: SignalVec<Item = IOE> + Send + 'static>(
         mut self,
         cells_options_signal_vec_option: impl Into<Option<S>>,
@@ -149,8 +200,8 @@ impl<NodeType: Bundle> Grid<NodeType> {
 }
 
 impl<NodeType: Bundle> Alignable for Grid<NodeType> {
-    fn alignable_type(&mut self) -> Option<AlignableType> {
-        Some(AlignableType::Grid)
+    fn aligner(&mut self) -> Option<Aligner> {
+        Some(Aligner::Grid)
     }
 
     fn align_mut(&mut self) -> &mut Option<AlignHolder> {
@@ -163,7 +214,7 @@ impl<NodeType: Bundle> Alignable for Grid<NodeType> {
 }
 
 impl<NodeType: Bundle> ChildAlignable for Grid<NodeType> {
-    fn update_style(style: &mut Style) {
+    fn update_style(mut style: Mut<Style>) {
         style.display = Display::Grid;
     }
 

@@ -1,5 +1,7 @@
+//! Alignment API demo, port of <https://github.com/MoonZoon/MoonZoon/tree/main/examples/align> and <https://github.com/MoonZoon/MoonZoon/tree/main/examples/align_content>.
+
 use bevy::prelude::*;
-use haalka::*;
+use haalka::prelude::*;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 fn main() {
@@ -90,12 +92,12 @@ fn ui_root(world: &mut World) {
     Column::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .with_style(|style| style.row_gap = Val::Px(15.))
+        .with_style(|mut style| style.row_gap = Val::Px(15.))
         .align_content(Align::center())
         .align(Align::center())
         .item(
             Row::<NodeBundle>::new()
-                .with_style(|style| style.column_gap = Val::Px(15.))
+                .with_style(|mut style| style.column_gap = Val::Px(15.))
                 .item(container("Column", Column::<NodeBundle>::new().items(rectangles())))
                 .item(container("El", El::<NodeBundle>::new().child(rectangle(1))))
                 // TODO: is this align content behavior buggy?
@@ -103,10 +105,10 @@ fn ui_root(world: &mut World) {
         )
         .item(
             Row::<NodeBundle>::new()
-                .with_style(|style| style.column_gap = Val::Px(15.))
+                .with_style(|mut style| style.column_gap = Val::Px(15.))
                 .item(
                     Column::<NodeBundle>::new()
-                        .with_style(|style| style.row_gap = Val::Px(15.))
+                        .with_style(|mut style| style.row_gap = Val::Px(15.))
                         .item(alignment_button(Alignment::Self_))
                         .item(alignment_button(Alignment::Content)),
                 )
@@ -118,7 +120,7 @@ fn ui_root(world: &mut World) {
         )
         .item(
             Row::<NodeBundle>::new()
-                .with_style(|style| style.column_gap = Val::Px(15.))
+                .with_style(|mut style| style.column_gap = Val::Px(15.))
                 .item(container("Row", Row::<NodeBundle>::new().items(rectangles())))
                 // TODO: is this align content behavior buggy?
                 .item(container("Stack", Stack::<NodeBundle>::new().layers(rectangles()))),
@@ -130,7 +132,7 @@ fn container_style<E: RawElWrapper + Sizeable>(el: E) -> E {
     el.width(Val::Px(278.)).height(Val::Px(200.)).update_raw_el(|raw_el| {
         raw_el
             .insert::<BorderColor>(Color::GRAY.into())
-            .with_component::<Style>(|style| {
+            .with_component::<Style>(|mut style| {
                 style.border = UiRect::all(Val::Px(3.));
             })
     })
@@ -207,7 +209,7 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
             )
             .map_bool(|| Color::BLUE.into(), || Color::MIDNIGHT_BLUE.into()),
         )
-        .with_style(|style| style.padding = UiRect::all(Val::Px(5.)))
+        .with_style(|mut style| style.padding = UiRect::all(Val::Px(5.)))
         .child(El::<TextBundle>::new().text(text(&rectangle_alignment.to_string(), 14.)))
         .hovered_sync(hovered)
         .on_click(move || {

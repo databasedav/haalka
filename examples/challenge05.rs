@@ -1,14 +1,14 @@
-// A UI on the right with a 3D scene of the character on the left.
-//     The character can be simple 3D shapes.
-// The UI is composed of multiple buttons to select options.
-//     The selected option is highlighted.
-//     There are too many buttons to fit in the box, so the box can be scrolled vertically. You can
-//         duplicate buttons or choose a small box size to simulate this.
-// Changing the selection in the UI changes the 3D shapes in the 3D scene.
-// On the top of the UI is a text field for the character name.
+//! - A UI on the right with a 3D scene of the character on the left.
+//!   - The character can be simple 3D shapes.
+//! - The UI is composed of multiple buttons to select options.
+//!   - The selected option is highlighted.
+//!   - There are too many buttons to fit in the box, so the box can be scrolled vertically. You can
+//!     duplicate buttons or choose a small box size to simulate this.
+//! - Changing the selection in the UI changes the 3D shapes in the 3D scene.
+//! - On the top of the UI is a text field for the character name.
 
 use bevy::prelude::*;
-use haalka::*;
+use haalka::{prelude::*, ViewportMutable};
 use strum::{self, IntoEnumIterator};
 
 fn main() {
@@ -85,7 +85,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
     El::<NodeBundle>::new()
         .width(BUTTON_WIDTH)
         .height(BUTTON_HEIGHT)
-        .with_style(|style| style.border = UiRect::all(Val::Px(5.)))
+        .with_style(|mut style| style.border = UiRect::all(Val::Px(5.)))
         .align_content(Align::center())
         .border_color_signal(border_color_signal)
         .background_color_signal(background_color_signal)
@@ -114,7 +114,7 @@ fn ui_root(world: &mut World) {
                 .layer(
                     Column::<NodeBundle>::new()
                         .align(Align::new().center_y().right())
-                        .with_style(|style| {
+                        .with_style(|mut style| {
                             style.padding.right = Val::Percent(20.);
                             style.row_gap = Val::Px(20.);
                         })
@@ -141,7 +141,7 @@ fn ui_root(world: &mut World) {
                                 .fill_color(CosmicBackgroundColor(NORMAL_BUTTON))
                                 .attrs(TextAttrs::new().color(Color::WHITE))
                                 .placeholder(
-                                    PlaceHolder::new()
+                                    Placeholder::new()
                                         .text("name")
                                         .attrs(TextAttrs::new().color(Color::GRAY)),
                                 )
@@ -172,7 +172,10 @@ fn ui_root(world: &mut World) {
                                         .map(move |(shape, hovered)| button(shape, hovered))
                                 })
                                 .on_click(|| {
-                                    async_world().insert_resource(CosmicFocusedWidget(None)).apply(spawn).detach();
+                                    async_world()
+                                        .insert_resource(CosmicFocusedWidget(None))
+                                        .apply(spawn)
+                                        .detach();
                                 })
                         }),
                 ),

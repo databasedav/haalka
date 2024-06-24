@@ -1,14 +1,22 @@
-use crate::{clone, raw_el::AppendDirection, spawn, PointerEventAware, RawElWrapper, RawHaalkaEl};
+use super::{
+    pointer_event_aware::PointerEventAware,
+    raw::{AppendDirection, RawElWrapper, RawHaalkaEl},
+    utils::{clone, spawn},
+};
 use bevy::{
     ecs::component::Component,
     input::mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
 };
 use futures_signals::signal::{always, BoxSignal, Mutable, Signal, SignalExt};
-use futures_signals_ext::{SignalExtBool, SignalExtExt};
+use haalka_futures_signals_ext::{SignalExtBool, SignalExtExt};
 use std::convert::Into;
 
+/// Enables an element's viewport to be modified and react to mouse wheel events.
 pub trait Scrollable: RawElWrapper {
+    /// Wrap this element in a scrollable container, setting how mouse wheel events should be
+    /// handled via [`ScrollabilitySettings`], and activating this handling only when the
+    /// provided [`Signal`] outputs `true`.
     fn scrollable(
         self,
         settings: ScrollabilitySettings,
@@ -20,7 +28,7 @@ pub trait Scrollable: RawElWrapper {
                 .component_signal::<ScrollableMarker, _>(active_signal.map_true(|| ScrollableMarker))
                 .defer_update(AppendDirection::Front, move |raw_el| {
                     RawHaalkaEl::from(NodeBundle::default())
-                        .with_component::<Style>(move |style| {
+                        .with_component::<Style>(move |mut style| {
                             style.flex_direction = settings.flex_direction;
                             style.overflow = settings.overflow;
                         })
@@ -30,7 +38,11 @@ pub trait Scrollable: RawElWrapper {
     }
 }
 
+/// Convenience trait for enabling scrollability when hovering over an element.
 pub trait HoverableScrollable: Scrollable + PointerEventAware {
+    /// Wrap this element in a scrollable container, setting how mouse wheel events should be
+    /// handled via [`ScrollabilitySettings`], and activating this handling only when this
+    /// element is hovered.
     fn scrollable_on_hover(self, settings: ScrollabilitySettings) -> Self {
         let hovered = Mutable::new(false);
         self.scrollable(settings, hovered.signal()).hovered_sync(hovered)
@@ -40,12 +52,17 @@ pub trait HoverableScrollable: Scrollable + PointerEventAware {
 impl<T: Scrollable + PointerEventAware> HoverableScrollable for T {}
 
 #[derive(Component)]
-struct ScrollHandler(Box<dyn FnMut(&MouseWheel, &mut Style, &Parent, &Node, &Query<&Node>) + Send + Sync + 'static>);
+struct ScrollHandler(Box<dyn FnMut(&MouseWheel, &Node, Mut<Style>, &Parent, &Query<&Node>) + Send + Sync + 'static>);
 
+/// Configuration for scrollable wrapping container and handling of mouse wheel events.
 pub struct ScrollabilitySettings {
+    /// Forwarded directly to the wrapping container's [`Style`].
     pub flex_direction: FlexDirection,
+    /// Forwarded directly to the wrapping container's [`Style`].
     pub overflow: Overflow,
-    pub scroll_handler: Box<dyn FnMut(&MouseWheel, &mut Style, &Parent, &Node, &Query<&Node>) + Send + Sync + 'static>,
+    /// Function to handle mouse wheel events, with access to the element's [`Node`],
+    /// [`Mut<Style>`], [`Parent`], and a [`Query<&Node>`].
+    pub scroll_handler: Box<dyn FnMut(&MouseWheel, &Node, Mut<Style>, &Parent, &Query<&Node>) + Send + Sync + 'static>,
 }
 
 #[derive(Component)]
@@ -53,28 +70,32 @@ pub struct ScrollableMarker;
 
 fn scroll_system(
     mut mouse_wheel_events: EventReader<MouseWheel>,
-    mut scroll_targets: Query<(&mut ScrollHandler, &mut Style, &Parent, &Node), With<ScrollableMarker>>,
+    mut scroll_targets: Query<(&mut ScrollHandler, &Node, &mut Style, &Parent), With<ScrollableMarker>>,
     node_query: Query<&Node>,
 ) {
     for mouse_wheel_event in mouse_wheel_events.read() {
-        for (mut scroll_handler, mut style, parent, scrollable_node) in &mut scroll_targets {
-            (scroll_handler.0)(mouse_wheel_event, &mut style, parent, scrollable_node, &node_query);
+        for (mut scroll_handler, scrollable_node, style, parent) in &mut scroll_targets {
+            (scroll_handler.0)(mouse_wheel_event, scrollable_node, style, parent, &node_query);
         }
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Copy, PartialEq)]
 pub enum ScrollDirection {
     Horizontal,
     Vertical,
 }
 
+/// Allows setting the direction and magnitude (in pixels) of viewport movement in response to mouse
+/// wheel events. These settings can be either static or reactive via [`Signal`]s.
 pub struct BasicScrollHandler {
     direction: Option<BoxSignal<'static, ScrollDirection>>,
     magnitude: Option<BoxSignal<'static, f32>>,
 }
 
 impl BasicScrollHandler {
+    #[allow(missing_docs)]
     pub fn new() -> Self {
         Self {
             direction: None,
@@ -82,6 +103,8 @@ impl BasicScrollHandler {
         }
     }
 
+    /// Reactively set the [`ScrollDirection`] of viewport movement in response to mouse wheel
+    /// events.
     pub fn direction_signal<S: Signal<Item = ScrollDirection> + Send + 'static>(
         mut self,
         direction_signal_option: impl Into<Option<S>>,
@@ -92,6 +115,7 @@ impl BasicScrollHandler {
         self
     }
 
+    /// Set the [`ScrollDirection`] of viewport movement in response to mouse wheel events.
     pub fn direction(mut self, direction_option: impl Into<Option<ScrollDirection>>) -> Self {
         if let Some(direction) = direction_option.into() {
             self = self.direction_signal(always(direction));
@@ -99,6 +123,8 @@ impl BasicScrollHandler {
         self
     }
 
+    /// Reactively set the magnitude (in pixels) of viewport movement in response to mouse wheel
+    /// events.
     pub fn pixels_signal<S: Signal<Item = f32> + Send + 'static>(
         mut self,
         pixels_signal_option: impl Into<Option<S>>,
@@ -109,6 +135,7 @@ impl BasicScrollHandler {
         self
     }
 
+    /// Set the magnitude (in pixels) of viewport movement in response to mouse wheel events.
     pub fn pixels(mut self, pixels_option: impl Into<Option<f32>>) -> Self {
         if let Some(pixels) = pixels_option.into() {
             self = self.pixels_signal(always(pixels));
@@ -121,7 +148,7 @@ const DEFAULT_SCROLL_DIRECTION: ScrollDirection = ScrollDirection::Vertical;
 const DEFAULT_SCROLL_MAGNITUDE: f32 = 10.;
 
 impl From<BasicScrollHandler>
-    for Box<dyn FnMut(&MouseWheel, &mut Style, &Parent, &Node, &Query<&Node>) + Send + Sync + 'static>
+    for Box<dyn FnMut(&MouseWheel, &Node, Mut<Style>, &Parent, &Query<&Node>) + Send + Sync + 'static>
 {
     fn from(handler: BasicScrollHandler) -> Self {
         let BasicScrollHandler {
@@ -142,9 +169,9 @@ impl From<BasicScrollHandler>
         }
         let f = {
             move |mouse_wheel_event: &MouseWheel,
-                  style: &mut Style,
-                  parent: &Parent,
                   scrollable_node: &Node,
+                  mut style: Mut<Style>,
+                  parent: &Parent,
                   node_query: &Query<&Node>| {
                 match direction.get() {
                     ScrollDirection::Vertical => {
