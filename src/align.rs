@@ -20,7 +20,7 @@ use super::{
 /// An [`Element`](`super::Element`) can be aligned in nine different areas in relation to its
 /// parent: top left, top center, top right, center left, center, center right, bottom left, bottom
 /// center, and bottom right. This provides a simple and clear to way to declare alignment as a thin
-/// layer on top of bevy_ui's flex implementation.
+/// layer on top of bevy_ui's flexbox implementation.
 ///
 /// [`Align`]s can be specified on individual elements using [`.align`](`Alignable::align`) and
 /// [`.align_signal`](`Alignable::align_signal`) or to all children using
@@ -185,7 +185,7 @@ pub trait Alignable: RawElWrapper {
         self
     }
 
-    /// Allows implementor to overwrite the content alignment processing function. The `&self` can
+    /// Allows implementor to override the content alignment processing function. The `&self` can
     /// be used to alter the alignment strategy based on data on the type itself. See
     /// [`AlignabilityFacade::apply_alignment_wrapper`] for an example.
     fn apply_content_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {
@@ -251,7 +251,7 @@ where
     /// Static style modifications for children of this type.
     fn update_style(_style: Mut<Style>) {} // only some require base updates
 
-    /// Allows implementor to overwrite the self alignment processing function function. The `&self`
+    /// Allows implementor to override the self alignment processing function. The `&self`
     /// can be used to alter the alignment strategy based on data on the type itself. See
     /// [`AlignabilityFacade::apply_alignment_wrapper`] for an example.
     fn apply_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {

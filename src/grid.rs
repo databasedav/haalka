@@ -69,9 +69,7 @@ impl<NodeType: Bundle> Sizeable for Grid<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Grid<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Grid<NodeType> {}
 
-// TODOTODO: update example link and confirm that all github links are correct, code links should
-// point to a commit
-/// Must substract this from the total row width of a [`Grid`] due to [float precision shenanigans](https://github.com/bevyengine/bevy/issues/12152). See an example usage in the [snake example](https://github.com/databasedav/haalka/blob/main/examples/snake.rs#L110).
+/// Must substract this from the total row width of a [`Grid`] due to [float precision shenanigans](https://github.com/bevyengine/bevy/issues/12152). See an example usage in the [snake example](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/snake.rs#L112).
 pub const GRID_TRACK_FLOAT_PRECISION_SLACK: f32 = 0.0001;
 
 impl<NodeType: Bundle> Grid<NodeType> {

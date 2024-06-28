@@ -105,7 +105,7 @@ cargo run --example challenge05  # character editor
 
 |Bevy|haalka|
 |-|-|
-|`0.13`|`0.0.2`|
+|`0.13`|`0.1`|
 
 ## license
 All code in this repository is dual-licensed under either:

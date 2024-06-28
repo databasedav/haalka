@@ -4,10 +4,10 @@ resolver = "2"
 
 [package]
 name = "haalka"
-version = "0.0.2-rc.2"
+version = "0.1.0"
 edition = "2021"
-categories = ["ui", "reactive", "signals", "frp"]
-description = "ergonomic reactive bevy UI library powered by FRP signals"
+categories = ["asynchronous", "gui", "game-development"]
+description = "ergonomic reactive Bevy UI library powered by FRP signals"
 exclude = ["assets/", ".github/", "crates/"]
 keywords = ["ui", "reactive", "signals", "game", "bevy"]
 license = "MIT OR Apache-2.0"

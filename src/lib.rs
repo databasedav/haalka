@@ -43,7 +43,8 @@ cfg_if::cfg_if! {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "text_input")] {
-                mod text_input;
+                /// Reactive text input widget and adjacent utilities, a thin wrapper around [`bevy_cosmic_edit`] integrated with [`Signal`](futures_signals::signal::Signal)s.
+                pub mod text_input;
                 use text_input::TextInputPlugin;
             }
         }

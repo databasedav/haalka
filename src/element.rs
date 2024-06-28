@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use bevy_eventlistener::prelude::*;
 use bevy_mod_picking::picking_core::Pickable;
 
-/// The high level UI building blocks of [haalka](crate). [`Element`]s are [`RawElement`]s that wrap
+/// The high level UI building block of [haalka](crate). [`Element`]s are [`RawElement`]s that wrap
 /// [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs)
 /// and be can be aligned using [haalka](crate)'s [simple alignability semantics](super::Align) and
 /// granted UI-specific abilities like [pointer event awareness](super::PointerEventAware),
@@ -59,11 +59,11 @@ impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
 /// [`.layers`](super::Stack::layers), [`.cells_signal_vec`](super::Grid::cells_signal_vec), etc.
 /// This trait provides the foundation for building "widgets" using [haalka](crate).
 ///
-/// For example one could create a selectable [`Button`](https://github.com/databasedav/haalka/blob/main/examples/challenge01.rs#L66)
-/// widget and then [stack them horizontally](https://github.com/databasedav/haalka/blob/main/examples/challenge01.rs#L354)
+/// For example one could create a selectable [`Button`](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/challenge01.rs#L83)
+/// widget and then [stack them horizontally](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/challenge01.rs#L354)
 /// in a [`Row`](super::Row) (or vertically in a [`Column`](super::Column)) and add some
-/// [exclusivity logic](https://github.com/databasedav/haalka/blob/main/examples/challenge01.rs#L374)
-/// to create a [`RadioGroup`](https://github.com/databasedav/haalka/blob/main/examples/challenge01.rs#L314) widget.
+/// [exclusivity logic](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/challenge01.rs#L374)
+/// to create a [`RadioGroup`](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/challenge01.rs#L314) widget.
 ///
 /// [`ElementWrapper`]s can also be granted UI-specific abilities, enabling consumers to easily add
 /// additional functionality to their custom widgets.
@@ -110,9 +110,9 @@ impl<EW: ElementWrapper> RawElWrapper for EW {
 /// `El<NodeBundle>`, `El<ImageBundle>`, `Column<NodeBundle>`, etc.), one will run into unfortunate
 /// type issues when doing things like returning differnt [`ElementWrapper`]s (read: widgets) from
 /// diverging branches of logic, or creating a collection of [`ElementWrapper`]s of different types.
-/// Since we have an exhaustive list of the possible [`Aligner`]s, we can use a bit type indirection
-/// via [`AlignabilityFacade`] to collapse all [`Element`]s and [`ElementWrapper`]s into a single
-/// "type erased" type.
+/// Since we have an exhaustive list of the possible [`Aligner`]s, we can use a bit of type
+/// indirection via [`AlignabilityFacade`] to collapse all [`Element`]s and [`ElementWrapper`]s into
+/// a single "type erased" type.
 pub trait TypeEraseable {
     /// Convert this type into an [`AlignabilityFacade`], allowing it to mix with other types of
     /// [`Element`]s and [`ElementWrapper`]s.
@@ -152,6 +152,11 @@ impl<E: Element> UiRootable for E {}
 // TODO: there should be a way to pass the entity into the system
 /// Enables registering "global" event listeners on the [`UiRoot`] node. The [`UiRoot`] must be
 /// manually registered with [`UiRootable::ui_root`] for this to work as expected.
+///
+/// # Notes
+/// Since multiple [`bevy_eventlistener::On`](bevy_eventlistener::event_listener::On)s can't be
+/// registered on the same entity, this trait can't *yet* be used to do things like registering "on
+/// click outside" listeners.
 pub trait GlobalEventAware: RawElWrapper {
     /// When an `E` [`EntityEvent`] propagates to the [`UiRoot`] node, run a `handler` [`System`].
     fn on_global_event_with_system<E: EntityEvent, Marker>(

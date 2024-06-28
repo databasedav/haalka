@@ -22,7 +22,7 @@ use bevy_cosmic_edit::{
 use futures_signals::signal::{always, BoxSignal, Mutable, Signal, SignalExt};
 use haalka_futures_signals_ext::SignalExtBool;
 
-/// Reactive text input widget, a thin wrapper around [`bevy_cosmic_edit`] integrated with [`Signal`]s. 
+/// Reactive text input widget, a thin wrapper around [`bevy_cosmic_edit`] integrated with [`Signal`]s.
 pub struct TextInput {
     el: El<ButtonBundle>,
 }
@@ -678,9 +678,10 @@ fn on_focus_changed(
     }
 }
 
+/// An owned dynamically typed [`Signal`] which is both [`Send`] and [`Sync`].
 pub type BoxSignalSync<'a, T> = Pin<Box<dyn Signal<Item = T> + Send + Sync + 'a>>;
 
-/// Allows setting the text attributes of a [`TextInput`] and its [`TextInput::placeholder`]. These settings can be either static or reactive via [`Signal`]s. See [`bevy_cosmic_edit::AttrsOwned`].
+/// Allows setting the text attributes of a [`TextInput`] and its [placeholder](`TextInput::placeholder`). These settings can be either static or reactive via [`Signal`]s. See [`bevy_cosmic_edit::AttrsOwned`].
 pub struct TextAttrs {
     color_opt: Option<BoxSignalSync<'static, Option<CosmicColor>>>,
     family_owned: Option<BoxSignalSync<'static, bevy_cosmic_edit::FamilyOwned>>,
