@@ -88,6 +88,7 @@ cargo run --example scroll_grid  # i can't believe it's not scrolling !
 cargo run --example snake  # with adjustable grid size and tick rate
 cargo run --example ecs_ui_sync  # forward ecs changes to the ui
 cargo run --example key_values_sorted  # text inputs, scrolling/viewport control, and reactive lists; promises made promises kept ! https://discord.com/channels/691052431525675048/1192585689460658348/1193431789465776198 (yes i take requests)
+cargo run --example calculator  # simple calculator, spurred by https://discord.com/channels/691052431525675048/885021580353237032/1263661461364932639
 
 # ui challenges from https://github.com/bevyengine/bevy/discussions/11100
 cargo run --example challenge01  # game menu
@@ -96,7 +97,7 @@ cargo run --example challenge03  # health bar
 cargo run --example challenge04  # responsive menu
 cargo run --example challenge05  # character editor
 ```
-One can also run the example with [`just`](https://github.com/casey/just) (`cargo install just`), e.g. `just example snake -r`.
+One can also run the examples with [`just`](https://github.com/casey/just) (`cargo install just`), e.g. `just example snake -r`.
 
 ## Bevy compatibility
 

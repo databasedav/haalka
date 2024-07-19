@@ -11,4 +11,4 @@ example name *extras:
     cargo run --example {{ name }} {{ extras }}
 
 release *extras:
-    cargo release {{ extras }}
+    cargo release --unpublished --sign-tag {{ extras }}
