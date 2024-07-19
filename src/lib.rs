@@ -7,7 +7,10 @@ mod node_builder;
 use node_builder::init_async_world;
 
 mod raw;
-pub use raw::{IntoOptionRawElement, IntoRawElement, RawElWrapper, RawElement, RawHaalkaEl, Spawnable};
+pub use raw::{
+    AppendDirection as DeferredUpdateAppendDirection, IntoOptionRawElement, IntoRawElement, RawElWrapper, RawElement,
+    RawHaalkaEl, Spawnable,
+};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "ui")] {
@@ -17,6 +20,7 @@ cfg_if::cfg_if! {
         mod element;
         mod grid;
         mod pointer_event_aware;
+        mod global_event_aware;
         mod row;
         mod scrollable;
         mod sizeable;
@@ -27,10 +31,11 @@ cfg_if::cfg_if! {
             align::{Align, AlignabilityFacade, Alignable, Alignment, ChildAlignable, Aligner},
             column::Column,
             el::El,
-            element::{Element, ElementWrapper, IntoElement, IntoOptionElement, TypeEraseable, UiRoot, UiRootable, GlobalEventAware},
+            element::{Element, ElementWrapper, IntoElement, IntoOptionElement, TypeEraseable, UiRoot, UiRootable, Nameable},
             grid::{Grid, GRID_TRACK_FLOAT_PRECISION_SLACK},
             node_builder::{async_world, NodeBuilder, TaskHolder},
-            pointer_event_aware::PointerEventAware,
+            pointer_event_aware::{PointerEventAware, Cursorable},
+            global_event_aware::GlobalEventAware,
             row::Row,
             scrollable::{BasicScrollHandler, HoverableScrollable, ScrollDirection, ScrollabilitySettings, Scrollable},
             sizeable::Sizeable,
@@ -131,7 +136,7 @@ pub mod prelude {
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "utils")] {
-            pub use super::utils::{sleep, spawn};
+            pub use super::utils::{sleep, spawn, sync, sync_neq, flip};
             pub use apply::{Also, Apply};
             pub use once_cell::sync::Lazy;
         }

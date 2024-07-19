@@ -11,8 +11,8 @@ use bevy_mod_picking::{
 };
 
 use super::{
-    el::El, element::{ElementWrapper, GlobalEventAware}, pointer_event_aware::PointerEventAware, raw::RawElWrapper, scrollable::Scrollable,
-    sizeable::Sizeable, utils::clone, viewport_mutable::ViewportMutable,
+    el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::PointerEventAware, raw::RawElWrapper, scrollable::Scrollable,
+    sizeable::Sizeable, utils::clone, viewport_mutable::ViewportMutable, global_event_aware::GlobalEventAware,
 };
 use apply::Apply;
 use bevy_cosmic_edit::{
@@ -34,11 +34,13 @@ impl ElementWrapper for TextInput {
     }
 }
 
+impl GlobalEventAware for TextInput {}
+impl Nameable for TextInput {}
 impl PointerEventAware for TextInput {}
 impl Scrollable for TextInput {}
 impl Sizeable for TextInput {}
+impl UiRootable for TextInput {}
 impl ViewportMutable for TextInput {}
-impl GlobalEventAware for TextInput {}
 
 // TODO: allow managing multiple spans reactively
 impl TextInput {
@@ -901,12 +903,12 @@ macro_rules! impl_text_input_cosmic_edit_methods {
                         self
                     }
 
-                    #[doc = concat!("Run a function with mutable access (via [`Mut`]) to this input's [`CosmicEditBundle`]'s [`", stringify!($field_type), "`] [`Component`] if it exists.")]
+                    #[doc = concat!("Run a function with mutable access (via [`Mut`]) to this input's [`CosmicEditBundle`]'s [`", stringify!($field_type), "`] [`Component`].")]
                     pub fn [<with_ $field>](self, f: impl FnOnce(Mut<$field_type>) + Send + 'static) -> Self {
                         self.with_cosmic_edit_component(f)
                     }
 
-                    #[doc = concat!("Reactively set this input's [`CosmicEditBundle`]'s [`", stringify!($field_type), "`] [`Component`]. If the [`Signal`] outputs [`None`], the `C` [`Component`] is removed.")]
+                    #[doc = concat!("Reactively set this input's [`CosmicEditBundle`]'s [`", stringify!($field_type), "`] [`Component`].")]
                     pub fn [<$field _signal>]<S: Signal<Item = $field_type> + Send + 'static>(
                         self,
                         [<$field _signal_option>]: impl Into<Option<S>>,

@@ -6,6 +6,8 @@
 //!   - You can leave the bounding box of the inventory while dragging.
 //! - A tooltip with the item's name is shown when hovering over an item.
 
+// TODO: fix cursor not updating when placing an item in an empty cell and then moving cursor outside
+
 use std::{collections::HashMap, convert::identity, sync::OnceLock};
 
 use bevy::prelude::*;
@@ -212,6 +214,7 @@ fn icon(
             El::<AtlasImageBundle>::new()
                 .image(UiImage::from(icon_sheet().image.clone()))
                 .texture_atlas(TextureAtlas::from(icon_sheet().layout.clone()))
+                // TODO: fix grey flash when inserting into an empty cell, making the index static does not suffice
                 .on_signal_with_texture_atlas(index_signal, |mut image, index| image.index = index),
         )
         .layer(
@@ -240,8 +243,14 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
     let hovered = Mutable::new(false);
     let original_position = Mutable::new(None);
     let down = Mutable::new(false);
+    let stop_propagation_trigger = Mutable::new(false);
+    let cursor_disabling_forwarder = spawn(sync_neq(
+        signal::or(cell_data_option.signal_ref(Option::is_none), is_dragging()),
+        stop_propagation_trigger.clone(),
+    ));
     El::<NodeBundle>::new()
-        .update_raw_el(clone!((cell_data_option, hovered, down) move |mut raw_el| {
+        .update_raw_el(clone!((cell_data_option, hovered, down, stop_propagation_trigger) move |mut raw_el| {
+            raw_el = raw_el.hold_tasks([cursor_disabling_forwarder]);
             if insertable {
                 raw_el = raw_el
                 .insert((
@@ -257,7 +266,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                     // the stack as it would immediately drop one down, so we track the `Down` state
                     signal::and(signal::not(down.signal()), hovered.signal()).dedupe()
                     .map_true(clone!((cell_data_option) move || {
-                        On::<Pointer<Click>>::run(clone!((cell_data_option => self_cell_data_option) move |click: Listener<Pointer<Click>>| {
+                        On::<Pointer<Click>>::run(clone!((cell_data_option => self_cell_data_option, stop_propagation_trigger) move |click: Listener<Pointer<Click>>| {
                             let mut consume = false;
                             if let Some(dragging_cell_data_option) = &*DRAGGING_OPTION.lock_ref() {
                                 if self_cell_data_option.lock_ref().is_none() {
@@ -291,9 +300,22 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                 }
                             }
                             if consume {
-                                if let Some(cell_data_option) = DRAGGING_OPTION.take() {
-                                    cell_data_option.take();
+                                // because propagation stoppage may not synchronize before the `Over` event is fired,
+                                // the `Over` event may leak through to the root, racing the root and cell's cursors;
+                                // to avoid this we first notify the cell to stop propagation, and wait for that to
+                                // propagate, before clearing the dragging cell data, which fires the `Over` event
+                                //
+                                // TODO: how can i address this more ergonomically? do bubbling observers help?
+                                let waiter = stop_propagation_trigger.signal().wait_for(true);
+                                async {
+                                    waiter.await;
+                                    if let Some(cell_data_option) = DRAGGING_OPTION.take() {
+                                        cell_data_option.take();
+                                    }
                                 }
+                                .apply(spawn)
+                                .detach();
+                                stop_propagation_trigger.set_neq(true);
                             }
                         }))
                     }))
@@ -301,7 +323,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             }
             raw_el
             .component_signal::<On::<Pointer<Down>>, _>(
-                signal::and(DRAGGING_OPTION.signal_ref(Option::is_none), cell_data_option.signal_ref(Option::is_some)).dedupe()
+                signal::and(signal::not(is_dragging()), cell_data_option.signal_ref(Option::is_some)).dedupe()
                 .map_true(clone!((cell_data_option, down) move ||
                     On::<Pointer<Down>>::run(clone!((cell_data_option, down) move |pointer_down: Listener<Pointer<Down>>| {
                         let to_drag_option = {
@@ -330,13 +352,29 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                 ))
             )
         }))
+        // alternative to the stop propagation trigger pattern, which is kinda/pretty cringe
+        // .cursor_signal(
+        //     map_ref! {
+        //         let populated = cell_data_option.signal_ref(Option::is_some),
+        //         let is_dragging = is_dragging() => {
+        //             if *is_dragging {
+        //                 CursorIcon::Grabbing
+        //             } else if *populated{
+        //                 CursorIcon::Grab
+        //             } else {
+        //                 CursorIcon::Default
+        //             }
+        //         }
+        //     }
+        // )
+        .cursor_disableable(CursorIcon::Grab, stop_propagation_trigger.signal())
         .hovered_sync(hovered.clone())
         .width(Val::Px(CELL_WIDTH))
         .height(Val::Px(CELL_WIDTH))
         .with_style(|mut style| style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH)))
         .background_color_signal(
             hovered.signal()
-                .map_bool(|| CELL_HIGHLIGHT_COLOR.into(), || CELL_BACKGROUND_COLOR.into()),
+                .map_bool(|| CELL_HIGHLIGHT_COLOR, || CELL_BACKGROUND_COLOR).map(Into::into),
         )
         .border_color(BorderColor(CELL_DARK_BORDER_COLOR))
         .child_signal(
@@ -346,15 +384,15 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                     Stack::<NodeBundle>::new()
                     .layer(icon(cell_data.index.signal(), cell_data.count.signal()))
                     .layer_signal(
-                        signal::and(hovered.signal(), DRAGGING_OPTION.signal_ref(Option::is_none)).dedupe()
+                        signal::and(hovered.signal(), signal::not(is_dragging())).dedupe()
                         .map_true(clone!((original_position) move ||
                             El::<NodeBundle>::new()
                                 // TODO: global transform isn't populated on spawn
                                 // .with_global_transform(clone!((original_position) move |transform| original_position.set(Some(transform.compute_transform().translation.xy()))))
                                 .height(Val::Px(CELL_WIDTH))
                                 .with_style(|mut style| {
-                                    style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
                                     style.position_type = PositionType::Absolute;
+                                    style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
                                     style.padding = UiRect::horizontal(Val::Px(10.));
                                 })
                                 .update_raw_el(clone!((original_position) move |raw_el| {
@@ -365,8 +403,9 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                             if original_position.get().is_none() {
                                                 original_position.set(Some(transform.compute_transform().translation.xy()));
                                             }
-                                            left -= original_position.get().unwrap().x - CELL_WIDTH / 2.;
-                                            top -= original_position.get().unwrap().y + CELL_WIDTH / 2.;
+                                            let original_position = original_position.get().unwrap();
+                                            left -= original_position.x - CELL_WIDTH / 2.;
+                                            top -= original_position.y + CELL_WIDTH / 2.;
                                         }
                                         if let Some(mut style) = entity.get_mut::<Style>() {
                                             style.left = Val::Px(left);
@@ -590,8 +629,13 @@ static DRAGGING_OPTION: Lazy<Mutable<Option<Mutable<Option<CellData>>>>> = Lazy:
 
 static POINTER_POSITION: Lazy<Mutable<(f32, f32)>> = Lazy::new(default);
 
+fn is_dragging() -> impl Signal<Item = bool> {
+    DRAGGING_OPTION.signal_ref(Option::is_some)
+}
+
 fn ui_root(world: &mut World) {
     Stack::<NodeBundle>::new()
+        .cursor_disableable(CursorIcon::Default, is_dragging())
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .update_raw_el(|raw_el| {
@@ -599,11 +643,7 @@ fn ui_root(world: &mut World) {
                 .insert(On::<Pointer<Move>>::run(|move_: Listener<Pointer<Move>>| {
                     POINTER_POSITION.set(move_.pointer_location.position.into());
                 }))
-                .component_signal::<Pickable, _>(
-                    DRAGGING_OPTION
-                        .signal_ref(Option::is_some)
-                        .map_true(|| Pickable::default()),
-                )
+                .component_signal::<Pickable, _>(is_dragging().map_true(default))
         })
         .align_content(Align::center())
         .layer(inventory())
@@ -615,17 +655,42 @@ fn ui_root(world: &mut World) {
                 .map(Option::flatten)
                 .map_some(move |cell_data| {
                     icon(cell_data.index.signal(), cell_data.count.signal())
+                        .update_raw_el(|raw_el| {
+                            raw_el.defer_update(DeferredUpdateAppendDirection::Front, |raw_el| {
+                                raw_el.insert(Pickable {
+                                    // required to allow cell hover to leak through a dragging icon
+                                    should_block_lower: false,
+                                    is_hoverable: true,
+                                })
+                            })
+                        })
+                        .cursor(CursorIcon::Grabbing)
                         .width(Val::Px(CELL_WIDTH))
                         .height(Val::Px(CELL_WIDTH))
-                        .with_style(|mut style| style.position_type = PositionType::Absolute)
-                        .z_index(ZIndex::Global(1))
-                        .on_signal_with_style(POINTER_POSITION.signal(), move |mut style, pointer_position| {
-                            style.left = Val::Px(pointer_position.0 - CELL_WIDTH / 2.);
-                            style.top = Val::Px(pointer_position.1 - CELL_WIDTH / 2.);
+                        .with_style(|mut style| {
+                            style.position_type = PositionType::Absolute;
+                            let pointer_position = POINTER_POSITION.get();
+                            // TODO: this is actually *extremely* cringe, because the `.on_signal_with_style`
+                            // will(might?) not tick before the first frame the icon is
+                            // rendered, the icon will flash from the left middle of the screen (default absolute
+                            // position?) to the pointer position, this means that the
+                            // position must first be set statically here *and* in reaction
+                            // to the pointer position below; workaround could be to wait
+                            // for a tick before making the the element visible, but
+                            // *ideally* we would force all signals to tick before the first frame, but not
+                            // sure if that's possible
+                            set_dragging_position(style, pointer_position);
                         })
+                        .z_index(ZIndex::Global(1))
+                        .on_signal_with_style(POINTER_POSITION.signal(), set_dragging_position)
                 }),
         )
         .spawn(world);
+}
+
+fn set_dragging_position(mut style: Mut<Style>, pointer_position: (f32, f32)) {
+    style.left = Val::Px(pointer_position.0 - CELL_WIDTH / 2.);
+    style.top = Val::Px(pointer_position.1 - CELL_WIDTH / 2.);
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]

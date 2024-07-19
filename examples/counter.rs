@@ -23,15 +23,7 @@ fn ui_root(world: &mut World) {
             Row::<NodeBundle>::new()
                 .with_style(|mut style| style.column_gap = Val::Px(15.0))
                 .item(counter_button(counter.clone(), "-", -1))
-                .item(El::<TextBundle>::new().text_signal(counter.signal().map(|count| {
-                    Text::from_section(
-                        count.to_string(),
-                        TextStyle {
-                            font_size: 30.0,
-                            ..default()
-                        },
-                    )
-                })))
+                .item(El::<TextBundle>::new().text_signal(counter.signal().map(text)))
                 .item(counter_button(counter.clone(), "+", 1))
                 .update_raw_el(move |raw_el| raw_el.insert(Counter(counter))),
         )
@@ -51,13 +43,17 @@ fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element
         )
         .hovered_sync(hovered)
         .on_click(move || *counter.lock_mut() += step)
-        .child(El::<TextBundle>::new().text(Text::from_section(
-            label,
-            TextStyle {
-                font_size: 30.0,
-                ..default()
-            },
-        )))
+        .child(El::<TextBundle>::new().text(text(label)))
+}
+
+fn text(text: impl ToString) -> Text {
+    Text::from_section(
+        text.to_string(),
+        TextStyle {
+            font_size: 30.0,
+            ..default()
+        },
+    )
 }
 
 fn camera(mut commands: Commands) {

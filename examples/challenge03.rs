@@ -252,6 +252,11 @@ fn respawn_button() -> impl Element {
         )))
 }
 
+fn set_dragging_position(mut style: Mut<Style>, StyleData { left, top, .. }: StyleData) {
+    style.left = Val::Px(left - MINI.0 / 2.);
+    style.top = Val::Px(top - 30. * 2. - MINI.1 * 1.5);
+}
+
 fn ui_root(world: &mut World) {
     let style_data = world.resource::<StyleDataResource>().0.clone();
     let health_option = world.resource::<HealthOptionMutable>().0.clone();
@@ -276,14 +281,14 @@ fn ui_root(world: &mut World) {
                                         .with_style(|mut style| style.padding.bottom = Val::Px(10.))
                                         .layer(
                                             Column::<NodeBundle>::new()
-                                                .with_style(|mut style| style.row_gap = Val::Px(MINI.1 / 4.))
                                                 .on_signal_with_style(
                                                     style_data.signal(),
-                                                    |mut style, StyleData { left, top, .. }| {
-                                                        style.left = Val::Px(left - MINI.0 / 2.);
-                                                        style.top = Val::Px(top - 30. * 2. - MINI.1 * 1.5);
-                                                    },
+                                                    set_dragging_position,
                                                 )
+                                                .with_style(clone!((style_data) move |mut style| {
+                                                    style.row_gap = Val::Px(MINI.1 / 4.);
+                                                    set_dragging_position(style, style_data.get());
+                                                }))
                                                 // .on_signal_with_transform(style_data.signal(), move |transform, StyleData { scale, .. }| {
                                                 //     transform.scale = Vec3::splat(starting_distance / scale);
                                                 // })

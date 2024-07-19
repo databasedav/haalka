@@ -5,8 +5,9 @@ use futures_signals::signal::{Signal, SignalExt};
 use super::{
     align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
     column::Column,
-    element::{GlobalEventAware, IntoOptionElement},
-    pointer_event_aware::PointerEventAware,
+    element::{IntoOptionElement, Nameable, UiRootable},
+    global_event_aware::GlobalEventAware,
+    pointer_event_aware::{Cursorable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
     scrollable::Scrollable,
     sizeable::Sizeable,
@@ -60,11 +61,14 @@ impl<NodeType> RawElWrapper for El<NodeType> {
     }
 }
 
+impl<NodeType: Bundle> Cursorable for El<NodeType> {}
+impl<NodeType: Bundle> GlobalEventAware for El<NodeType> {}
+impl<NodeType: Bundle> Nameable for El<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for El<NodeType> {}
 impl<NodeType: Bundle> Scrollable for El<NodeType> {}
 impl<NodeType: Bundle> Sizeable for El<NodeType> {}
+impl<NodeType: Bundle> UiRootable for El<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for El<NodeType> {}
-impl<NodeType: Bundle> GlobalEventAware for El<NodeType> {}
 
 impl<NodeType: Bundle> El<NodeType> {
     /// Declare a static child.

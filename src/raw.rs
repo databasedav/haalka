@@ -1,6 +1,8 @@
 use std::{
     mem,
+    ops::Not,
     sync::{Arc, Mutex},
+    future::Future
 };
 
 use async_lock;
@@ -11,11 +13,10 @@ use futures_signals::{
     signal::{always, Mutable, Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
-use haalka_futures_signals_ext::{Future, SignalExtExt};
 
 use super::{
     node_builder::{async_world, NodeBuilder, TaskHolder},
-    utils::spawn,
+    utils::{spawn, sync_neq},
 };
 
 /// [haalka](crate)'s core abstraction, allowing one to rig any [`Entity`] with ergonomic
@@ -43,6 +44,9 @@ impl Default for RawHaalkaEl {
     }
 }
 
+/// Whether to append the deferred updater to the front or the back *of the back of the line*. See
+/// [`RawHaalkaEl::defer_update`].
+#[allow(missing_docs)]
 pub enum AppendDirection {
     Front,
     Back,
@@ -69,9 +73,10 @@ impl RawHaalkaEl {
     /// Force updates to be in the back of the line, with some crude ordering.
     ///
     /// Useful when updates must be applied after some node is wrapped with another, for example,
-    /// the [`super::Sizeable`] methods defer their updates to the back of the line because they
-    /// must be applied after any [`super::Scrollable`] wrapping container is applied, whose
-    /// application is also deferred, but to the *front* of the back of the line.
+    /// the [`Sizeable`](super::Sizeable) methods defer their updates to the back of the line
+    /// because they must be applied after any [`Scrollable`](super::Scrollable) wrapping
+    /// container is applied, whose application is also deferred, but to the *front* of the back
+    /// of the line.
     ///
     /// # Notes
     /// Deferred updates is a lower level feature and is used internally to deal with update
@@ -79,7 +84,7 @@ impl RawHaalkaEl {
     /// to do things like apply wrapping nodes on their own custom elements built on top of
     /// [`RawHaalkaEl`], but should be more wary of using it through
     /// [`.update_raw_el`](RawElWrapper::update_raw_el) on the provided higher level UI elements
-    /// like [`super::El`] and [`super::Column`].
+    /// like [`El`](super::El) and [`Column`](super::Column).
     pub fn defer_update(
         mut self,
         append_direction: AppendDirection,
@@ -341,8 +346,8 @@ impl RawHaalkaEl {
         })
     }
 
-    /// Reactively run an IO [`System`] that takes [`In`](`System::In`) this node's [`Entity`] and
-    /// the output of the [`Signal`] and then run a [`Future`]-returning function with this
+    /// Reactively run an IO [`System`] that takes [`In`](`System::In`) this element's [`Entity`]
+    /// and the output of the [`Signal`] and then run a [`Future`]-returning function with this
     /// element's [`Entity`] and the [`Out`](`System::Out`)put of the [`System`].
     pub fn on_signal_one_shot_io<I: Send + 'static, O: Send + 'static, M, Fut: Future<Output = ()> + Send + 'static>(
         self,
@@ -448,14 +453,19 @@ impl RawHaalkaEl {
         handler: impl IntoSystem<(), (), Marker> + Send + 'static,
         disabled: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        let handler_holder = Mutable::new(Some(On::<E>::run(handler)));
-        self.on_signal_with_entity(disabled.dedupe(), move |mut entity, disabled| {
-            if disabled {
-                handler_holder.set(entity.take::<On<E>>());
-            } else {
-                entity.insert(handler_holder.lock_mut().take().unwrap());
-            }
-        })
+        let system_holder = Mutable::new(None);
+        let disabled_mutable = Mutable::new(false);
+        let syncer = spawn(sync_neq(disabled, disabled_mutable.clone()));
+        self.hold_tasks([syncer])
+            .on_spawn(clone!((system_holder) move |world, _| {
+                let system = world.register_system(handler);
+                system_holder.set(Some(system));
+            }))
+            .insert(On::<E>::run(move |world: &mut World| {
+                if disabled_mutable.get().not() {
+                    let _ = world.run_system(system_holder.get().unwrap());
+                }
+            }))
     }
 
     /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
@@ -464,28 +474,62 @@ impl RawHaalkaEl {
         self.on_event_with_system::<E, _>(move |event: Listener<E>| handler(event))
     }
 
+    /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
+    /// data, reactively disabling this handling.
+    pub fn on_event_disableable<E: EntityEvent>(
+        self,
+        mut handler: impl FnMut(Listener<E>) + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.on_event_with_system_disableable::<E, _>(move |event: Listener<E>| handler(event), disabled)
+    }
+
     /// When this element receives an `E` [`EntityEvent`], run a function with mutable access to the
     /// event's data.
     pub fn on_event_mut<E: EntityEvent>(self, mut handler: impl FnMut(ListenerMut<E>) + Send + Sync + 'static) -> Self {
         self.on_event_with_system::<E, _>(move |event: ListenerMut<E>| handler(event))
     }
 
+    /// When this element receives an `E` [`EntityEvent`], run a function with mutable access to the
+    /// event's data, reactively disabling this handling.
+    pub fn on_event_mut_disableable<E: EntityEvent>(
+        self,
+        mut handler: impl FnMut(ListenerMut<E>) + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.on_event_with_system_disableable::<E, _>(move |event: ListenerMut<E>| handler(event), disabled)
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
+    /// data, reactively controlling whether the event bubbles up the hierarchy and reactively
+    /// disabling this handling.
+    pub fn on_event_propagation_stoppable_disableable<E: EntityEvent>(
+        self,
+        mut handler: impl FnMut(&E) + Send + Sync + 'static,
+        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        let propagation_stopped_mutable = Mutable::new(false);
+        let syncer = spawn(sync_neq(propagation_stopped, propagation_stopped_mutable.clone()));
+        self.hold_tasks([syncer]).on_event_mut_disableable::<E>(
+            move |mut event| {
+                if propagation_stopped_mutable.get() {
+                    event.stop_propagation();
+                }
+                handler(&**event);
+            },
+            disabled,
+        )
+    }
+
     /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
     /// data, reactively controlling whether the event bubbles up the hierarchy.
     pub fn on_event_propagation_stoppable<E: EntityEvent>(
         self,
-        mut handler: impl FnMut(&E) + Send + Sync + 'static,
+        handler: impl FnMut(&E) + Send + Sync + 'static,
         propagation_stopped: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        let propagation_stopped_mutable = Mutable::new(false);
-        let syncer = spawn(propagation_stopped
-            .for_each_sync(clone!((propagation_stopped_mutable) move |propagation_stopped| propagation_stopped_mutable.set_neq(propagation_stopped))));
-        self.hold_tasks([syncer]).on_event_mut::<E>(move |mut event| {
-            if propagation_stopped_mutable.get() {
-                event.stop_propagation();
-            }
-            handler(&**event);
-        })
+        self.on_event_propagation_stoppable_disableable(handler, propagation_stopped, always(false))
     }
 
     /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
@@ -619,11 +663,11 @@ impl<E: RawElement, IE: IntoRawElement<EL = E>> IntoOptionRawElement for IE {
     }
 }
 
-// TODO: derive macro for RawElWrapper which scans through the fields of a struct and implements the
+// TODO: proc macro for RawElWrapper which scans through the fields of a struct and implements the
 // trait for whatever RawHaalkaEl is found first
 /// [`RawElWrapper`]s can be passed to the child methods of [`RawHaalkaEl`]. This can be used to
-/// create custom non-UI "widgets". See [`super::ElementWrapper`] for what this looks like in a UI
-/// context.
+/// create custom non-UI "widgets". See [`ElementWrapper`](super::ElementWrapper) for what this
+/// looks like in a UI context.
 pub trait RawElWrapper: Sized {
     /// Mutable reference to the [`RawHaalkaEl`] that this wrapper wraps.
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl;
@@ -648,7 +692,7 @@ impl RawElement for RawHaalkaEl {
     }
 }
 
-/// Allows [`RawElement`]s and their wrappers to be spawned into the world.
+/// Allows [`RawElement`]s and their [wrappers](RawElWrapper) to be spawned into the world.
 pub trait Spawnable: RawElement {
     /// Spawn the element into the world.
     fn spawn(self, world: &mut World) -> Entity {

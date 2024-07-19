@@ -1,0 +1,208 @@
+//! - A dropdown for the type of bug (UI/cosmetics/gameplay).
+//! - A one-line text input for the bug title.
+//! - A multi-line text input for the bug description.
+//! - The text editing should have the following features:
+//!   - Cursor, which can be moved with arrow keys and mouse click.
+//!   - Text selection.
+//!   - Copy/paste/cut with the usual shortcuts.
+
+use std::convert::identity;
+
+use bevy::prelude::*;
+use haalka::prelude::*;
+
+fn main() {
+    App::new()
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    position: WindowPosition::Centered(MonitorSelection::Primary),
+                    ..default()
+                }),
+                ..default()
+            }),
+            HaalkaPlugin,
+        ))
+        .add_systems(Startup, (ui_root, camera))
+        .run();
+}
+
+fn ui_root(world: &mut World) {
+    El::<NodeBundle>::new()
+        .ui_root()
+        .cursor(CursorIcon::Default)
+        .height(Val::Percent(100.))
+        .width(Val::Percent(100.))
+        .align_content(Align::center())
+        .child(
+            Column::<NodeBundle>::new()
+                .height(Val::Percent(80.))
+                .width(Val::Percent(60.))
+                .item(
+                    Row::<NodeBundle>::new()
+                        .with_style(|mut style| style.column_gap = Val::Px(15.))
+                        .item(El::<TextBundle>::new().text(text_with_size("bug report", 50.)))
+                        .item(dropdown(["UI", "cosmetics", "gameplay"], Some("type"))),
+                ),
+        )
+        .spawn(world);
+}
+
+const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
+const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
+const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
+
+const BASE_PADDING: f32 = 5.;
+
+fn button() -> El<NodeBundle> {
+    let (pressed, pressed_signal) = Mutable::new_and_signal(false);
+    let (hovered, hovered_signal) = Mutable::new_and_signal(false);
+    let pressed_hovered_broadcaster =
+        map_ref!(pressed_signal, hovered_signal => (*pressed_signal, *hovered_signal)).broadcast();
+    let border_color_signal = {
+        pressed_hovered_broadcaster
+            .signal()
+            .map(|(pressed, hovered)| {
+                if pressed {
+                    Color::RED
+                } else if hovered {
+                    Color::WHITE
+                } else {
+                    Color::BLACK
+                }
+            })
+            .map(BorderColor)
+    };
+    let background_color_signal = {
+        pressed_hovered_broadcaster
+            .signal()
+            .map(|(pressed, hovered)| {
+                if pressed {
+                    PRESSED_BUTTON
+                } else if hovered {
+                    HOVERED_BUTTON
+                } else {
+                    NORMAL_BUTTON
+                }
+            })
+            .map(BackgroundColor)
+    };
+    El::<NodeBundle>::new()
+        .width(Val::Px(150.0))
+        .height(Val::Px(65.))
+        .with_style(|mut style| style.border = UiRect::all(Val::Px(5.0)))
+        .align_content(Align::center())
+        .border_color_signal(border_color_signal)
+        .background_color_signal(background_color_signal)
+        .hovered_sync(hovered)
+        .cursor_disableable(CursorIcon::Grabbing, pressed.signal().dedupe())
+        .pressed_sync(pressed)
+}
+
+fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
+    let hovered = Mutable::new(false);
+    El::<NodeBundle>::new()
+        .background_color(BackgroundColor(Color::NONE))
+        // stop propagation because otherwise clearing the dropdown will drop down the
+        // options too; the x should eat the click
+        .on_click_stop_propagation(on_click)
+        .child(El::<TextBundle>::new().text(text("x")).on_signal_with_text(
+            hovered.signal().map_bool(|| Color::RED, || Color::WHITE),
+            |mut text, color| {
+                if let Some(section) = text.sections.first_mut() {
+                    section.style.color = color;
+                }
+            },
+        ))
+        .hovered_sync(hovered)
+}
+
+fn dropdown(options: impl IntoIterator<Item = &'static str>, placeholder: Option<&'static str>) -> impl Element {
+    let selected: Mutable<Option<String>> = Mutable::new(None);
+    let show_dropdown = Mutable::new(false);
+    let options = MutableVec::from(options.into_iter().map(ToString::to_string).collect::<Vec<_>>());
+    button()
+        .child(
+            Stack::<NodeBundle>::new()
+                .width(Val::Percent(100.))
+                .with_style(|mut style| style.padding = UiRect::horizontal(Val::Px(BASE_PADDING)))
+                .layer(
+                    El::<TextBundle>::new().align(Align::new().left()).text_signal(
+                        selected
+                            .signal_cloned()
+                            .map_option(identity, move || placeholder.unwrap_or_default().to_string())
+                            .map(text),
+                    ),
+                )
+                .layer(
+                    Row::<NodeBundle>::new()
+                        .with_style(|mut style| style.column_gap = Val::Px(BASE_PADDING))
+                        .align(Align::new().right())
+                        .item_signal({
+                            selected.signal_ref(Option::is_some).dedupe().map_true(
+                                clone!((selected) move || x_button(clone!((selected) move || { selected.take(); }))),
+                            )
+                        })
+                        .item(
+                            El::<TextBundle>::new()
+                                // TODO: need to figure out to rotate in place (around center)
+                                // .on_signal_with_transform(show_dropdown.signal(), |transform, showing| {
+                                //     transform.rotate_around(Vec3::X, Quat::from_rotation_z((if showing { 180.0f32 }
+                                // else { 0. }).to_radians())); })
+                                .text(text("v")),
+                        ),
+                ),
+        )
+        // TODO: this should be element below signal
+        .child_signal(
+            show_dropdown
+                .signal()
+                .map_true(clone!((options, show_dropdown, selected) move || {
+                    Column::<NodeBundle>::new()
+                    .width(Val::Percent(100.))
+                    .with_style(|mut style| {
+                        style.position_type = PositionType::Absolute;
+                        style.top = Val::Percent(100.);
+                    })
+                    .items_signal_vec(
+                        options.signal_vec_cloned()
+                        .filter_signal_cloned(clone!((selected) move |option| {
+                            selected.signal_ref(clone!((option) move |selected_option| {
+                                selected_option.as_ref() != Some(&option)
+                            }))
+                            .dedupe()
+                        }))
+                        .map(clone!((selected, show_dropdown) move |option| {
+                            button()
+                            .child(El::<TextBundle>::new().text(text(&option)))
+                            .on_click(
+                                clone!((selected, show_dropdown, option) move || {
+                                    selected.set_neq(Some(option.clone()));
+                                    flip(&show_dropdown);
+                                })
+                            )
+                        }))
+                    )
+                })),
+        )
+}
+
+fn text_with_size(text: impl ToString, size: f32) -> Text {
+    Text::from_section(
+        text.to_string(),
+        TextStyle {
+            font_size: size,
+            ..default()
+        },
+    )
+}
+
+const DEFAULT_FONT_SIZE: f32 = 20.;
+
+fn text(text: impl ToString) -> Text {
+    text_with_size(text, DEFAULT_FONT_SIZE)
+}
+
+fn camera(mut commands: Commands) {
+    commands.spawn(Camera2dBundle::default());
+}

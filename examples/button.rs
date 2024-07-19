@@ -15,7 +15,7 @@ fn main() {
             }),
             HaalkaPlugin,
         ))
-        .add_systems(Startup, (setup, spawn_ui_root))
+        .add_systems(Startup, (camera, ui_root))
         .run();
 }
 
@@ -93,11 +93,11 @@ fn button(font: Handle<Font>) -> impl Element {
         )
 }
 
-fn setup(mut commands: Commands) {
+fn camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 }
 
-fn spawn_ui_root(world: &mut World) {
+fn ui_root(world: &mut World) {
     El::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))

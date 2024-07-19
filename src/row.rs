@@ -7,8 +7,9 @@ use futures_signals::{
 
 use super::{
     align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
-    element::{GlobalEventAware, IntoOptionElement},
-    pointer_event_aware::PointerEventAware,
+    element::{IntoOptionElement, Nameable, UiRootable},
+    global_event_aware::GlobalEventAware,
+    pointer_event_aware::{Cursorable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
     scrollable::Scrollable,
     sizeable::Sizeable,
@@ -57,11 +58,14 @@ impl<NodeType: Bundle> RawElWrapper for Row<NodeType> {
     }
 }
 
+impl<NodeType: Bundle> Cursorable for Row<NodeType> {}
+impl<NodeType: Bundle> GlobalEventAware for Row<NodeType> {}
+impl<NodeType: Bundle> Nameable for Row<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Row<NodeType> {}
 impl<NodeType: Bundle> Scrollable for Row<NodeType> {}
 impl<NodeType: Bundle> Sizeable for Row<NodeType> {}
+impl<NodeType: Bundle> UiRootable for Row<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Row<NodeType> {}
-impl<NodeType: Bundle> GlobalEventAware for Row<NodeType> {}
 
 impl<NodeType: Bundle> Row<NodeType> {
     /// Declare a static horizontally stacked child.

@@ -5,12 +5,11 @@ use futures_signals::{
     signal_vec::{SignalVec, SignalVecExt},
 };
 
-use crate::element::GlobalEventAware;
-
 use super::{
     align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
-    element::IntoOptionElement,
-    pointer_event_aware::PointerEventAware,
+    element::{IntoOptionElement, Nameable, UiRootable},
+    global_event_aware::GlobalEventAware,
+    pointer_event_aware::{Cursorable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
     scrollable::Scrollable,
     sizeable::Sizeable,
@@ -58,11 +57,14 @@ impl<NodeType: Bundle> RawElWrapper for Column<NodeType> {
     }
 }
 
+impl<NodeType: Bundle> Cursorable for Column<NodeType> {}
+impl<NodeType: Bundle> GlobalEventAware for Column<NodeType> {}
+impl<NodeType: Bundle> Nameable for Column<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Column<NodeType> {}
 impl<NodeType: Bundle> Scrollable for Column<NodeType> {}
 impl<NodeType: Bundle> Sizeable for Column<NodeType> {}
+impl<NodeType: Bundle> UiRootable for Column<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Column<NodeType> {}
-impl<NodeType: Bundle> GlobalEventAware for Column<NodeType> {}
 
 impl<NodeType: Bundle> Column<NodeType> {
     /// Declare a static vertically stacked child.

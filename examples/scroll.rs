@@ -1,4 +1,4 @@
-//! Scrollable row of scrollable letter columns.
+//! Scrollable row of scrollable letter columns. Inspired by https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs.
 
 use bevy::prelude::*;
 use haalka::prelude::*;

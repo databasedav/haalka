@@ -1,12 +1,15 @@
 use std::{future::Future, time::Duration};
 
-use bevy::{ecs::system::SystemId, prelude::*};
+use apply::Apply;
+use bevy::{ecs::system::SystemId, prelude::*, window::PrimaryWindow};
 use bevy_mod_picking::prelude::*;
 use enclose::enclose as clone;
+use focus::HoverMap;
 use futures_signals::signal::{self, always, Mutable, Signal, SignalExt};
 use haalka_futures_signals_ext::{SignalExtBool, SignalExtExt};
 
 use super::{
+    node_builder::async_world,
     raw::RawElWrapper,
     utils::{sleep, spawn},
 };
@@ -269,12 +272,12 @@ struct Hoverable {
 
 fn update_hover_states(
     hover_map: Res<bevy_mod_picking::focus::HoverMap>,
-    mut hovers: Query<(Entity, &mut Hoverable)>,
+    mut hoverables: Query<(Entity, &mut Hoverable)>,
     parent_query: Query<&Parent>,
     mut commands: Commands,
 ) {
     let hover_set = hover_map.get(&PointerId::Mouse);
-    for (entity, mut hoverable) in hovers.iter_mut() {
+    for (entity, mut hoverable) in hoverables.iter_mut() {
         let is_hovering = match hover_set {
             Some(map) => map
                 .iter()
@@ -327,20 +330,149 @@ fn pressable_system(
 //     false
 // }
 
-// TODO: requires being able to register multipe callbacks for the same event type in event
-// listener, since otherwise would overwrite any other on hovered listeners TODO: should be able to
-// do this just with an Over with stop propagation
+/// Enables reactively setting the cursor icon when an element receives an [`Over`] event.
+pub trait Cursorable: PointerEventAware {
+    /// Set the cursor icon when this element receives an [`Over`] event.
+    fn cursor(self, cursor_option: impl Into<Option<CursorIcon>>) -> Self {
+        let cursor_option = cursor_option.into();
+        self.update_raw_el(|raw_el| {
+            raw_el
+                .insert(Pickable::default())
+                .on_event_with_system::<Pointer<Over>, _>(
+                    move |mut cursors: EventWriter<CursorEvent>, mut event: ListenerMut<Pointer<Over>>| {
+                        event.stop_propagation();
+                        cursors.send(CursorEvent(cursor_option));
+                    },
+                )
+        })
+    }
 
-// trait Cursorable: PointerEventAware {
-//     fn cursor(self, cursor_option: impl Into<Option<CursorIcon>>) -> Self {
-//     }
-// }
+    /// Reactively set the cursor icon when this element receives an [`Over`] event, reactively
+    /// disabling the cursor produced by this element. If the cursor is [`Over`] this element
+    /// when it is reactively disabled, another [`Over`] event will be sent up the hierarchy to
+    /// trigger any handlers whose propagation was previously stopped by this element.
+    fn cursor_signal_disableable<S: Signal<Item = impl Into<Option<CursorIcon>>> + Send + Sync + 'static>(
+        mut self,
+        cursor_option_signal_option: impl Into<Option<S>>,
+        disabled: impl Signal<Item = bool> + Send + Sync + 'static,
+    ) -> Self {
+        if let Some(cursor_option_signal) = cursor_option_signal_option.into() {
+            let over = Mutable::new(false);
+            let cursor_option_signal = cursor_option_signal
+                .map(|cursor_option| cursor_option.into())
+                .broadcast();
+            self = self.update_raw_el(|raw_el| {
+                let disabled = disabled.dedupe().broadcast();
+                let cursor_sender = spawn(
+                    signal::and(signal::not(disabled.signal()), over.signal())
+                        .dedupe()
+                        .map_true_signal(move || cursor_option_signal.signal())
+                        .for_each_sync(|cursor_option_option| {
+                            if let Some(cursor_option) = cursor_option_option {
+                                async_world()
+                                    .send_event(CursorEvent(cursor_option))
+                                    .apply(spawn)
+                                    .detach();
+                            }
+                        }),
+                );
+                raw_el
+                    .insert(Pickable::default())
+                    .hold_tasks([cursor_sender])
+                    .on_event_propagation_stoppable::<Pointer<Over>>(
+                        clone!((over) move |_| over.set(true)),
+                        signal::not(disabled.signal()),
+                    )
+                    .on_event_stop_propagation::<Pointer<Out>>(clone!((over) move |_| over.set_neq(false)))
+                    // when the cursor is disabled *while* over an element, we need to resend the `Over`
+                    // event to the element's parent to trigger any handlers whose propagation was stopped
+                    .on_signal_one_shot(
+                        over.signal().map_true_signal(move || disabled.signal()),
+                        |In((entity, disabled_option)): In<(Entity, Option<bool>)>,
+                         mut was_hovered: Local<bool>,
+                         pointer_map: Res<PointerMap>,
+                         pointers: Query<&PointerLocation>,
+                         hover_map: Res<HoverMap>,
+                         mut pointer_over: EventWriter<Pointer<Over>>,
+                         parents: Query<&Parent>| {
+                            // `disabled_option` is `Some` if the element is `Over`ed
+                            if *was_hovered && disabled_option == Some(true) {
+                                *was_hovered = false;
+                                if let Some(((hover_map, location), parent)) = hover_map
+                                    .get(&PointerId::Mouse)
+                                    .zip(
+                                        pointer_map
+                                            .get_entity(PointerId::Mouse)
+                                            .and_then(|entity| pointers.get(entity).ok())
+                                            .and_then(|pointer| pointer.location.clone()),
+                                    )
+                                    .zip(parents.get(entity).ok())
+                                {
+                                    if let Some(hit) = hover_map.get(&entity).cloned() {
+                                        pointer_over.send(Pointer::new(
+                                            PointerId::Mouse,
+                                            location,
+                                            parent.get(),
+                                            Over { hit },
+                                        ));
+                                    }
+                                }
+                            } else if disabled_option == Some(false) {
+                                *was_hovered = true;
+                            }
+                        },
+                    )
+            });
+        }
+        self
+    }
+
+    /// Reactively set the cursor icon when this element receives an [`Over`] event.
+    fn cursor_signal<S: Signal<Item = impl Into<Option<CursorIcon>>> + Send + Sync + 'static>(
+        self,
+        cursor_option_signal: S,
+    ) -> Self {
+        self.cursor_signal_disableable(cursor_option_signal, always(false))
+    }
+
+    /// Set the cursor icon when this element receives an [`Over`] event, reactively disabling the
+    /// cursor produced by this element. If the cursor is [`Over`] this element when it is
+    /// reactively disabled, another [`Over`] event will be sent up the hierarchy to trigger any
+    /// handlers whose propagation was previously stopped by this element.
+    fn cursor_disableable(
+        self,
+        cursor_option: impl Into<Option<CursorIcon>>,
+        disabled: impl Signal<Item = bool> + Send + Sync + 'static,
+    ) -> Self {
+        self.cursor_signal_disableable(always(cursor_option.into()), disabled)
+    }
+}
+
+#[derive(Event)]
+struct CursorEvent(Option<CursorIcon>);
+
+fn cursor_setter(
+    mut cursors: EventReader<CursorEvent>,
+    // TODO: add support for multiple windows
+    mut windows: Query<&mut Window, With<PrimaryWindow>>,
+) {
+    if let Ok(mut window) = windows.get_single_mut() {
+        for CursorEvent(icon_option) in cursors.read() {
+            if let Some(icon) = icon_option {
+                window.cursor.icon = *icon;
+                window.cursor.visible = true;
+            } else {
+                window.cursor.visible = false;
+            }
+        }
+    }
+}
 
 pub(crate) struct PointerEventAwarePlugin;
 
 impl Plugin for PointerEventAwarePlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.add_event::<CursorEvent>().add_systems(
             Update,
             (
                 pressable_system.run_if(any_with_component::<Pressable>),
@@ -349,6 +481,7 @@ impl Plugin for PointerEventAwarePlugin {
                         // TODO: apparently this updates every no matter what, if so, remove this condition
                         .and_then(resource_exists_and_changed::<bevy_mod_picking::focus::HoverMap>),
                 ),
+                cursor_setter.run_if(on_event::<CursorEvent>()),
             ),
         );
     }

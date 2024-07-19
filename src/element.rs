@@ -1,10 +1,11 @@
+use std::borrow::Cow;
+
 use super::{
     align::{AlignabilityFacade, Alignable, Aligner, ChildAlignable},
     raw::{RawElWrapper, RawElement, RawHaalkaEl},
 };
 use bevy::prelude::*;
-use bevy_eventlistener::prelude::*;
-use bevy_mod_picking::picking_core::Pickable;
+use futures_signals::signal::{Signal, SignalExt};
 
 /// The high level UI building block of [haalka](crate). [`Element`]s are [`RawElement`]s that wrap
 /// [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs)
@@ -30,6 +31,16 @@ impl<T: Element> IntoElement for T {
         self
     }
 }
+
+// impl IntoElement for &'static str {
+//     type EL = El<TextBundle>;
+//     fn into_element(self) -> Self::EL {
+//         El::<TextBundle>::new().text(Text::from_section(
+//             self.to_string(),
+//             TextStyle::default(),
+//         ))
+//     }
+// }
 
 /// Thin wrapper trait around [`Element`] that allows consumers to pass [`Option`]s to the child
 /// methods of all alignable types.
@@ -134,54 +145,38 @@ impl<T: Alignable> TypeEraseable for T {
 pub struct UiRoot(pub Entity);
 
 /// Allows [`Element`]s to be marked as the root of the UI tree.
-pub trait UiRootable: Element {
+pub trait UiRootable: RawElWrapper {
     /// Mark this node as the root of the UI tree.
     fn ui_root(self) -> Self {
         self.update_raw_el(|raw_el| {
-            raw_el
-                .on_spawn(|world, entity| {
-                    world.insert_resource(UiRoot(entity));
-                })
-                .insert(Pickable::default())
+            raw_el.on_spawn(|world, entity| {
+                world.insert_resource(UiRoot(entity));
+            })
         })
     }
 }
 
-impl<E: Element> UiRootable for E {}
+/// Convenience trait for adding a [`Name`] to an [`Element`].
+pub trait Nameable: RawElWrapper {
+    /// Set the [`Name`] of this element.
+    fn name<T: Into<Cow<'static, str>>>(mut self, name_option: impl Into<Option<T>>) -> Self {
+        if let Some(name) = name_option.into() {
+            self = self.update_raw_el(|raw_el| raw_el.insert(Name::new(name)));
+        }
+        self
+    }
 
-// TODO: there should be a way to pass the entity into the system
-/// Enables registering "global" event listeners on the [`UiRoot`] node. The [`UiRoot`] must be
-/// manually registered with [`UiRootable::ui_root`] for this to work as expected.
-///
-/// # Notes
-/// Since multiple [`bevy_eventlistener::On`](bevy_eventlistener::event_listener::On)s can't be
-/// registered on the same entity, this trait can't *yet* be used to do things like registering "on
-/// click outside" listeners.
-pub trait GlobalEventAware: RawElWrapper {
-    /// When an `E` [`EntityEvent`] propagates to the [`UiRoot`] node, run a `handler` [`System`].
-    fn on_global_event_with_system<E: EntityEvent, Marker>(
-        self,
-        handler: impl IntoSystem<(), (), Marker> + Send + 'static,
+    /// Reactively set the name of this element. If the signal outputs [`None`] the [`Name`] is
+    /// removed.
+    fn name_signal<T: Into<Cow<'static, str>> + 'static, S: Signal<Item = Option<T>> + Send + 'static>(
+        mut self,
+        name_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
-        self.update_raw_el(|raw_el| raw_el.insert_forwarded(ui_root_forwarder, On::<E>::run(handler)))
+        if let Some(name_option_signal) = name_option_signal_option.into() {
+            self = self.update_raw_el(|raw_el| {
+                raw_el.component_signal::<Name, _>(name_option_signal.map(|name_option| name_option.map(Name::new)))
+            });
+        }
+        self
     }
-
-    /// When an `E` [`EntityEvent`] propagates to the [`UiRoot`] node, run a function with access to
-    /// the event's data.
-    fn on_global_event<E: EntityEvent>(self, mut handler: impl FnMut(Listener<E>) + Send + Sync + 'static) -> Self {
-        self.on_global_event_with_system::<E, _>(move |event: Listener<E>| handler(event))
-    }
-
-    /// When an `E` [`EntityEvent`] propagates to the [`UiRoot`] node, run a function with mutable
-    /// access to the event's data.
-    fn on_global_event_mut<E: EntityEvent>(
-        self,
-        mut handler: impl FnMut(ListenerMut<E>) + Send + Sync + 'static,
-    ) -> Self {
-        self.on_global_event_with_system::<E, _>(move |event: ListenerMut<E>| handler(event))
-    }
-}
-
-fn ui_root_forwarder(entity: &mut EntityWorldMut) -> Option<Entity> {
-    entity.world_scope(|world| world.get_resource::<UiRoot>().map(|&UiRoot(ui_root)| ui_root))
 }

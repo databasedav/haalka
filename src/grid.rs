@@ -7,8 +7,9 @@ use futures_signals::{
 
 use super::{
     align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
-    element::{GlobalEventAware, IntoOptionElement},
-    pointer_event_aware::PointerEventAware,
+    element::{IntoOptionElement, Nameable, UiRootable},
+    global_event_aware::GlobalEventAware,
+    pointer_event_aware::{Cursorable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
     scrollable::Scrollable,
     sizeable::Sizeable,
@@ -63,11 +64,14 @@ impl<NodeType: Bundle> RawElWrapper for Grid<NodeType> {
     }
 }
 
+impl<NodeType: Bundle> Cursorable for Grid<NodeType> {}
+impl<NodeType: Bundle> GlobalEventAware for Grid<NodeType> {}
+impl<NodeType: Bundle> Nameable for Grid<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Grid<NodeType> {}
 impl<NodeType: Bundle> Scrollable for Grid<NodeType> {}
 impl<NodeType: Bundle> Sizeable for Grid<NodeType> {}
+impl<NodeType: Bundle> UiRootable for Grid<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Grid<NodeType> {}
-impl<NodeType: Bundle> GlobalEventAware for Grid<NodeType> {}
 
 /// Must substract this from the total row width of a [`Grid`] due to [float precision shenanigans](https://github.com/bevyengine/bevy/issues/12152). See an example usage in the [snake example](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/snake.rs#L112).
 pub const GRID_TRACK_FLOAT_PRECISION_SLACK: f32 = 0.0001;

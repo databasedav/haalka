@@ -25,7 +25,7 @@ fn main() {
             HaalkaPlugin,
         ))
         .add_plugins(EventListenerPlugin::<MenuInputEvent>::default())
-        .add_systems(Startup, (setup, ui_root))
+        .add_systems(Startup, (camera, ui_root))
         .add_systems(Update, (keyboard_menu_input_events, gamepad_menu_input_events))
         .insert_resource(AUDIO_SETTINGS.clone())
         .insert_resource(GRAPHICS_SETTINGS.clone())
@@ -160,9 +160,9 @@ async fn sync<T>(mutable: Mutable<T>, signal: impl Signal<Item = T> + Send + 'st
     signal.for_each_sync(|value| mutable.set(value)).await;
 }
 
-fn text(text: &str) -> Text {
+fn text(text: impl ToString) -> Text {
     Text::from_section(
-        text,
+        text.to_string(),
         TextStyle {
             font_size: FONT_SIZE,
             ..default()
@@ -176,7 +176,7 @@ fn text_button(
 ) -> Button {
     Button::new()
         .width(Val::Px(200.))
-        .body(El::<TextBundle>::new().text_signal(text_signal.map(|t| text(&t))))
+        .body(El::<TextBundle>::new().text_signal(text_signal.map(text)))
         .on_click(on_click)
 }
 
@@ -205,10 +205,6 @@ fn menu_base(width: f32, height: f32, title: &str) -> Column<NodeBundle> {
                         .text(text(title)),
                 ),
         )
-}
-
-fn flip(mutable_bool: &Mutable<bool>) {
-    mutable_bool.set(!mutable_bool.get());
 }
 
 // global ui state comes in super handy sometimes ...
@@ -269,7 +265,7 @@ impl Checkbox {
                             }),
                         )
                     })
-                    .on_click(clone!((checked) move || { flip(&checked) }))
+                    .on_click(clone!((checked) move || flip(&checked)))
                     .selected_signal(checked.signal())
                     .into_element()
             },
@@ -405,10 +401,13 @@ fn centered_arrow_text(direction: LeftRight) -> El<TextBundle> {
             style.bottom = Val::Px(2.);
             style.right = Val::Px(2.);
         })
-        .text(text(match direction {
-            LeftRight::Left => "<",
-            LeftRight::Right => ">",
-        }))
+        .text(
+            match direction {
+                LeftRight::Left => "<",
+                LeftRight::Right => ">",
+            }
+            .apply(text),
+        )
 }
 
 struct IterableOptions {
@@ -487,7 +486,7 @@ impl IterableOptions {
                 })
                 .item(
                     El::<TextBundle>::new()
-                    .text_signal(selected.signal_cloned().map(|selected| text(&selected.to_string())))
+                    .text_signal(selected.signal_cloned().map(text))
                 )
                 .item({
                     lil_baby_button()
@@ -772,14 +771,19 @@ impl Dropdown {
                             .map(|selected_option| {
                                 selected_option.map(|option| option.to_string()).unwrap_or_default()
                             })
-                            .map(|t| text(&t))
+                            .map(text)
                         )
                     )
                     .layer(
                         Row::<NodeBundle>::new()
                         .with_style(|mut style| style.column_gap = Val::Px(BASE_PADDING))
                         .align(Align::new().right())
-                        .item_signal({
+                        .item_signal(
+                            // TODO: this should just work, but compiler asks for type info
+                            // clearable.then(||
+                            //     selected.signal_ref(Option::is_some).dedupe()
+                            //     .map_true(clone!((selected) move || x_button(clone!((selected) move || { selected.take(); }))))
+                            // )
                             if clearable {
                                 selected.signal_ref(Option::is_some).dedupe()
                                 .map_true(clone!((selected) move || x_button(clone!((selected) move || { selected.take(); }))))
@@ -787,7 +791,7 @@ impl Dropdown {
                             } else {
                                 always(None).boxed()
                             }
-                        })
+                        )
                         .item(
                             El::<TextBundle>::new()
                             // TODO: need to figure out to rotate in place (around center)
@@ -1173,7 +1177,7 @@ fn menu() -> impl Element {
         }))
 }
 
-fn setup(mut commands: Commands) {
+fn camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 }
 

@@ -4,12 +4,12 @@ resolver = "2"
 
 [package]
 name = "haalka"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 categories = ["asynchronous", "gui", "game-development"]
 description = "ergonomic reactive Bevy UI library powered by FRP signals"
 exclude = ["assets/", ".github/", "crates/"]
-keywords = ["ui", "reactive", "signals", "game", "bevy"]
+keywords = ["ui", "reactive", "signals", "gamedev", "bevy"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/databasedav/haalka"
 documentation = "https://docs.rs/haalka"
@@ -55,6 +55,8 @@ bevy_rand = { version = "0.5.0", features = ["rand_chacha"] }
 colorgrad = "0.6.2"
 rand = "0.8.5"
 strum = { version = "0.25.0", features = ["derive"] }
+calc = { version = "0.4.0", default-features = false }
+rust_decimal = "1.35"
 
 [[example]]
 name = "align"
