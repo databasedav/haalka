@@ -332,7 +332,8 @@ fn pressable_system(
 
 /// Enables reactively setting the cursor icon when an element receives an [`Over`] event.
 pub trait Cursorable: PointerEventAware {
-    /// Set the cursor icon when this element receives an [`Over`] event.
+    /// Set the cursor icon when this element receives an [`Over`] event. When passed [`None`], the
+    /// cursor is hidden.
     fn cursor(self, cursor_option: impl Into<Option<CursorIcon>>) -> Self {
         let cursor_option = cursor_option.into();
         self.update_raw_el(|raw_el| {
@@ -348,9 +349,12 @@ pub trait Cursorable: PointerEventAware {
     }
 
     /// Reactively set the cursor icon when this element receives an [`Over`] event, reactively
-    /// disabling the cursor produced by this element. If the cursor is [`Over`] this element
-    /// when it is reactively disabled, another [`Over`] event will be sent up the hierarchy to
-    /// trigger any handlers whose propagation was previously stopped by this element.
+    /// disabling the cursor produced by this element. When the [`Signal`] outputs [`None`], the
+    /// cursor is hidden.
+    ///
+    /// If the cursor is [`Over`] this element when it is reactively disabled, another [`Over`]
+    /// event will be sent up the hierarchy to trigger any handlers whose propagation was previously
+    /// stopped by this element.
     fn cursor_signal_disableable<S: Signal<Item = impl Into<Option<CursorIcon>>> + Send + Sync + 'static>(
         mut self,
         cursor_option_signal_option: impl Into<Option<S>>,
@@ -427,16 +431,19 @@ pub trait Cursorable: PointerEventAware {
         self
     }
 
-    /// Reactively set the cursor icon when this element receives an [`Over`] event.
+    /// Reactively set the cursor icon when this element receives an [`Over`] event. When the
+    /// [`Signal`] outputs [`None`], the cursor is hidden.
     fn cursor_signal<S: Signal<Item = impl Into<Option<CursorIcon>>> + Send + Sync + 'static>(
         self,
-        cursor_option_signal: S,
+        cursor_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
-        self.cursor_signal_disableable(cursor_option_signal, always(false))
+        self.cursor_signal_disableable(cursor_option_signal_option, always(false))
     }
 
     /// Set the cursor icon when this element receives an [`Over`] event, reactively disabling the
-    /// cursor produced by this element. If the cursor is [`Over`] this element when it is
+    /// cursor produced by this element. When passed [`None`], the cursor is hidden.
+    ///
+    /// If the cursor is [`Over`] this element when it is
     /// reactively disabled, another [`Over`] event will be sent up the hierarchy to trigger any
     /// handlers whose propagation was previously stopped by this element.
     fn cursor_disableable(

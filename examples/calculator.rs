@@ -74,8 +74,10 @@ fn input_button(symbol: &'static str) -> impl Element {
                 if let Ok(result) = Context::<f64>::default().evaluate(&output) {
                     if let Some(result) = Decimal::from_f64((result * 100.).round() / 100.) {
                         *output = result.normalize().to_string();
+                        return;
                     }
                 }
+                ERROR.set_neq(true);
             } else {
                 *output += symbol;
             }
@@ -83,12 +85,20 @@ fn input_button(symbol: &'static str) -> impl Element {
 }
 
 static OUTPUT: Lazy<Mutable<String>> = Lazy::new(default);
+static ERROR: Lazy<Mutable<bool>> = Lazy::new(default);
 
 fn display() -> impl Element {
     textable_element(OUTPUT.signal_cloned())
         .with_style(|mut style| {
             style.padding = UiRect::all(Val::Px(GAP));
             style.overflow = Overflow::clip();
+        })
+        .update_raw_el(|raw_el| {
+            raw_el.component_signal::<Outline, _>(
+                ERROR
+                    .signal()
+                    .map_true(|| Outline::new(Val::Px(4.0), Val::ZERO, Color::RED)),
+            )
         })
         .width(Val::Px(BUTTON_SIZE * 3. + GAP * 2.))
         .height(Val::Px(BUTTON_SIZE))
@@ -122,42 +132,39 @@ fn clear_button() -> impl Element {
 }
 
 fn ui_root(world: &mut World) {
+    let error_clearer = OUTPUT.signal_ref(|_| ERROR.set_neq(false)).to_future().apply(spawn);
     El::<NodeBundle>::new()
+        .update_raw_el(|raw_el| raw_el.hold_tasks([error_clearer]))
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .cursor(CursorIcon::Default)
         .align_content(Align::center())
         .child(
-            El::<NodeBundle>::new()
+            Column::<NodeBundle>::new()
                 .height(Val::Px(HEIGHT))
                 .width(Val::Px(WIDTH))
                 .background_color(BackgroundColor(PINK))
-                .child(
-                    Column::<NodeBundle>::new()
+                .align(Align::center())
+                .with_style(|mut style| {
+                    style.row_gap = Val::Px(GAP);
+                    style.padding = UiRect::all(Val::Px(GAP));
+                })
+                .item(
+                    Row::<NodeBundle>::new()
                         .align(Align::center())
+                        .with_style(|mut style| style.column_gap = Val::Px(GAP))
+                        .item(clear_button())
+                        .item(display()),
+                )
+                .item(
+                    Row::<NodeBundle>::new()
+                        .multiline()
+                        .align_content(Align::center())
                         .with_style(|mut style| {
                             style.row_gap = Val::Px(GAP);
-                            style.padding = UiRect::all(Val::Px(GAP));
+                            style.column_gap = Val::Px(GAP);
                         })
-                        .item(
-                            Row::<NodeBundle>::new()
-                                .align(Align::center())
-                                .with_style(|mut style| style.column_gap = Val::Px(GAP))
-                                .item(clear_button())
-                                .item(display()),
-                        )
-                        .item(
-                            Row::<NodeBundle>::new()
-                                .multiline()
-                                .align_content(Align::center())
-                                .with_style(|mut style| {
-                                    style.row_gap = Val::Px(GAP);
-                                    style.column_gap = Val::Px(GAP);
-                                })
-                                .width(Val::Percent(100.))
-                                .height(Val::Percent(100.))
-                                .items(buttons().into_iter().map(input_button)),
-                        ),
+                        .items(buttons().into_iter().map(input_button)),
                 ),
         )
         .spawn(world);

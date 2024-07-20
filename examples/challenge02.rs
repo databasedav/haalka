@@ -6,7 +6,8 @@
 //!   - You can leave the bounding box of the inventory while dragging.
 //! - A tooltip with the item's name is shown when hovering over an item.
 
-// TODO: fix cursor not updating when placing an item in an empty cell and then moving cursor outside
+// TODO: fix cursor not updating when placing an item in an empty cell and then moving cursor
+// outside
 
 use std::{collections::HashMap, convert::identity, sync::OnceLock};
 
@@ -353,21 +354,22 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             )
         }))
         // alternative to the stop propagation trigger pattern, which is kinda/pretty cringe
-        // .cursor_signal(
-        //     map_ref! {
-        //         let populated = cell_data_option.signal_ref(Option::is_some),
-        //         let is_dragging = is_dragging() => {
-        //             if *is_dragging {
-        //                 CursorIcon::Grabbing
-        //             } else if *populated{
-        //                 CursorIcon::Grab
-        //             } else {
-        //                 CursorIcon::Default
-        //             }
-        //         }
-        //     }
-        // )
-        .cursor_disableable(CursorIcon::Grab, stop_propagation_trigger.signal())
+        .cursor_signal(
+            map_ref! {
+                let populated = cell_data_option.signal_ref(Option::is_some),
+                let is_dragging = is_dragging() => {
+                    if *is_dragging {
+                        CursorIcon::Grabbing
+                    } else if *populated{
+                        CursorIcon::Grab
+                    } else {
+                        CursorIcon::Default
+                    }
+                }
+            }
+        )
+        // TODO: this is more idiomatic and should work, but it doesn't ... yet
+        // .cursor_disableable(CursorIcon::Grab, stop_propagation_trigger.signal())
         .hovered_sync(hovered.clone())
         .width(Val::Px(CELL_WIDTH))
         .height(Val::Px(CELL_WIDTH))

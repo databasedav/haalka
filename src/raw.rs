@@ -1,8 +1,8 @@
 use std::{
+    future::Future,
     mem,
     ops::Not,
     sync::{Arc, Mutex},
-    future::Future
 };
 
 use async_lock;
