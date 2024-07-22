@@ -82,17 +82,17 @@ fn ui_root(world: &mut World) {
                 )
                 .items(
                     [
-                        Color::RED,
-                        Color::ORANGE,
-                        Color::YELLOW,
-                        Color::GREEN,
-                        Color::BLUE,
-                        Color::INDIGO,
-                        Color::VIOLET,
+                        bevy::color::palettes::css::RED,
+                        bevy::color::palettes::css::ORANGE,
+                        bevy::color::palettes::css::YELLOW,
+                        bevy::color::palettes::css::GREEN,
+                        bevy::color::palettes::css::BLUE,
+                        bevy::color::palettes::css::INDIGO,
+                        bevy::color::palettes::css::VIOLET,
                     ]
                     .into_iter()
                     .enumerate()
-                    .map(|(i, color)| letter_column(i, color)),
+                    .map(|(i, color)| letter_column(i, color.into())),
                 ),
         )
         .spawn(world);

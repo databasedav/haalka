@@ -48,9 +48,9 @@ fn ui_root(world: &mut World) {
         .spawn(world);
 }
 
-const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
-const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
-const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
+const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
+const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
+const PRESSED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
 
 const BASE_PADDING: f32 = 5.;
 
@@ -64,7 +64,7 @@ fn button() -> El<NodeBundle> {
             .signal()
             .map(|(pressed, hovered)| {
                 if pressed {
-                    Color::RED
+                    bevy::color::palettes::basic::RED.into()
                 } else if hovered {
                     Color::WHITE
                 } else {
@@ -106,14 +106,18 @@ fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
         // stop propagation because otherwise clearing the dropdown will drop down the
         // options too; the x should eat the click
         .on_click_stop_propagation(on_click)
-        .child(El::<TextBundle>::new().text(text("x")).on_signal_with_text(
-            hovered.signal().map_bool(|| Color::RED, || Color::WHITE),
-            |mut text, color| {
-                if let Some(section) = text.sections.first_mut() {
-                    section.style.color = color;
-                }
-            },
-        ))
+        .child(
+            El::<TextBundle>::new().text(text("x")).on_signal_with_text(
+                hovered
+                    .signal()
+                    .map_bool(|| bevy::color::palettes::basic::RED.into(), || Color::WHITE),
+                |mut text, color| {
+                    if let Some(section) = text.sections.first_mut() {
+                        section.style.color = color;
+                    }
+                },
+            ),
+        )
         .hovered_sync(hovered)
 }
 

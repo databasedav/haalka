@@ -215,10 +215,6 @@ impl From<BasicScrollHandler>
     }
 }
 
-pub(crate) struct ScrollablePlugin;
-
-impl Plugin for ScrollablePlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(Update, scroll_system.run_if(any_with_component::<ScrollableMarker>));
-    }
+pub(super) fn plugin(app: &mut App) {
+    app.add_systems(Update, scroll_system.run_if(any_with_component::<ScrollableMarker>));
 }

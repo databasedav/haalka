@@ -20,7 +20,7 @@ fn main() {
                 .enumerate()
                 .map(|(j, letter)| LetterColor {
                     letter: letter.to_string(),
-                    color: ROYGBIV[j % 7],
+                    color: ROYGBIV[j % 7].into(),
                 })
                 .collect::<Vec<_>>()
         })
@@ -34,7 +34,7 @@ fn main() {
                 .take(26)
                 .map(|letter| LetterColor {
                     letter: letter.to_string(),
-                    color: ROYGBIV[i],
+                    color: ROYGBIV[i].into(),
                 })
                 .collect::<Vec<_>>()
         })
@@ -106,14 +106,14 @@ struct Rails {
     horizontal: Vec<Vec<LetterColor>>,
 }
 
-const ROYGBIV: &[Color] = &[
-    Color::RED,
-    Color::ORANGE,
-    Color::YELLOW,
-    Color::GREEN,
-    Color::BLUE,
-    Color::INDIGO,
-    Color::VIOLET,
+const ROYGBIV: &[Srgba] = &[
+    bevy::color::palettes::css::RED,
+    bevy::color::palettes::css::ORANGE,
+    bevy::color::palettes::css::YELLOW,
+    bevy::color::palettes::css::GREEN,
+    bevy::color::palettes::css::BLUE,
+    bevy::color::palettes::css::INDIGO,
+    bevy::color::palettes::css::VIOLET,
 ];
 
 static CELLS: Lazy<Vec<Vec<Mutable<LetterColor>>>> = Lazy::new(|| {
@@ -125,7 +125,7 @@ static CELLS: Lazy<Vec<Vec<Mutable<LetterColor>>>> = Lazy::new(|| {
         for (j, letter) in letters.chars().skip(i).take(5).enumerate() {
             cells[i][j].set(LetterColor {
                 letter: letter.to_string(),
-                color: ROYGBIV[i],
+                color: ROYGBIV[i].into(),
             });
         }
     }

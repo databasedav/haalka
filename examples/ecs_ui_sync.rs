@@ -259,10 +259,10 @@ fn ui_root(world: &mut World) {
         .spawn(world);
 }
 
-const BLUE: Color = Color::rgb(0.25, 0.25, 0.75);
-const GREEN: Color = Color::rgb(0.25, 0.75, 0.25);
-const RED: Color = Color::rgb(0.75, 0.25, 0.25);
-const YELLOW: Color = Color::rgb(0.75, 0.75, 0.25);
+const BLUE: Color = Color::srgb(0.25, 0.25, 0.75);
+const GREEN: Color = Color::srgb(0.25, 0.75, 0.25);
+const RED: Color = Color::srgb(0.75, 0.25, 0.25);
+const YELLOW: Color = Color::srgb(0.75, 0.75, 0.25);
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());

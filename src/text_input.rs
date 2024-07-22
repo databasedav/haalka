@@ -4,7 +4,6 @@ use bevy::{
     ecs::system::{SystemId, SystemState},
     prelude::*,
 };
-use bevy_eventlistener::callbacks::Listener;
 use bevy_mod_picking::{
     events::{Down, Pointer},
     picking_core::Pickable,
@@ -49,18 +48,19 @@ impl TextInput {
         let cosmic_edit_holder = Mutable::new(None);
         let el = El::<ButtonBundle>::new().update_raw_el(|raw_el| {
             raw_el
+                .insert(Pickable::default())
                 .with_entity(clone!((cosmic_edit_holder) move |mut entity| {
                     let cosmic_edit = entity.world_scope(|world| world.spawn(CosmicEditBundle::default()).id());
                     cosmic_edit_holder.set(Some(cosmic_edit));
-                    entity
-                        // TODO: once bevy 0.14, can just add an OnRemove to despawn the corresponding cosmic edit entity to
-                        // avoid the non ui child warning
-                        .add_child(cosmic_edit)
-                        .insert(CosmicSource(cosmic_edit));
-                }))
-                .insert(Pickable::default())
+                    entity.insert(CosmicSource(cosmic_edit));
+                })) 
+                .on_remove(move |world, _| {
+                    if let Some(entity) = world.commands().get_entity(cosmic_edit_holder.get().unwrap()) {
+                        entity.despawn_recursive();
+                    }
+                })
                 .on_event_with_system::<Pointer<Down>, _>(
-                    move |pointer_down: Listener<Pointer<Down>>,
+                    move |In((_, pointer_down)): In<(_, Pointer<Down>)>,
                             mut focusable_query: Query<(Entity, &mut Focusable)>,
                             mut commands: Commands| {
                         // TODO: remove this focusable trigger and uncomment .insert_resource below when https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
@@ -69,8 +69,7 @@ impl TextInput {
                             focusable.is_focused = true;
                             commands.run_system_with_input(focusable.system, (entity, true));
                         }
-                        // commands.insert_resource(CosmicFocusedWidget(cosmic_edit_holder.
-                        // get()));
+                        // commands.insert_resource(CosmicFocusedWidget(cosmic_edit_holder.get()));
                     },
                 )
         });
@@ -709,7 +708,7 @@ impl TextAttrs {
     }
 
     /// Reactively set the color of this text. If the signal outputs [`None`] the color is set to its default white.
-    pub fn color_signal<S: Signal<Item = Option<Color>> + Send + Sync + 'static>(
+    pub fn color_signal<C: Into<Color>, S: Signal<Item = Option<C>> + Send + Sync + 'static>(
         mut self,
         color_signal_option: impl Into<Option<S>>,
     ) -> Self {
@@ -724,9 +723,9 @@ impl TextAttrs {
     }
 
     /// Set the color of this text.
-    pub fn color(mut self, color_option: impl Into<Option<Color>>) -> Self {
+    pub fn color<C: Into<Color>>(mut self, color_option: impl Into<Option<C>>) -> Self {
         if let Some(color) = color_option.into() {
-            self = self.color_signal(always(Some(color)));
+            self = self.color_signal(always(Some(color.into())));
         }
         self
     }
@@ -947,19 +946,15 @@ impl_text_input_cosmic_edit_methods! {
     hover_cursor: bevy_cosmic_edit::HoverCursor,
 }
 
-pub(crate) struct TextInputPlugin;
-
-impl Plugin for TextInputPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_plugins(bevy_cosmic_edit::CosmicEditPlugin::default())
-            .add_systems(
-                Update,
-                (
-                    on_change.run_if(any_with_component::<TextInputOnChange>.and_then(on_event::<CosmicTextChanged>())),
-                    on_focus_changed.run_if(resource_changed::<CosmicFocusedWidget>),
-                )
-                    .run_if(any_with_component::<CosmicSource>),
+pub(super) fn plugin(app: &mut App) {
+    app.add_plugins(bevy_cosmic_edit::CosmicEditPlugin::default())
+        .add_systems(
+            Update,
+            (
+                on_change.run_if(any_with_component::<TextInputOnChange>.and_then(on_event::<CosmicTextChanged>())),
+                on_focus_changed.run_if(resource_changed::<CosmicFocusedWidget>),
             )
-            .add_systems(PostUpdate, bevy_cosmic_edit::deselect_editor_on_esc);
-    }
+                .run_if(any_with_component::<CosmicSource>),
+        )
+        .add_systems(PostUpdate, bevy_cosmic_edit::deselect_editor_on_esc);
 }

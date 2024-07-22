@@ -42,10 +42,10 @@ fn main() {
         .run();
 }
 
-const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
-const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
-const CLICKED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
-const TEXT_COLOR: Color = Color::rgb(0.9, 0.9, 0.9);
+const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
+const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
+const CLICKED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
+const TEXT_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
 const FONT_SIZE: f32 = 30.;
 const MAIN_MENU_SIDES: f32 = 300.;
 const SUB_MENU_HEIGHT: f32 = 700.;
@@ -91,7 +91,7 @@ impl Button {
                 .signal()
                 .map(|(selected, hovered)| {
                     if selected {
-                        Color::RED
+                        bevy::color::palettes::basic::RED.into()
                     } else if hovered {
                         Color::WHITE
                     } else {
@@ -633,7 +633,10 @@ fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<N
         .background_color_signal(
             hovered
                 .signal()
-                .map_bool(|| NORMAL_BUTTON.with_l(NORMAL_BUTTON.l() + 0.1), || NORMAL_BUTTON)
+                .map_bool(
+                    || NORMAL_BUTTON.with_alpha(NORMAL_BUTTON.alpha() + 0.1),
+                    || NORMAL_BUTTON,
+                )
                 .map(BackgroundColor),
         )
         .on_hovered_change(move |is_hovered| only_one_up_flipper(&hovered, &MENU_ITEM_HOVERED_OPTION, Some(is_hovered)))
@@ -1067,14 +1070,18 @@ fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
         // stop propagation because otherwise clearing the dropdown will drop down the
         // options too; the x should eat the click
         .on_click_stop_propagation(on_click)
-        .child(El::<TextBundle>::new().text(text("x")).on_signal_with_text(
-            hovered.signal().map_bool(|| Color::RED, || TEXT_COLOR),
-            |mut text, color| {
-                if let Some(section) = text.sections.first_mut() {
-                    section.style.color = color;
-                }
-            },
-        ))
+        .child(
+            El::<TextBundle>::new().text(text("x")).on_signal_with_text(
+                hovered
+                    .signal()
+                    .map_bool(|| bevy::color::palettes::basic::RED.into(), || TEXT_COLOR),
+                |mut text, color| {
+                    if let Some(section) = text.sections.first_mut() {
+                        section.style.color = color;
+                    }
+                },
+            ),
+        )
 }
 
 static SUB_MENU_SELECTED: Lazy<Mutable<Option<SubMenu>>> = Lazy::new(default);

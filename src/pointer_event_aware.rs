@@ -23,9 +23,11 @@ pub trait PointerEventAware: RawElWrapper {
         handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
+            let system_id_holder = Mutable::new(None);
             raw_el
-                .with_entity(move |mut entity| {
+                .with_entity(clone!((system_id_holder) move |mut entity| {
                     let system = entity.world_scope(|world| world.register_system(handler));
+                    system_id_holder.set(Some(system));
                     if let Some(mut hoverable) = entity.get_mut::<Hoverable>() {
                         hoverable.systems.push(system);
                     } else {
@@ -34,9 +36,14 @@ pub trait PointerEventAware: RawElWrapper {
                             is_hovered: false,
                         });
                     }
+                }))
+                .on_remove(move |world, _| {
+                    if let Some(system) = system_id_holder.get() {
+                        world.commands().add(move |world: &mut World| {
+                            let _ = world.remove_system(system);
+                        })
+                    }
                 })
-                // TODO: bevy 0.14, remove the system
-                // .on_remove
                 .insert(Pickable::default())
         })
     }
@@ -52,7 +59,10 @@ pub trait PointerEventAware: RawElWrapper {
     }
 
     /// Run a system when this element is clicked.
-    fn on_click_with_system<Marker>(self, handler: impl IntoSystem<(), (), Marker>) -> Self {
+    fn on_click_with_system<Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, Pointer<Click>), (), Marker> + Send + 'static,
+    ) -> Self {
         self.update_raw_el(|raw_el| {
             raw_el
                 .insert(Pickable::default())
@@ -60,35 +70,16 @@ pub trait PointerEventAware: RawElWrapper {
         })
     }
 
-    /// When this element is clicked, run a function with access to the click event, reactively
-    /// controlling whether the click bubbles up the hierarchy.
-    fn on_click_event_propagation_stoppable(
-        self,
-        handler: impl FnMut(&Pointer<Click>) + Send + Sync + 'static,
-        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        self.update_raw_el(|raw_el| {
-            raw_el
-                .insert(Pickable::default())
-                .on_event_propagation_stoppable::<Pointer<Click>>(handler, propagation_stopped)
-        })
-    }
-
-    /// When this element is clicked, run a function with access to the click event.
-    fn on_click_event(self, mut handler: impl FnMut(&Pointer<Click>) + Send + Sync + 'static) -> Self {
-        self.update_raw_el(|raw_el| {
-            raw_el
-                .insert(Pickable::default())
-                .on_event::<Pointer<Click>>(move |listener| handler(&*listener))
-        })
-    }
-
     /// Run a function when this element is clicked.
     fn on_click(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.on_click_event(move |click| {
-            if matches!(click.button, PointerButton::Primary) {
-                handler()
-            }
+        self.update_raw_el(|raw_el| {
+            raw_el
+                .insert(Pickable::default())
+                .on_event::<Pointer<Click>>(move |click| {
+                    if matches!(click.button, PointerButton::Primary) {
+                        handler()
+                    }
+                })
         })
     }
 
@@ -99,7 +90,18 @@ pub trait PointerEventAware: RawElWrapper {
         mut handler: impl FnMut() + Send + Sync + 'static,
         propagation_stopped: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.on_click_event_propagation_stoppable(move |_| handler(), propagation_stopped)
+        self.update_raw_el(|raw_el| {
+            raw_el
+                .insert(Pickable::default())
+                .on_event_propagation_stoppable_with_signal::<Pointer<Click>>(
+                    move |click| {
+                        if matches!(click.button, PointerButton::Primary) {
+                            handler()
+                        }
+                    },
+                    propagation_stopped,
+                )
+        })
     }
 
     /// Run a function when this element is clicked, stopping the click from bubbling up the
@@ -110,10 +112,14 @@ pub trait PointerEventAware: RawElWrapper {
 
     /// Run a function when this element is right clicked.
     fn on_right_click(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.on_click_event(move |click| {
-            if matches!(click.button, PointerButton::Secondary) {
-                handler()
-            }
+        self.update_raw_el(|raw_el| {
+            raw_el
+                .insert(Pickable::default())
+                .on_event::<Pointer<Click>>(move |click| {
+                    if matches!(click.button, PointerButton::Secondary) {
+                        handler()
+                    }
+                })
         })
     }
 
@@ -144,7 +150,10 @@ pub trait PointerEventAware: RawElWrapper {
 
     /// When this element's pressed state changes, run a system which takes [`In`](`System::In`)
     /// this node's [`Entity`] and its current pressed state, reactively controlling whether the
-    /// press is blocked.
+    /// press is blocked. Critically note that this blocking is *NOT* frame perfect, i.e. the
+    /// handler is not guaranteed to not run in the same frame the [`Signal`] outputs `true` and
+    /// thus should not be used for situations where spurious calls to the `handler` are
+    /// intolerable; see (`Self::on_pressed_`)
     fn on_pressed_change_blockable_with_system<Marker>(
         self,
         handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
@@ -163,7 +172,7 @@ pub trait PointerEventAware: RawElWrapper {
                     Pressable(system_holder.get().unwrap())
                 }))
                 .insert(Pickable::default())
-                .on_event_with_system::<Pointer<Down>, _>(clone!((down) move |pointer_down: Listener<Pointer<Down>>| if matches!(pointer_down.button, PointerButton::Primary) { down.set_neq(true) }))
+                .on_event::<Pointer<Down>>(clone!((down) move |pointer_down: Pointer<Down>| if matches!(pointer_down.button, PointerButton::Primary) { down.set_neq(true) }))
                 // .on_global_event_with_system::<Pointer<Up>, _>(move |pointer_up: Listener<Pointer<Up>>| if matches!(pointer_up.button, PointerButton::Primary) { down.set_neq(false) })
             })
         // TODO: this isn't the desired behavior, press should linger outside and instead `Up` should trigger even outside of element (like the `.on_global_event_with_system` commented out above), requires being able to register multiple event listeners per event type
@@ -339,9 +348,8 @@ pub trait Cursorable: PointerEventAware {
         self.update_raw_el(|raw_el| {
             raw_el
                 .insert(Pickable::default())
-                .on_event_with_system::<Pointer<Over>, _>(
-                    move |mut cursors: EventWriter<CursorEvent>, mut event: ListenerMut<Pointer<Over>>| {
-                        event.stop_propagation();
+                .on_event_with_system_stop_propagation::<Pointer<Over>, _>(
+                    move |_: In<_>, mut cursors: EventWriter<CursorEvent>| {
                         cursors.send(CursorEvent(cursor_option));
                     },
                 )
@@ -383,7 +391,7 @@ pub trait Cursorable: PointerEventAware {
                 raw_el
                     .insert(Pickable::default())
                     .hold_tasks([cursor_sender])
-                    .on_event_propagation_stoppable::<Pointer<Over>>(
+                    .on_event_propagation_stoppable_with_signal::<Pointer<Over>>(
                         clone!((over) move |_| over.set(true)),
                         signal::not(disabled.signal()),
                     )
@@ -475,21 +483,17 @@ fn cursor_setter(
     }
 }
 
-pub(crate) struct PointerEventAwarePlugin;
-
-impl Plugin for PointerEventAwarePlugin {
-    fn build(&self, app: &mut App) {
-        app.add_event::<CursorEvent>().add_systems(
-            Update,
-            (
-                pressable_system.run_if(any_with_component::<Pressable>),
-                update_hover_states.run_if(
-                    any_with_component::<Hoverable>
-                        // TODO: apparently this updates every no matter what, if so, remove this condition
-                        .and_then(resource_exists_and_changed::<bevy_mod_picking::focus::HoverMap>),
-                ),
-                cursor_setter.run_if(on_event::<CursorEvent>()),
+pub(super) fn plugin(app: &mut App) {
+    app.add_event::<CursorEvent>().add_systems(
+        Update,
+        (
+            pressable_system.run_if(any_with_component::<Pressable>),
+            update_hover_states.run_if(
+                any_with_component::<Hoverable>
+                    // TODO: apparently this updates every no matter what, if so, remove this condition
+                    .and_then(resource_exists_and_changed::<bevy_mod_picking::focus::HoverMap>),
             ),
-        );
-    }
+            cursor_setter.run_if(on_event::<CursorEvent>()),
+        ),
+    );
 }

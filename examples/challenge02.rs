@@ -199,7 +199,7 @@ fn icon_sheet() -> &'static RpgIconSheet {
 
 #[derive(AssetCollection, Resource, Clone, Debug)]
 struct RpgIconSheet {
-    #[asset(texture_atlas(tile_size_x = 48., tile_size_y = 48., columns = 10, rows = 27))]
+    #[asset(texture_atlas(tile_size_x = 48, tile_size_y = 48, columns = 10, rows = 27))]
     layout: Handle<TextureAtlasLayout>,
     #[asset(image(sampler = nearest))]
     #[asset(path = "rpg_icon_sheet.png")]
@@ -212,11 +212,17 @@ fn icon(
 ) -> Stack<NodeBundle> {
     Stack::new()
         .layer(
-            El::<AtlasImageBundle>::new()
+            El::<ImageBundle>::new()
                 .image(UiImage::from(icon_sheet().image.clone()))
-                .texture_atlas(TextureAtlas::from(icon_sheet().layout.clone()))
-                // TODO: fix grey flash when inserting into an empty cell, making the index static does not suffice
-                .on_signal_with_texture_atlas(index_signal, |mut image, index| image.index = index),
+                .update_raw_el(|raw_el| {
+                    raw_el
+                        .insert(TextureAtlas::from(icon_sheet().layout.clone()))
+                        // TODO: fix grey flash when inserting into an empty cell, making the index static does not
+                        // suffice
+                        .on_signal_with_component(index_signal, |mut texture_atlas: Mut<TextureAtlas>, index| {
+                            texture_atlas.index = index;
+                        })
+                }),
         )
         .layer(
             El::<TextBundle>::new()
@@ -360,7 +366,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                 let is_dragging = is_dragging() => {
                     if *is_dragging {
                         CursorIcon::Grabbing
-                    } else if *populated{
+                    } else if *populated {
                         CursorIcon::Grab
                     } else {
                         CursorIcon::Default

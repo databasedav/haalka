@@ -27,9 +27,9 @@ fn main() {
         .run();
 }
 
-const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
-const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
-const CLICKED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
+const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
+const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
+const CLICKED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
 const BUTTON_WIDTH: Val = Val::Px(250.);
 const BUTTON_HEIGHT: Val = Val::Px(65.);
 
@@ -59,7 +59,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
             .signal()
             .map(|(selected, hovered)| {
                 if selected {
-                    Color::RED
+                    bevy::color::palettes::basic::RED.into()
                 } else if hovered {
                     Color::WHITE
                 } else {
@@ -96,7 +96,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
             shape.to_string(),
             TextStyle {
                 font_size: 40.0,
-                color: Color::rgb(0.9, 0.9, 0.9),
+                color: Color::srgb(0.9, 0.9, 0.9),
                 ..default()
             },
         )))
@@ -143,7 +143,7 @@ fn ui_root(world: &mut World) {
                                 .placeholder(
                                     Placeholder::new()
                                         .text("name")
-                                        .attrs(TextAttrs::new().color(Color::GRAY)),
+                                        .attrs(TextAttrs::new().color(bevy::color::palettes::basic::GRAY)),
                                 )
                                 .focus_signal(focused.signal())
                                 .focused_sync(focused)
@@ -202,7 +202,7 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>
         .apply(spawn)
         .detach();
     commands.spawn(PbrBundle {
-        material: materials.add(Color::rgb_u8(87, 108, 50)),
+        material: materials.add(Color::srgb_u8(87, 108, 50)),
         transform: Transform::from_xyz(-1., 0., 1.),
         ..default()
     });

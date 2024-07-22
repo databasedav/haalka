@@ -20,8 +20,8 @@ fn main() {
 
 const SIZE: usize = 110; // SIZE^2 buttons
 const FONT_SIZE: f32 = 7.0;
-const HOVERED_COLOR: Color = Color::rgb(0.25, 0.25, 0.25);
-const PRESSED_COLOR: Color = Color::rgb(0.35, 0.75, 0.35);
+const HOVERED_COLOR: Color = Color::srgb(0.25, 0.25, 0.25);
+const PRESSED_COLOR: Color = Color::srgb(0.35, 0.75, 0.35);
 
 fn button(i: usize, j: usize) -> RawHaalkaEl {
     let color = as_rainbow(j % i.max(1));
@@ -60,7 +60,7 @@ fn button(i: usize, j: usize) -> RawHaalkaEl {
             format!("{i} {j}"),
             TextStyle {
                 font_size: FONT_SIZE,
-                color: Color::rgb(0.2, 0.2, 0.2),
+                color: Color::srgb(0.2, 0.2, 0.2),
                 ..default()
             },
         )))

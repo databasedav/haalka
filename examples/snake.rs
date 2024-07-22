@@ -65,9 +65,9 @@ fn main() {
 const STARTING_SIZE: usize = 20;
 const SIDE: usize = 720; // TODO: reactively auto fit to height
 const WIDTH: usize = 1280; // TODO: reactively auto fit to height
-const EMPTY_COLOR: Color = Color::rgb(91. / 255., 206. / 255., 250. / 255.);
-const SNAKE_COLOR: Color = Color::rgb(245. / 255., 169. / 255., 184. / 255.);
-const FOOD_COLOR: Color = Color::rgb(255. / 255., 255. / 255., 255. / 255.);
+const EMPTY_COLOR: Color = Color::srgb(91. / 255., 206. / 255., 250. / 255.);
+const SNAKE_COLOR: Color = Color::srgb(245. / 255., 169. / 255., 184. / 255.);
+const FOOD_COLOR: Color = Color::srgb(255. / 255., 255. / 255., 255. / 255.);
 const STARTING_TICKS_PER_SECOND: u32 = 10;
 
 #[derive(Resource)]
@@ -215,7 +215,7 @@ fn restart_button() -> impl Element {
         .background_color_signal(
             hovered
                 .signal()
-                .map_bool(|| Color::GRAY, || Color::BLACK)
+                .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
                 .map(BackgroundColor),
         )
         .hovered_sync(hovered)

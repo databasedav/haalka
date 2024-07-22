@@ -43,14 +43,10 @@ cfg_if::cfg_if! {
             viewport_mutable::ViewportMutable,
         };
 
-        use pointer_event_aware::{PointerEventAwarePlugin};
-        use scrollable::ScrollablePlugin;
-
         cfg_if::cfg_if! {
             if #[cfg(feature = "text_input")] {
                 /// Reactive text input widget and adjacent utilities, a thin wrapper around [`bevy_cosmic_edit`] integrated with [`Signal`](futures_signals::signal::Signal)s.
                 pub mod text_input;
-                use text_input::TextInputPlugin;
             }
         }
     }
@@ -88,10 +84,10 @@ impl Plugin for HaalkaPlugin {
             if !app.is_plugin_added::<bevy_mod_picking::backends::bevy_ui::BevyUiBackend>() {
                 app.add_plugins(bevy_mod_picking::backends::bevy_ui::BevyUiBackend);
             }
-            app.add_plugins((PointerEventAwarePlugin, ScrollablePlugin));
+            app.add_plugins((pointer_event_aware::plugin, scrollable::plugin));
         }
         #[cfg(feature = "text_input")]
-        app.add_plugins(TextInputPlugin);
+        app.add_plugins(text_input::plugin);
 
         app.add_systems(PreStartup, init_async_world);
     }

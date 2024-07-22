@@ -1,4 +1,5 @@
 use std::{
+    convert::identity,
     future::Future,
     mem,
     ops::Not,
@@ -6,7 +7,15 @@ use std::{
 };
 
 use async_lock;
-use bevy::{prelude::*, tasks::Task};
+use bevy::{
+    ecs::{
+        component::{ComponentHooks, StorageType},
+        system::SystemId,
+        world::DeferredWorld,
+    },
+    prelude::*,
+    tasks::Task,
+};
 use bevy_eventlistener::prelude::*;
 use enclose::enclose as clone;
 use futures_signals::{
@@ -119,6 +128,11 @@ impl RawHaalkaEl {
         self.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn))
     }
 
+    /// Keep a cloneable thread-safe handle to this element's [`Entity`].
+    pub fn entity_handle(self, handle: Mutable<Entity>) -> Self {
+        self.on_spawn(clone!((handle) move |_, entity| handle.set(entity)))
+    }
+
     /// Add a [`Bundle`] of components to this element.
     pub fn insert<B: Bundle>(self, bundle: B) -> Self {
         self.update_node_builder(|node_builder| node_builder.insert(bundle))
@@ -192,16 +206,17 @@ impl RawHaalkaEl {
         })
     }
 
-    // TODO: requires bevy 0.14
-    // pub fn on_remove(self, on_remove: impl FnOnce(&mut World, Entity) + Send + Sync + 'static) ->
-    // Self { self.on_spawn(|world, entity| {
-    //         if let Some(mut on_remove_component) = world.entity_mut(entity).get_mut::<OnRemove>() {
-    //             on_remove_component.0.push(Box::new(on_remove));
-    //         } else {
-    //             world.entity_mut(entity).insert(OnRemove(vec![Box::new(on_remove)]));
-    //         }
-    //     })
-    // }
+    /// When this element is despawned, run a function with mutable access to the [`DeferredWorld`]
+    /// and this element's [`Entity`].
+    pub fn on_remove(self, on_remove: impl FnOnce(&mut DeferredWorld, Entity) + Send + Sync + 'static) -> Self {
+        self.on_spawn(|world, entity| {
+            if let Some(mut on_remove_component) = world.entity_mut(entity).get_mut::<OnRemove>() {
+                on_remove_component.0.push(Box::new(on_remove));
+            } else {
+                world.entity_mut(entity).insert(OnRemove(vec![Box::new(on_remove)]));
+            }
+        })
+    }
 
     /// Reactively run a [`Future`]-returning function with this element's [`Entity`] and the output
     /// of the [`Signal`].
@@ -441,101 +456,198 @@ impl RawHaalkaEl {
         })
     }
 
-    /// Run a [`System`] when this element receives an `E` [`EntityEvent`].
-    pub fn on_event_with_system<E: EntityEvent, Marker>(self, handler: impl IntoSystem<(), (), Marker>) -> Self {
-        self.insert(On::<E>::run(handler))
-    }
-
-    /// Run a [`System`] when this element receives an `E` [`EntityEvent`], reactively disabling
-    /// this handling.
-    pub fn on_event_with_system_disableable<E: EntityEvent, Marker>(
+    pub fn on_event_with_system_disableable_propagation_stoppable<E: EntityEvent, Marker1, Marker2, Marker3>(
         self,
-        handler: impl IntoSystem<(), (), Marker> + Send + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
+        handler: impl IntoSystem<(Entity, E), (), Marker1> + Send + 'static,
+        disabled: impl IntoSystem<Entity, bool, Marker2> + Send + 'static,
+        propagation_stopped: impl IntoSystem<(Entity, E), bool, Marker3> + Send + 'static,
     ) -> Self {
         let system_holder = Mutable::new(None);
+        self
+            .with_entity(clone!((system_holder) move |mut entity| {
+                let (handler, disabled, propagation_stopped) = entity.world_scope(|world| (world.register_system(handler), world.register_system(disabled), world.register_system(propagation_stopped)));
+                system_holder.set(Some((handler, disabled, propagation_stopped)));
+                let id = entity.id();
+                entity.insert(
+                    On::<E>::run(move |world: &mut World| {
+                        if world.run_system_with_input(disabled, id).ok() == Some(false) {
+                            let Some(event) = world.get_resource_mut::<ListenerInput<E>>().map(|event| (**event).clone()) else { return };
+                            let _ = world.run_system_with_input(handler, (id, event.clone()));
+                            if world.run_system_with_input(propagation_stopped, (id, event)).ok() == Some(true) {
+                                if let Some(mut event) = world.get_resource_mut::<ListenerInput<E>>() {
+                                    event.stop_propagation();
+                                }
+                            }
+                        }
+                    })
+                );
+            }))
+            .on_remove(move |world, _| {
+                if let Some((handler, disabled, propagation_stopped)) = system_holder.get() {
+                    world.commands().add(move |world: &mut World| {
+                        let _ = world.remove_system(handler);
+                        let _ = world.remove_system(disabled);
+                        let _ = world.remove_system(propagation_stopped);
+                    })
+                }
+            })
+    }
+
+    /// Run a [`System`] when this element receives an `E` [`EntityEvent`].
+    pub fn on_event_with_system<E: EntityEvent, Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, E), (), Marker> + Send + 'static,
+    ) -> Self {
+        self.on_event_with_system_disableable_propagation_stoppable::<E, _, _, _>(
+            handler,
+            |_: In<_>| false,
+            |_: In<_>| false,
+        )
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], if the `disabled` [`System`] returns
+    /// `false`, run a `handler` [`System`]; both systems are passed this element's [`Entity`].
+    pub fn on_event_with_system_disableable<E: EntityEvent, Marker1, Marker2>(
+        self,
+        handler: impl IntoSystem<(Entity, E), (), Marker1> + Send + 'static,
+        disabled: impl IntoSystem<Entity, bool, Marker2> + Send + 'static,
+    ) -> Self {
+        self.on_event_with_system_disableable_propagation_stoppable::<E, _, _, _>(handler, disabled, |_: In<_>| false)
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a `handler` [`System`] with this
+    /// element's [`Entity`], reactively controlling whether this handling is disabled with a
+    /// [`Signal`]. Critically note that this disabling is not frame perfect, e.g. you should
+    /// not expect the handler to be disabled the same frame that the [`Signal`] outputs `true`.
+    /// If you needs frame perfect disabling, use
+    /// [`.on_event_with_system_disableable`](Self::on_event_with_system_disableable).
+    pub fn on_event_with_system_disableable_with_signal<E: EntityEvent, Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, E), (), Marker> + Send + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
         let disabled_mutable = Mutable::new(false);
         let syncer = spawn(sync_neq(disabled, disabled_mutable.clone()));
         self.hold_tasks([syncer])
-            .on_spawn(clone!((system_holder) move |world, _| {
-                let system = world.register_system(handler);
-                system_holder.set(Some(system));
-            }))
-            .insert(On::<E>::run(move |world: &mut World| {
-                if disabled_mutable.get().not() {
-                    let _ = world.run_system(system_holder.get().unwrap());
-                }
-            }))
+            .on_event_with_system_disableable::<E, _, _>(handler, move |_: In<_>| disabled_mutable.get())
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], if the `disabled` [`System`] returns
+    /// `false`, run a `handler` [`System`]; both systems are passed this element's [`Entity`].
+    pub fn on_event_with_system_propagation_stoppable<E: EntityEvent, Marker1, Marker2>(
+        self,
+        handler: impl IntoSystem<(Entity, E), (), Marker1> + Send + 'static,
+        propagation_stopped: impl IntoSystem<(Entity, E), bool, Marker2> + Send + 'static,
+    ) -> Self {
+        self.on_event_with_system_disableable_propagation_stoppable::<E, _, _, _>(
+            handler,
+            |_: In<_>| false,
+            propagation_stopped,
+        )
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a `handler` [`System`] with this
+    /// element's [`Entity`], reactively controlling whether this handling is disabled with a
+    /// [`Signal`]. Critically note that this disabling is not frame perfect, e.g. you should
+    /// not expect the handler to be disabled the same frame that the [`Signal`] outputs `true`.
+    /// If you needs frame perfect disabling, use
+    /// [`.on_event_with_system_disableable`](Self::on_event_with_system_disableable).
+    pub fn on_event_with_system_propagation_stoppable_with_signal<E: EntityEvent, Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, E), (), Marker> + Send + 'static,
+        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        let propagation_stopped_mutable = Mutable::new(false);
+        let syncer = spawn(sync_neq(propagation_stopped, propagation_stopped_mutable.clone()));
+        self.hold_tasks([syncer])
+            .on_event_with_system_propagation_stoppable::<E, _, _>(handler, move |_: In<_>| {
+                propagation_stopped_mutable.get()
+            })
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
+    /// data, stopping the event from bubbling up the hierarchy.
+    pub fn on_event_with_system_stop_propagation<E: EntityEvent, Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, E), (), Marker> + Send + 'static,
+    ) -> Self {
+        self.on_event_with_system_propagation_stoppable::<E, _, _>(handler, |_: In<_>| true)
     }
 
     /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
     /// data.
-    pub fn on_event<E: EntityEvent>(self, mut handler: impl FnMut(Listener<E>) + Send + Sync + 'static) -> Self {
-        self.on_event_with_system::<E, _>(move |event: Listener<E>| handler(event))
+    pub fn on_event<E: EntityEvent>(self, mut handler: impl FnMut(E) + Send + Sync + 'static) -> Self {
+        self.on_event_with_system::<E, _>(move |In((_, event))| handler(event))
     }
 
     /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
     /// data, reactively disabling this handling.
-    pub fn on_event_disableable<E: EntityEvent>(
+    pub fn on_event_disableable<E: EntityEvent, Marker>(
         self,
-        mut handler: impl FnMut(Listener<E>) + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
+        mut handler: impl FnMut(E) + Send + Sync + 'static,
+        disabled: impl IntoSystem<Entity, bool, Marker> + Send + 'static,
     ) -> Self {
-        self.on_event_with_system_disableable::<E, _>(move |event: Listener<E>| handler(event), disabled)
+        self.on_event_with_system_disableable::<E, _, _>(move |In((_, event))| handler(event), disabled)
     }
 
-    /// When this element receives an `E` [`EntityEvent`], run a function with mutable access to the
-    /// event's data.
-    pub fn on_event_mut<E: EntityEvent>(self, mut handler: impl FnMut(ListenerMut<E>) + Send + Sync + 'static) -> Self {
-        self.on_event_with_system::<E, _>(move |event: ListenerMut<E>| handler(event))
-    }
-
-    /// When this element receives an `E` [`EntityEvent`], run a function with mutable access to the
-    /// event's data, reactively disabling this handling.
-    pub fn on_event_mut_disableable<E: EntityEvent>(
+    pub fn on_event_disableable_with_signal<E: EntityEvent>(
         self,
-        mut handler: impl FnMut(ListenerMut<E>) + Send + Sync + 'static,
+        mut handler: impl FnMut(E) + Send + Sync + 'static,
         disabled: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.on_event_with_system_disableable::<E, _>(move |event: ListenerMut<E>| handler(event), disabled)
+        self.on_event_with_system_disableable_with_signal::<E, _>(move |In((_, event))| handler(event), disabled)
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
+    /// data, reactively controlling whether the event bubbles up the hierarchy.
+    pub fn on_event_propagation_stoppable<E: EntityEvent, Marker>(
+        self,
+        mut handler: impl FnMut(E) + Send + Sync + 'static,
+        propagation_stopped: impl IntoSystem<(Entity, E), bool, Marker> + Send + 'static,
+    ) -> Self {
+        self.on_event_with_system_propagation_stoppable(move |In((_, event))| handler(event), propagation_stopped)
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
+    /// data, reactively controlling whether the event bubbles up the hierarchy.
+    pub fn on_event_propagation_stoppable_with_signal<E: EntityEvent>(
+        self,
+        mut handler: impl FnMut(E) + Send + Sync + 'static,
+        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.on_event_with_system_propagation_stoppable_with_signal(
+            move |In((_, event))| handler(event),
+            propagation_stopped,
+        )
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
+    /// data, stopping the event from bubbling up the hierarchy.
+    pub fn on_event_stop_propagation<E: EntityEvent>(self, handler: impl FnMut(E) + Send + Sync + 'static) -> Self {
+        self.on_event_propagation_stoppable::<E, _>(handler, |_: In<_>| true)
     }
 
     /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
     /// data, reactively controlling whether the event bubbles up the hierarchy and reactively
     /// disabling this handling.
-    pub fn on_event_propagation_stoppable_disableable<E: EntityEvent>(
+    pub fn on_event_disableable_propagation_stoppable_with_signal<E: EntityEvent>(
         self,
-        mut handler: impl FnMut(&E) + Send + Sync + 'static,
-        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
+        mut handler: impl FnMut(E) + Send + Sync + 'static,
         disabled: impl Signal<Item = bool> + Send + 'static,
+        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
         let propagation_stopped_mutable = Mutable::new(false);
-        let syncer = spawn(sync_neq(propagation_stopped, propagation_stopped_mutable.clone()));
-        self.hold_tasks([syncer]).on_event_mut_disableable::<E>(
-            move |mut event| {
-                if propagation_stopped_mutable.get() {
-                    event.stop_propagation();
-                }
-                handler(&**event);
-            },
-            disabled,
-        )
-    }
-
-    /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
-    /// data, reactively controlling whether the event bubbles up the hierarchy.
-    pub fn on_event_propagation_stoppable<E: EntityEvent>(
-        self,
-        handler: impl FnMut(&E) + Send + Sync + 'static,
-        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        self.on_event_propagation_stoppable_disableable(handler, propagation_stopped, always(false))
-    }
-
-    /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
-    /// data, stopping the event from bubbling up the hierarchy.
-    pub fn on_event_stop_propagation<E: EntityEvent>(self, handler: impl FnMut(&E) + Send + Sync + 'static) -> Self {
-        self.on_event_propagation_stoppable::<E>(handler, always(true))
+        let disabled_mutable = Mutable::new(false);
+        let syncers = [
+            spawn(sync_neq(disabled, disabled_mutable.clone())),
+            spawn(sync_neq(propagation_stopped, propagation_stopped_mutable.clone())),
+        ];
+        self.hold_tasks(syncers)
+            .on_event_with_system_disableable_propagation_stoppable::<E, _, _, _>(
+                move |In((_, event))| handler(event),
+                move |_: In<_>| disabled_mutable.get(),
+                move |_: In<_>| propagation_stopped_mutable.get(),
+            )
     }
 
     /// Declare a static child.
@@ -590,20 +702,25 @@ impl RawHaalkaEl {
     }
 }
 
-// struct OnRemove(Vec<Box<dyn FnOnce(&mut World, Entity) + Send + Sync + 'static>>);
+struct OnRemove(Vec<Box<dyn FnOnce(&mut DeferredWorld, Entity) + Send + Sync + 'static>>);
 
-// TODO: requires bevy 0.14
-// impl Component for OnRemove {
-//     const STORAGE_TYPE: StorageType = StorageType::Table;
+impl Component for OnRemove {
+    const STORAGE_TYPE: StorageType = StorageType::Table;
 
-//     fn register_component_hooks(hooks: &mut ComponentHooks) {
-//         hooks.on_remove.(|mut world, entity, component_id| {
-//             for f in world.get_mut::<OnRemove>(entity).unwrap().0.drain(..) {
-//                 f(&mut world, entity);
-//             }
-//         })
-//     }
-// }
+    fn register_component_hooks(hooks: &mut ComponentHooks) {
+        hooks.on_remove(|mut world, entity, _| {
+            let fs = world
+                .get_mut::<OnRemove>(entity)
+                .unwrap()
+                .0
+                .drain(..)
+                .collect::<Vec<_>>();
+            for f in fs {
+                f(&mut world, entity);
+            }
+        });
+    }
+}
 
 /// Thin wrapper trait around [`RawHaalkaEl`] to allow consumers to target custom types when
 /// composing [`RawHaalkaEl`]s.

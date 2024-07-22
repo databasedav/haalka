@@ -88,7 +88,7 @@ fn setup(
 ) {
     commands.spawn(PbrBundle {
         mesh: meshes.add(Plane3d::default().mesh().size(50.0, 50.0)),
-        material: materials.add(Color::rgb_u8(87, 108, 50)),
+        material: materials.add(Color::srgb_u8(87, 108, 50)),
         ..default()
     });
     commands.spawn(PointLightBundle {
@@ -173,7 +173,7 @@ fn healthbar(
                 .width_signal(percent_health.signal().map(|ph| ph * 100.).map(Val::Percent))
                 .background_color_signal(percent_health.signal().map(move |percent_health| {
                     let [r, g, b, ..] = color_gradient.at(percent_health as f64).to_rgba8();
-                    Color::rgb_u8(r, g, b).into()
+                    Color::srgb_u8(r, g, b).into()
                 })),
         )
         .layer(
@@ -220,7 +220,7 @@ fn spawn_player(
                 ..default()
             })),
             transform: Transform::from_translation(PLAYER_POSITION),
-            material: materials.add(Color::rgb_u8(228, 147, 58)),
+            material: materials.add(Color::srgb_u8(228, 147, 58)),
             ..default()
         },
     ));
@@ -236,7 +236,7 @@ fn respawn_button() -> impl Element {
         .background_color_signal(
             hovered
                 .signal()
-                .map_bool(|| Color::GRAY, || Color::BLACK)
+                .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
                 .map(BackgroundColor),
         )
         .hovered_sync(hovered)

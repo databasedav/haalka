@@ -141,7 +141,7 @@ fn text_input(
         .fill_color_signal(
             focus
                 .signal()
-                .map_bool(|| Color::DARK_GRAY, || Color::WHITE)
+                .map_bool(|| bevy::color::palettes::css::DARK_GRAY.into(), || Color::WHITE)
                 .map(CosmicBackgroundColor),
         )
         .attrs(TextAttrs::new().color_signal(focus.signal().map_bool(|| Color::WHITE, || Color::BLACK).map(Some)))
@@ -189,7 +189,7 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
                 .height(Val::Px(80.))
                 .background_color_signal(
                     signal::or(hovered.signal(), selected.signal())
-                        .map_bool(|| Color::GRAY, || Color::BLACK)
+                        .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
                         .map(BackgroundColor),
                 )
                 .hovered_sync(hovered)
@@ -342,8 +342,11 @@ fn x_button() -> impl Element + PointerEventAware {
         .background_color_signal(
             hovered
                 .signal()
-                .map_bool(|| Color::RED, || Color::DARK_GRAY)
-                .map(BackgroundColor),
+                .map_bool(
+                    || bevy::color::palettes::basic::RED,
+                    || bevy::color::palettes::css::DARK_GRAY,
+                )
+                .map(BackgroundColor::from),
         )
         .hovered_sync(hovered)
         .child(
@@ -391,8 +394,11 @@ fn ui_root(world: &mut World) {
                                 .background_color_signal(
                                     hovered
                                         .signal()
-                                        .map_bool(|| Color::GREEN, || Color::DARK_GRAY)
-                                        .map(BackgroundColor),
+                                        .map_bool(
+                                            || bevy::color::palettes::basic::GREEN,
+                                            || bevy::color::palettes::css::DARK_GRAY,
+                                        )
+                                        .map(BackgroundColor::from),
                                 )
                                 .hovered_sync(hovered)
                                 .align_content(Align::center())
@@ -403,7 +409,7 @@ fn ui_root(world: &mut World) {
                                         ..default()
                                     },
                                 )))
-                                .on_click_with_system(|mut focused_widget: ResMut<CosmicFocusedWidget>| {
+                                .on_click_with_system(|_: In<_>, mut focused_widget: ResMut<CosmicFocusedWidget>| {
                                     focused_widget.0 = None; // TODO: shouldn't need this, can remove once https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
                                     clear_focus();
                                     PAIRS.lock_mut().push_cloned(RowData {
