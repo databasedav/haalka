@@ -2,7 +2,7 @@ use std::{future::Future, time::Duration};
 
 use apply::Apply;
 use bevy::{ecs::system::SystemId, prelude::*, window::PrimaryWindow};
-use bevy_mod_picking::prelude::*;
+use bevy_mod_picking::{prelude::*, picking_core::backend::HitData};
 use enclose::enclose as clone;
 use focus::HoverMap;
 use futures_signals::signal::{self, always, Mutable, Signal, SignalExt};
@@ -154,7 +154,32 @@ pub trait PointerEventAware: RawElWrapper {
     /// handler is not guaranteed to not run in the same frame the [`Signal`] outputs `true` and
     /// thus should not be used for situations where spurious calls to the `handler` are
     /// intolerable; see (`Self::on_pressed_`)
-    fn on_pressed_change_blockable_with_system<Marker>(
+    fn on_pressed_change_with_system_blockable<Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
+        blocked: impl IntoSystem<Entity, (), Marker> + Send + 'static,
+    ) -> Self {
+        let down = Mutable::new(false);
+        self.update_raw_el(|raw_el| {
+            let system_holder = Mutable::new(None);
+            raw_el
+                .on_spawn(clone!((system_holder) move |world, _| {
+                    let system = world.register_system(handler);
+                    system_holder.set(Some(system));
+                }))
+                .component_signal::<Pressable, _>(
+                    signal::and(system_holder.signal_ref(Option::is_some), signal::and(signal::not(blocked), down.signal())).dedupe().map_true(move || {
+                    Pressable(system_holder.get().unwrap())
+                }))
+                .insert(Pickable::default())
+                .on_event::<Pointer<Down>>(clone!((down) move |pointer_down: Pointer<Down>| if matches!(pointer_down.button, PointerButton::Primary) { down.set_neq(true) }))
+                // .on_global_event_with_system::<Pointer<Up>, _>(move |pointer_up: Listener<Pointer<Up>>| if matches!(pointer_up.button, PointerButton::Primary) { down.set_neq(false) })
+            })
+        // TODO: this isn't the desired behavior, press should linger outside and instead `Up` should trigger even outside of element (like the `.on_global_event_with_system` commented out above), requires being able to register multiple event listeners per event type
+        .on_hovered_change(move |is_hovered| if !is_hovered { down.set_neq(false) })
+    }
+
+    fn on_pressed_change_with_system_blockable_with_signal<Marker>(
         self,
         handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
@@ -185,7 +210,7 @@ pub trait PointerEventAware: RawElWrapper {
         self,
         handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
     ) -> Self {
-        self.on_pressed_change_blockable_with_system(handler, always(false))
+        self.on_pressed_change_with_system_blockable(handler, always(false))
     }
 
     // TODO: there's still problems with this, `Up` doesn't trigger outside of the element + pressable
@@ -199,7 +224,7 @@ pub trait PointerEventAware: RawElWrapper {
         mut handler: impl FnMut(bool) + Send + Sync + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.on_pressed_change_blockable_with_system(move |In((_, is_pressed))| handler(is_pressed), blocked)
+        self.on_pressed_change_with_system_blockable(move |In((_, is_pressed))| handler(is_pressed), blocked)
     }
 
     /// When this element's pressed state changes, run a function with its current pressed state.
@@ -279,13 +304,29 @@ struct Hoverable {
     is_hovered: bool,
 }
 
+/// Fires when a the pointer crosses into the bounds of the `target` entity, ignoring children.
+#[derive(Clone, PartialEq, Debug, Reflect)]
+pub struct Enter {
+    /// Information about the picking intersection.
+    pub hit: HitData,
+}
+
+/// Fires when a the pointer crosses out of the bounds of the `target` entity, excluding children.
+#[derive(Clone, PartialEq, Debug, Reflect)]
+pub struct Leave {
+    /// Information about the latest prior picking intersection.
+    pub hit: HitData,
+}
+
+// TODO: should emit Enter/Leave events instead, but chose not to do this yet because event listener yet to be migrated to observers, which would enable multiple listeners per event type
 fn update_hover_states(
     hover_map: Res<bevy_mod_picking::focus::HoverMap>,
     mut hoverables: Query<(Entity, &mut Hoverable)>,
     parent_query: Query<&Parent>,
     mut commands: Commands,
 ) {
-    let hover_set = hover_map.get(&PointerId::Mouse);
+    let pointer_id = PointerId::Mouse;
+    let hover_set = hover_map.get(&pointer_id);
     for (entity, mut hoverable) in hoverables.iter_mut() {
         let is_hovering = match hover_set {
             Some(map) => map
@@ -303,17 +344,22 @@ fn update_hover_states(
 }
 
 #[derive(Component)]
-struct Pressable(SystemId<(Entity, bool)>);
+struct Pressable {
+    handler: SystemId<(Entity, bool)>,
+    blocked: SystemId<Entity, bool>,
+}
 
 fn pressable_system(
     mut interaction_query: Query<(Entity, &PickingInteraction, &Pressable), Changed<PickingInteraction>>,
     mut commands: Commands,
 ) {
-    for (entity, interaction, pressable) in &mut interaction_query {
-        commands.run_system_with_input(
-            pressable.0,
-            (entity, matches!(interaction, PickingInteraction::Pressed)),
-        );
+    for (entity, interaction, &Pressable { handler, blocked }) in &mut interaction_query {
+        let pressed = matches!(interaction, PickingInteraction::Pressed);
+        commands.add(move |world: &mut World| {
+            if world.run_system_with_input(blocked, entity).ok() == Some(false) {
+                world.run_system_with_input(handler, (entity, pressed));
+            }
+        });
     }
 }
 

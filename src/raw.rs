@@ -10,7 +10,7 @@ use async_lock;
 use bevy::{
     ecs::{
         component::{ComponentHooks, StorageType},
-        system::SystemId,
+        system::{SystemId, IntoObserverSystem},
         world::DeferredWorld,
     },
     prelude::*,
@@ -128,10 +128,10 @@ impl RawHaalkaEl {
         self.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn))
     }
 
-    /// Keep a cloneable thread-safe handle to this element's [`Entity`].
-    pub fn entity_handle(self, handle: Mutable<Entity>) -> Self {
-        self.on_spawn(clone!((handle) move |_, entity| handle.set(entity)))
-    }
+    // /// Keep a cloneable thread-safe handle to this element's [`Entity`].
+    // pub fn entity_handle(self, handle: Mutable<Entity>) -> Self {
+    //     self.on_spawn(clone!((handle) move |_, entity| handle.set(entity)))
+    // }
 
     /// Add a [`Bundle`] of components to this element.
     pub fn insert<B: Bundle>(self, bundle: B) -> Self {
@@ -195,6 +195,10 @@ impl RawHaalkaEl {
                 f(component)
             }
         })
+    }
+
+    pub fn observe<E: Event, B: Bundle, M>(self, observer: impl IntoObserverSystem<E, B, M>) -> Self {
+        self.with_entity(|mut entity| { entity.observe(observer); })
     }
 
     /// Drop the [`Task`]s when the element is despawned.
