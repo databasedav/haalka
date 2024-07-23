@@ -10,7 +10,7 @@ use async_lock;
 use bevy::{
     ecs::{
         component::{ComponentHooks, StorageType},
-        system::{SystemId, IntoObserverSystem},
+        system::{IntoObserverSystem, SystemId},
         world::DeferredWorld,
     },
     prelude::*,
@@ -19,7 +19,7 @@ use bevy::{
 use bevy_eventlistener::prelude::*;
 use enclose::enclose as clone;
 use futures_signals::{
-    signal::{always, Mutable, Signal, SignalExt},
+    signal::{Mutable, Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
 
@@ -198,7 +198,9 @@ impl RawHaalkaEl {
     }
 
     pub fn observe<E: Event, B: Bundle, M>(self, observer: impl IntoObserverSystem<E, B, M>) -> Self {
-        self.with_entity(|mut entity| { entity.observe(observer); })
+        self.with_entity(|mut entity| {
+            entity.observe(observer);
+        })
     }
 
     /// Drop the [`Task`]s when the element is despawned.

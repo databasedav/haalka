@@ -63,6 +63,7 @@ fn button(font: Handle<Font>) -> impl Element {
         .align_content(Align::center())
         .border_color_signal(border_color_signal)
         .background_color_signal(background_color_signal)
+        .border_radius(BorderRadius::MAX)
         .hovered_sync(hovered)
         .pressed_sync(pressed)
         .child(
