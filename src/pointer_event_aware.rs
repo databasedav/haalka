@@ -284,20 +284,18 @@ pub trait PointerEventAware: RawElWrapper {
         mut handler: impl FnMut() + Send + Sync + 'static,
         duration: Duration,
     ) -> Self {
-        self.on_pressing_throttled(handler, move || sleep(duration))
-        // self.on_pressed_change_with_system(move |In((_, pressed)), mut timer_option: Local<Option<Timer>>, time: Res<Time>| {
-        //     if pressed {
-        //         if let Some(timer) = &mut *timer_option {
-        //             if !timer.tick(time.delta()).finished() {
-        //                 return
-        //             }
-        //         } else {
-        //             *timer_option = Some(Timer::new(duration, TimerMode::Repeating));
-        //         }
-        //         handler()
-        //     }
-            
-        // })
+        self.on_pressed_change_with_system(move |In((_, pressed)), mut timer_option: Local<Option<Timer>>, time: Res<Time>| {
+            if pressed {
+                if let Some(timer) = &mut *timer_option {
+                    if !timer.tick(time.delta()).finished() {
+                        return
+                    }
+                } else {
+                    *timer_option = Some(Timer::new(duration, TimerMode::Repeating));
+                }
+                handler()
+            }  
+        })
     }
 
     /// Sync a [`Mutable`] with this element's pressed state.

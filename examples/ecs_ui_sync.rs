@@ -121,7 +121,7 @@ fn incrde_button(value: Mutable<f32>, incr: f32) -> impl Element {
                 .map(BackgroundColor),
         )
         .hovered_sync(hovered)
-        .on_pressing_with_sleep_throttle(f, Duration::from_millis(100))
+        .on_pressing_with_sleep_throttle(f, Duration::from_millis(50))
         .child(El::<TextBundle>::new().text(text(if incr.is_sign_positive() { "+" } else { "-" })))
 }
 
