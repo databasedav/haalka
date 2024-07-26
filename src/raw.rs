@@ -128,10 +128,10 @@ impl RawHaalkaEl {
         self.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn))
     }
 
-    // /// Keep a cloneable thread-safe handle to this element's [`Entity`].
-    // pub fn entity_handle(self, handle: Mutable<Entity>) -> Self {
-    //     self.on_spawn(clone!((handle) move |_, entity| handle.set(entity)))
-    // }
+    /// Keep a cloneable thread-safe handle to this element's [`Entity`].
+    pub fn entity_handle(self, handle: Mutable<Entity>) -> Self {
+        self.on_spawn(clone!((handle) move |_, entity| handle.set(entity)))
+    }
 
     /// Add a [`Bundle`] of components to this element.
     pub fn insert<B: Bundle>(self, bundle: B) -> Self {
@@ -381,12 +381,11 @@ impl RawHaalkaEl {
         self.hold_tasks([spawn(clone!((system_holder) async move {
             system_holder.set(Some(async_world().register_io_system(system).await));
         }))])
-        // .on_remove(move |world, _| {
-        //     if let Some(system) = system_holder.take() {
-        //         // TODO: https://github.com/dlom/bevy-async-ecs/issues/5#issuecomment-2119180363
-        //         world.remove_system(system.id)
-        //     }
-        // })
+        .on_remove(clone!((system_holder) move |_, _| {
+            if let Some(system) = system_holder.lock_mut().take() {
+                spawn(system.unregister()).detach();
+            }
+        }))
         .on_signal(signal, move |entity, input| {
             clone!((system_holder, f) async move {
                 if system_holder.lock_ref().is_none() {
