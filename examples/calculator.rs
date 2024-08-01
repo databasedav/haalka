@@ -126,7 +126,7 @@ fn clear_button() -> impl Element {
             .dedupe()
             .map(BackgroundColor),
         )
-        .cursor_disableable(CursorIcon::Pointer, output_empty.signal())
+        .cursor_disableable_signal(CursorIcon::Pointer, output_empty.signal())
         .hovered_sync(hovered)
         .on_click(|| OUTPUT.lock_mut().clear())
 }

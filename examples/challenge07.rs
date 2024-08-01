@@ -95,7 +95,7 @@ fn button() -> El<NodeBundle> {
         .border_color_signal(border_color_signal)
         .background_color_signal(background_color_signal)
         .hovered_sync(hovered)
-        .cursor_disableable(CursorIcon::Grabbing, pressed.signal().dedupe())
+        .cursor_disableable_signal(CursorIcon::Grabbing, pressed.signal().dedupe())
         .pressed_sync(pressed)
 }
 

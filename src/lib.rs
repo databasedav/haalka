@@ -34,7 +34,7 @@ cfg_if::cfg_if! {
             element::{Element, ElementWrapper, IntoElement, IntoOptionElement, TypeEraseable, UiRoot, UiRootable, Nameable},
             grid::{Grid, GRID_TRACK_FLOAT_PRECISION_SLACK},
             node_builder::{async_world, NodeBuilder, TaskHolder},
-            pointer_event_aware::{PointerEventAware, Cursorable},
+            pointer_event_aware::{PointerEventAware, Cursorable, CursorDisabled},
             global_event_aware::GlobalEventAware,
             row::Row,
             scrollable::{BasicScrollHandler, HoverableScrollable, ScrollDirection, ScrollabilitySettings, Scrollable},

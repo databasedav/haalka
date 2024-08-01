@@ -71,6 +71,11 @@ path = "examples/button.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "calculator"
+path = "examples/calculator.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "challenge01"
 path = "examples/challenge01.rs"
 doc-scrape-examples = true
@@ -123,9 +128,4 @@ doc-scrape-examples = true
 [[example]]
 name = "snake"
 path = "examples/snake.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "calculator"
-path = "examples/calculator.rs"
 doc-scrape-examples = true

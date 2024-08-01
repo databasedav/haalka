@@ -218,7 +218,7 @@ fn icon(
                     raw_el
                         .insert(TextureAtlas::from(icon_sheet().layout.clone()))
                         // TODO: fix grey flash when inserting into an empty cell, making the index static does not
-                        // suffice
+                        // suffice; this might actually be the item label flashing on top before the frame it is moved
                         .on_signal_with_component(index_signal, |mut texture_atlas: Mut<TextureAtlas>, index| {
                             texture_atlas.index = index;
                         })
@@ -273,7 +273,8 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                     // the stack as it would immediately drop one down, so we track the `Down` state
                     signal::and(signal::not(down.signal()), hovered.signal()).dedupe()
                     .map_true(clone!((cell_data_option) move || {
-                        On::<Pointer<Click>>::run(clone!((cell_data_option => self_cell_data_option, stop_propagation_trigger) move |click: Listener<Pointer<Click>>| {
+                        On::<Pointer<Click>>::run(clone!((cell_data_option => self_cell_data_option, stop_propagation_trigger) move |click: Listener<Pointer<Click>>, mut commands: Commands| {
+                            println!("handling click");
                             let mut consume = false;
                             if let Some(dragging_cell_data_option) = &*DRAGGING_OPTION.lock_ref() {
                                 if self_cell_data_option.lock_ref().is_none() {
@@ -313,16 +314,17 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                 // propagate, before clearing the dragging cell data, which fires the `Over` event
                                 //
                                 // TODO: how can i address this more ergonomically? do bubbling observers help?
-                                let waiter = stop_propagation_trigger.signal().wait_for(true);
-                                async {
-                                    waiter.await;
+                                // let waiter = stop_propagation_trigger.signal().wait_for(true);
+                                // async {
+                                //     waiter.await;
                                     if let Some(cell_data_option) = DRAGGING_OPTION.take() {
                                         cell_data_option.take();
+                                        commands.entity(click.listener()).remove::<CursorDisabled>();
                                     }
-                                }
-                                .apply(spawn)
-                                .detach();
-                                stop_propagation_trigger.set_neq(true);
+                                // }
+                                // .apply(spawn)
+                                // .detach();
+                                // stop_propagation_trigger.set_neq(true);
                             }
                         }))
                     }))
@@ -333,6 +335,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                 signal::and(signal::not(is_dragging()), cell_data_option.signal_ref(Option::is_some)).dedupe()
                 .map_true(clone!((cell_data_option, down) move ||
                     On::<Pointer<Down>>::run(clone!((cell_data_option, down) move |pointer_down: Listener<Pointer<Down>>| {
+                        println!("handling down");
                         let to_drag_option = {
                             if pointer_down.button == PointerButton::Secondary {
                                 if let Some(cell_data) = &*cell_data_option.lock_ref() {
@@ -360,22 +363,23 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             )
         }))
         // alternative to the stop propagation trigger pattern, which is kinda/pretty cringe
-        .cursor_signal(
-            map_ref! {
-                let populated = cell_data_option.signal_ref(Option::is_some),
-                let is_dragging = is_dragging() => {
-                    if *is_dragging {
-                        CursorIcon::Grabbing
-                    } else if *populated {
-                        CursorIcon::Grab
-                    } else {
-                        CursorIcon::Default
-                    }
-                }
-            }
-        )
+        // .cursor_signal(
+        //     map_ref! {
+        //         let populated = cell_data_option.signal_ref(Option::is_some),
+        //         let is_dragging = is_dragging() => {
+        //             if *is_dragging {
+        //                 CursorIcon::Grabbing
+        //             } else if *populated {
+        //                 CursorIcon::Grab
+        //             } else {
+        //                 CursorIcon::Default
+        //             }
+        //         }
+        //     }
+        // )
+        // .cursor_disableable_signal(CursorIcon::Grab, stop_propagation_trigger.signal())
         // TODO: this is more idiomatic and should work, but it doesn't ... yet
-        // .cursor_disableable(CursorIcon::Grab, stop_propagation_trigger.signal())
+        .cursor_disableable_signal(CursorIcon::Grab, signal::or(cell_data_option.signal_ref(Option::is_none), is_dragging()))
         .hovered_sync(hovered.clone())
         .width(Val::Px(CELL_WIDTH))
         .height(Val::Px(CELL_WIDTH))
@@ -643,9 +647,9 @@ fn is_dragging() -> impl Signal<Item = bool> {
 
 fn ui_root(world: &mut World) {
     Stack::<NodeBundle>::new()
-        .cursor_disableable(CursorIcon::Default, is_dragging())
+        .cursor_disableable_signal(CursorIcon::Default, is_dragging())
         .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .height(Val::Percent(100.)) 
         .update_raw_el(|raw_el| {
             raw_el
                 .insert(On::<Pointer<Move>>::run(|move_: Listener<Pointer<Move>>| {

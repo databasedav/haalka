@@ -1,8 +1,6 @@
 use std::{
-    convert::identity,
     future::Future,
     mem,
-    ops::Not,
     sync::{Arc, Mutex},
 };
 
@@ -10,7 +8,7 @@ use async_lock;
 use bevy::{
     ecs::{
         component::{ComponentHooks, StorageType},
-        system::{IntoObserverSystem, SystemId},
+        system::IntoObserverSystem,
         world::DeferredWorld,
     },
     prelude::*,
@@ -476,7 +474,7 @@ impl RawHaalkaEl {
                 entity.insert(
                     On::<E>::run(move |world: &mut World| {
                         if world.run_system_with_input(disabled, id).ok() == Some(false) {
-                            let Some(event) = world.get_resource_mut::<ListenerInput<E>>().map(|event| (**event).clone()) else { return };
+                            let Some(event) = world.get_resource::<ListenerInput<E>>().map(|event| (**event).clone()) else { return };
                             let _ = world.run_system_with_input(handler, (id, event.clone()));
                             if world.run_system_with_input(propagation_stopped, (id, event)).ok() == Some(true) {
                                 if let Some(mut event) = world.get_resource_mut::<ListenerInput<E>>() {
@@ -526,7 +524,7 @@ impl RawHaalkaEl {
     /// not expect the handler to be disabled the same frame that the [`Signal`] outputs `true`.
     /// If you needs frame perfect disabling, use
     /// [`.on_event_with_system_disableable`](Self::on_event_with_system_disableable).
-    pub fn on_event_with_system_disableable_with_signal<E: EntityEvent, Marker>(
+    pub fn on_event_with_system_disableable_signal<E: EntityEvent, Marker>(
         self,
         handler: impl IntoSystem<(Entity, E), (), Marker> + Send + 'static,
         disabled: impl Signal<Item = bool> + Send + 'static,
@@ -557,7 +555,7 @@ impl RawHaalkaEl {
     /// not expect the handler to be disabled the same frame that the [`Signal`] outputs `true`.
     /// If you needs frame perfect disabling, use
     /// [`.on_event_with_system_disableable`](Self::on_event_with_system_disableable).
-    pub fn on_event_with_system_propagation_stoppable_with_signal<E: EntityEvent, Marker>(
+    pub fn on_event_with_system_propagation_stoppable_signal<E: EntityEvent, Marker>(
         self,
         handler: impl IntoSystem<(Entity, E), (), Marker> + Send + 'static,
         propagation_stopped: impl Signal<Item = bool> + Send + 'static,
@@ -595,12 +593,12 @@ impl RawHaalkaEl {
         self.on_event_with_system_disableable::<E, _, _>(move |In((_, event))| handler(event), disabled)
     }
 
-    pub fn on_event_disableable_with_signal<E: EntityEvent>(
+    pub fn on_event_disableable_signal<E: EntityEvent>(
         self,
         mut handler: impl FnMut(E) + Send + Sync + 'static,
         disabled: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.on_event_with_system_disableable_with_signal::<E, _>(move |In((_, event))| handler(event), disabled)
+        self.on_event_with_system_disableable_signal::<E, _>(move |In((_, event))| handler(event), disabled)
     }
 
     /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
@@ -615,12 +613,12 @@ impl RawHaalkaEl {
 
     /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
     /// data, reactively controlling whether the event bubbles up the hierarchy.
-    pub fn on_event_propagation_stoppable_with_signal<E: EntityEvent>(
+    pub fn on_event_propagation_stoppable_signal<E: EntityEvent>(
         self,
         mut handler: impl FnMut(E) + Send + Sync + 'static,
         propagation_stopped: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.on_event_with_system_propagation_stoppable_with_signal(
+        self.on_event_with_system_propagation_stoppable_signal(
             move |In((_, event))| handler(event),
             propagation_stopped,
         )
@@ -635,7 +633,7 @@ impl RawHaalkaEl {
     /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
     /// data, reactively controlling whether the event bubbles up the hierarchy and reactively
     /// disabling this handling.
-    pub fn on_event_disableable_propagation_stoppable_with_signal<E: EntityEvent>(
+    pub fn on_event_disableable_propagation_stoppable_signal<E: EntityEvent>(
         self,
         mut handler: impl FnMut(E) + Send + Sync + 'static,
         disabled: impl Signal<Item = bool> + Send + 'static,
