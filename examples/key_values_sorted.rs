@@ -37,6 +37,7 @@ fn main() {
 const INPUT_HEIGHT: f32 = 40.;
 const INPUT_WIDTH: f32 = 200.;
 const STARTING_SORTED_BY: KeyValue = KeyValue::Key;
+static DARK_GRAY: Lazy<Color> = Lazy::new(|| Srgba::gray(0.25).into());
 
 static PAIRS: Lazy<MutableVec<RowData>> = Lazy::new(|| {
     let mut pairs = [
@@ -141,7 +142,7 @@ fn text_input(
         .fill_color_signal(
             focus
                 .signal()
-                .map_bool(|| bevy::color::palettes::css::DARK_GRAY.into(), || Color::WHITE)
+                .map_bool(|| *DARK_GRAY, || Color::WHITE)
                 .map(CosmicBackgroundColor),
         )
         .attrs(TextAttrs::new().color_signal(focus.signal().map_bool(|| Color::WHITE, || Color::BLACK).map(Some)))
@@ -342,10 +343,7 @@ fn x_button() -> impl Element + PointerEventAware {
         .background_color_signal(
             hovered
                 .signal()
-                .map_bool(
-                    || bevy::color::palettes::basic::RED,
-                    || bevy::color::palettes::css::DARK_GRAY,
-                )
+                .map_bool(|| bevy::color::palettes::basic::RED.into(), || *DARK_GRAY)
                 .map(BackgroundColor::from),
         )
         .hovered_sync(hovered)
@@ -394,10 +392,7 @@ fn ui_root(world: &mut World) {
                                 .background_color_signal(
                                     hovered
                                         .signal()
-                                        .map_bool(
-                                            || bevy::color::palettes::basic::GREEN,
-                                            || bevy::color::palettes::css::DARK_GRAY,
-                                        )
+                                        .map_bool(|| bevy::color::palettes::basic::GREEN.into(), || *DARK_GRAY)
                                         .map(BackgroundColor::from),
                                 )
                                 .hovered_sync(hovered)

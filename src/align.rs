@@ -8,7 +8,7 @@ use super::{
     el::El,
     element::ElementWrapper,
     grid::Grid,
-    raw::{RawElWrapper, RawHaalkaEl},
+    raw::{RawElWrapper, RawHaalkaEl, AppendDirection},
     row::Row,
     stack::Stack,
 };
@@ -122,30 +122,32 @@ fn register_align_signal<REW: RawElWrapper>(
 ) -> REW {
     let mut last_alignments_option: Option<Vec<Alignment>> = None;
     element.update_raw_el(|raw_el| {
-        raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Style>(
-            align_signal,
-            move |mut style, aligns_option| {
-                if let Some(alignments) = aligns_option {
-                    // TODO: confirm that this last alignment removal strategy is working as intended
-                    if let Some(mut last_alignments) = last_alignments_option.take() {
-                        last_alignments.retain(|align| !alignments.contains(align));
-                        for alignment in last_alignments {
-                            apply_alignment(&mut style, alignment, AddRemove::Remove)
+        raw_el.defer_update(AppendDirection::Back, move |raw_el| {
+            raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Style>(
+                align_signal,
+                move |mut style, aligns_option| {
+                    if let Some(alignments) = aligns_option {
+                        // TODO: confirm that this last alignment removal strategy is working as intended
+                        if let Some(mut last_alignments) = last_alignments_option.take() {
+                            last_alignments.retain(|align| !alignments.contains(align));
+                            for alignment in last_alignments {
+                                apply_alignment(&mut style, alignment, AddRemove::Remove)
+                            }
+                        }
+                        for alignment in &alignments {
+                            apply_alignment(&mut style, *alignment, AddRemove::Add)
+                        }
+                        last_alignments_option = alignments.is_empty().not().then_some(alignments);
+                    } else {
+                        if let Some(last_aligns) = last_alignments_option.take() {
+                            for align in last_aligns {
+                                apply_alignment(&mut style, align, AddRemove::Remove)
+                            }
                         }
                     }
-                    for alignment in &alignments {
-                        apply_alignment(&mut style, *alignment, AddRemove::Add)
-                    }
-                    last_alignments_option = alignments.is_empty().not().then_some(alignments);
-                } else {
-                    if let Some(last_aligns) = last_alignments_option.take() {
-                        for align in last_aligns {
-                            apply_alignment(&mut style, align, AddRemove::Remove)
-                        }
-                    }
-                }
-            },
-        )
+                },
+            )
+        })
     })
 }
 
@@ -267,17 +269,19 @@ where
         mut child: Child,
         apply_alignment: fn(&mut Style, Alignment, AddRemove),
     ) -> Child {
-        child = child.update_raw_el(|raw_el| raw_el.with_component::<Style>(Self::update_style));
+        child = child.update_raw_el(|raw_el| raw_el.defer_update(AppendDirection::Back, |raw_el| raw_el.with_component::<Style>(Self::update_style)));
         // TODO: this .take means that child can't be passed around parents without losing align
         // info, but this can be easily added if desired
         if let Some(align) = child.align_mut().take() {
             match align {
                 AlignHolder::Align(align) => {
                     child = child.update_raw_el(|raw_el| {
-                        raw_el.with_component::<Style>(move |mut style| {
-                            for align in align.alignments {
-                                apply_alignment(&mut style, align, AddRemove::Add)
-                            }
+                        raw_el.defer_update(AppendDirection::Back, move |raw_el| {
+                            raw_el.with_component::<Style>(move |mut style| {
+                                for align in align.alignments {
+                                    apply_alignment(&mut style, align, AddRemove::Add)
+                                }
+                            })
                         })
                     })
                 }

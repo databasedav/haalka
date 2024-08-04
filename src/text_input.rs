@@ -10,7 +10,7 @@ use bevy_mod_picking::{
 };
 
 use super::{
-    el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::PointerEventAware, raw::RawElWrapper, scrollable::Scrollable,
+    el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::PointerEventAware, raw::{RawElWrapper, register_system}, scrollable::Scrollable,
     sizeable::Sizeable, utils::clone, viewport_mutable::ViewportMutable, global_event_aware::GlobalEventAware,
 };
 use apply::Apply;
@@ -95,18 +95,18 @@ impl TextInput {
     pub fn on_signal_with_cosmic_edit<T: Send + 'static>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
-        f: impl FnMut(EntityWorldMut, T) + Send + 'static,
+        f: impl FnMut(EntityWorldMut, T) + Send + Sync + 'static,
     ) -> Self {
-        self.update_raw_el(|raw_el| raw_el.on_signal_with_entity_forwarded(signal, cosmic_edit_entity_forwarder, f))
+        self.update_raw_el(|raw_el| raw_el.on_signal_with_entity_forwarded(signal, cosmic_edit_entity_forwarder_for_signal, f))
     }
 
     /// Reactively run a function with this input's [`CosmicEditBundle`]'s entity's `C` [`Component`] if it exists and the output of the [`Signal`].
     pub fn on_signal_with_cosmic_edit_component<T: Send + 'static, C: Component>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
-        f: impl FnMut(Mut<C>, T) + Send + 'static,
+        f: impl FnMut(Mut<C>, T) + Send + Sync + 'static,
     ) -> Self {
-        self.update_raw_el(|raw_el| raw_el.on_signal_with_component_forwarded(signal, cosmic_edit_entity_forwarder, f))
+        self.update_raw_el(|raw_el| raw_el.on_signal_with_component_forwarded(signal, cosmic_edit_entity_forwarder_for_signal, f))
     }
 
     /// Reactively set this input's [`CosmicEditBundle`]'s entity's `C` [`Component`]. If the [`Signal`] outputs [`None`], the `C` [`Component`] is removed.
@@ -116,7 +116,7 @@ impl TextInput {
     ) -> Self {
         if let Some(component_option_signal) = component_option_signal_option.into() {
             self = self.update_raw_el(|raw_el| {
-                raw_el.component_signal_forwarded(cosmic_edit_entity_forwarder, component_option_signal)
+                raw_el.component_signal_forwarded(cosmic_edit_entity_forwarder_for_signal, component_option_signal)
             });
         }
         self
@@ -206,7 +206,7 @@ impl TextInput {
     ) -> Self {
         self.update_raw_el(|raw_el| {
             raw_el.with_entity(move |mut entity| {
-                let system = entity.world_scope(|world| world.register_system(handler));
+                let system = entity.world_scope(|world| register_system(world, handler));
                 entity.insert(Focusable {
                     system,
                     is_focused: false,
@@ -633,6 +633,10 @@ fn cosmic_edit_entity_forwarder(entity: &mut EntityWorldMut) -> Option<Entity> {
     entity.get::<CosmicSource>().map(|cosmic_source| cosmic_source.0)
 }
 
+fn cosmic_edit_entity_forwarder_for_signal(In(entity): In<Entity>, cosmic_sources: Query<&CosmicSource>) -> Option<Entity> {
+    cosmic_sources.get(entity).map(|cosmic_source| cosmic_source.0).ok()
+}
+
 fn set_text_attrs(cosmic_buffer: &mut CosmicBuffer, font_system: &mut FontSystem, attrs: bevy_cosmic_edit::AttrsOwned) {
     let spans = cosmic_buffer.get_text_spans(attrs.clone());
     if let Some(list_spans) = spans.first() {
@@ -919,7 +923,7 @@ macro_rules! impl_text_input_cosmic_edit_methods {
                     pub fn [<on_signal_with_ $field>]<T: Send + 'static>(
                         self,
                         signal: impl Signal<Item = T> + Send + 'static,
-                        f: impl FnMut(Mut<$field_type>, T) + Send + 'static,
+                        f: impl FnMut(Mut<$field_type>, T) + Send + Sync + 'static,
                     ) -> Self {
                         self.on_signal_with_cosmic_edit_component(signal, f)
                     }

@@ -1,6 +1,7 @@
 //! Simple button, port of <https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs>.
 
 use bevy::prelude::*;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use haalka::prelude::*;
 
 fn main() {
@@ -14,10 +15,15 @@ fn main() {
                 ..default()
             }),
             HaalkaPlugin,
+            WorldInspectorPlugin::new(),
         ))
+        .register_type::<BoolComponent>()
         .add_systems(Startup, (camera, ui_root))
         .run();
 }
+
+#[derive(Component, Reflect)]
+struct BoolComponent(bool);
 
 const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
@@ -100,6 +106,7 @@ fn camera(mut commands: Commands) {
 
 fn ui_root(world: &mut World) {
     El::<NodeBundle>::new()
+        .update_raw_el(|raw_el| raw_el.insert(BoolComponent(true)))
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())

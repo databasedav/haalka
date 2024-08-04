@@ -1089,7 +1089,7 @@ static SUB_MENU_SELECTED: Lazy<Mutable<Option<SubMenu>>> = Lazy::new(default);
 fn input_event_listener_controller<E: Element>(
     element: E,
     listening: impl Signal<Item = bool> + Send + 'static,
-    mut callback: impl FnMut() -> On<MenuInputEvent> + Send + 'static,
+    mut callback: impl FnMut() -> On<MenuInputEvent> + Send + Sync + 'static,
 ) -> E {
     element.update_raw_el(|raw_el| {
         raw_el.on_signal_with_entity(listening, move |mut entity, listening| {

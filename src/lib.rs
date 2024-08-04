@@ -9,7 +9,7 @@ use node_builder::init_async_world;
 mod raw;
 pub use raw::{
     AppendDirection as DeferredUpdateAppendDirection, IntoOptionRawElement, IntoRawElement, RawElWrapper, RawElement,
-    RawHaalkaEl, Spawnable,
+    RawHaalkaEl, Spawnable, HaalkaOneShotSystem, HaalkaObserver,
 };
 
 cfg_if::cfg_if! {

@@ -319,7 +319,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                 //     waiter.await;
                                     if let Some(cell_data_option) = DRAGGING_OPTION.take() {
                                         cell_data_option.take();
-                                        commands.entity(click.listener()).remove::<CursorDisabled>();
+                                        // commands.entity(click.listener()).remove::<CursorDisabled>();
                                     }
                                 // }
                                 // .apply(spawn)
@@ -649,7 +649,7 @@ fn ui_root(world: &mut World) {
     Stack::<NodeBundle>::new()
         .cursor_disableable_signal(CursorIcon::Default, is_dragging())
         .width(Val::Percent(100.))
-        .height(Val::Percent(100.)) 
+        .height(Val::Percent(100.))
         .update_raw_el(|raw_el| {
             raw_el
                 .insert(On::<Pointer<Move>>::run(|move_: Listener<Pointer<Move>>| {

@@ -85,7 +85,7 @@ macro_rules! impl_haalka_methods {
                     pub fn [<on_signal_with_ $field>]<T: Send + 'static>(
                         self,
                         signal: impl Signal<Item = T> + Send + 'static,
-                        f: impl FnMut(Mut<$field_type>, T) + Send + 'static,
+                        f: impl FnMut(Mut<$field_type>, T) + Send + Sync + 'static,
                     ) -> Self {
                         self.update_raw_el(|raw_el| {
                             raw_el.on_signal_with_component::<T, $field_type>(signal, f)

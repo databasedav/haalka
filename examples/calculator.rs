@@ -1,4 +1,4 @@
-//! Simple calculator. Spurred by https://discord.com/channels/691052431525675048/885021580353237032/1263661461364932639.
+//! Simple calculator. Spurred by <https://discord.com/channels/691052431525675048/885021580353237032/1263661461364932639>.
 
 use bevy::prelude::*;
 use calc::*;
