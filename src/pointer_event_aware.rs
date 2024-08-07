@@ -28,9 +28,12 @@ pub trait PointerEventAware: RawElWrapper {
                 .on_spawn(clone!((system_id_holder) move |world, entity| {
                     let system = register_system(world, handler);
                     system_id_holder.set(Some(system));
-                    observe(world, entity, move |enter: Trigger<Pointer<Enter>>, mut commands: Commands| commands.run_system_with_input(system, (enter.entity(), true)));
-                    observe(world, entity, move |leave: Trigger<Pointer<Leave>>, mut commands: Commands| commands.run_system_with_input(system, (leave.entity(), false)));
+                    // TODO: using observers here requires bubbling
+                    // observe(world, entity, move |enter: Trigger<Pointer<Enter>>, mut commands: Commands| commands.run_system_with_input(system, (enter.entity(), true)););
+                    // observe(world, entity, move |leave: Trigger<Pointer<Leave>>, mut commands: Commands| commands.run_system_with_input(system, (leave.entity(), false)););
                 }))
+                .on_event_with_system::<Pointer<Enter>, _>(clone!((system_id_holder) move |In((entity, _)), mut commands: Commands| commands.run_system_with_input(system_id_holder.get().unwrap(), (entity, true))))
+                .on_event_with_system::<Pointer<Leave>, _>(clone!((system_id_holder) move |In((entity, _)), mut commands: Commands| commands.run_system_with_input(system_id_holder.get().unwrap(), (entity, false))))
                 .on_remove(move |world, _| {
                     if let Some(system) = system_id_holder.get() {
                         world.commands().add(move |world: &mut World| {
@@ -334,7 +337,9 @@ fn update_hover_states(
     previous_hover_map: Res<PreviousHoverMap>,
     mut hovereds: Query<(Entity, &mut Hovered)>,
     parent_query: Query<&Parent>,
-    mut commands: Commands,
+    mut pointer_enter: EventWriter<Pointer<Enter>>,
+    mut pointer_leave: EventWriter<Pointer<Leave>>,
+    // mut commands: Commands,
 ) {
     let pointer_id = PointerId::Mouse;
     let hover_set = hover_map.get(&pointer_id);
@@ -361,14 +366,17 @@ fn update_hover_states(
                 );
                 continue;
             };
+            // TODO: using observers here requires bubbling
             if let Some(hit) = hit_data_option.cloned() {
-                commands.trigger_targets(Pointer::new(pointer_id, location, entity, Enter { hit }), entity);
+                pointer_enter.send(Pointer::new(pointer_id, location, entity, Enter { hit }));
+                // commands.trigger_targets(Pointer::new(pointer_id, location, entity, Enter { hit }), entity);
             } else {
                 if let Some(hit) = previous_hover_map
                     .get(&pointer_id)
                     .and_then(|map| map.get(&entity).cloned())
                 {
-                    commands.trigger_targets(Pointer::new(pointer_id, location, entity, Leave { hit }), entity);
+                    pointer_leave.send(Pointer::new(pointer_id, location, entity, Leave { hit }));
+                    // commands.trigger_targets(Pointer::new(pointer_id, location, entity, Leave { hit }), entity);
                 }
             }
         }
@@ -467,10 +475,8 @@ pub trait Cursorable: PointerEventAware {
                          mut cursors: EventWriter<CursorEvent>| {
                             if let Some(cursor_option) = cursor_option_option {
                                 if !disabled.contains(entity) {
-                                    println!("{:?}", cursor_option);
+                                    // println!("{:?}", cursor_option);
                                     cursors.send(CursorEvent(cursor_option));
-                                    // entity.into_world_mut().
-                                    // send_event(CursorEvent(cursor_option));
                                 }
                             }
                         },
@@ -504,9 +510,7 @@ pub trait Cursorable: PointerEventAware {
                     )
                     .observe(
                         clone!((over) move |event: Trigger<OnInsert, CursorOver>, disabled: Query<&DisabledComponent>| {
-                            println!("here0");
                             if !disabled.contains(event.entity()) {
-                                println!("here1");
                                 over.set(true);
                             }
                         }),
@@ -651,7 +655,12 @@ fn cursor_setter(
 }
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_event::<CursorEvent>().add_systems(
+    app
+    .add_plugins((
+        EventListenerPlugin::<Pointer<Enter>>::default(),
+        EventListenerPlugin::<Pointer<Leave>>::default(),
+    ))
+    .add_event::<CursorEvent>().add_systems(
         Update,
         (
             pressable_system.run_if(any_with_component::<Pressable>),

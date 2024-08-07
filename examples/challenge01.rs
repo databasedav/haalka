@@ -143,21 +143,16 @@ impl Button {
         // what if we want the selectedness to persist? simply add another mutable that gets flipped
         // on click and then pass a signal of that to this method, which is exactly how the
         // `Checkbox` widget is implemented
-        let syncer = spawn(sync(self.selected.clone(), selected_signal));
+        let syncer = spawn(sync(selected_signal, self.selected.clone()));
         self.el = self.el.update_raw_el(|raw_el| raw_el.hold_tasks([syncer]));
         self
     }
 
     fn hovered_signal(mut self, hovered_signal: impl Signal<Item = bool> + Send + 'static) -> Self {
-        let syncer = spawn(sync(self.hovered.clone(), hovered_signal));
+        let syncer = spawn(sync(hovered_signal, self.hovered.clone()));
         self.el = self.el.update_raw_el(|raw_el| raw_el.hold_tasks([syncer]));
         self
     }
-}
-
-// TODO: make this a public util ?
-async fn sync<T>(mutable: Mutable<T>, signal: impl Signal<Item = T> + Send + 'static) {
-    signal.for_each_sync(|value| mutable.set(value)).await;
 }
 
 fn text(text: impl ToString) -> Text {
@@ -226,7 +221,7 @@ where
     fn controlling(&self) -> &Mutable<bool>;
 
     fn controlling_signal(mut self, controlling_signal: impl Signal<Item = bool> + Send + 'static) -> Self {
-        let syncer = spawn(sync(self.controlling().clone(), controlling_signal));
+        let syncer = spawn(sync(controlling_signal, self.controlling().clone()));
         self = self.update_raw_el(|raw_el| raw_el.hold_tasks([syncer]));
         self
     }

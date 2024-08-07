@@ -18,12 +18,21 @@ fn main() {
             WorldInspectorPlugin::new(),
         ))
         .register_type::<BoolComponent>()
+        .register_type::<BoolComponentHolder>()
         .add_systems(Startup, (camera, ui_root))
         .run();
 }
 
-#[derive(Component, Reflect)]
+#[derive(Component, Reflect, Default)]
 struct BoolComponent(bool);
+
+#[derive(Component, Reflect, Default)]
+struct BoolComponentHolder {
+    bool_1: BoolComponent,
+    bool_2: BoolComponent,
+    bool_3: Vec<bool>,
+    bool_4: (bool, BoolComponent, Vec<bool>),
+}
 
 const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
@@ -106,7 +115,11 @@ fn camera(mut commands: Commands) {
 
 fn ui_root(world: &mut World) {
     El::<NodeBundle>::new()
-        .update_raw_el(|raw_el| raw_el.insert(BoolComponent(true)))
+        .update_raw_el(|raw_el| raw_el
+            .insert(BoolComponent(true))
+            // .insert(BoolComponentHolder::default())
+            .insert(BoolComponentHolder{ bool_3: vec![true, false], bool_4: (false, default(), vec![false, true]), ..default() })
+        )
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())

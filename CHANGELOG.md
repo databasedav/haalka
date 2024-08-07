@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### fixed
 
 - Self-alignment of `Scrollable` elements.
+- Child entities now attached to parents before being populated.
 
 # 0.1.1 (2024-07-18)
 
