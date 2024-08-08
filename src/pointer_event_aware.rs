@@ -8,7 +8,7 @@ use futures_signals::signal::{always, Mutable, Signal, SignalExt};
 use haalka_futures_signals_ext::{SignalExtBool, SignalExtExt};
 
 use super::{
-    raw::{RawElWrapper, register_system, observe},
+    raw::{observe, register_system, RawElWrapper},
     utils::{spawn, sync_neq},
 };
 
@@ -28,12 +28,9 @@ pub trait PointerEventAware: RawElWrapper {
                 .on_spawn(clone!((system_id_holder) move |world, entity| {
                     let system = register_system(world, handler);
                     system_id_holder.set(Some(system));
-                    // TODO: using observers here requires bubbling
-                    // observe(world, entity, move |enter: Trigger<Pointer<Enter>>, mut commands: Commands| commands.run_system_with_input(system, (enter.entity(), true)););
-                    // observe(world, entity, move |leave: Trigger<Pointer<Leave>>, mut commands: Commands| commands.run_system_with_input(system, (leave.entity(), false)););
+                    observe(world, entity, move |enter: Trigger<Pointer<Enter>>, mut commands: Commands| commands.run_system_with_input(system, (enter.entity(), true)));
+                    observe(world, entity, move |leave: Trigger<Pointer<Leave>>, mut commands: Commands| commands.run_system_with_input(system, (leave.entity(), false)));
                 }))
-                .on_event_with_system::<Pointer<Enter>, _>(clone!((system_id_holder) move |In((entity, _)), mut commands: Commands| commands.run_system_with_input(system_id_holder.get().unwrap(), (entity, true))))
-                .on_event_with_system::<Pointer<Leave>, _>(clone!((system_id_holder) move |In((entity, _)), mut commands: Commands| commands.run_system_with_input(system_id_holder.get().unwrap(), (entity, false))))
                 .on_remove(move |world, _| {
                     if let Some(system) = system_id_holder.get() {
                         world.commands().add(move |world: &mut World| {
@@ -159,13 +156,15 @@ pub trait PointerEventAware: RawElWrapper {
                         });
                     });
                 }))
-                .on_event_with_system::<Pointer<Down>, _>(move |In((entity, pointer_down)): In<(Entity, Pointer<Down>)>, world: &mut World|{
-                    if matches!(pointer_down.button, PointerButton::Primary) {
-                        if let Some(mut entity) = world.get_entity_mut(entity) {
-                            entity.insert(Pressable);
+                .on_event_with_system::<Pointer<Down>, _>(
+                    move |In((entity, pointer_down)): In<(Entity, Pointer<Down>)>, world: &mut World| {
+                        if matches!(pointer_down.button, PointerButton::Primary) {
+                            if let Some(mut entity) = world.get_entity_mut(entity) {
+                                entity.insert(Pressable);
+                            }
                         }
-                    }
-                })
+                    },
+                )
                 .on_remove(move |world, _| {
                     if let Some((handler, blocked)) = system_holder.get() {
                         world.commands().add(move |world: &mut World| {
@@ -175,12 +174,12 @@ pub trait PointerEventAware: RawElWrapper {
                     }
                 })
         })
-        // .on_global_event_with_system::<Pointer<Up>, _>(move |pointer_up: Listener<Pointer<Up>>| if matches!(pointer_up.button, PointerButton::Primary) { down.set_neq(false) })
-        // TODO: this isn't the desired behavior, press should linger outside and instead `Up`
-        // should trigger even outside of element (like the `.on_global_event_with_system`
-        // commented out above), requires being able to register multiple event listeners
-        // per event type 
-        .on_hovered_change_with_system(|In((entity, hovered)): In<(_,bool)>, world: &mut World| {
+        // .on_global_event_with_system::<Pointer<Up>, _>(move |pointer_up: Listener<Pointer<Up>>| if
+        // matches!(pointer_up.button, PointerButton::Primary) { down.set_neq(false) }) TODO: this isn't the
+        // desired behavior, press should linger outside and instead `Up` should trigger even outside of element
+        // (like the `.on_global_event_with_system` commented out above), requires being able to register
+        // multiple event listeners per event type
+        .on_hovered_change_with_system(|In((entity, hovered)): In<(_, bool)>, world: &mut World| {
             if !hovered {
                 if let Some(mut entity) = world.get_entity_mut(entity) {
                     entity.remove::<Pressable>();
@@ -325,8 +324,8 @@ pub struct Enter {
 /// Fires when a the pointer crosses out of the bounds of the `target` entity, excluding children.
 #[derive(Clone, PartialEq, Debug, Reflect)]
 pub struct Leave {
-    /// Information about the latest prior picking intersection.
-    pub hit: HitData,
+    // /// Information about the latest prior picking intersection.
+    // pub hit: HitData,
 }
 
 // TODO: integrate with bubbling observers and upstreamed event listener
@@ -337,9 +336,9 @@ fn update_hover_states(
     previous_hover_map: Res<PreviousHoverMap>,
     mut hovereds: Query<(Entity, &mut Hovered)>,
     parent_query: Query<&Parent>,
-    mut pointer_enter: EventWriter<Pointer<Enter>>,
-    mut pointer_leave: EventWriter<Pointer<Leave>>,
-    // mut commands: Commands,
+    // mut pointer_enter: EventWriter<Pointer<Enter>>,
+    // mut pointer_leave: EventWriter<Pointer<Leave>>,
+    mut commands: Commands,
 ) {
     let pointer_id = PointerId::Mouse;
     let hover_set = hover_map.get(&pointer_id);
@@ -366,18 +365,17 @@ fn update_hover_states(
                 );
                 continue;
             };
-            // TODO: using observers here requires bubbling
             if let Some(hit) = hit_data_option.cloned() {
-                pointer_enter.send(Pointer::new(pointer_id, location, entity, Enter { hit }));
-                // commands.trigger_targets(Pointer::new(pointer_id, location, entity, Enter { hit }), entity);
+                commands.trigger_targets(Pointer::new(pointer_id, location, entity, Enter { hit }), entity);
             } else {
-                if let Some(hit) = previous_hover_map
-                    .get(&pointer_id)
-                    .and_then(|map| map.get(&entity).cloned())
-                {
-                    pointer_leave.send(Pointer::new(pointer_id, location, entity, Leave { hit }));
-                    // commands.trigger_targets(Pointer::new(pointer_id, location, entity, Leave { hit }), entity);
-                }
+                // TODO: children `Leave`s don't trigger with this condition, e.g. in an aalo inspector row
+                // if let Some(hit) = previous_hover_map
+                // .get(&pointer_id)
+                // .and_then(|map| map.get(&entity).cloned())
+                // {
+                // commands.trigger_targets(Pointer::new(pointer_id, location, entity, Leave { hit }), entity);
+                commands.trigger_targets(Pointer::new(pointer_id, location, entity, Leave {}), entity);
+                // }
             }
         }
     }
@@ -655,12 +653,12 @@ fn cursor_setter(
 }
 
 pub(super) fn plugin(app: &mut App) {
-    app
-    .add_plugins((
+    app.add_plugins((
         EventListenerPlugin::<Pointer<Enter>>::default(),
         EventListenerPlugin::<Pointer<Leave>>::default(),
     ))
-    .add_event::<CursorEvent>().add_systems(
+    .add_event::<CursorEvent>()
+    .add_systems(
         Update,
         (
             pressable_system.run_if(any_with_component::<Pressable>),

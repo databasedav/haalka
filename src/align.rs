@@ -8,7 +8,7 @@ use super::{
     el::El,
     element::ElementWrapper,
     grid::Grid,
-    raw::{RawElWrapper, RawHaalkaEl, AppendDirection},
+    raw::{AppendDirection, RawElWrapper, RawHaalkaEl},
     row::Row,
     stack::Stack,
 };
@@ -269,7 +269,11 @@ where
         mut child: Child,
         apply_alignment: fn(&mut Style, Alignment, AddRemove),
     ) -> Child {
-        child = child.update_raw_el(|raw_el| raw_el.defer_update(AppendDirection::Back, |raw_el| raw_el.with_component::<Style>(Self::update_style)));
+        child = child.update_raw_el(|raw_el| {
+            raw_el.defer_update(AppendDirection::Back, |raw_el| {
+                raw_el.with_component::<Style>(Self::update_style)
+            })
+        });
         // TODO: this .take means that child can't be passed around parents without losing align
         // info, but this can be easily added if desired
         if let Some(align) = child.align_mut().take() {

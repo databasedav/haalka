@@ -115,11 +115,17 @@ fn camera(mut commands: Commands) {
 
 fn ui_root(world: &mut World) {
     El::<NodeBundle>::new()
-        .update_raw_el(|raw_el| raw_el
-            .insert(BoolComponent(true))
-            // .insert(BoolComponentHolder::default())
-            .insert(BoolComponentHolder{ bool_3: vec![true, false], bool_4: (false, default(), vec![false, true]), ..default() })
-        )
+        .update_raw_el(|raw_el| {
+            raw_el
+                .insert(BoolComponent(true))
+                // .insert(BoolComponentHolder::default())
+                .insert(BoolComponentHolder {
+                    bool_3: vec![true, false],
+                    bool_4: (false, default(), vec![false, true]),
+                    ..default()
+                })
+                .insert(Name::new("ui root"))
+        })
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())

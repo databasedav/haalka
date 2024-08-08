@@ -21,26 +21,31 @@ use super::{
 /// While multiple children can still be declared with repeated calls to [`.child`](`El::child`) or
 /// [`.child_signal`](`El::child_signal`), their relative alignment was arbitrarily chosen to match
 /// [MoonZoon's implementation](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/el.rs#L41-L69) and should not be relied on.
+#[derive(Default)]
 pub struct El<NodeType> {
     raw_el: RawHaalkaEl,
     align: Option<AlignHolder>,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType: Bundle> From<NodeType> for El<NodeType> {
-    fn from(node_bundle: NodeType) -> Self {
+impl<NodeType: Bundle> From<RawHaalkaEl> for El<NodeType> {
+    fn from(value: RawHaalkaEl) -> Self {
         Self {
-            raw_el: {
-                RawHaalkaEl::from(node_bundle)
-                    .with_component::<Style>(|mut style| {
-                        style.display = Display::Flex;
-                        style.flex_direction = FlexDirection::Column;
-                    })
-                    .insert(Pickable::IGNORE)
-            },
+            raw_el: value
+                .with_component::<Style>(|mut style| {
+                    style.display = Display::Flex;
+                    style.flex_direction = FlexDirection::Column;
+                })
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
+    }
+}
+
+impl<NodeType: Bundle> From<NodeType> for El<NodeType> {
+    fn from(node_bundle: NodeType) -> Self {
+        RawHaalkaEl::from(node_bundle).into()
     }
 }
 

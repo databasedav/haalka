@@ -9,6 +9,8 @@ use bevy_mod_picking::{
     picking_core::Pickable,
 };
 
+use crate::RawHaalkaEl;
+
 use super::{
     el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::PointerEventAware, raw::{RawElWrapper, register_system}, scrollable::Scrollable,
     sizeable::Sizeable, utils::clone, viewport_mutable::ViewportMutable, global_event_aware::GlobalEventAware,
@@ -22,6 +24,7 @@ use futures_signals::signal::{always, BoxSignal, Mutable, Signal, SignalExt};
 use haalka_futures_signals_ext::SignalExtBool;
 
 /// Reactive text input widget, a thin wrapper around [`bevy_cosmic_edit`] integrated with [`Signal`]s.
+#[derive(Default)]
 pub struct TextInput {
     el: El<ButtonBundle>,
 }

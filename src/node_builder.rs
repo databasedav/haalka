@@ -394,7 +394,7 @@ impl TaskHolder {
     }
 
     /// Drop the [`Task`] when the entity is despawned.
-    pub fn hold(self: &mut Self, task: Task<()>) {
+    pub fn hold(&mut self, task: Task<()>) {
         self.0.push(task);
     }
 }

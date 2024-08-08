@@ -23,21 +23,25 @@ pub struct Row<NodeType> {
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType: Bundle> From<NodeType> for Row<NodeType> {
-    fn from(node_bundle: NodeType) -> Self {
+impl<NodeType: Bundle> From<RawHaalkaEl> for Row<NodeType> {
+    fn from(value: RawHaalkaEl) -> Self {
         Self {
-            raw_el: {
-                RawHaalkaEl::from(node_bundle)
-                    .with_component::<Style>(|mut style| {
-                        style.display = Display::Flex;
-                        style.flex_direction = FlexDirection::Row;
-                        style.align_items = AlignItems::Center;
-                    })
-                    .insert(Pickable::IGNORE)
-            },
+            raw_el: RawHaalkaEl::from(value)
+                .with_component::<Style>(|mut style| {
+                    style.display = Display::Flex;
+                    style.flex_direction = FlexDirection::Row;
+                    style.align_items = AlignItems::Center;
+                })
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
+    }
+}
+
+impl<NodeType: Bundle> From<NodeType> for Row<NodeType> {
+    fn from(node_bundle: NodeType) -> Self {
+        RawHaalkaEl::from(node_bundle).into()
     }
 }
 

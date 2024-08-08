@@ -107,11 +107,32 @@ pub trait ElementWrapper: Sized {
     type EL: Element;
     /// Mutable reference to the [`Element`] that this wrapper wraps.
     fn element_mut(&mut self) -> &mut Self::EL;
+
+    /// Indirection which allows trait consumers to define custom "build" or "render" logic outside the body
+    /// of the [`ElementWrapper`] itself, allowing the [`ElementWrapper`] to be more ergonomically
+    /// used as a configuration builder.
+    /// 
+    /// The default implementation simply allows this method to exist in this trait while only
+    /// requiring the consumer to implement [.element_mut](`ElementWrapper::element_mut`). An
+    /// alternative to the unsafe approach is to use [mem::take](std::mem::take), but this
+    /// would have required the consumer to implement a `Default` trait for their `EL` type.
+    fn into_el(mut self) -> Self::EL {
+        let element_ptr: *mut Self::EL = self.element_mut();
+        // SAFETY: `.element_mut()` returns a valid mutable reference and we prevent the `self`
+        // destructor from running since `std::ptr::read` takes ownership of the value.
+        let element = unsafe { std::ptr::read(element_ptr) };
+        std::mem::forget(self);
+        element
+    }
 }
 
 impl<EW: ElementWrapper> RawElWrapper for EW {
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
         self.element_mut().raw_el_mut()
+    }
+
+    fn into_raw_el(self) -> RawHaalkaEl {
+        self.into_el().into_raw()
     }
 }
 

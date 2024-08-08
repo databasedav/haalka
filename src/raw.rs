@@ -2,14 +2,13 @@ use std::{
     future::Future,
     marker::PhantomData,
     mem,
-    sync::{Arc, Mutex},
 };
 
-use apply::Apply;
-use async_lock;
 use bevy::{
     ecs::{
-        component::{ComponentHooks, StorageType}, observer, system::{EntityCommands, IntoObserverSystem, RunSystemWithInput, SystemId}, world::DeferredWorld
+        component::{ComponentHooks, StorageType},
+        system::{IntoObserverSystem, RunSystemWithInput, SystemId},
+        world::DeferredWorld,
     },
     prelude::*,
     tasks::Task,
@@ -22,10 +21,7 @@ use futures_signals::{
 };
 use haalka_futures_signals_ext::SignalExtBool;
 
-use super::{
-    node_builder::{async_world, NodeBuilder, TaskHolder},
-    utils::{spawn, sync_neq},
-};
+use super::node_builder::{async_world, NodeBuilder, TaskHolder};
 
 /// [haalka](crate)'s core abstraction, allowing one to rig any [`Entity`] with ergonomic
 /// [`futures_signals::Signal`](https://docs.rs/futures-signals/latest/futures_signals/signal/trait.Signal.html) driven reactivity, including
@@ -683,7 +679,10 @@ impl Component for OnRemove {
 #[derive(Component)]
 pub struct HaalkaOneShotSystem;
 
-pub(crate) fn register_system<I: 'static, O: 'static, M, S: IntoSystem<I, O, M> + 'static>(world: &mut World, system: S) -> SystemId<I, O> {
+pub(crate) fn register_system<I: 'static, O: 'static, M, S: IntoSystem<I, O, M> + 'static>(
+    world: &mut World,
+    system: S,
+) -> SystemId<I, O> {
     let system = world.register_system(system);
     if let Some(mut entity) = world.get_entity_mut(system.entity()) {
         entity.insert(HaalkaOneShotSystem);
@@ -695,11 +694,12 @@ pub(crate) fn register_system<I: 'static, O: 'static, M, S: IntoSystem<I, O, M> 
 #[derive(Component)]
 pub struct HaalkaObserver;
 
-pub(crate) fn observe<E: Event, B: Bundle, M>(world: &mut World, entity: Entity, observer: impl IntoObserverSystem<E, B, M>) {
-    world.spawn((
-        Observer::new(observer).with_entity(entity),
-        HaalkaObserver,
-    ));
+pub(crate) fn observe<E: Event, B: Bundle, M>(
+    world: &mut World,
+    entity: Entity,
+    observer: impl IntoObserverSystem<E, B, M>,
+) {
+    world.spawn((Observer::new(observer).with_entity(entity), HaalkaObserver));
 }
 
 #[derive(Component)]
@@ -717,7 +717,7 @@ pub trait RawElement: Sized {
 
 impl<REW: RawElWrapper> RawElement for REW {
     fn into_raw(self) -> RawHaalkaEl {
-        self.into_raw_el().into()
+        self.into_raw_el()
     }
 }
 
