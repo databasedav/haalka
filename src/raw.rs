@@ -1,8 +1,4 @@
-use std::{
-    future::Future,
-    marker::PhantomData,
-    mem,
-};
+use std::{future::Future, marker::PhantomData, mem};
 
 use bevy::{
     ecs::{

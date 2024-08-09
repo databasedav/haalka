@@ -4,10 +4,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+### added
+
+- Component-based event handler blockability.
+
+### changed
+
+- Child entities now attached to parents before being populated.
+
 ### fixed
 
-- Self-alignment of `Scrollable` elements.
-- Child entities now attached to parents before being populated.
+- `Scrollable` elements can now be self-aligned.
+- Throttable pressing functions now correctly block immediately after the first press.
 
 # 0.1.1 (2024-07-18)
 

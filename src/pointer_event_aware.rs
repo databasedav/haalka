@@ -1,15 +1,15 @@
 use std::{future::Future, time::Duration};
 
-use bevy::{prelude::*, window::PrimaryWindow};
+use bevy::{ecs::system::SystemId, prelude::*, window::PrimaryWindow};
 use bevy_mod_picking::{picking_core::backend::HitData, prelude::*};
 use enclose::enclose as clone;
 use focus::{HoverMap, PreviousHoverMap};
-use futures_signals::signal::{always, Mutable, Signal, SignalExt};
+use futures_signals::signal::{always, channel, Mutable, Signal, SignalExt};
 use haalka_futures_signals_ext::{SignalExtBool, SignalExtExt};
 
 use super::{
     raw::{observe, register_system, RawElWrapper},
-    utils::{spawn, sync_neq},
+    utils::sleep,
 };
 
 /// Enables reacting to pointer events like hover, click, and press. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`PointerEventAware`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/ability/pointer_event_aware.rs).
@@ -134,26 +134,22 @@ pub trait PointerEventAware: RawElWrapper {
     /// returns `false`, run a `handler` [`System`]; the `blocked` [`System`] takes
     /// [`In`](`System::In`) this node's [`Entity`] and the `handler` [`System`] takes
     /// [`In`](`System::In`) this node's [`Entity`] and its current pressed state.
-    fn on_pressed_with_system_blockable<Marker1, Marker2>(
+    fn on_pressed_with_system_blockable<Marker, Blocked: Component>(
         self,
-        handler: impl IntoSystem<(Entity, bool), (), Marker1> + Send + 'static,
-        blocked: impl IntoSystem<Entity, bool, Marker2> + Send + 'static,
+        handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
             let system_holder = Mutable::new(None);
             raw_el
                 .insert(Pickable::default())
                 .on_spawn(clone!((system_holder) move |world, entity| {
-                    let (handler, blocked) = (register_system(world, handler), register_system(world, blocked));
-                    system_holder.set(Some((handler, blocked)));
-                    observe(world, entity, move |press: Trigger<Press>, mut commands: Commands| {
+                    let handler = register_system(world, handler);
+                    system_holder.set(Some(handler));
+                    observe(world, entity, move |press: Trigger<Press>, blocked: Query<&Blocked>, mut commands: Commands| {
                         let entity = press.entity();
-                        let pressed = **press.event();
-                        commands.add(move |world: &mut World| {
-                            if world.run_system_with_input(blocked, entity).ok() == Some(false) {
-                                let _ = world.run_system_with_input(handler, (entity, pressed));
-                            }
-                        });
+                        if !blocked.contains(entity) {
+                            commands.run_system_with_input(handler, (entity, **press.event()));
+                        }
                     });
                 }))
                 .on_event_with_system::<Pointer<Down>, _>(
@@ -166,10 +162,9 @@ pub trait PointerEventAware: RawElWrapper {
                     },
                 )
                 .on_remove(move |world, _| {
-                    if let Some((handler, blocked)) = system_holder.get() {
+                    if let Some(handler) = system_holder.get() {
                         world.commands().add(move |world: &mut World| {
                             let _ = world.remove_system(handler);
-                            let _ = world.remove_system(blocked);
                         })
                     }
                 })
@@ -188,131 +183,121 @@ pub trait PointerEventAware: RawElWrapper {
         })
     }
 
-    // , reactively controlling whether the
-    /// press is blocked. Critically note that this blocking is *NOT* frame perfect, i.e. the
-    /// handler is not guaranteed to not run in the same frame the [`Signal`] outputs `true` and
-    /// thus should not be used for situations where spurious calls to the `handler` are
-    /// intolerable; see (`Self::on_pressed_`)
-    fn on_pressed_change_with_system_blockable_signal<Marker>(
-        self,
-        handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
-        blocked: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        let blocked_mutable = Mutable::new(false);
-        let syncer = spawn(sync_neq(blocked, blocked_mutable.clone()));
-        self.update_raw_el(|raw_el| raw_el.hold_tasks([syncer]))
-            .on_pressed_with_system_blockable(handler, move |_: In<_>| blocked_mutable.get())
-    }
-
-    /// When this element's pressed state changes, run a system which takes [`In`](`System::In`)
-    /// this node's [`Entity`] and its current pressed state.
     fn on_pressed_change_with_system<Marker>(
         self,
         handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
     ) -> Self {
-        self.on_pressed_with_system_blockable(handler, |_: In<Entity>| false)
+        let system_holder = Mutable::new(None);
+        self.update_raw_el(|raw_el| {
+            raw_el.on_spawn(clone!((system_holder) move |world, _| {
+                system_holder.set(Some(register_system(world, handler)));
+            }))
+        })
+        .on_pressed_with_system_blockable::<_, PressHandlingBlocked>(
+            move |In((entity, cur)),
+                  mut pressed: Local<bool>,
+                  mut system: Local<Option<SystemId<(Entity, bool)>>>,
+                  mut commands: Commands| {
+                if cur != *pressed {
+                    *pressed = cur;
+                    // only pay the read locking cost once
+                    let &mut system = system.get_or_insert_with(|| system_holder.get().unwrap());
+                    commands.run_system_with_input(system, (entity, cur));
+                }
+            },
+        )
     }
 
-    // TODO: there's still problems with this, `Up` doesn't trigger outside of the element + pressable
-    // system isn't sensitive to left clicks only, so e.g. downing a button, upping outside it, then
-    // holding right click over it will incorrectly show a pressed state
-    // TODO: add right click pressing convenience methods if someone wants them ...
-    /// When this element's pressed state changes, run a function with its current pressed state,
-    /// reactively controlling whether the press is blocked.
-    fn on_pressed_change_blockable(
-        self,
-        mut handler: impl FnMut(bool) + Send + Sync + 'static,
-        blocked: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        self.on_pressed_change_with_system_blockable_signal(move |In((_, is_pressed))| handler(is_pressed), blocked)
-    }
-
-    /// When this element's pressed state changes, run a function with its current pressed state.
     fn on_pressed_change(self, mut handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
         self.on_pressed_change_with_system(move |In((_, pressed))| handler(pressed))
     }
 
-    /// When this element is being pressed, run a function, reactively controlling whether the press
-    /// is blocked.
-    fn on_pressing_blockable(
+    fn on_pressing_with_system_blockable<Marker, Blocked: Component>(
         self,
-        mut handler: impl FnMut() + Send + Sync + 'static,
-        blocked: impl Signal<Item = bool> + Send + 'static,
+        handler: impl IntoSystem<Entity, (), Marker> + Send + 'static,
     ) -> Self {
-        self.on_pressed_change_blockable(
-            move |is_pressed| {
-                if is_pressed {
-                    handler()
+        let system_holder = Mutable::new(None);
+        self.update_raw_el(|raw_el| {
+            raw_el.on_spawn(clone!((system_holder) move |world, _| {
+                system_holder.set(Some(register_system(world, handler)));
+            }))
+        })
+        .on_pressed_with_system_blockable::<_, Blocked>(
+            move |In((entity, pressed)), mut system: Local<Option<SystemId<Entity>>>, mut commands: Commands| {
+                if pressed {
+                    // only pay the read locking cost once
+                    let &mut system = system.get_or_insert_with(|| system_holder.get().unwrap());
+                    commands.run_system_with_input(system, entity);
                 }
             },
-            blocked,
         )
+    }
+
+    fn on_pressing_blockable<Blocked: Component>(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
+        self.on_pressing_with_system_blockable::<_, Blocked>(move |_: In<_>| handler())
+    }
+
+    /// When this element is being pressed, run a function, reactively controlling whether the press
+    /// is blocked.
+    fn on_pressing_blockable_signal(
+        self,
+        handler: impl FnMut() + Send + Sync + 'static,
+        blocked: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.update_raw_el(|raw_el| raw_el.component_signal::<PressHandlingBlocked, _>(blocked.map_true(default)))
+            .on_pressing_blockable::<PressHandlingBlocked>(handler)
     }
 
     /// When this element is being pressed, run a function.
     fn on_pressing(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.on_pressing_blockable(handler, always(false))
+        self.on_pressing_blockable::<PressHandlingBlocked>(handler)
     }
 
     /// When this element is being pressed, run a function, waiting for the [`Future`] returned by
     /// `throttle` to resolve before running the `handler` again.
-    fn on_pressing_throttled<Fut: Future<Output = ()> + Send>(
+    fn on_pressing_throttled<Fut: Future<Output = ()> + Send + 'static>(
         self,
         mut handler: impl FnMut() + Send + Sync + 'static,
-        throttle: impl FnMut() -> Fut + Send + 'static,
+        mut throttle: impl FnMut() -> Fut + Send + 'static,
     ) -> Self {
-        let blocked = Mutable::new(false);
-        let throttler = spawn(clone!((blocked) async move {
-            blocked.signal()
-            .throttle(throttle)
-            .for_each_sync(move |b| {
-                if b {
-                    blocked.set_neq(false);
-                }
-            })
-            .await;
-        }));
-        self.update_raw_el(|raw_el| raw_el.hold_tasks([throttler]))
-            .on_pressing_blockable(
-                clone!((blocked) move || {
+        let (sender, receiver) = channel(());
+        self.update_raw_el(|raw_el| {
+            raw_el.component_signal::<PressHandlingBlocked, _>(receiver.map_future(move |_| throttle()).map(|_| None))
+        })
+        .on_pressed_with_system_blockable::<_, PressHandlingBlocked>(
+            move |In((entity, pressed)), world: &mut World| {
+                if pressed {
                     handler();
-                    blocked.set_neq(true);
-                }),
-                blocked.signal(),
-            )
+                    if let Some(mut entity) = world.get_entity_mut(entity) {
+                        entity.insert(PressHandlingBlocked);
+                        sender.send(()).unwrap();
+                    }
+                }
+            },
+        )
     }
 
     /// When this element is being pressed, run a function, waiting for `duration` before running
     /// the `handler` again.
     fn on_pressing_with_sleep_throttle(
         self,
-        mut handler: impl FnMut() + Send + Sync + 'static,
+        handler: impl FnMut() + Send + Sync + 'static,
         duration: Duration,
     ) -> Self {
-        self.on_pressed_change_with_system(
-            move |In((_, pressed)), mut timer_option: Local<Option<Timer>>, time: Res<Time>| {
-                if pressed {
-                    if let Some(timer) = &mut *timer_option {
-                        if !timer.tick(time.delta()).finished() {
-                            return;
-                        }
-                    } else {
-                        *timer_option = Some(Timer::new(duration, TimerMode::Repeating));
-                    }
-                    handler()
-                }
-            },
-        )
+        self.on_pressing_throttled(handler, move || sleep(duration))
     }
 
     /// Sync a [`Mutable`] with this element's pressed state.
     fn pressed_sync(self, pressed: Mutable<bool>) -> Self {
-        self.on_pressed_change(move |is_pressed| pressed.set_neq(is_pressed))
+        self.on_pressed_change(move |cur| pressed.set_neq(cur))
     }
 }
 
 #[derive(Component, Deref, DerefMut)]
 struct Hovered(bool);
+
+#[derive(Component, Default)]
+struct PressHandlingBlocked;
 
 /// Fires when a the pointer crosses into the bounds of the `target` entity, ignoring children.
 #[derive(Clone, PartialEq, Debug, Reflect)]
@@ -380,12 +365,6 @@ fn update_hover_states(
         }
     }
 }
-
-// #[derive(Component)]
-// struct Pressable {
-//     handler: SystemId<(Entity, bool)>,
-//     blocked: SystemId<Entity, bool>,
-// }
 
 #[derive(Component)]
 struct Pressable;

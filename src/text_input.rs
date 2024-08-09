@@ -24,7 +24,6 @@ use futures_signals::signal::{always, BoxSignal, Mutable, Signal, SignalExt};
 use haalka_futures_signals_ext::SignalExtBool;
 
 /// Reactive text input widget, a thin wrapper around [`bevy_cosmic_edit`] integrated with [`Signal`]s.
-#[derive(Default)]
 pub struct TextInput {
     el: El<ButtonBundle>,
 }

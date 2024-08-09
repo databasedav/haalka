@@ -21,7 +21,6 @@ use super::{
 /// While multiple children can still be declared with repeated calls to [`.child`](`El::child`) or
 /// [`.child_signal`](`El::child_signal`), their relative alignment was arbitrarily chosen to match
 /// [MoonZoon's implementation](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/el.rs#L41-L69) and should not be relied on.
-#[derive(Default)]
 pub struct El<NodeType> {
     raw_el: RawHaalkaEl,
     align: Option<AlignHolder>,
