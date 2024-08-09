@@ -7,12 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### added
 
 - Component-based event handler blockability.
+- Convenience method `RawHaalkaEl::observe`.
+- `RawHaalkaEl::on_remove` for adding removal hooks to elements.
+- `Enter` and `Leave` events triggered by hover management system.
 - `impl From<RawHaalkaEl>` for all built-in element types.
 
 ### changed
 
 - Upgraded Bevy to `0.14.1`
-- Child entities now attached to parents before being populated.
+- Reactive methods and event handling use one shot systems throughout.
+- Child entities attached to parents before being populated.
+- Hovering methods triggered by observers on `Enter` and `Leave`.
+- Cursor API uses observers.
 
 ### fixed
 

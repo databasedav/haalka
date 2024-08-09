@@ -119,11 +119,6 @@ impl RawHaalkaEl {
         self.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn))
     }
 
-    /// Keep a cloneable thread-safe handle to this element's [`Entity`].
-    pub fn entity_handle(self, handle: Mutable<Entity>) -> Self {
-        self.on_spawn(clone!((handle) move |_, entity| handle.set(entity)))
-    }
-
     /// Add a [`Bundle`] of components to this element.
     pub fn insert<B: Bundle>(self, bundle: B) -> Self {
         self.update_node_builder(|node_builder| node_builder.insert(bundle))
@@ -248,6 +243,7 @@ impl RawHaalkaEl {
             signal,
             clone!((system_holder) move |entity, input| {
                 async_world().apply(RunSystemWithInput::new_with_input(
+                    // TODO: would caching this in a Local via SystemState be better/faster ?
                     system_holder.get().unwrap(),
                     (entity, input),
                 ))
@@ -274,12 +270,14 @@ impl RawHaalkaEl {
         }))
         .on_signal_one_shot(
             signal,
-            clone!((system_holder) move |In((entity, input)): In<(Entity, I)>, world: &mut World| {
-                if let Some((forwarder, system)) = system_holder.get() {
+            clone!((system_holder) move |In((entity, input)): In<(Entity, I)>, mut systems: Local<Option<(SystemId<Entity, Option<Entity>>, SystemId<(Entity, I)>)>>, mut commands: Commands| {
+                // only pay the read locking cost once
+                let &mut (forwarder, system) = systems.get_or_insert_with(|| system_holder.get().unwrap());
+                commands.add(move |world: &mut World| {
                     if let Ok(Some(forwardee)) = world.run_system_with_input(forwarder, entity) {
-                        world.run_system_with_input(system, (forwardee, input));
+                        let _ = world.run_system_with_input(system, (forwardee, input));
                     }
-                }
+                })
             }),
         )
         .on_remove(move |world, _| {
