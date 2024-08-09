@@ -7,9 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### added
 
 - Component-based event handler blockability.
+- `impl From<RawHaalkaEl>` for all built-in element types.
 
 ### changed
 
+- Upgraded Bevy to `0.14.1`
 - Child entities now attached to parents before being populated.
 
 ### fixed
