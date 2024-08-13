@@ -11,7 +11,7 @@ pub trait ViewportMutable: Scrollable {
     fn viewport_x_signal<S: Signal<Item = f32> + Send + 'static>(
         mut self,
         x_signal_option: impl Into<Option<S>>,
-    ) -> Self {
+    ) -> Self { 
         if let Some(x_signal) = x_signal_option.into() {
             self = self.update_raw_el(|raw_el| {
                 raw_el.on_signal_one_shot(

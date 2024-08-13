@@ -657,7 +657,7 @@ impl Component for OnRemove {
     fn register_component_hooks(hooks: &mut ComponentHooks) {
         hooks.on_remove(|mut world, entity, _| {
             let fs = world
-                .get_mut::<OnRemove>(entity)
+                .get_mut::<Self>(entity)
                 .unwrap()
                 .0
                 .drain(..)
@@ -669,7 +669,7 @@ impl Component for OnRemove {
     }
 }
 
-/// Marker [`Component`] for filtering entities.
+/// Marker [`Component`] for filtering `SystemId` `Entity`s managed by haalka.
 #[derive(Component)]
 pub struct HaalkaOneShotSystem;
 
@@ -684,7 +684,7 @@ pub(crate) fn register_system<I: 'static, O: 'static, M, S: IntoSystem<I, O, M> 
     system
 }
 
-/// Marker [`Component`] for filtering entities.
+/// Marker [`Component`] for filtering `Observer` `Entity`s managed by haalka.
 #[derive(Component)]
 pub struct HaalkaObserver;
 

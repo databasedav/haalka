@@ -12,12 +12,14 @@ use futures_signals::signal::{always, BoxSignal, Mutable, Signal, SignalExt};
 use haalka_futures_signals_ext::{SignalExtBool, SignalExtExt};
 use std::convert::Into;
 
+// TODO: make this component marker based
+
 /// Enables an element's viewport to be modified and react to mouse wheel events.
 pub trait Scrollable: RawElWrapper {
     /// Wrap this element in a scrollable container, setting how mouse wheel events should be
     /// handled via [`ScrollabilitySettings`], and activating this handling only when the
     /// provided [`Signal`] outputs `true`.
-    fn scrollable(
+    fn scrollable_signal(
         self,
         settings: ScrollabilitySettings,
         active_signal: impl Signal<Item = bool> + Send + 'static,
@@ -45,7 +47,7 @@ pub trait HoverableScrollable: Scrollable + PointerEventAware {
     /// element is hovered.
     fn scrollable_on_hover(self, settings: ScrollabilitySettings) -> Self {
         let hovered = Mutable::new(false);
-        self.scrollable(settings, hovered.signal()).hovered_sync(hovered)
+        self.scrollable_signal(settings, hovered.signal()).hovered_sync(hovered)
     }
 }
 

@@ -65,7 +65,11 @@ pub trait PointerEventAware: RawElWrapper {
 
     /// Run a function when this element is clicked.
     fn on_click(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.on_click_with_system(move |_: In<_>| handler())
+        self.on_click_with_system(move |In((_, click)): In<(_, Pointer<Click>)>| {
+            if matches!(click.button, PointerButton::Primary) {
+                handler()
+            }
+        })
     }
 
     /// Run a function when this element is clicked, reactively controlling whether the click

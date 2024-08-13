@@ -39,7 +39,7 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
     let hovered = Mutable::new(false);
     Column::<NodeBundle>::new()
         .height(Val::Px(5. * LETTER_SIZE))
-        .scrollable(
+        .scrollable_signal(
             ScrollabilitySettings {
                 flex_direction: FlexDirection::Column,
                 overflow: Overflow::clip_y(),
@@ -68,7 +68,7 @@ fn ui_root(world: &mut World) {
             Row::<NodeBundle>::new()
                 .with_style(|mut style| style.column_gap = Val::Px(30.))
                 .width(Val::Px(300.))
-                .scrollable(
+                .scrollable_signal(
                     ScrollabilitySettings {
                         flex_direction: FlexDirection::Row,
                         overflow: Overflow::clip_x(),
