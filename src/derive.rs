@@ -187,6 +187,7 @@ impl_haalka_methods_for_aligners_and_node_bundles! {
 }
 
 // TODO: macro doesn't play nice with generics and chatgpt can't figure it out
+// TODO: migrate to aalo's impl_syncers! strategy for this
 // MaterialNodeBundle<M: UiMaterial> {
 //     node: Node,
 //     style: Style,

@@ -132,7 +132,7 @@ pub mod prelude {
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "utils")] {
-            pub use super::utils::{sleep, spawn, sync, sync_neq, flip};
+            pub use super::utils::*;
             pub use apply::{Also, Apply};
             pub use once_cell::sync::Lazy;
         }

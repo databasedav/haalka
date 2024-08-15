@@ -290,13 +290,6 @@ enum Quality {
     Ultra,
 }
 
-fn signal_eq<T: PartialEq + Send>(
-    signal1: impl Signal<Item = T> + Send + 'static,
-    signal2: impl Signal<Item = T> + Send + 'static,
-) -> impl Signal<Item = bool> + Send + 'static {
-    map_ref!(signal1, signal2 => *signal1 == *signal2).dedupe()
-}
-
 struct RadioGroup {
     el: Row<NodeBundle>,
     controlling: Mutable<bool>,

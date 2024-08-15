@@ -3,7 +3,7 @@ use std::time::Duration;
 use async_io::Timer;
 use bevy::tasks::{IoTaskPool, Task};
 pub use enclose::enclose as clone;
-use futures_signals::signal::{Mutable, Signal};
+use futures_signals::{signal::{Mutable, Signal, SignalExt}, map_ref};
 use haalka_futures_signals_ext::SignalExtExt;
 use std::{future::Future, ops::Not};
 
@@ -31,4 +31,12 @@ pub async fn sync_neq<T: PartialEq>(signal: impl Signal<Item = T> + Send + 'stat
 pub fn flip<T: Copy + Not<Output = T>>(mutable: &Mutable<T>) {
     let mut lock = mutable.lock_mut();
     *lock = lock.not();
+}
+
+/// [`Signal`] outputing if two [`Signal`]s are equal.
+pub fn signal_eq<T: PartialEq + Send>(
+    signal_1: impl Signal<Item = T> + Send + 'static,
+    signal_2: impl Signal<Item = T> + Send + 'static,
+) -> impl Signal<Item = bool> + Send + 'static {
+    map_ref!(signal_1, signal_2 => *signal_1 == *signal_2).dedupe()
 }
