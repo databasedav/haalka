@@ -104,7 +104,7 @@ impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
 /// ```
 pub trait ElementWrapper: Sized {
     /// The type of the [`Element`] that this wrapper wraps; this can be another [`ElementWrapper`].
-    type EL: Element;
+    type EL: Element + Default;
     /// Mutable reference to the [`Element`] that this wrapper wraps.
     fn element_mut(&mut self) -> &mut Self::EL;
 
@@ -112,17 +112,14 @@ pub trait ElementWrapper: Sized {
     /// the body of the [`ElementWrapper`] itself, allowing the [`ElementWrapper`] to be more
     /// ergonomically used as a configuration builder.
     ///
-    /// The default implementation simply allows this method to exist in this trait while only
-    /// requiring the consumer to implement [.element_mut](`ElementWrapper::element_mut`). An
-    /// alternative to the unsafe approach is to use [mem::take](std::mem::take), but this
-    /// would have required the consumer to implement a `Default` trait for their `EL` type.
+    /// Couldn't figure out how to do this without the [`Default`] constraint since it is required
+    /// by [`mem::take`], and was led to the [`mem::take`] solution since there didn't seem to
+    /// be a viable unsafe way to take ownership of a single field of a struct with only a
+    /// mutable reference to the field, i.e. via [`.element_mut()`](ElementWrapper::element_mut).
+    ///
+    /// [`mem::take`]: std::mem::take
     fn into_el(mut self) -> Self::EL {
-        let element_ptr: *mut Self::EL = self.element_mut();
-        // SAFETY: `.element_mut()` returns a valid mutable reference and we prevent the `self`
-        // destructor from running since `std::ptr::read` takes ownership of the value.
-        let element = unsafe { std::ptr::read(element_ptr) };
-        std::mem::forget(self);
-        element
+        std::mem::take(self.element_mut())
     }
 }
 

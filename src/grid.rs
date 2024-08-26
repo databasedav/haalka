@@ -9,7 +9,7 @@ use super::{
     align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
     element::{IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
-    pointer_event_aware::{Cursorable, PointerEventAware},
+    pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
     scrollable::Scrollable,
     sizeable::Sizeable,
@@ -18,6 +18,7 @@ use super::{
 };
 
 /// [`Element`](super::Element) with children aligned in a grid using a simple [`.row_wrap_cell_width`](Grid::row_wrap_cell_width) grid layout model. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`Grid`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/grid.rs).
+#[derive(Default)]
 pub struct Grid<NodeType> {
     raw_el: RawHaalkaEl,
     align: Option<AlignHolder>,
@@ -68,7 +69,7 @@ impl<NodeType: Bundle> RawElWrapper for Grid<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> Cursorable for Grid<NodeType> {}
+impl<NodeType: Bundle> CursorOnHoverable for Grid<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Grid<NodeType> {}
 impl<NodeType: Bundle> Nameable for Grid<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Grid<NodeType> {}

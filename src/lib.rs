@@ -34,7 +34,7 @@ cfg_if::cfg_if! {
             element::{Element, ElementWrapper, IntoElement, IntoOptionElement, TypeEraseable, UiRoot, UiRootable, Nameable},
             grid::{Grid, GRID_TRACK_FLOAT_PRECISION_SLACK},
             node_builder::{async_world, NodeBuilder, TaskHolder},
-            pointer_event_aware::{PointerEventAware, Cursorable, CursorDisabled},
+            pointer_event_aware::{PointerEventAware, CursorOnHoverable, CursorDisabled, CursorEvent, CursorOverDisabled},
             global_event_aware::GlobalEventAware,
             row::Row,
             scrollable::{BasicScrollHandler, HoverableScrollable, ScrollDirection, ScrollabilitySettings, Scrollable},
@@ -125,7 +125,7 @@ pub mod prelude {
                 CacheKeyFlags, CosmicBackgroundColor, CosmicBackgroundImage, CosmicBuffer, CosmicColor, CosmicPadding,
                 CosmicSource, CosmicTextAlign, CosmicTextChanged, CosmicWidgetSize, CosmicWrap, CursorColor, DefaultAttrs,
                 FamilyOwned, FocusedWidget as CosmicFocusedWidget, FontStyle, FontWeight, HoverCursor, MaxChars, MaxLines,
-                SelectionColor, Stretch, XOffset,
+                SelectionColor, Stretch, XOffset, CursorPluginDisabled as CosmidEditCursorPluginDisabled, Family
             };
         }
     }

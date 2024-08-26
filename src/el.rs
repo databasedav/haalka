@@ -7,7 +7,7 @@ use super::{
     column::Column,
     element::{IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
-    pointer_event_aware::{Cursorable, PointerEventAware},
+    pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
     scrollable::Scrollable,
     sizeable::Sizeable,
@@ -21,6 +21,7 @@ use super::{
 /// While multiple children can still be declared with repeated calls to [`.child`](`El::child`) or
 /// [`.child_signal`](`El::child_signal`), their relative alignment was arbitrarily chosen to match
 /// [MoonZoon's implementation](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/el.rs#L41-L69) and should not be relied on.
+#[derive(Default)]
 pub struct El<NodeType> {
     raw_el: RawHaalkaEl,
     align: Option<AlignHolder>,
@@ -65,7 +66,7 @@ impl<NodeType> RawElWrapper for El<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> Cursorable for El<NodeType> {}
+impl<NodeType: Bundle> CursorOnHoverable for El<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for El<NodeType> {}
 impl<NodeType: Bundle> Nameable for El<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for El<NodeType> {}

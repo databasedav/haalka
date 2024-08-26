@@ -1,6 +1,6 @@
 use std::{future::Future, time::Duration};
 
-use bevy::{ecs::system::SystemId, prelude::*, window::PrimaryWindow};
+use bevy::{ecs::system::SystemId, log::prelude::*, prelude::*, window::PrimaryWindow};
 use bevy_mod_picking::{picking_core::backend::HitData, prelude::*};
 use enclose::enclose as clone;
 use focus::{HoverMap, PreviousHoverMap};
@@ -413,8 +413,11 @@ struct CursorOver;
 #[derive(Component, Default)]
 pub struct CursorDisabled;
 
+#[derive(Resource)]
+pub struct CursorOverDisabled;
+
 /// Enables reactively setting the cursor icon when an element receives an [`Over`] event.
-pub trait Cursorable: PointerEventAware {
+pub trait CursorOnHoverable: PointerEventAware {
     /// Set the cursor icon when this element receives an [`Over`] event. When passed [`None`], the
     /// cursor is hidden.
     fn cursor(self, cursor_option: impl Into<Option<CursorIcon>>) -> Self {
@@ -423,8 +426,12 @@ pub trait Cursorable: PointerEventAware {
             raw_el
                 .insert(Pickable::default())
                 .on_event_with_system_stop_propagation::<Pointer<Over>, _>(
-                    move |_: In<_>, mut cursors: EventWriter<CursorEvent>| {
-                        cursors.send(CursorEvent(cursor_option));
+                    move |_: In<_>,
+                          cursor_over_disabled_option: Option<Res<CursorOverDisabled>>,
+                          mut commands: Commands| {
+                        if cursor_over_disabled_option.is_none() {
+                            commands.trigger(CursorEvent(cursor_option));
+                        }
                     },
                 )
         })
@@ -453,11 +460,14 @@ pub trait Cursorable: PointerEventAware {
                         over.signal().map_true_signal(move || cursor_option_signal.signal()),
                         |In((entity, cursor_option_option)): In<(Entity, Option<Option<CursorIcon>>)>,
                          disabled: Query<&DisabledComponent>,
-                         mut cursors: EventWriter<CursorEvent>| {
-                            if let Some(cursor_option) = cursor_option_option {
-                                if !disabled.contains(entity) {
-                                    // println!("{:?}", cursor_option);
-                                    cursors.send(CursorEvent(cursor_option));
+                         cursor_over_disabled_option: Option<Res<CursorOverDisabled>>,
+                         mut commands: Commands| {
+                            if cursor_over_disabled_option.is_none() {
+                                if let Some(cursor_option) = cursor_option_option {
+                                    if !disabled.contains(entity) {
+                                        println!("{:?}", cursor_option);
+                                        commands.trigger(CursorEvent(cursor_option));
+                                    }
                                 }
                             }
                         },
@@ -531,35 +541,35 @@ pub trait Cursorable: PointerEventAware {
                             }
                         },
                     )
-                // .observe(
-                //     move |event: Trigger<OnRemove, DisabledComponent>,
-                //           cursor_over: Query<&CursorOver>,
-                //           pointer_map: Res<PointerMap>,
-                //           pointers: Query<&PointerLocation>,
-                //           hover_map: Res<HoverMap>,
-                //           mut pointer_over: EventWriter<Pointer<Over>>,
-                //           mut commands: Commands| {
-                //         let entity = event.entity();
-                //         if cursor_over.get(entity).is_ok() {
-                //             commands.entity(entity).remove::<CursorOver>();
-                //             if let Some((hover_map, location)) =
-                // hover_map.get(&PointerId::Mouse).zip(                 pointer_map
-                //                     .get_entity(PointerId::Mouse)
-                //                     .and_then(|entity| pointers.get(entity).ok())
-                //                     .and_then(|pointer| pointer.location.clone()),
-                //             ) {
-                //                 if let Some(hit) = hover_map.get(&entity).cloned() {
-                //                     pointer_over.send(Pointer::new(
-                //                         PointerId::Mouse,
-                //                         location,
-                //                         entity,
-                //                         Over { hit },
-                //                     ));
-                //                 }
-                //             }
-                //         }
-                //     },
-                // )
+                    .observe(
+                        move |event: Trigger<OnRemove, DisabledComponent>,
+                              cursor_over: Query<&CursorOver>,
+                              pointer_map: Res<PointerMap>,
+                              pointers: Query<&PointerLocation>,
+                              hover_map: Res<HoverMap>,
+                              mut pointer_over: EventWriter<Pointer<Over>>,
+                              mut commands: Commands| {
+                            let entity = event.entity();
+                            if cursor_over.get(entity).is_ok() {
+                                commands.entity(entity).remove::<CursorOver>();
+                                if let Some((hover_map, location)) = hover_map.get(&PointerId::Mouse).zip(
+                                    pointer_map
+                                        .get_entity(PointerId::Mouse)
+                                        .and_then(|entity| pointers.get(entity).ok())
+                                        .and_then(|pointer| pointer.location.clone()),
+                                ) {
+                                    if let Some(hit) = hover_map.get(&entity).cloned() {
+                                        pointer_over.send(Pointer::new(
+                                            PointerId::Mouse,
+                                            location,
+                                            entity,
+                                            Over { hit },
+                                        ));
+                                    }
+                                }
+                            }
+                        },
+                    )
             });
         }
         self
@@ -613,27 +623,10 @@ pub trait Cursorable: PointerEventAware {
 }
 
 #[derive(Event)]
-struct CursorEvent(Option<CursorIcon>);
+pub struct CursorEvent(pub Option<CursorIcon>);
 
 #[derive(Component)]
 pub struct CursorOverPropagationStopped;
-
-fn cursor_setter(
-    mut cursors: EventReader<CursorEvent>,
-    // TODO: add support for multiple windows
-    mut windows: Query<&mut Window, With<PrimaryWindow>>,
-) {
-    if let Ok(mut window) = windows.get_single_mut() {
-        for CursorEvent(icon_option) in cursors.read() {
-            if let Some(icon) = icon_option {
-                window.cursor.icon = *icon;
-                window.cursor.visible = true;
-            } else {
-                window.cursor.visible = false;
-            }
-        }
-    }
-}
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins((
@@ -641,6 +634,20 @@ pub(super) fn plugin(app: &mut App) {
         EventListenerPlugin::<Pointer<Leave>>::default(),
     ))
     .add_event::<CursorEvent>()
+    // TODO: add support for multiple windows
+    .observe(
+        |event: Trigger<CursorEvent>, mut windows: Query<&mut Window, With<PrimaryWindow>>| {
+            if let Ok(mut window) = windows.get_single_mut() {
+                let CursorEvent(icon_option) = event.event();
+                if let Some(icon) = icon_option {
+                    window.cursor.icon = *icon;
+                    window.cursor.visible = true;
+                } else {
+                    window.cursor.visible = false;
+                }
+            }
+        },
+    )
     .add_systems(
         Update,
         (
@@ -650,7 +657,6 @@ pub(super) fn plugin(app: &mut App) {
                     // TODO: apparently this updates every no matter what, if so, remove this condition
                     .and_then(resource_exists_and_changed::<bevy_mod_picking::focus::HoverMap>),
             ),
-            cursor_setter.run_if(on_event::<CursorEvent>()),
         ),
     );
 }

@@ -29,6 +29,15 @@ pub struct RawHaalkaEl {
     deferred_updaters: Vec<Box<dyn FnOnce(RawHaalkaEl) -> RawHaalkaEl + Send + 'static>>,
 }
 
+impl From<NodeBuilder> for RawHaalkaEl {
+    fn from(node_builder: NodeBuilder) -> Self {
+        Self {
+            node_builder: Some(node_builder),
+            ..Self::new_dummy()
+        }
+    }
+}
+
 impl<NodeType: Bundle> From<NodeType> for RawHaalkaEl {
     fn from(node_bundle: NodeType) -> Self {
         Self {
@@ -656,12 +665,7 @@ impl Component for OnRemove {
 
     fn register_component_hooks(hooks: &mut ComponentHooks) {
         hooks.on_remove(|mut world, entity, _| {
-            let fs = world
-                .get_mut::<Self>(entity)
-                .unwrap()
-                .0
-                .drain(..)
-                .collect::<Vec<_>>();
+            let fs = world.get_mut::<Self>(entity).unwrap().0.drain(..).collect::<Vec<_>>();
             for f in fs {
                 f(&mut world, entity);
             }

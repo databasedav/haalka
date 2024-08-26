@@ -9,7 +9,7 @@ use bevy_mod_picking::{
     picking_core::Pickable,
 };
 
-use crate::RawHaalkaEl;
+use crate::{CursorOnHoverable, RawHaalkaEl};
 
 use super::{
     el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::PointerEventAware, raw::{RawElWrapper, register_system}, scrollable::Scrollable,
@@ -17,8 +17,7 @@ use super::{
 };
 use apply::Apply;
 use bevy_cosmic_edit::{
-    self, ColorExtras, CosmicBuffer, CosmicColor, CosmicEditBundle, CosmicFontSystem, CosmicSource, CosmicTextChanged,
-    DefaultAttrs, FocusedWidget as CosmicFocusedWidget, FontSystem,
+    self, ColorExtras, CosmicBuffer, CosmicColor, CosmicEditBundle, CosmicFontSystem, CosmicSource, CosmicTextChanged, DefaultAttrs, FamilyOwned, FocusedWidget as CosmicFocusedWidget, FontSystem
 };
 use futures_signals::signal::{always, BoxSignal, Mutable, Signal, SignalExt};
 use haalka_futures_signals_ext::SignalExtBool;
@@ -42,6 +41,7 @@ impl Scrollable for TextInput {}
 impl Sizeable for TextInput {}
 impl UiRootable for TextInput {}
 impl ViewportMutable for TextInput {}
+impl CursorOnHoverable for TextInput {}
 
 // TODO: allow managing multiple spans reactively
 impl TextInput {
@@ -193,6 +193,7 @@ impl TextInput {
             self = self.on_signal_with_cosmic_buffer(
                 text_option_signal.map(|text_option| text_option.into()),
                 |mut cosmic_buffer, mut font_system, attrs, text_option| {
+                    println!("{:?}", attrs.family_owned);
                     cosmic_buffer.set_text(&mut font_system, &text_option.unwrap_or_default(), attrs.0.as_attrs());
                 },
             );
@@ -711,6 +712,7 @@ impl TextAttrs {
             metadata: None,
             cache_key_flags: None,
         }
+        // .family(FamilyOwned::new(bevy_cosmic_edit::Family::Name("Fira Mono")))
     }
 
     /// Reactively set the color of this text. If the signal outputs [`None`] the color is set to its default white.
@@ -953,7 +955,17 @@ impl_text_input_cosmic_edit_methods! {
 }
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_plugins(bevy_cosmic_edit::CosmicEditPlugin::default())
+    let font_bytes: &[u8] = include_bytes!("../assets/fonts/FiraMono-Medium.ttf");
+    let font_config = bevy_cosmic_edit::CosmicFontConfig {
+        fonts_dir_path: None,
+        font_bytes: Some(vec![font_bytes]),
+        load_system_fonts: true,
+    };
+    app
+    .add_plugins(bevy_cosmic_edit::CosmicEditPlugin {
+        font_config,
+        ..default()
+    })
         .add_systems(
             Update,
             (

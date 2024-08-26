@@ -9,7 +9,7 @@ use super::{
     align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
     element::{IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
-    pointer_event_aware::{Cursorable, PointerEventAware},
+    pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
     scrollable::Scrollable,
     sizeable::Sizeable,
@@ -17,6 +17,7 @@ use super::{
 };
 
 /// [`Element`](super::Element) with horizontally stacked children. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`Row`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/row.rs).
+#[derive(Default)]
 pub struct Row<NodeType> {
     raw_el: RawHaalkaEl,
     align: Option<AlignHolder>,
@@ -62,7 +63,7 @@ impl<NodeType: Bundle> RawElWrapper for Row<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> Cursorable for Row<NodeType> {}
+impl<NodeType: Bundle> CursorOnHoverable for Row<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Row<NodeType> {}
 impl<NodeType: Bundle> Nameable for Row<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Row<NodeType> {}

@@ -3,7 +3,10 @@ use std::time::Duration;
 use async_io::Timer;
 use bevy::tasks::{IoTaskPool, Task};
 pub use enclose::enclose as clone;
-use futures_signals::{signal::{Mutable, Signal, SignalExt}, map_ref};
+use futures_signals::{
+    map_ref,
+    signal::{Mutable, Signal, SignalExt},
+};
 use haalka_futures_signals_ext::SignalExtExt;
 use std::{future::Future, ops::Not};
 
