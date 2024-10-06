@@ -3,7 +3,7 @@ use std::{future::Future, marker::PhantomData, mem};
 use bevy::{
     ecs::{
         component::{ComponentHooks, StorageType},
-        system::{IntoObserverSystem, RunSystemWithInput, SystemId},
+        system::{IntoObserverSystem, RunSystemOnce, RunSystemWithInput, SystemId},
         world::DeferredWorld,
     },
     prelude::*,
@@ -126,6 +126,10 @@ impl RawHaalkaEl {
     /// Run a function with mutable access to the [`World`] and this element's [`Entity`].
     pub fn on_spawn(self, on_spawn: impl FnOnce(&mut World, Entity) + Send + 'static) -> Self {
         self.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn))
+    }
+
+    pub fn on_spawn_with_system<T: IntoSystem<Entity, (), Marker> + Send + 'static, Marker>(self, system: T) -> Self {
+        self.on_spawn(|world, entity| world.run_system_once_with(entity, system))
     }
 
     /// Add a [`Bundle`] of components to this element.

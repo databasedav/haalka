@@ -34,10 +34,10 @@ cfg_if::cfg_if! {
             element::{Element, ElementWrapper, IntoElement, IntoOptionElement, TypeEraseable, UiRoot, UiRootable, Nameable},
             grid::{Grid, GRID_TRACK_FLOAT_PRECISION_SLACK},
             node_builder::{async_world, NodeBuilder, TaskHolder},
-            pointer_event_aware::{PointerEventAware, CursorOnHoverable, CursorDisabled, CursorEvent, CursorOverDisabled},
+            pointer_event_aware::{PointerEventAware, CursorOnHoverable, CursorDisabled, CursorEvent, CursorOnHoverDisabled},
             global_event_aware::GlobalEventAware,
             row::Row,
-            scrollable::{BasicScrollHandler, HoverableScrollable, ScrollDirection, ScrollabilitySettings, Scrollable},
+            scrollable::{ScrollHandler, BasicScrollHandler, HoverableScrollable, ScrollDirection, ScrollabilitySettings, Scrollable},
             sizeable::Sizeable,
             stack::Stack,
             viewport_mutable::ViewportMutable,
@@ -120,12 +120,13 @@ pub mod prelude {
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "text_input")] {
-            pub use super::text_input::{Placeholder, TextAttrs, TextInput};
+            pub use super::text_input::{Placeholder, TextAttrs, TextInput, TextInputFocusOnDownDisabled};
             pub use bevy_cosmic_edit::{
-                CacheKeyFlags, CosmicBackgroundColor, CosmicBackgroundImage, CosmicBuffer, CosmicColor, CosmicPadding,
+                CosmicBackgroundColor, CosmicBackgroundImage, CosmicBuffer, CosmicColor, CosmicPadding,
                 CosmicSource, CosmicTextAlign, CosmicTextChanged, CosmicWidgetSize, CosmicWrap, CursorColor, DefaultAttrs,
-                FamilyOwned, FocusedWidget as CosmicFocusedWidget, FontStyle, FontWeight, HoverCursor, MaxChars, MaxLines,
-                SelectionColor, Stretch, XOffset, CursorPluginDisabled as CosmidEditCursorPluginDisabled, Family
+                FocusedWidget as CosmicFocusedWidget, FontStyle, FontWeight, HoverCursor, MaxChars, MaxLines,
+                SelectionColor, XOffset, CursorPluginDisabled as CosmicEditCursorPluginDisabled, CosmicEditor, CosmicFontSystem,
+                cosmic_text::{Selection, Motion, CacheKeyFlags, FamilyOwned, Stretch, Family, Edit, Cursor, Action}
             };
         }
     }

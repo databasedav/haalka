@@ -63,6 +63,7 @@ enum SubMenu {
 }
 
 // core widget, pretty much every other widget uses the `Button`
+#[derive(Default)]
 struct Button {
     el: El<NodeBundle>,
     selected: Mutable<bool>,

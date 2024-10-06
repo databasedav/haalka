@@ -1,7 +1,7 @@
 use std::{ops::Not, pin::Pin};
 
 use bevy::{
-    ecs::system::{SystemId, SystemState},
+    ecs::{component::{ComponentHooks, StorageType}, system::{self, SystemId, SystemState}},
     prelude::*,
 };
 use bevy_mod_picking::{
@@ -9,20 +9,23 @@ use bevy_mod_picking::{
     picking_core::Pickable,
 };
 
-use crate::{CursorOnHoverable, RawHaalkaEl};
+use crate::raw::observe;
 
 use super::{
-    el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::PointerEventAware, raw::{RawElWrapper, register_system}, scrollable::Scrollable,
+    el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::{PointerEventAware, CursorOnHoverable}, raw::{RawElWrapper, register_system}, scrollable::Scrollable,
     sizeable::Sizeable, utils::clone, viewport_mutable::ViewportMutable, global_event_aware::GlobalEventAware,
 };
 use apply::Apply;
 use bevy_cosmic_edit::{
-    self, ColorExtras, CosmicBuffer, CosmicColor, CosmicEditBundle, CosmicFontSystem, CosmicSource, CosmicTextChanged, DefaultAttrs, FamilyOwned, FocusedWidget as CosmicFocusedWidget, FontSystem
+    self, ColorExtras, CosmicBuffer, CosmicColor, CosmicEditBundle, CosmicFontSystem, CosmicSource, CosmicTextChanged, DefaultAttrs, FocusedWidget as CosmicFocusedWidget,
+    cosmic_text
 };
+use cosmic_text::FontSystem;
 use futures_signals::signal::{always, BoxSignal, Mutable, Signal, SignalExt};
 use haalka_futures_signals_ext::SignalExtBool;
 
 /// Reactive text input widget, a thin wrapper around [`bevy_cosmic_edit`] integrated with [`Signal`]s.
+#[derive(Default)]
 pub struct TextInput {
     el: El<ButtonBundle>,
 }
@@ -43,6 +46,12 @@ impl UiRootable for TextInput {}
 impl ViewportMutable for TextInput {}
 impl CursorOnHoverable for TextInput {}
 
+#[derive(Component)]
+pub struct TextInputFocusOnDownDisabled;
+
+#[derive(Component)]
+struct TextInputEntity(Entity);
+
 // TODO: allow managing multiple spans reactively
 impl TextInput {
     #[allow(missing_docs)]
@@ -52,7 +61,8 @@ impl TextInput {
             raw_el
                 .insert(Pickable::default())
                 .with_entity(clone!((cosmic_edit_holder) move |mut entity| {
-                    let cosmic_edit = entity.world_scope(|world| world.spawn(CosmicEditBundle::default()).id());
+                    let id = entity.id();
+                    let cosmic_edit = entity.world_scope(|world| world.spawn((CosmicEditBundle::default(), TextInputEntity(id))).id());
                     cosmic_edit_holder.set(Some(cosmic_edit));
                     entity.insert(CosmicSource(cosmic_edit));
                 })) 
@@ -63,13 +73,13 @@ impl TextInput {
                 })
                 .on_event_with_system::<Pointer<Down>, _>(
                     move |In((_, pointer_down)): In<(_, Pointer<Down>)>,
-                            mut focusable_query: Query<(Entity, &mut Focusable)>,
+                            mut focusable_query: Query<(Entity, &mut Focusable), Without<TextInputFocusOnDownDisabled>>,
                             mut commands: Commands| {
                         // TODO: remove this focusable trigger and uncomment .insert_resource below when https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
                         // otherwise cursor position is not instantly correct on `Down`
                         if let Ok((entity, mut focusable)) = focusable_query.get_mut(pointer_down.target) {
                             focusable.is_focused = true;
-                            commands.run_system_with_input(focusable.system, (entity, true));
+                            commands.trigger_targets(FocusedChange(true), entity);
                         }
                         // commands.insert_resource(CosmicFocusedWidget(cosmic_edit_holder.get()));
                     },
@@ -193,7 +203,6 @@ impl TextInput {
             self = self.on_signal_with_cosmic_buffer(
                 text_option_signal.map(|text_option| text_option.into()),
                 |mut cosmic_buffer, mut font_system, attrs, text_option| {
-                    println!("{:?}", attrs.family_owned);
                     cosmic_buffer.set_text(&mut font_system, &text_option.unwrap_or_default(), attrs.0.as_attrs());
                 },
             );
@@ -208,12 +217,19 @@ impl TextInput {
         handler: impl IntoSystem<(Entity, bool,), (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
-            raw_el.with_entity(move |mut entity| {
+            let system_holder = Mutable::new(None);
+            raw_el.with_entity(clone!((system_holder) move |mut entity| {
                 let system = entity.world_scope(|world| register_system(world, handler));
-                entity.insert(Focusable {
-                    system,
-                    is_focused: false,
-                });
+                system_holder.set(Some(system));
+                entity.insert(Focusable { is_focused: false });
+            }))
+            .observe(clone!((system_holder) move |event: Trigger<FocusedChange>, mut commands: Commands| commands.run_system_with_input(system_holder.get().unwrap(), (event.entity(), event.event().0))))
+            .on_remove(move |world, _| {
+                if let Some(system) = system_holder.get() {
+                    world.commands().add(move |world: &mut World| {
+                        let _ = world.remove_system(system);
+                    });
+                }
             })
         })
     }
@@ -529,7 +545,7 @@ impl TextInput {
                     if let Some(mut placeholder) = cosmic_edit.get_mut::<bevy_cosmic_edit::Placeholder>() {
                         placeholder.text = text;
                     } else {
-                        cosmic_edit.insert(bevy_cosmic_edit::Placeholder::new(text, bevy_cosmic_edit::Attrs::new()));
+                        cosmic_edit.insert(bevy_cosmic_edit::Placeholder::new(text, cosmic_text::Attrs::new()));
                     }
                 });
             }
@@ -539,7 +555,7 @@ impl TextInput {
                         if let Some(mut placeholder) = cosmic_edit.get_mut::<bevy_cosmic_edit::Placeholder>() {
                             placeholder.attrs.color_opt = color_option;
                         } else {
-                            let mut attrs = bevy_cosmic_edit::Attrs::new();
+                            let mut attrs = cosmic_text::Attrs::new();
                             attrs.color_opt = color_option;
                             cosmic_edit.insert(bevy_cosmic_edit::Placeholder::new("", attrs));
                         }
@@ -550,7 +566,7 @@ impl TextInput {
                         if let Some(placeholder) = cosmic_edit.get_mut::<bevy_cosmic_edit::Placeholder>() {
                             placeholder.attrs.family(family.as_family());
                         } else {
-                            let attrs = bevy_cosmic_edit::Attrs::new();
+                            let attrs = cosmic_text::Attrs::new();
                             attrs.family(family.as_family());
                             cosmic_edit.insert(bevy_cosmic_edit::Placeholder::new("", attrs));
                         }
@@ -561,7 +577,7 @@ impl TextInput {
                         if let Some(placeholder) = cosmic_edit.get_mut::<bevy_cosmic_edit::Placeholder>() {
                             placeholder.attrs.stretch(stretch);
                         } else {
-                            let attrs = bevy_cosmic_edit::Attrs::new();
+                            let attrs = cosmic_text::Attrs::new();
                             attrs.stretch(stretch);
                             cosmic_edit.insert(bevy_cosmic_edit::Placeholder::new("", attrs));
                         }
@@ -572,7 +588,7 @@ impl TextInput {
                         if let Some(placeholder) = cosmic_edit.get_mut::<bevy_cosmic_edit::Placeholder>() {
                             placeholder.attrs.style(style);
                         } else {
-                            let attrs = bevy_cosmic_edit::Attrs::new();
+                            let attrs = cosmic_text::Attrs::new();
                             attrs.style(style);
                             cosmic_edit.insert(bevy_cosmic_edit::Placeholder::new("", attrs));
                         }
@@ -583,7 +599,7 @@ impl TextInput {
                         if let Some(placeholder) = cosmic_edit.get_mut::<bevy_cosmic_edit::Placeholder>() {
                             placeholder.attrs.weight(weight);
                         } else {
-                            let attrs = bevy_cosmic_edit::Attrs::new();
+                            let attrs = cosmic_text::Attrs::new();
                             attrs.weight(weight);
                             cosmic_edit.insert(bevy_cosmic_edit::Placeholder::new("", attrs));
                         }
@@ -594,7 +610,7 @@ impl TextInput {
                         if let Some(placeholder) = cosmic_edit.get_mut::<bevy_cosmic_edit::Placeholder>() {
                             placeholder.attrs.metadata(metadata);
                         } else {
-                            let attrs = bevy_cosmic_edit::Attrs::new();
+                            let attrs = cosmic_text::Attrs::new();
                             attrs.metadata(metadata);
                             cosmic_edit.insert(bevy_cosmic_edit::Placeholder::new("", attrs));
                         }
@@ -607,7 +623,7 @@ impl TextInput {
                             if let Some(placeholder) = cosmic_edit.get_mut::<bevy_cosmic_edit::Placeholder>() {
                                 placeholder.attrs.cache_key_flags(cache_key_flags);
                             } else {
-                                let attrs = bevy_cosmic_edit::Attrs::new();
+                                let attrs = cosmic_text::Attrs::new();
                                 attrs.cache_key_flags(cache_key_flags);
                                 cosmic_edit.insert(bevy_cosmic_edit::Placeholder::new("", attrs));
                             }
@@ -619,11 +635,31 @@ impl TextInput {
         self
     }
 
-    /// When the text of this input changes, run a function with the new text.
-    pub fn on_change(self, handler: impl FnMut(String) + Send + Sync + 'static) -> Self {
-        self.with_cosmic_edit(|mut entity| {
-            entity.insert(TextInputOnChange(Box::new(handler)));
+    pub fn on_change_with_system<Marker>(self, handler: impl IntoSystem<(Entity, String,), (), Marker> + Send + 'static) -> Self {
+        self.update_raw_el(|raw_el| {
+            let system_holder = Mutable::new(None);
+            raw_el.on_spawn(clone!((system_holder) move |world, entity| {
+                let system = register_system(world, handler);
+                system_holder.set(Some(system));
+                observe(world, entity, move |change: Trigger<TextInputChange>, mut commands: Commands| {
+                    let entity = change.entity();
+                    commands.run_system_with_input(system, (entity, change.event().0.clone()));
+                });
+            }))
+            .insert(ListeningToChanges)
+            .on_remove(move |world, _| {
+                if let Some(system) = system_holder.get() {
+                    world.commands().add(move |world: &mut World| {
+                        let _ = world.remove_system(system);
+                    });
+                }
+            })
         })
+    }
+
+    /// When the text of this input changes, run a function with the new text.
+    pub fn on_change(self, mut handler: impl FnMut(String) + Send + Sync + 'static) -> Self {
+        self.on_change_with_system(move |In((_, text))| handler(text))
     }
 
     /// Sync a [`Mutable`] with the text of this input.
@@ -632,15 +668,18 @@ impl TextInput {
     }
 }
 
+#[derive(Component)]
+struct ListeningToChanges;
+
 fn cosmic_edit_entity_forwarder(entity: &mut EntityWorldMut) -> Option<Entity> {
-    entity.get::<CosmicSource>().map(|cosmic_source| cosmic_source.0)
+    entity.get::<CosmicSource>().map(|&CosmicSource(cosmic_edit)| cosmic_edit)
 }
 
 fn cosmic_edit_entity_forwarder_for_signal(In(entity): In<Entity>, cosmic_sources: Query<&CosmicSource>) -> Option<Entity> {
-    cosmic_sources.get(entity).map(|cosmic_source| cosmic_source.0).ok()
+    cosmic_sources.get(entity).map(|&CosmicSource(cosmic_edit)| cosmic_edit).ok()
 }
 
-fn set_text_attrs(cosmic_buffer: &mut CosmicBuffer, font_system: &mut FontSystem, attrs: bevy_cosmic_edit::AttrsOwned) {
+fn set_text_attrs(cosmic_buffer: &mut CosmicBuffer, font_system: &mut FontSystem, attrs: cosmic_text::AttrsOwned) {
     let spans = cosmic_buffer.get_text_spans(attrs.clone());
     if let Some(list_spans) = spans.first() {
         if let Some((text, _)) = list_spans.first() {
@@ -649,20 +688,22 @@ fn set_text_attrs(cosmic_buffer: &mut CosmicBuffer, font_system: &mut FontSystem
     }
 }
 
-#[derive(Component)]
-struct TextInputOnChange(Box<dyn FnMut(String) + Send + Sync + 'static>);
+#[derive(Event)]
+struct TextInputChange(String);
 
-fn on_change(mut on_change_query: Query<&mut TextInputOnChange>, mut changed_events: EventReader<CosmicTextChanged>) {
-    for CosmicTextChanged((entity, text)) in changed_events.read() {
-        if let Ok(mut on_change) = on_change_query.get_mut(*entity) {
-            (on_change.0)(text.to_string());
+fn on_change(text_input_entities: Query<&TextInputEntity>, mut changed_events: EventReader<CosmicTextChanged>, mut commands: Commands) {
+    for CosmicTextChanged((cosmic_edit_entity, text)) in changed_events.read() {
+        if let Ok(&TextInputEntity(entity)) = text_input_entities.get(*cosmic_edit_entity) {
+            commands.trigger_targets(TextInputChange(text.clone()), entity);
         }
     }
 }
 
+#[derive(Event)]
+struct FocusedChange(bool);
+
 #[derive(Component)]
 struct Focusable {
-    system: SystemId<(Entity, bool,)>,
     is_focused: bool,
 }
 
@@ -677,11 +718,11 @@ fn on_focus_changed(
             // TODO: remove condition when https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
             if focusable.is_focused.not() {
                 focusable.is_focused = true;
-                commands.run_system_with_input(focusable.system, (entity, true));
+                commands.trigger_targets(FocusedChange(true), entity);
             }
         } else if focusable.is_focused {
             focusable.is_focused = false;
-            commands.run_system_with_input(focusable.system, (entity, false));
+            commands.trigger_targets(FocusedChange(false), entity);
         }
     }
 }
@@ -689,15 +730,15 @@ fn on_focus_changed(
 /// An owned dynamically typed [`Signal`] which is both [`Send`] and [`Sync`].
 pub type BoxSignalSync<'a, T> = Pin<Box<dyn Signal<Item = T> + Send + Sync + 'a>>;
 
-/// Allows setting the text attributes of a [`TextInput`] and its [placeholder](`TextInput::placeholder`). These settings can be either static or reactive via [`Signal`]s. See [`bevy_cosmic_edit::AttrsOwned`].
+/// Allows setting the text attributes of a [`TextInput`] and its [placeholder](`TextInput::placeholder`). These settings can be either static or reactive via [`Signal`]s. See [`cosmic_text::AttrsOwned`].
 pub struct TextAttrs {
     color_opt: Option<BoxSignalSync<'static, Option<CosmicColor>>>,
-    family_owned: Option<BoxSignalSync<'static, bevy_cosmic_edit::FamilyOwned>>,
-    stretch: Option<BoxSignalSync<'static, bevy_cosmic_edit::Stretch>>,
+    family_owned: Option<BoxSignalSync<'static, cosmic_text::FamilyOwned>>,
+    stretch: Option<BoxSignalSync<'static, cosmic_text::Stretch>>,
     style: Option<BoxSignalSync<'static, bevy_cosmic_edit::FontStyle>>,
     weight: Option<BoxSignalSync<'static, bevy_cosmic_edit::FontWeight>>,
     metadata: Option<BoxSignalSync<'static, usize>>,
-    cache_key_flags: Option<BoxSignalSync<'static, bevy_cosmic_edit::CacheKeyFlags>>,
+    cache_key_flags: Option<BoxSignalSync<'static, cosmic_text::CacheKeyFlags>>,
 }
 
 impl TextAttrs {
@@ -739,7 +780,7 @@ impl TextAttrs {
     }
 
     /// Reactively set the font family of this text.
-    pub fn family_signal<S: Signal<Item = bevy_cosmic_edit::FamilyOwned> + Send + Sync + 'static>(
+    pub fn family_signal<S: Signal<Item = cosmic_text::FamilyOwned> + Send + Sync + 'static>(
         mut self,
         family_signal_option: impl Into<Option<S>>,
     ) -> Self {
@@ -750,7 +791,7 @@ impl TextAttrs {
     }
 
     /// Set the font family of this text.
-    pub fn family(mut self, family_option: impl Into<Option<bevy_cosmic_edit::FamilyOwned>>) -> Self {
+    pub fn family(mut self, family_option: impl Into<Option<cosmic_text::FamilyOwned>>) -> Self {
         if let Some(family) = family_option.into() {
             self = self.family_signal(always(family));
         }
@@ -758,7 +799,7 @@ impl TextAttrs {
     }
 
     /// Reactively set the stretch of this text.
-    pub fn stretch_signal<S: Signal<Item = bevy_cosmic_edit::Stretch> + Send + Sync + 'static>(
+    pub fn stretch_signal<S: Signal<Item = cosmic_text::Stretch> + Send + Sync + 'static>(
         mut self,
         stretch_signal_option: impl Into<Option<S>>,
     ) -> Self {
@@ -769,7 +810,7 @@ impl TextAttrs {
     }
 
     /// Set the stretch of this text.
-    pub fn stretch(mut self, stretch_option: impl Into<Option<bevy_cosmic_edit::Stretch>>) -> Self {
+    pub fn stretch(mut self, stretch_option: impl Into<Option<cosmic_text::Stretch>>) -> Self {
         if let Some(stretch) = stretch_option.into() {
             self = self.stretch_signal(always(stretch));
         }
@@ -834,7 +875,7 @@ impl TextAttrs {
     }
 
     /// Reactively set the cache key flags of this text.
-    pub fn cache_key_flags_signal<S: Signal<Item = bevy_cosmic_edit::CacheKeyFlags> + Send + Sync + 'static>(
+    pub fn cache_key_flags_signal<S: Signal<Item = cosmic_text::CacheKeyFlags> + Send + Sync + 'static>(
         mut self,
         cache_key_flags_signal_option: impl Into<Option<S>>,
     ) -> Self {
@@ -847,7 +888,7 @@ impl TextAttrs {
     /// Set the cache key flags of this text.
     pub fn cache_key_flags(
         mut self,
-        cache_key_flags_option: impl Into<Option<bevy_cosmic_edit::CacheKeyFlags>>,
+        cache_key_flags_option: impl Into<Option<cosmic_text::CacheKeyFlags>>,
     ) -> Self {
         if let Some(cache_key_flags) = cache_key_flags_option.into() {
             self = self.cache_key_flags_signal(always(cache_key_flags));
@@ -955,7 +996,7 @@ impl_text_input_cosmic_edit_methods! {
 }
 
 pub(super) fn plugin(app: &mut App) {
-    let font_bytes: &[u8] = include_bytes!("../assets/fonts/FiraMono-Medium.ttf");
+    let font_bytes: &[u8] = include_bytes!("../assets/fonts/FiraMono-subset.ttf");
     let font_config = bevy_cosmic_edit::CosmicFontConfig {
         fonts_dir_path: None,
         font_bytes: Some(vec![font_bytes]),
@@ -966,13 +1007,12 @@ pub(super) fn plugin(app: &mut App) {
         font_config,
         ..default()
     })
-        .add_systems(
-            Update,
-            (
-                on_change.run_if(any_with_component::<TextInputOnChange>.and_then(on_event::<CosmicTextChanged>())),
-                on_focus_changed.run_if(resource_changed::<CosmicFocusedWidget>),
-            )
-                .run_if(any_with_component::<CosmicSource>),
+    .add_systems(
+        Update,
+        (
+            on_change.run_if(any_with_component::<ListeningToChanges>.and_then(on_event::<CosmicTextChanged>())),
+            on_focus_changed.run_if(resource_changed::<CosmicFocusedWidget>),
         )
-        .add_systems(PostUpdate, bevy_cosmic_edit::deselect_editor_on_esc);
+            .run_if(any_with_component::<CosmicSource>),
+    );  
 }

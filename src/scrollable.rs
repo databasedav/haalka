@@ -54,7 +54,9 @@ pub trait HoverableScrollable: Scrollable + PointerEventAware {
 impl<T: Scrollable + PointerEventAware> HoverableScrollable for T {}
 
 #[derive(Component)]
-struct ScrollHandler(Box<dyn FnMut(&MouseWheel, &Node, Mut<Style>, &Parent, &Query<&Node>) + Send + Sync + 'static>);
+pub struct ScrollHandler(
+    Box<dyn FnMut(&MouseWheel, &Node, Mut<Style>, &Parent, &Query<&Node>) + Send + Sync + 'static>,
+);
 
 /// Configuration for scrollable wrapping container and handling of mouse wheel events.
 pub struct ScrollabilitySettings {
@@ -87,6 +89,7 @@ fn scroll_system(
 pub enum ScrollDirection {
     Horizontal,
     Vertical,
+    Both,
 }
 
 /// Allows setting the direction and magnitude (in pixels) of viewport movement in response to mouse
@@ -210,6 +213,7 @@ impl From<BasicScrollHandler>
                             style.left = Val::Px((cur + dx).clamp(-max_scroll, 0.));
                         }
                     }
+                    _ => {}
                 }
             }
         };
