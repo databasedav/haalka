@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### changed
 
-- Upgraded Bevy to `0.14.1`
+- Upgraded Bevy to `0.14.2`
 - Reactive methods and event handling use one shot systems throughout.
 - Child entities attached to parents before being populated.
 - Hovering methods triggered by observers on `Enter` and `Leave`.
@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### fixed
 
 - `Scrollable` elements can now be self-aligned.
-- Throttable pressing functions now correctly block immediately after the first press.
+- Throttle-able pressing functions now correctly block immediately after the first press.
 
 # 0.1.1 (2024-07-18)
 
