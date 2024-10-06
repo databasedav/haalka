@@ -11,7 +11,7 @@ use bevy_eventlistener::prelude::*;
 /// registered on the same entity, this trait can't *yet* be used to do things like registering "on
 /// click outside" listeners.
 pub trait GlobalEventAware: RawElWrapper {
-    /// When an `E` [`EntityEvent`] propagates to the [`UiRoot`] node, run a `handler` [`System`].
+    /// When an `E` [`EntityEvent`] propagates to the [`UiRoot`] node, run a [`System`].
     fn on_global_event_with_system<E: EntityEvent, Marker>(
         self,
         handler: impl IntoSystem<(), (), Marker> + Send + 'static,

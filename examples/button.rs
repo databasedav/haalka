@@ -103,6 +103,8 @@ fn ui_root(world: &mut World) {
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
-        .child(button(world.resource::<AssetServer>().load("fonts/FiraMono-subset.ttf")))
+        .child(button(
+            world.resource::<AssetServer>().load("fonts/FiraMono-subset.ttf"),
+        ))
         .spawn(world);
 }

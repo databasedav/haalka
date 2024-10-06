@@ -356,6 +356,7 @@ impl NodeBuilder {
         self
     }
 
+    /// Spawn a node on an existing [`Entity`].
     pub fn spawn_on_entity(self, world: &mut World, entity: Entity) {
         if let Some(mut entity) = world.get_entity_mut(entity) {
             let id = entity.id();

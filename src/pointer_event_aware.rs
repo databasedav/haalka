@@ -1,6 +1,15 @@
 use std::{future::Future, ops::Not, time::Duration};
 
-use bevy::{ecs::{component::{ComponentHooks, StorageType}, system::SystemId}, log::prelude::*, prelude::*, window::PrimaryWindow};
+use apply::Apply;
+use bevy::{
+    ecs::{
+        component::{ComponentHooks, StorageType},
+        system::SystemId,
+    },
+    log::prelude::*,
+    prelude::*,
+    window::PrimaryWindow,
+};
 use bevy_mod_picking::{picking_core::backend::HitData, prelude::*};
 use enclose::enclose as clone;
 use focus::{HoverMap, PreviousHoverMap};
@@ -11,13 +20,14 @@ use crate::UiRoot;
 
 use super::{
     raw::{observe, register_system, RawElWrapper},
-    utils::sleep,
+    utils::{remove_system_holder_on_remove, sleep},
 };
 
 /// Enables reacting to pointer events like hover, click, and press. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`PointerEventAware`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/ability/pointer_event_aware.rs).
 pub trait PointerEventAware: RawElWrapper {
-    /// When this element's hovered state changes, run a system which takes [`In`](`System::In`)
-    /// this node's [`Entity`] and its current hovered state.
+    /// When this element's hovered state changes, run a [`System`] which takes
+    /// [`In`](`System::In`) this node's [`Entity`] and its current hovered state. This method
+    /// can be called repeatedly to register many such handlers.
     fn on_hovered_change_with_system<Marker>(
         self,
         handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
@@ -33,27 +43,22 @@ pub trait PointerEventAware: RawElWrapper {
                     observe(world, entity, move |enter: Trigger<Pointer<Enter>>, mut commands: Commands| commands.run_system_with_input(system, (enter.entity(), true)));
                     observe(world, entity, move |leave: Trigger<Pointer<Leave>>, mut commands: Commands| commands.run_system_with_input(system, (leave.entity(), false)));
                 }))
-                .on_remove(move |world, _| {
-                    if let Some(system) = system_holder.get() {
-                        world.commands().add(move |world: &mut World| {
-                            let _ = world.remove_system(system);
-                        })
-                    }
-                })
+                .apply(remove_system_holder_on_remove(system_holder))
         })
     }
 
-    /// When this element's hover state changes, run a function with its current hovered state.
+    /// When this element's hover state changes, run a function with its current hovered state. This
+    /// method can be called repeatedly to register many such handlers.
     fn on_hovered_change(self, mut handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
         self.on_hovered_change_with_system(move |In((_, is_hovered))| handler(is_hovered))
     }
 
-    /// Sync a [`Mutable`] with this element's hovered state.
+    /// Sync a [`Mutable<bool>`] with this element's hovered state.
     fn hovered_sync(self, hovered: Mutable<bool>) -> Self {
         self.on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
     }
 
-    /// Run a system when this element is clicked.
+    /// Run a [`System`] when this element is clicked.
     fn on_click_with_system<Marker>(
         self,
         handler: impl IntoSystem<(Entity, Pointer<Click>), (), Marker> + Send + 'static,
@@ -65,7 +70,7 @@ pub trait PointerEventAware: RawElWrapper {
         })
     }
 
-    /// Run a function when this element is clicked.
+    /// Run a function when this element is left clicked.
     fn on_click(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
         self.on_click_with_system(move |In((_, click)): In<(_, Pointer<Click>)>| {
             if matches!(click.button, PointerButton::Primary) {
@@ -74,8 +79,8 @@ pub trait PointerEventAware: RawElWrapper {
         })
     }
 
-    /// Run a function when this element is clicked, reactively controlling whether the click
-    /// bubbles up the hierarchy.
+    /// Run a function when this element is left clicked, reactively controlling whether the click
+    /// bubbles up the hierarchy with a [`Signal`].
     fn on_click_propagation_stoppable(
         self,
         mut handler: impl FnMut() + Send + Sync + 'static,
@@ -95,7 +100,7 @@ pub trait PointerEventAware: RawElWrapper {
         })
     }
 
-    /// Run a function when this element is clicked, stopping the click from bubbling up the
+    /// Run a function when this element is left clicked, stopping the click from bubbling up the
     /// hierarchy.
     fn on_click_stop_propagation(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
         self.on_click_propagation_stoppable(handler, always(true))
@@ -110,39 +115,16 @@ pub trait PointerEventAware: RawElWrapper {
         })
     }
 
-    // TODO: this doesn't make sense until the event listener supports registering multiple listeners https://discord.com/channels/691052431525675048/1236111180624297984/1250245547756093465
-    // per event
-    // fn on_click_outside_event(self, mut handler: impl FnMut(&Pointer<Click>) + Send + Sync + 'static)
-    // -> Self {      self.update_raw_el(|raw_el| {
-    //         let entity_holder = Mutable::new(None);
-    //         raw_el
-    //             .on_spawn(clone!((entity_holder) move |_, entity| entity_holder.set(Some(entity))))
-    //             .on_global_event_with_system::<Pointer<Click>, _>(
-    //                 move |click: Listener<Pointer<Click>>, children_query: Query<&Children>| {
-    //                     if !is_inside_or_removed_from_dom(
-    //                         entity_holder.get().unwrap(),
-    //                         &click,
-    //                         click.listener(),
-    //                         &children_query,
-    //                     ) {
-    //                         handler(&*click);
-    //                     }
-    //                 },
-    //             )
-    //     })
-    // }
-
     // Requires the [`UiRoot`] resource to be present.
     fn on_click_outside_with_system<Marker>(
         self,
         handler: impl IntoSystem<(Entity, Pointer<Click>), (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
-            raw_el
-                .with_entity(|mut entity| {
-                    let handler = entity.world_scope(|world| register_system(world, handler));
-                    entity.insert(OnClickOutside { handler });
-                })
+            raw_el.with_entity(|mut entity| {
+                let handler = entity.world_scope(|world| register_system(world, handler));
+                entity.insert(OnClickOutside { handler });
+            })
         })
     }
 
@@ -151,10 +133,10 @@ pub trait PointerEventAware: RawElWrapper {
         self.on_click_outside_with_system(move |In((_, _))| handler())
     }
 
-    /// On frames where this element is pressed or gets unpressed and the `blocked` [`System`]
-    /// returns `false`, run a `handler` [`System`]; the `blocked` [`System`] takes
-    /// [`In`](`System::In`) this node's [`Entity`] and the `handler` [`System`] takes
-    /// [`In`](`System::In`) this node's [`Entity`] and its current pressed state.
+    /// On frames where this element is pressed or gets unpressed and does not have a `Blocked`
+    /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this node's
+    /// [`Entity`] and its current pressed state. This method can be called repeatedly to register
+    /// many such handlers.
     fn on_pressed_with_system_blockable<Marker, Blocked: Component>(
         self,
         handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
@@ -182,13 +164,7 @@ pub trait PointerEventAware: RawElWrapper {
                         }
                     },
                 )
-                .on_remove(move |world, _| {
-                    if let Some(handler) = system_holder.get() {
-                        world.commands().add(move |world: &mut World| {
-                            let _ = world.remove_system(handler);
-                        })
-                    }
-                })
+                .apply(remove_system_holder_on_remove(system_holder))
         })
         // .on_global_event_with_system::<Pointer<Up>, _>(move |pointer_up: Listener<Pointer<Up>>| if
         // matches!(pointer_up.button, PointerButton::Primary) { down.set_neq(false) }) TODO: this isn't the
@@ -204,23 +180,22 @@ pub trait PointerEventAware: RawElWrapper {
         })
     }
 
+    /// When this element's pressed state changes, run a [`System`] which takes
+    /// [`In`](`System::In`) this node's [`Entity`] and its current pressed state. This method can
+    /// be called repeatedly to register many such handlers.
     fn on_pressed_change_with_system<Marker>(
         self,
         handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
     ) -> Self {
         let system_holder = Mutable::new(None);
-        self.update_raw_el(clone!((system_holder) |raw_el| {
-            raw_el.on_spawn(clone!((system_holder) move |world, _| {
-                system_holder.set(Some(register_system(world, handler)));
-            }))
-            .on_remove(move |world, _| {
-                if let Some(system) = system_holder.get() {
-                    world.commands().add(move |world: &mut World| {
-                        let _ = world.remove_system(system);
-                    })
-                }
-            })
-        }))
+        self.update_raw_el(clone!(
+            (system_holder) | raw_el | {
+                raw_el.on_spawn(clone!((system_holder) move |world, _| {
+                    system_holder.set(Some(register_system(world, handler)));
+                }))
+            }
+        ))
+        .update_raw_el(remove_system_holder_on_remove(system_holder.clone()))
         .on_pressed_with_system_blockable::<_, PressHandlingBlocked>(
             move |In((entity, cur)),
                   mut pressed: Local<bool>,
@@ -236,6 +211,7 @@ pub trait PointerEventAware: RawElWrapper {
         )
     }
 
+    /// When this element's pressed state changes, run a function with its current pressed state.
     fn on_pressed_change(self, mut handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
         self.on_pressed_change_with_system(move |In((_, pressed))| handler(pressed))
     }
@@ -245,18 +221,15 @@ pub trait PointerEventAware: RawElWrapper {
         handler: impl IntoSystem<Entity, (), Marker> + Send + 'static,
     ) -> Self {
         let system_holder = Mutable::new(None);
-        self.update_raw_el(clone!((system_holder) |raw_el| {
-            raw_el.on_spawn(clone!((system_holder) move |world, _| {
-                system_holder.set(Some(register_system(world, handler)));
-            }))
-            .on_remove(move |world, _| {
-                if let Some(system) = system_holder.get() {
-                    world.commands().add(move |world: &mut World| {
-                        let _ = world.remove_system(system);
-                    })
-                }
-            })
-        }))
+        self.update_raw_el(clone!(
+            (system_holder) | raw_el | {
+                raw_el
+                    .on_spawn(clone!((system_holder) move |world, _| {
+                        system_holder.set(Some(register_system(world, handler)));
+                    }))
+                    .apply(remove_system_holder_on_remove(system_holder.clone()))
+            }
+        ))
         .on_pressed_with_system_blockable::<_, Blocked>(
             move |In((entity, pressed)), mut system: Local<Option<SystemId<Entity>>>, mut commands: Commands| {
                 if pressed {
@@ -273,7 +246,7 @@ pub trait PointerEventAware: RawElWrapper {
     }
 
     /// When this element is being pressed, run a function, reactively controlling whether the press
-    /// is blocked.
+    /// is blocked with a [`Signal`].
     fn on_pressing_blockable_signal(
         self,
         handler: impl FnMut() + Send + Sync + 'static,
@@ -431,7 +404,8 @@ impl Component for OnClickOutside {
     }
 }
 
-// TODO: use global events like moonzoon instead? requires being able to register multiple event listeners per event type
+// TODO: use global events like moonzoon instead? requires being able to register multiple event
+// listeners per event type
 fn on_click_outside_system(
     mut clicks: EventReader<Pointer<Click>>,
     on_click_outsides: Query<(Entity, &OnClickOutside)>,
@@ -702,7 +676,11 @@ pub(super) fn plugin(app: &mut App) {
                     .and_then(resource_exists_and_changed::<bevy_mod_picking::focus::HoverMap>),
             ),
             consume_queued_cursor.run_if(resource_removed::<CursorOnHoverDisabled>()),
-            on_click_outside_system.run_if(resource_exists::<UiRoot>.and_then(any_with_component::<OnClickOutside>).and_then(on_event::<Pointer<Click>>())),
+            on_click_outside_system.run_if(
+                resource_exists::<UiRoot>
+                    .and_then(any_with_component::<OnClickOutside>)
+                    .and_then(on_event::<Pointer<Click>>()),
+            ),
         ),
     );
 }

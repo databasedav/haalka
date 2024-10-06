@@ -1,7 +1,7 @@
 use std::{ops::Not, pin::Pin};
 
 use bevy::{
-    ecs::{component::{ComponentHooks, StorageType}, system::{self, SystemId, SystemState}},
+    ecs::system::{SystemId, SystemState},
     prelude::*,
 };
 use bevy_mod_picking::{
@@ -9,7 +9,7 @@ use bevy_mod_picking::{
     picking_core::Pickable,
 };
 
-use crate::raw::observe;
+use crate::{raw::observe, utils::remove_system_holder_on_remove};
 
 use super::{
     el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::{PointerEventAware, CursorOnHoverable}, raw::{RawElWrapper, register_system}, scrollable::Scrollable,
@@ -46,6 +46,7 @@ impl UiRootable for TextInput {}
 impl ViewportMutable for TextInput {}
 impl CursorOnHoverable for TextInput {}
 
+/// Marker [`Component`] for [`TextInput`] to prevent focusing on `Down` events. Useful when input focus is more conditional.
 #[derive(Component)]
 pub struct TextInputFocusOnDownDisabled;
 
@@ -223,13 +224,11 @@ impl TextInput {
                 system_holder.set(Some(system));
                 entity.insert(Focusable { is_focused: false });
             }))
-            .observe(clone!((system_holder) move |event: Trigger<FocusedChange>, mut commands: Commands| commands.run_system_with_input(system_holder.get().unwrap(), (event.entity(), event.event().0))))
-            .on_remove(move |world, _| {
-                if let Some(system) = system_holder.get() {
-                    world.commands().add(move |world: &mut World| {
-                        let _ = world.remove_system(system);
-                    });
-                }
+            .apply(remove_system_holder_on_remove(system_holder.clone()))
+            .observe(move |event: Trigger<FocusedChange>, mut system: Local<Option<SystemId<(Entity, bool)>>>, mut commands: Commands| {
+                // only pay the read locking cost once
+                let &mut system = system.get_or_insert_with(|| system_holder.get().unwrap());
+                commands.run_system_with_input(system, (event.entity(), event.event().0))
             })
         })
     }
@@ -635,6 +634,7 @@ impl TextInput {
         self
     }
 
+    /// When the string in this input changes, run a `handler` [`System`] which takes [`In`](System::In) the [`Entity`] of this input's [`Entity`] and the new [`String`].
     pub fn on_change_with_system<Marker>(self, handler: impl IntoSystem<(Entity, String,), (), Marker> + Send + 'static) -> Self {
         self.update_raw_el(|raw_el| {
             let system_holder = Mutable::new(None);
@@ -647,13 +647,7 @@ impl TextInput {
                 });
             }))
             .insert(ListeningToChanges)
-            .on_remove(move |world, _| {
-                if let Some(system) = system_holder.get() {
-                    world.commands().add(move |world: &mut World| {
-                        let _ = world.remove_system(system);
-                    });
-                }
-            })
+            .apply(remove_system_holder_on_remove(system_holder))
         })
     }
 
