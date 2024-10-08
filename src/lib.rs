@@ -37,10 +37,10 @@ cfg_if::cfg_if! {
             pointer_event_aware::{PointerEventAware, CursorOnHoverable, CursorDisabled, CursorEvent, CursorOnHoverDisabled},
             global_event_aware::GlobalEventAware,
             row::Row,
-            scrollable::{ScrollHandler, BasicScrollHandler, HoverableScrollable, ScrollDirection, ScrollabilitySettings, Scrollable},
+            scrollable::{BasicScrollHandler, MouseWheelScrollable, OnHoverMouseWheelScrollable, ScrollDirection},
             sizeable::Sizeable,
             stack::Stack,
-            viewport_mutable::ViewportMutable,
+            viewport_mutable::{ViewportMutable, LimitToBody, ViewportMutation},
         };
 
         cfg_if::cfg_if! {

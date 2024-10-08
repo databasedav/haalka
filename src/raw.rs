@@ -203,7 +203,7 @@ impl RawHaalkaEl {
     /// Attach an [`Observer`] to this element.
     ///
     /// Attaches a special [`HaalkaObserver`] component to the entity, which allows it to be filtered by higher level tools (see [aalo](https://github.com/databasedav/aalo)).
-    pub fn observe<E: Event, B: Bundle, M>(self, observer: impl IntoObserverSystem<E, B, M>) -> Self {
+    pub fn observe<E: Event, B: Bundle, Marker>(self, observer: impl IntoObserverSystem<E, B, Marker>) -> Self {
         self.on_spawn(|world, entity| observe(world, entity, observer))
     }
 
@@ -250,10 +250,10 @@ impl RawHaalkaEl {
         })
     }
 
-    pub fn on_signal_one_shot<I: Send + 'static, M>(
+    pub fn on_signal_one_shot<I: Send + 'static, Marker>(
         self,
         signal: impl Signal<Item = I> + Send + 'static,
-        system: impl IntoSystem<(Entity, I), (), M> + Send + 'static,
+        system: impl IntoSystem<(Entity, I), (), Marker> + Send + 'static,
     ) -> Self {
         let system_holder = Mutable::new(None);
         self.on_spawn(clone!((system_holder) move |world, _| {
@@ -319,10 +319,10 @@ impl RawHaalkaEl {
 
     /// Reactively run a function with that [`Entity`]'s [`EntityWorldMut`] and the output of the
     /// [`Signal`].
-    pub fn on_signal_with_entity_forwarded<T: Send + 'static, M>(
+    pub fn on_signal_with_entity_forwarded<T: Send + 'static, Marker>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
-        forwarder: impl IntoSystem<Entity, Option<Entity>, M> + Send + 'static,
+        forwarder: impl IntoSystem<Entity, Option<Entity>, Marker> + Send + 'static,
         mut f: impl FnMut(EntityWorldMut, T) + Send + Sync + 'static,
     ) -> Self {
         self.on_signal_one_shot_forwarded(
@@ -355,10 +355,10 @@ impl RawHaalkaEl {
 
     /// Reactively run a function, if the `forwarder` points to [`Some`] [`Entity`], with mutable
     /// access (via [`Mut`]) to that [`Entity`]'s `C` [`Component`] if it exists.
-    pub fn on_signal_with_component_forwarded<T: Send + 'static, C: Component, M>(
+    pub fn on_signal_with_component_forwarded<T: Send + 'static, C: Component, Marker>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
-        forwarder: impl IntoSystem<Entity, Option<Entity>, M> + Send + 'static,
+        forwarder: impl IntoSystem<Entity, Option<Entity>, Marker> + Send + 'static,
         mut f: impl FnMut(Mut<C>, T) + Send + Sync + 'static,
     ) -> Self {
         self.on_signal_one_shot_forwarded(
@@ -398,9 +398,9 @@ impl RawHaalkaEl {
     /// Reactively set the `C` [`Component`] of the [`Entity`] that the `forwarder` points to if it
     /// points to [`Some`] [`Entity`]. If the [`Signal`] outputs [`None`], the `C` [`Component`] is
     /// removed.
-    pub fn component_signal_forwarded<C: Component, M>(
+    pub fn component_signal_forwarded<C: Component, Marker>(
         self,
-        forwarder: impl IntoSystem<Entity, Option<Entity>, M> + Send + 'static,
+        forwarder: impl IntoSystem<Entity, Option<Entity>, Marker> + Send + 'static,
         component_option_signal: impl Signal<Item = impl Into<Option<C>>> + Send + 'static,
     ) -> Self {
         self.on_signal_with_entity_forwarded(
@@ -606,7 +606,6 @@ impl RawHaalkaEl {
     /// stop propagation the same frame that the respective [`Signal`] outputs `true`. If you need
     /// frame perfect disabling and propagation stopping, use
     /// [`.on_event_with_system_disableable_propagation_stoppable`](Self::on_event_with_system_disableable_propagation_stoppable).
-    ///
     pub fn on_event_disableable_propagation_stoppable_signal<E: EntityEvent>(
         self,
         mut handler: impl FnMut(E) + Send + Sync + 'static,
@@ -692,7 +691,7 @@ impl Component for OnRemove {
 #[derive(Component)]
 pub struct HaalkaOneShotSystem;
 
-pub(crate) fn register_system<I: 'static, O: 'static, M, S: IntoSystem<I, O, M> + 'static>(
+pub(crate) fn register_system<I: 'static, O: 'static, Marker, S: IntoSystem<I, O, Marker> + 'static>(
     world: &mut World,
     system: S,
 ) -> SystemId<I, O> {
@@ -707,10 +706,10 @@ pub(crate) fn register_system<I: 'static, O: 'static, M, S: IntoSystem<I, O, M> 
 #[derive(Component)]
 pub struct HaalkaObserver;
 
-pub(crate) fn observe<E: Event, B: Bundle, M>(
+pub(crate) fn observe<E: Event, B: Bundle, Marker>(
     world: &mut World,
     entity: Entity,
-    observer: impl IntoObserverSystem<E, B, M>,
+    observer: impl IntoObserverSystem<E, B, Marker>,
 ) {
     world.spawn((Observer::new(observer).with_entity(entity), HaalkaObserver));
 }

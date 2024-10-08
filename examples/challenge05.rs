@@ -156,14 +156,13 @@ fn ui_root(world: &mut World) {
                             Column::<NodeBundle>::new()
                                 .height(Val::Px(200.))
                                 .align(Align::new().center_x())
-                                .scrollable_on_hover(ScrollabilitySettings {
-                                    flex_direction: FlexDirection::Column,
-                                    overflow: Overflow::clip_y(),
-                                    scroll_handler: BasicScrollHandler::new()
+                                .viewport_mutable(Overflow::clip_y(), LimitToBody::Vertical)
+                                .on_scroll_with_system_on_hover(
+                                    BasicScrollHandler::new()
                                         .direction(ScrollDirection::Vertical)
                                         .pixels(20.)
-                                        .into(),
-                                })
+                                        .into_system(),
+                                )
                                 .viewport_y_signal(SCROLL_POSITION.signal())
                                 .items({
                                     let hovereds = hovereds.lock_ref().into_iter().cloned().collect::<Vec<_>>();

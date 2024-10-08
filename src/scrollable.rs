@@ -1,10 +1,14 @@
+use crate::{raw::observe, ViewportMutable};
+
 use super::{
     pointer_event_aware::PointerEventAware,
-    raw::{AppendDirection, RawElWrapper, RawHaalkaEl},
-    utils::{clone, spawn},
+    raw::{register_system, AppendDirection, RawHaalkaEl},
+    utils::{clone, remove_system_holder_on_remove, spawn},
+    viewport_mutable::ViewportMutation,
 };
+use apply::Apply;
 use bevy::{
-    ecs::component::Component,
+    ecs::{component::Component, event},
     input::mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
 };
@@ -14,73 +18,114 @@ use std::convert::Into;
 
 // TODO: make this component marker based
 
+#[derive(Component, Default)]
+pub struct ScrollDisabled;
+
+#[derive(Component)]
+struct ScrollEnabled;
+
 /// Enables an element's viewport to be modified and react to mouse wheel events.
-pub trait Scrollable: RawElWrapper {
-    /// Wrap this element in a scrollable container, setting how mouse wheel events should be
-    /// handled via [`ScrollabilitySettings`], and activating this handling only when the
-    /// provided [`Signal`] outputs `true`.
-    fn scrollable_signal(
+pub trait MouseWheelScrollable: ViewportMutable {
+    fn on_scroll_with_system_disableable<Disabled: Component, Marker>(
         self,
-        settings: ScrollabilitySettings,
-        active_signal: impl Signal<Item = bool> + Send + 'static,
+        handler: impl IntoSystem<(Entity, MouseWheel), (), Marker> + Send + 'static,
     ) -> Self {
-        self.update_raw_el(move |raw_el| {
+        self.update_raw_el(|raw_el| {
+            let system_holder = Mutable::new(None);
             raw_el
-                .insert(ScrollHandler(settings.scroll_handler))
-                .component_signal::<ScrollableMarker, _>(active_signal.map_true(|| ScrollableMarker))
-                .defer_update(AppendDirection::Front, move |raw_el| {
-                    RawHaalkaEl::from(NodeBundle::default())
-                        .with_component::<Style>(move |mut style| {
-                            style.flex_direction = settings.flex_direction;
-                            style.overflow = settings.overflow;
-                        })
-                        .child(raw_el)
+                .insert(ScrollEnabled)
+                .observe(|event: Trigger<OnAdd, Disabled>, mut commands: Commands| {
+                    if let Some(mut entity) = commands.get_entity(event.entity()) {
+                        entity.remove::<ScrollEnabled>();
+                    }
                 })
+                .observe(move |event: Trigger<OnRemove, Disabled>, mut commands: Commands| {
+                    if let Some(mut entity) = commands.get_entity(event.entity()) {
+                        entity.try_insert(ScrollEnabled);
+                    }
+                })
+                .on_spawn(clone!((system_holder) move |world, entity| {
+                    let system = register_system(world, handler);
+                    system_holder.set(Some(system));
+                    observe(world, entity, move |mouse_wheel: Trigger<MouseWheel>, mut commands: Commands| {
+                        commands.run_system_with_input(system, (mouse_wheel.entity(), mouse_wheel.event().clone()));
+                    })
+                }))
+                .apply(remove_system_holder_on_remove(system_holder))
         })
+    }
+
+    fn on_scroll_with_system<Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, MouseWheel), (), Marker> + Send + 'static,
+    ) -> Self {
+        self.on_scroll_with_system_disableable::<ScrollDisabled, Marker>(handler)
+    }
+
+    #[allow(invalid_type_param_default)]
+    fn on_scroll_with_system_disableable_signal<Marker, Disabled: Component + Default = ScrollDisabled>(
+        self,
+        handler: impl IntoSystem<(Entity, MouseWheel), (), Marker> + Send + 'static,
+        blocked: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.update_raw_el(|raw_el| raw_el.component_signal::<Disabled, _>(blocked.map_true(default)))
+        .on_scroll_with_system_disableable::<Disabled, _>(handler)
+    }
+
+    fn on_scroll_disableable<Disabled: Component>(
+        self,
+        mut handler: impl FnMut(MouseWheel) + Send + Sync + 'static,
+    ) -> Self {
+        self.on_scroll_with_system_disableable::<Disabled, _>(move |In((_, mouse_wheel))| handler(mouse_wheel))
+    }
+
+    fn on_scroll(self, handler: impl FnMut(MouseWheel) + Send + Sync + 'static) -> Self {
+        self.on_scroll_disableable::<ScrollDisabled>(handler)
+    }
+
+    fn on_scroll_disableable_signal(
+        self,
+        handler: impl FnMut(MouseWheel) + Send + Sync + 'static,
+        blocked: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.update_raw_el(|raw_el| raw_el.component_signal::<ScrollDisabled, _>(blocked.map_true(default)))
+            .on_scroll_disableable::<ScrollDisabled>(handler)
     }
 }
 
 /// Convenience trait for enabling scrollability when hovering over an element.
-pub trait HoverableScrollable: Scrollable + PointerEventAware {
-    /// Wrap this element in a scrollable container, setting how mouse wheel events should be
-    /// handled via [`ScrollabilitySettings`], and activating this handling only when this
-    /// element is hovered.
-    fn scrollable_on_hover(self, settings: ScrollabilitySettings) -> Self {
-        let hovered = Mutable::new(false);
-        self.scrollable_signal(settings, hovered.signal()).hovered_sync(hovered)
+pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware {
+    fn on_scroll_with_system_on_hover<Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, MouseWheel), (), Marker> + Send + 'static,
+    ) -> Self {
+        self.on_scroll_with_system_disableable::<ScrollDisabled, Marker>(handler)
+            .on_hovered_change_with_system(|In((entity, hovered)), mut commands: Commands| {
+                if let Some(mut entity) = commands.get_entity(entity) {
+                    if hovered {
+                        entity.remove::<ScrollDisabled>();
+                    } else {
+                        entity.try_insert(ScrollDisabled);
+                    }
+                }
+            })
+    }
+
+    fn on_scroll_on_hover(self, mut handler: impl FnMut(MouseWheel) + Send + Sync + 'static) -> Self {
+        self.on_scroll_with_system_on_hover::<_>(move |In((_, mouse_wheel))| handler(mouse_wheel))
     }
 }
 
-impl<T: Scrollable + PointerEventAware> HoverableScrollable for T {}
-
-#[derive(Component)]
-pub struct ScrollHandler(
-    Box<dyn FnMut(&MouseWheel, &Node, Mut<Style>, &Parent, &Query<&Node>) + Send + Sync + 'static>,
-);
-
-/// Configuration for scrollable wrapping container and handling of mouse wheel events.
-pub struct ScrollabilitySettings {
-    /// Forwarded directly to the wrapping container's [`Style`].
-    pub flex_direction: FlexDirection,
-    /// Forwarded directly to the wrapping container's [`Style`].
-    pub overflow: Overflow,
-    /// Function to handle mouse wheel events, with access to the element's [`Node`],
-    /// [`Mut<Style>`], [`Parent`], and a [`Query<&Node>`].
-    pub scroll_handler: Box<dyn FnMut(&MouseWheel, &Node, Mut<Style>, &Parent, &Query<&Node>) + Send + Sync + 'static>,
-}
-
-#[derive(Component)]
-pub struct ScrollableMarker;
+impl<T: PointerEventAware + MouseWheelScrollable> OnHoverMouseWheelScrollable for T {}
 
 fn scroll_system(
     mut mouse_wheel_events: EventReader<MouseWheel>,
-    mut scroll_targets: Query<(&mut ScrollHandler, &Node, &mut Style, &Parent), With<ScrollableMarker>>,
-    node_query: Query<&Node>,
+    scroll_listeners: Query<Entity, With<ScrollEnabled>>,
+    mut commands: Commands,
 ) {
-    for mouse_wheel_event in mouse_wheel_events.read() {
-        for (mut scroll_handler, scrollable_node, style, parent) in &mut scroll_targets {
-            (scroll_handler.0)(mouse_wheel_event, scrollable_node, style, parent, &node_query);
-        }
+    let listeners = scroll_listeners.iter().collect::<Vec<_>>();
+    for event in mouse_wheel_events.read() {
+        commands.trigger_targets(event.clone(), listeners.clone());
     }
 }
 
@@ -147,13 +192,19 @@ impl BasicScrollHandler {
         }
         self
     }
+
+    pub fn into_system(
+        self,
+    ) -> Box<dyn FnMut(In<(Entity, MouseWheel)>, Query<&Style>, Commands) + Send + Sync + 'static> {
+        self.into()
+    }
 }
 
 const DEFAULT_SCROLL_DIRECTION: ScrollDirection = ScrollDirection::Vertical;
 const DEFAULT_SCROLL_MAGNITUDE: f32 = 10.;
 
 impl From<BasicScrollHandler>
-    for Box<dyn FnMut(&MouseWheel, &Node, Mut<Style>, &Parent, &Query<&Node>) + Send + Sync + 'static>
+    for Box<dyn FnMut(In<(Entity, MouseWheel)>, Query<&Style>, Commands) + Send + Sync + 'static>
 {
     fn from(handler: BasicScrollHandler) -> Self {
         let BasicScrollHandler {
@@ -172,48 +223,30 @@ impl From<BasicScrollHandler>
             // ergonomic task collection strat if so
             spawn(magnitude_signal.for_each_sync(clone!((magnitude) move |m| magnitude.set_neq(m)))).detach();
         }
-        let f = {
-            move |mouse_wheel_event: &MouseWheel,
-                  scrollable_node: &Node,
-                  mut style: Mut<Style>,
-                  parent: &Parent,
-                  node_query: &Query<&Node>| {
+        let f = move |In((entity, mouse_wheel)): In<(Entity, MouseWheel)>,
+                      styles: Query<&Style>,
+                      mut commands: Commands| {
+            let dy = match mouse_wheel.unit {
+                MouseScrollUnit::Line => mouse_wheel.y * magnitude.get(),
+                MouseScrollUnit::Pixel => mouse_wheel.y,
+            };
+            if let Ok(style) = styles.get(entity) {
                 match direction.get() {
                     ScrollDirection::Vertical => {
-                        let height = scrollable_node.size().y;
-                        let Ok(container_height) = node_query.get(parent.get()).map(|node| node.size().y) else {
-                            return;
+                        let top = match style.top {
+                            Val::Px(top) => top,
+                            _ => 0.,
                         };
-                        let max_scroll: f32 = (height - container_height).max(0.);
-                        let dy = match mouse_wheel_event.unit {
-                            MouseScrollUnit::Line => magnitude.get() * mouse_wheel_event.y,
-                            MouseScrollUnit::Pixel => mouse_wheel_event.y,
-                        };
-                        if let Val::Auto = style.top {
-                            style.top = Val::Px(0.);
-                        }
-                        if let Val::Px(cur) = style.top {
-                            style.top = Val::Px((cur + dy).clamp(-max_scroll, 0.));
-                        }
+                        commands.trigger_targets(ViewportMutation::y(top + dy), entity);
                     }
                     ScrollDirection::Horizontal => {
-                        let width = scrollable_node.size().x;
-                        let Ok(container_width) = node_query.get(parent.get()).map(|node| node.size().x) else {
-                            return;
+                        let left = match style.left {
+                            Val::Px(left) => left,
+                            _ => 0.,
                         };
-                        let max_scroll: f32 = (width - container_width).max(0.);
-                        let dx = match mouse_wheel_event.unit {
-                            MouseScrollUnit::Line => mouse_wheel_event.y * magnitude.get(),
-                            MouseScrollUnit::Pixel => mouse_wheel_event.y,
-                        };
-                        if let Val::Auto = style.left {
-                            style.left = Val::Px(0.);
-                        }
-                        if let Val::Px(cur) = style.left {
-                            style.left = Val::Px((cur + dx).clamp(-max_scroll, 0.));
-                        }
+                        commands.trigger_targets(ViewportMutation::x(left + dy), entity);
                     }
-                    _ => {}
+                    _ => (),
                 }
             }
         };
@@ -222,5 +255,5 @@ impl From<BasicScrollHandler>
 }
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(Update, scroll_system.run_if(any_with_component::<ScrollableMarker>));
+    app.add_systems(Update, scroll_system.run_if(any_with_component::<ScrollEnabled>));
 }

@@ -5,7 +5,10 @@
 
 use std::{ops::Not, time::Duration};
 
-use bevy::prelude::*;
+use bevy::{
+    input::mouse::{MouseScrollUnit, MouseWheel},
+    prelude::*,
+};
 use haalka::{prelude::*, ViewportMutable};
 
 fn main() {
@@ -293,14 +296,13 @@ fn key_values() -> impl Element + Sizeable {
     Column::<NodeBundle>::new()
         .with_style(|mut style| style.row_gap = Val::Px(10.))
         .height(Val::Percent(90.))
-        .scrollable_on_hover(ScrollabilitySettings {
-            flex_direction: FlexDirection::Column,
-            overflow: Overflow::clip_y(),
-            scroll_handler: BasicScrollHandler::new()
+        .viewport_mutable(Overflow::clip_y(), LimitToBody::Vertical)
+        .on_scroll_with_system_on_hover(
+            BasicScrollHandler::new()
                 .direction(ScrollDirection::Vertical)
                 .pixels(20.)
-                .into(),
-        })
+                .into_system(),
+        )
         .viewport_y_signal(SCROLL_POSITION.signal())
         .items_signal_vec(PAIRS.signal_vec_cloned().enumerate().map(
             |(

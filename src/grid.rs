@@ -11,7 +11,7 @@ use super::{
     global_event_aware::GlobalEventAware,
     pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
-    scrollable::Scrollable,
+    scrollable::MouseWheelScrollable,
     sizeable::Sizeable,
     stack::Stack,
     viewport_mutable::ViewportMutable,
@@ -73,7 +73,7 @@ impl<NodeType: Bundle> CursorOnHoverable for Grid<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Grid<NodeType> {}
 impl<NodeType: Bundle> Nameable for Grid<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Grid<NodeType> {}
-impl<NodeType: Bundle> Scrollable for Grid<NodeType> {}
+impl<NodeType: Bundle> MouseWheelScrollable for Grid<NodeType> {}
 impl<NodeType: Bundle> Sizeable for Grid<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Grid<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Grid<NodeType> {}

@@ -4,7 +4,7 @@ use super::{
     align::{AlignabilityFacade, Alignable, Aligner, ChildAlignable},
     raw::{RawElWrapper, RawElement, RawHaalkaEl},
 };
-use bevy:: prelude::*;
+use bevy::prelude::*;
 use futures_signals::signal::{Signal, SignalExt};
 
 /// The high level UI building block of [haalka](crate). [`Element`]s are [`RawElement`]s that wrap

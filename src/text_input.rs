@@ -12,7 +12,7 @@ use bevy_mod_picking::{
 use crate::{raw::observe, utils::remove_system_holder_on_remove};
 
 use super::{
-    el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::{PointerEventAware, CursorOnHoverable}, raw::{RawElWrapper, register_system}, scrollable::Scrollable,
+    el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::{PointerEventAware, CursorOnHoverable}, raw::{RawElWrapper, register_system}, scrollable::MouseWheelScrollable,
     sizeable::Sizeable, utils::clone, viewport_mutable::ViewportMutable, global_event_aware::GlobalEventAware,
 };
 use apply::Apply;
@@ -40,7 +40,7 @@ impl ElementWrapper for TextInput {
 impl GlobalEventAware for TextInput {}
 impl Nameable for TextInput {}
 impl PointerEventAware for TextInput {}
-impl Scrollable for TextInput {}
+impl MouseWheelScrollable for TextInput {}
 impl Sizeable for TextInput {}
 impl UiRootable for TextInput {}
 impl ViewportMutable for TextInput {}

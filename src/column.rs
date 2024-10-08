@@ -11,7 +11,7 @@ use super::{
     global_event_aware::GlobalEventAware,
     pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
-    scrollable::Scrollable,
+    scrollable::MouseWheelScrollable,
     sizeable::Sizeable,
     viewport_mutable::ViewportMutable,
 };
@@ -66,7 +66,7 @@ impl<NodeType: Bundle> CursorOnHoverable for Column<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Column<NodeType> {}
 impl<NodeType: Bundle> Nameable for Column<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Column<NodeType> {}
-impl<NodeType: Bundle> Scrollable for Column<NodeType> {}
+impl<NodeType: Bundle> MouseWheelScrollable for Column<NodeType> {}
 impl<NodeType: Bundle> Sizeable for Column<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Column<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Column<NodeType> {}

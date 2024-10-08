@@ -9,7 +9,7 @@ use super::{
     global_event_aware::GlobalEventAware,
     pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
-    scrollable::Scrollable,
+    scrollable::MouseWheelScrollable,
     sizeable::Sizeable,
     viewport_mutable::ViewportMutable,
 };
@@ -70,7 +70,7 @@ impl<NodeType: Bundle> CursorOnHoverable for El<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for El<NodeType> {}
 impl<NodeType: Bundle> Nameable for El<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for El<NodeType> {}
-impl<NodeType: Bundle> Scrollable for El<NodeType> {}
+impl<NodeType: Bundle> MouseWheelScrollable for El<NodeType> {}
 impl<NodeType: Bundle> Sizeable for El<NodeType> {}
 impl<NodeType: Bundle> UiRootable for El<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for El<NodeType> {}
