@@ -12,15 +12,15 @@ use bevy::{
 };
 use bevy_mod_picking::{picking_core::backend::HitData, prelude::*};
 use enclose::enclose as clone;
-use focus::{HoverMap, PreviousHoverMap};
+use focus::HoverMap;
 use futures_signals::signal::{always, channel, Mutable, Signal, SignalExt};
-use haalka_futures_signals_ext::{SignalExtBool, SignalExtExt};
+use haalka_futures_signals_ext::SignalExtBool;
 
 use crate::UiRoot;
 
 use super::{
-    raw::{observe, register_system, RawElWrapper},
-    utils::{remove_system_holder_on_remove, sleep},
+    raw::{observe, register_system, utils::remove_system_holder_on_remove, RawElWrapper},
+    utils::sleep,
 };
 
 /// Enables reacting to pointer events like hover, click, and press. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`PointerEventAware`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/ability/pointer_event_aware.rs).
@@ -216,6 +216,9 @@ pub trait PointerEventAware: RawElWrapper {
         self.on_pressed_change_with_system(move |In((_, pressed))| handler(pressed))
     }
 
+    /// On frames where this element is being pressed and does not have a `Blocked`
+    /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this node's
+    /// [`Entity`]. This method can be called repeatedly to register many such handlers.
     fn on_pressing_with_system_blockable<Marker, Blocked: Component>(
         self,
         handler: impl IntoSystem<Entity, (), Marker> + Send + 'static,
@@ -241,12 +244,13 @@ pub trait PointerEventAware: RawElWrapper {
         )
     }
 
+    /// On frames where this element is being pressed, run a function.
     fn on_pressing_blockable<Blocked: Component>(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
         self.on_pressing_with_system_blockable::<_, Blocked>(move |_: In<_>| handler())
     }
 
-    /// When this element is being pressed, run a function, reactively controlling whether the press
-    /// is blocked with a [`Signal`].
+    /// On frames where this element is being pressed, run a function, reactively controlling
+    /// whether the press is blocked with a [`Signal`].
     fn on_pressing_blockable_signal(
         self,
         handler: impl FnMut() + Send + Sync + 'static,

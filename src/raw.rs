@@ -18,9 +18,10 @@ use futures_signals::{
 };
 use haalka_futures_signals_ext::SignalExtBool;
 
-use crate::utils::remove_system_holder_on_remove;
-
-use super::node_builder::{async_world, NodeBuilder, TaskHolder};
+use super::{
+    node_builder::{async_world, NodeBuilder, TaskHolder},
+    raw::utils::remove_system_holder_on_remove,
+};
 
 /// [haalka](crate)'s core abstraction, allowing one to rig any [`Entity`] with ergonomic
 /// [`futures_signals::Signal`](https://docs.rs/futures-signals/latest/futures_signals/signal/trait.Signal.html) driven reactivity, including
@@ -250,10 +251,12 @@ impl RawHaalkaEl {
         })
     }
 
-    pub fn on_signal_one_shot<I: Send + 'static, Marker>(
+    /// Reactively run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and
+    /// the output of the [`Signal`].
+    pub fn on_signal_one_shot<T: Send + 'static, Marker>(
         self,
-        signal: impl Signal<Item = I> + Send + 'static,
-        system: impl IntoSystem<(Entity, I), (), Marker> + Send + 'static,
+        signal: impl Signal<Item = T> + Send + 'static,
+        system: impl IntoSystem<(Entity, T), (), Marker> + Send + 'static,
     ) -> Self {
         let system_holder = Mutable::new(None);
         self.on_spawn(clone!((system_holder) move |world, _| {
@@ -272,11 +275,13 @@ impl RawHaalkaEl {
         .apply(remove_system_holder_on_remove(system_holder))
     }
 
-    pub fn on_signal_one_shot_forwarded<I: Send + 'static, Marker1, Marker2>(
+    /// Reactively run a [`System`], if the `forwarder` points to [`Some`] [`Entity`], which takes
+    /// [`In`](`System::In`) that element's [`Entity`] and the output of the [`Signal`].
+    pub fn on_signal_one_shot_forwarded<T: Send + 'static, Marker1, Marker2>(
         self,
-        signal: impl Signal<Item = I> + Send + 'static,
+        signal: impl Signal<Item = T> + Send + 'static,
         forwarder: impl IntoSystem<Entity, Option<Entity>, Marker1> + Send + 'static,
-        system: impl IntoSystem<(Entity, I), (), Marker2> + Send + 'static,
+        system: impl IntoSystem<(Entity, T), (), Marker2> + Send + 'static,
     ) -> Self {
         let forwarder_system_holder = Mutable::new(None);
         let handler_system_holder = Mutable::new(None);
@@ -286,7 +291,7 @@ impl RawHaalkaEl {
         }))
         .on_signal_one_shot(
             signal,
-            clone!((forwarder_system_holder, handler_system_holder) move |In((entity, input)): In<(Entity, I)>, mut systems: Local<Option<(SystemId<Entity, Option<Entity>>, SystemId<(Entity, I)>)>>, mut commands: Commands| {
+            clone!((forwarder_system_holder, handler_system_holder) move |In((entity, input)): In<(Entity, T)>, mut systems: Local<Option<(SystemId<Entity, Option<Entity>>, SystemId<(Entity, T)>)>>, mut commands: Commands| {
                 // only pay the read locking cost once
                 let &mut (forwarder, system) = systems.get_or_insert_with(|| (forwarder_system_holder.get().unwrap(), handler_system_holder.get().unwrap()));
                 commands.add(move |world: &mut World| {
@@ -317,8 +322,8 @@ impl RawHaalkaEl {
         )
     }
 
-    /// Reactively run a function with that [`Entity`]'s [`EntityWorldMut`] and the output of the
-    /// [`Signal`].
+    /// Reactively run a function, if the `forwarder` points to [`Some`] [`Entity`],
+    /// with that [`Entity`]'s [`EntityWorldMut`] and the output of the [`Signal`].
     pub fn on_signal_with_entity_forwarded<T: Send + 'static, Marker>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
@@ -816,3 +821,35 @@ pub trait Spawnable: RawElement {
 }
 
 impl<REW: RawElement> Spawnable for REW {}
+
+pub mod utils {
+    use super::*;
+
+    /// If [`Some`] [`System`](bevy::ecs::system::System) is returned by the `getter`, remove it
+    /// from the [`World`] on element removal.
+    pub fn remove_system_on_remove<I: 'static, O: 'static>(
+        getter: impl FnOnce() -> Option<SystemId<I, O>> + Send + Sync + 'static,
+    ) -> impl FnOnce(RawHaalkaEl) -> RawHaalkaEl {
+        |raw_el| {
+            raw_el.on_remove(move |world, _| {
+                if let Some(system) = getter() {
+                    world.commands().add(move |world: &mut World| {
+                        let _ = world.remove_system(system);
+                    })
+                }
+            })
+        }
+    }
+
+    /// Remove the held system from the [`World`] on element removal.
+    pub fn remove_system_holder_on_remove<I: 'static, O: 'static>(
+        system_holder: Mutable<Option<SystemId<I, O>>>,
+    ) -> impl FnOnce(RawHaalkaEl) -> RawHaalkaEl {
+        remove_system_on_remove(move || system_holder.get())
+    }
+
+    /// Run an element's deferred updaters without spawning.
+    pub fn flush_deferred_updaters<T: RawElement>(raw_el: T) -> RawHaalkaEl {
+        raw_el.into_raw().into_node_builder().apply(RawHaalkaEl::from)
+    }
+}

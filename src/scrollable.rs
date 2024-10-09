@@ -2,13 +2,13 @@ use crate::{raw::observe, ViewportMutable};
 
 use super::{
     pointer_event_aware::PointerEventAware,
-    raw::{register_system, AppendDirection, RawHaalkaEl},
-    utils::{clone, remove_system_holder_on_remove, spawn},
+    raw::{register_system, utils::remove_system_holder_on_remove},
+    utils::{clone, spawn},
     viewport_mutable::ViewportMutation,
 };
 use apply::Apply;
 use bevy::{
-    ecs::{component::Component, event},
+    ecs::component::Component,
     input::mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
 };
@@ -69,7 +69,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
         blocked: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| raw_el.component_signal::<Disabled, _>(blocked.map_true(default)))
-        .on_scroll_with_system_disableable::<Disabled, _>(handler)
+            .on_scroll_with_system_disableable::<Disabled, _>(handler)
     }
 
     fn on_scroll_disableable<Disabled: Component>(
@@ -196,21 +196,10 @@ impl BasicScrollHandler {
     pub fn into_system(
         self,
     ) -> Box<dyn FnMut(In<(Entity, MouseWheel)>, Query<&Style>, Commands) + Send + Sync + 'static> {
-        self.into()
-    }
-}
-
-const DEFAULT_SCROLL_DIRECTION: ScrollDirection = ScrollDirection::Vertical;
-const DEFAULT_SCROLL_MAGNITUDE: f32 = 10.;
-
-impl From<BasicScrollHandler>
-    for Box<dyn FnMut(In<(Entity, MouseWheel)>, Query<&Style>, Commands) + Send + Sync + 'static>
-{
-    fn from(handler: BasicScrollHandler) -> Self {
         let BasicScrollHandler {
             direction: direction_signal_option,
             magnitude: magnitude_signal_option,
-        } = handler;
+        } = self;
         let direction = Mutable::new(DEFAULT_SCROLL_DIRECTION);
         let magnitude = Mutable::new(DEFAULT_SCROLL_MAGNITUDE);
         if let Some(direction_signal) = direction_signal_option {
@@ -253,6 +242,9 @@ impl From<BasicScrollHandler>
         Box::new(f)
     }
 }
+
+const DEFAULT_SCROLL_DIRECTION: ScrollDirection = ScrollDirection::Vertical;
+const DEFAULT_SCROLL_MAGNITUDE: f32 = 10.;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(Update, scroll_system.run_if(any_with_component::<ScrollEnabled>));

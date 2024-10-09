@@ -9,7 +9,7 @@ use bevy_mod_picking::{
     picking_core::Pickable,
 };
 
-use crate::{raw::observe, utils::remove_system_holder_on_remove};
+use crate::{raw::observe, raw::utils::remove_system_holder_on_remove};
 
 use super::{
     el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::{PointerEventAware, CursorOnHoverable}, raw::{RawElWrapper, register_system}, scrollable::MouseWheelScrollable,

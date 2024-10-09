@@ -46,7 +46,7 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
                 .direction(ScrollDirection::Vertical)
                 .pixels(LETTER_SIZE)
                 .into_system(),
-            signal::not(signal::and(signal::not(SHIFTED.signal()), hovered.signal())),
+            signal::or(signal::not(hovered.signal()), SHIFTED.signal()),
         )
         .with_style(move |mut style| style.top = Val::Px(-LETTER_SIZE * rotate as f32))
         .hovered_sync(hovered)
@@ -66,10 +66,12 @@ fn ui_root(world: &mut World) {
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
-        .hovered_sync(hovered.clone())
         .child(
             Row::<NodeBundle>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(30.))
+                .with_style(|mut style: Mut<'_, Style>| {
+                    style.column_gap = Val::Px(30.);
+                    style.padding = UiRect::horizontal(Val::Px(7.5));
+                })
                 .width(Val::Px(300.))
                 .viewport_mutable(Overflow::clip_x(), LimitToBody::Horizontal)
                 .on_scroll_with_system_disableable_signal::<_, HorizontalScrollDisabled>(
@@ -78,8 +80,9 @@ fn ui_root(world: &mut World) {
                         // TODO: special handler for auto discrete like rectray https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs
                         .pixels(63.)
                         .into_system(),
-                    signal::not(signal::and(SHIFTED.signal(), hovered.signal())),
+                    signal::not(signal::and(hovered.signal(), SHIFTED.signal())),
                 )
+                .hovered_sync(hovered)
                 .items(
                     [
                         bevy::color::palettes::css::RED,

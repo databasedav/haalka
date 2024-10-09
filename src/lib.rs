@@ -8,8 +8,8 @@ use node_builder::init_async_world;
 
 mod raw;
 pub use raw::{
-    AppendDirection as DeferredUpdateAppendDirection, HaalkaObserver, HaalkaOneShotSystem, IntoOptionRawElement,
-    IntoRawElement, RawElWrapper, RawElement, RawHaalkaEl, Spawnable,
+    utils::*, AppendDirection as DeferredUpdateAppendDirection, HaalkaObserver, HaalkaOneShotSystem,
+    IntoOptionRawElement, IntoRawElement, RawElWrapper, RawElement, RawHaalkaEl, Spawnable,
 };
 
 cfg_if::cfg_if! {

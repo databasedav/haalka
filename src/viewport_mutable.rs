@@ -114,10 +114,27 @@ pub trait ViewportMutable: RawElWrapper {
                     // this wrapper element is the [`Viewport`]
                     RawHaalkaEl::from(NodeBundle::default())
                         .with_component::<Style>(move |mut style| {
-                            style.flex_direction = FlexDirection::Column;
+                            style.display = Display::Flex;
                             style.overflow = overflow;
                         })
                         .child(raw_el) // the `raw_el` here is the [`Scene`]
+                        .on_spawn_with_system(
+                            |In(entity), children: Query<&Children>, mut styles: Query<&mut Style>| {
+                                // match the flex direction of `raw_el` above
+                                if let Ok(children) = children.get(entity) {
+                                    if let Some(&child) = children.first() {
+                                        if let Some((flex_direction, mut style)) = styles
+                                            .get(child)
+                                            .map(|style| style.flex_direction)
+                                            .ok()
+                                            .zip(styles.get_mut(entity).ok())
+                                        {
+                                            style.flex_direction = flex_direction;
+                                        }
+                                    }
+                                }
+                            },
+                        )
                 })
         })
     }
