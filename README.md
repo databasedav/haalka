@@ -103,7 +103,7 @@ One can also run the examples with [`just`](https://github.com/casey/just) (`car
 
 |bevy|haalka|
 |-|-|
-|`0.14`|`bevy_0.14` branch|
+|`0.14`|`0.2`|
 |`0.13`|`0.1`|
 
 ## license

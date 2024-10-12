@@ -1,0 +1,17 @@
+[workspace]
+changelog_update = false
+git_release_type = "auto"
+git_release_draft = true
+# release_always = false
+
+[[package]]
+name = "haalka"
+git_tag_name = "v{{ version }}"
+
+[[package]]
+name = "haalka_futures_signals_ext"
+git_tag_enable = false
+
+[[package]]
+name = "haalka_futures_signals_ext"
+git_tag_enable = false

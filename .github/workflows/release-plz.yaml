@@ -43,6 +43,9 @@ jobs:
           submodules: true
       - name: install rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: install bevy dependencies
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
       - name: run release-plz
         uses: MarcoIeni/release-plz-action@v0.5
         with:
