@@ -7,40 +7,45 @@ use super::{
     column::Column,
     element::{IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
-    pointer_event_aware::{Cursorable, PointerEventAware},
+    mouse_wheel_scrollable::MouseWheelScrollable,
+    pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
-    scrollable::Scrollable,
     sizeable::Sizeable,
     viewport_mutable::ViewportMutable,
 };
 
 // TODO: add the extra flag machinery that MoonZoon has to ensure that El's have exactly one child
 // (or child signal)
-/// Singleton [`Element`](super::Element) with exactly one child (not yet enforced). Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`El`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/el.rs).
+/// Singleton [`Element`](super::element::Element) with exactly one child (not yet enforced). Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`El`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/el.rs).
 ///
 /// While multiple children can still be declared with repeated calls to [`.child`](`El::child`) or
 /// [`.child_signal`](`El::child_signal`), their relative alignment was arbitrarily chosen to match
 /// [MoonZoon's implementation](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/el.rs#L41-L69) and should not be relied on.
+#[derive(Default)]
 pub struct El<NodeType> {
     raw_el: RawHaalkaEl,
     align: Option<AlignHolder>,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType: Bundle> From<NodeType> for El<NodeType> {
-    fn from(node_bundle: NodeType) -> Self {
+impl<NodeType: Bundle> From<RawHaalkaEl> for El<NodeType> {
+    fn from(value: RawHaalkaEl) -> Self {
         Self {
-            raw_el: {
-                RawHaalkaEl::from(node_bundle)
-                    .with_component::<Style>(|mut style| {
-                        style.display = Display::Flex;
-                        style.flex_direction = FlexDirection::Column;
-                    })
-                    .insert(Pickable::IGNORE)
-            },
+            raw_el: value
+                .with_component::<Style>(|mut style| {
+                    style.display = Display::Flex;
+                    style.flex_direction = FlexDirection::Column;
+                })
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
+    }
+}
+
+impl<NodeType: Bundle> From<NodeType> for El<NodeType> {
+    fn from(node_bundle: NodeType) -> Self {
+        RawHaalkaEl::from(node_bundle).into()
     }
 }
 
@@ -61,11 +66,11 @@ impl<NodeType> RawElWrapper for El<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> Cursorable for El<NodeType> {}
+impl<NodeType: Bundle> CursorOnHoverable for El<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for El<NodeType> {}
 impl<NodeType: Bundle> Nameable for El<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for El<NodeType> {}
-impl<NodeType: Bundle> Scrollable for El<NodeType> {}
+impl<NodeType: Bundle> MouseWheelScrollable for El<NodeType> {}
 impl<NodeType: Bundle> Sizeable for El<NodeType> {}
 impl<NodeType: Bundle> UiRootable for El<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for El<NodeType> {}

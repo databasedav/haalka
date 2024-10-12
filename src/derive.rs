@@ -16,30 +16,30 @@ use super::{column::Column, el::El, grid::Grid, raw::RawElWrapper, row::Row, sta
 /// enabling one to quickly add high level signals-powered reactivity to any [`Bundle`], not just [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs).
 ///
 /// # Example
-///
 /// ```
 /// use bevy::prelude::*;
-/// use haalka::prelude::*;
+/// use haalka::{prelude::*, impl_haalka_methods};
 ///
-/// #[derive(Component)]
+/// #[derive(Component, Default)]
 /// struct MyComponentA(usize);
 ///
-/// #[derive(Component)]
+/// #[derive(Component, Default)]
 /// struct MyComponentB {
 ///     data: usize,
 /// }
 ///
-/// #[derive(Bundle)]
+/// #[derive(Bundle, Default)]
 /// struct MyBundle {
 ///     my_component_a: MyComponentA,
 ///     my_component_b: MyComponentB,
 /// }
 ///
 /// #[derive(Default)]
-/// struct MyEl(RawHaalkaEl);
+/// struct MyEl(El<MyBundle>);
 ///
-/// impl RawElWrapper for MyEl {
-///     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
+/// impl ElementWrapper for MyEl {
+///     type EL = El<MyBundle>;
+///     fn element_mut(&mut self) -> &mut Self::EL {
 ///         &mut self.0       
 ///     }
 /// }
@@ -85,7 +85,7 @@ macro_rules! impl_haalka_methods {
                     pub fn [<on_signal_with_ $field>]<T: Send + 'static>(
                         self,
                         signal: impl Signal<Item = T> + Send + 'static,
-                        f: impl FnMut(Mut<$field_type>, T) + Send + 'static,
+                        f: impl FnMut(Mut<$field_type>, T) + Send + Sync + 'static,
                     ) -> Self {
                         self.update_raw_el(|raw_el| {
                             raw_el.on_signal_with_component::<T, $field_type>(signal, f)
@@ -108,6 +108,7 @@ macro_rules! impl_haalka_methods_for_aligners_and_node_bundles {
                         style: Style,
                         background_color: BackgroundColor,
                         border_color: BorderColor,
+                        border_radius: BorderRadius,
                         focus_policy: FocusPolicy,
                         transform: Transform,
                         global_transform: GlobalTransform,
@@ -122,28 +123,10 @@ macro_rules! impl_haalka_methods_for_aligners_and_node_bundles {
                         node: Node,
                         style: Style,
                         calculated_size: ContentSize,
-                        background_color: BackgroundColor,
                         image: UiImage,
+                        background_color: BackgroundColor,
                         image_size: UiImageSize,
                         focus_policy: FocusPolicy,
-                        transform: Transform,
-                        global_transform: GlobalTransform,
-                        visibility: Visibility,
-                        inherited_visibility: InheritedVisibility,
-                        view_visibility: ViewVisibility,
-                        z_index: ZIndex,
-                    }
-                }
-                impl_haalka_methods! {
-                    $el_type<AtlasImageBundle> {
-                        node: Node,
-                        style: Style,
-                        calculated_size: ContentSize,
-                        background_color: BackgroundColor,
-                        image: UiImage,
-                        texture_atlas: TextureAtlas,
-                        focus_policy: FocusPolicy,
-                        image_size: UiImageSize,
                         transform: Transform,
                         global_transform: GlobalTransform,
                         visibility: Visibility,
@@ -177,9 +160,10 @@ macro_rules! impl_haalka_methods_for_aligners_and_node_bundles {
                         style: Style,
                         interaction: Interaction,
                         focus_policy: FocusPolicy,
-                        background_color: BackgroundColor,
                         border_color: BorderColor,
+                        border_radius: BorderRadius,
                         image: UiImage,
+                        background_color: BackgroundColor,
                         transform: Transform,
                         global_transform: GlobalTransform,
                         visibility: Visibility,
@@ -203,6 +187,7 @@ impl_haalka_methods_for_aligners_and_node_bundles! {
 }
 
 // TODO: macro doesn't play nice with generics and chatgpt can't figure it out
+// TODO: migrate to aalo's impl_syncers! strategy for this
 // MaterialNodeBundle<M: UiMaterial> {
 //     node: Node,
 //     style: Style,

@@ -3,54 +3,34 @@
 use bevy::prelude::*;
 use bevy_async_ecs::AsyncEcsPlugin;
 
-mod node_builder;
+pub mod node_builder;
 use node_builder::init_async_world;
 
-mod raw;
-pub use raw::{
-    AppendDirection as DeferredUpdateAppendDirection, IntoOptionRawElement, IntoRawElement, RawElWrapper, RawElement,
-    RawHaalkaEl, Spawnable,
-};
+pub mod raw;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "ui")] {
-        mod align;
+        pub mod align;
         mod column;
         mod el;
-        mod element;
-        mod grid;
-        mod pointer_event_aware;
-        mod global_event_aware;
+        pub mod element;
+        pub mod grid;
+        #[allow(missing_docs)]
+        pub mod pointer_event_aware;
+        #[allow(missing_docs)]
+        pub mod global_event_aware;
         mod row;
-        mod scrollable;
-        mod sizeable;
+        #[allow(missing_docs)]
+        pub mod mouse_wheel_scrollable;
+        #[allow(missing_docs)]
+        pub mod sizeable;
         mod stack;
-        mod viewport_mutable;
-
-        pub use self::{
-            align::{Align, AlignabilityFacade, Alignable, Alignment, ChildAlignable, Aligner},
-            column::Column,
-            el::El,
-            element::{Element, ElementWrapper, IntoElement, IntoOptionElement, TypeEraseable, UiRoot, UiRootable, Nameable},
-            grid::{Grid, GRID_TRACK_FLOAT_PRECISION_SLACK},
-            node_builder::{async_world, NodeBuilder, TaskHolder},
-            pointer_event_aware::{PointerEventAware, Cursorable},
-            global_event_aware::GlobalEventAware,
-            row::Row,
-            scrollable::{BasicScrollHandler, HoverableScrollable, ScrollDirection, ScrollabilitySettings, Scrollable},
-            sizeable::Sizeable,
-            stack::Stack,
-            viewport_mutable::ViewportMutable,
-        };
-
-        use pointer_event_aware::{PointerEventAwarePlugin};
-        use scrollable::ScrollablePlugin;
+        #[allow(missing_docs)]
+        pub mod viewport_mutable;
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "text_input")] {
-                /// Reactive text input widget and adjacent utilities, a thin wrapper around [`bevy_cosmic_edit`] integrated with [`Signal`](futures_signals::signal::Signal)s.
                 pub mod text_input;
-                use text_input::TextInputPlugin;
             }
         }
     }
@@ -59,7 +39,8 @@ cfg_if::cfg_if! {
 #[cfg(feature = "derive")]
 mod derive;
 
-mod utils;
+#[allow(missing_docs)]
+pub mod utils;
 
 /// Includes the plugins and systems required for [haalka](crate) to function.
 ///
@@ -88,56 +69,71 @@ impl Plugin for HaalkaPlugin {
             if !app.is_plugin_added::<bevy_mod_picking::backends::bevy_ui::BevyUiBackend>() {
                 app.add_plugins(bevy_mod_picking::backends::bevy_ui::BevyUiBackend);
             }
-            app.add_plugins((PointerEventAwarePlugin, ScrollablePlugin));
+            app.add_plugins((pointer_event_aware::plugin, mouse_wheel_scrollable::plugin));
         }
         #[cfg(feature = "text_input")]
-        app.add_plugins(TextInputPlugin);
+        app.add_plugins(text_input::plugin);
 
         app.add_systems(PreStartup, init_async_world);
     }
 }
 
-/// `use haalka::prelude::*;` imports everything one needs to use haalka.
+/// `use haalka::prelude::*;` imports everything one needs to use start using [haalka](crate).
 pub mod prelude {
-    pub use super::*;
+    #[doc(inline)]
+    pub use crate::{
+        node_builder::async_world,
+        raw::{RawElWrapper, RawElement, RawHaalkaEl, Spawnable},
+        HaalkaPlugin,
+    };
 
-    pub use utils::clone;
-
+    #[doc(no_inline)]
     pub use haalka_futures_signals_ext::*;
 
+    #[doc(no_inline)]
     pub use bevy_eventlistener::prelude::*;
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "ui")] {
+            #[doc(no_inline)]
             pub use paste::paste;
-            pub use bevy_mod_picking::{
-                events::{
-                    Click, Down, Drag, DragEnd, DragEnter, DragLeave, DragOver, DragStart, Drop, Move, Out, Over, Pointer, Up,
-                },
-                focus::PickingInteraction,
-                input::prelude::*,
-                picking_core::Pickable,
-                pointer::{PointerButton, PointerId, PointerInteraction, PointerLocation, PointerMap, PointerPress},
-            };
-        }
-    }
+            pub use bevy_mod_picking;
 
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "text_input")] {
-            pub use super::text_input::{Placeholder, TextAttrs, TextInput};
-            pub use bevy_cosmic_edit::{
-                CacheKeyFlags, CosmicBackgroundColor, CosmicBackgroundImage, CosmicBuffer, CosmicColor, CosmicPadding,
-                CosmicSource, CosmicTextAlign, CosmicTextChanged, CosmicWidgetSize, CosmicWrap, CursorColor, DefaultAttrs,
-                FamilyOwned, FocusedWidget as CosmicFocusedWidget, FontStyle, FontWeight, HoverCursor, MaxChars, MaxLines,
-                SelectionColor, Stretch, XOffset,
+            #[doc(inline)]
+            pub use crate::{
+                align::{Align, Alignable},
+                column::Column,
+                el::El,
+                element::{Element, ElementWrapper, Nameable, TypeEraseable, UiRoot, UiRootable},
+                global_event_aware::GlobalEventAware,
+                grid::Grid,
+                mouse_wheel_scrollable::{
+                    BasicScrollHandler, MouseWheelScrollable, OnHoverMouseWheelScrollable, ScrollDirection,
+                },
+                pointer_event_aware::{SetCursor, CursorOnHoverDisabled, CursorOnHoverable, PointerEventAware},
+                row::Row,
+                sizeable::Sizeable,
+                stack::Stack,
+                viewport_mutable::{LimitToBody, ViewportMutable},
             };
+
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "text_input")] {
+                    #[doc(inline)]
+                    pub use super::text_input::{Placeholder, TextAttrs, TextInput};
+                    pub use bevy_cosmic_edit;
+                }
+            }
         }
     }
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "utils")] {
-            pub use super::utils::{sleep, spawn, sync, sync_neq, flip};
+            #[doc(inline)]
+            pub use crate::utils::*;
+            #[doc(no_inline)]
             pub use apply::{Also, Apply};
+            #[doc(no_inline)]
             pub use once_cell::sync::Lazy;
         }
     }

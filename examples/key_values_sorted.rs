@@ -3,10 +3,14 @@
 //! promises made promises kept ! <https://discord.com/channels/691052431525675048/1192585689460658348/1193431789465776198>
 //! (yes i take requests)
 
-use std::{ops::Not, time::Duration};
+use std::{
+    ops::{Deref, Not},
+    time::Duration,
+};
 
 use bevy::prelude::*;
-use haalka::{prelude::*, ViewportMutable};
+use bevy_cosmic_edit::{CosmicBackgroundColor, CosmicWrap, CursorColor, MaxLines};
+use haalka::{prelude::*, text_input::FocusedTextInput};
 
 fn main() {
     App::new()
@@ -27,7 +31,7 @@ fn main() {
                 tabber,
                 escaper,
                 sort_one.run_if(on_event::<MaybeChanged>()),
-                focus_scroller.run_if(resource_changed::<CosmicFocusedWidget>),
+                focus_scroller.run_if(resource_changed_or_removed::<FocusedTextInput>()),
             ),
         )
         .add_event::<MaybeChanged>()
@@ -37,6 +41,7 @@ fn main() {
 const INPUT_HEIGHT: f32 = 40.;
 const INPUT_WIDTH: f32 = 200.;
 const STARTING_SORTED_BY: KeyValue = KeyValue::Key;
+static DARK_GRAY: Lazy<Color> = Lazy::new(|| Srgba::gray(0.25).into());
 
 static PAIRS: Lazy<MutableVec<RowData>> = Lazy::new(|| {
     let mut pairs = [
@@ -141,7 +146,7 @@ fn text_input(
         .fill_color_signal(
             focus
                 .signal()
-                .map_bool(|| Color::DARK_GRAY, || Color::WHITE)
+                .map_bool(|| *DARK_GRAY, || Color::WHITE)
                 .map(CosmicBackgroundColor),
         )
         .attrs(TextAttrs::new().color_signal(focus.signal().map_bool(|| Color::WHITE, || Color::BLACK).map(Some)))
@@ -149,6 +154,7 @@ fn text_input(
         .on_focused_change(clone!((focus) move |is_focused| {
             if !is_focused {
                 if let Some(index) = index_option.get() {
+                    // TODO: use an observer for this
                     async_world().send_event(MaybeChanged(index)).apply(spawn).detach();
                 }
             }
@@ -156,6 +162,9 @@ fn text_input(
         }))
         .text_signal(string.signal_cloned())
         .on_change_sync(string)
+    // TODO: this unfocuses on click for some reason ...
+    // .on_click_outside_with_system(|In(_), mut commands: Commands|
+    // commands.remove_resource::<FocusedTextInput>())
 }
 
 fn clear_focus() {
@@ -189,7 +198,7 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
                 .height(Val::Px(80.))
                 .background_color_signal(
                     signal::or(hovered.signal(), selected.signal())
-                        .map_bool(|| Color::GRAY, || Color::BLACK)
+                        .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
                         .map(BackgroundColor),
                 )
                 .hovered_sync(hovered)
@@ -292,14 +301,13 @@ fn key_values() -> impl Element + Sizeable {
     Column::<NodeBundle>::new()
         .with_style(|mut style| style.row_gap = Val::Px(10.))
         .height(Val::Percent(90.))
-        .scrollable_on_hover(ScrollabilitySettings {
-            flex_direction: FlexDirection::Column,
-            overflow: Overflow::clip_y(),
-            scroll_handler: BasicScrollHandler::new()
+        .mutable_viewport(Overflow::clip_y(), LimitToBody::Vertical)
+        .on_scroll_with_system_on_hover(
+            BasicScrollHandler::new()
                 .direction(ScrollDirection::Vertical)
                 .pixels(20.)
-                .into(),
-        })
+                .into_system(),
+        )
         .viewport_y_signal(SCROLL_POSITION.signal())
         .items_signal_vec(PAIRS.signal_vec_cloned().enumerate().map(
             |(
@@ -342,8 +350,8 @@ fn x_button() -> impl Element + PointerEventAware {
         .background_color_signal(
             hovered
                 .signal()
-                .map_bool(|| Color::RED, || Color::DARK_GRAY)
-                .map(BackgroundColor),
+                .map_bool(|| bevy::color::palettes::basic::RED.into(), || *DARK_GRAY)
+                .map(BackgroundColor::from),
         )
         .hovered_sync(hovered)
         .child(
@@ -362,7 +370,7 @@ fn x_button() -> impl Element + PointerEventAware {
 
 fn ui_root(world: &mut World) {
     El::<NodeBundle>::new()
-        .ui_root() // required if we want `on_click_outside` functions to behave correctly
+        .ui_root()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
@@ -391,8 +399,8 @@ fn ui_root(world: &mut World) {
                                 .background_color_signal(
                                     hovered
                                         .signal()
-                                        .map_bool(|| Color::GREEN, || Color::DARK_GRAY)
-                                        .map(BackgroundColor),
+                                        .map_bool(|| bevy::color::palettes::basic::GREEN.into(), || *DARK_GRAY)
+                                        .map(BackgroundColor::from),
                                 )
                                 .hovered_sync(hovered)
                                 .align_content(Align::center())
@@ -403,8 +411,8 @@ fn ui_root(world: &mut World) {
                                         ..default()
                                     },
                                 )))
-                                .on_click_with_system(|mut focused_widget: ResMut<CosmicFocusedWidget>| {
-                                    focused_widget.0 = None; // TODO: shouldn't need this, can remove once https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
+                                .on_click_with_system(|_: In<_>, mut commands: Commands| {
+                                    commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, can remove once https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
                                     clear_focus();
                                     PAIRS.lock_mut().push_cloned(RowData {
                                         key: {
@@ -433,9 +441,12 @@ fn scroll_to_bottom() {
     SCROLL_POSITION.set(f32::MIN);
 }
 
-fn tabber(keys: Res<ButtonInput<KeyCode>>, mut focused_widget: ResMut<CosmicFocusedWidget>) {
+fn tabber(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
+    // TODO: use .pressed instead of .just_pressed to allow for holding down tab, browser seems to
+    // require minimum press time before starting to repeat, and repeating seems slower than refresh
+    // rate
     if keys.pressed(KeyCode::ShiftLeft) && keys.just_pressed(KeyCode::Tab) {
-        focused_widget.0 = None; // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
+        commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
         let pairs = PAIRS.lock_ref();
         let focused_option = pairs
             .iter()
@@ -458,7 +469,7 @@ fn tabber(keys: Res<ButtonInput<KeyCode>>, mut focused_widget: ResMut<CosmicFocu
             }
         }
     } else if keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::Enter) {
-        focused_widget.0 = None; // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
+        commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
         let pairs = PAIRS.lock_ref();
         let focused_option = pairs
             .iter()
@@ -483,55 +494,52 @@ fn tabber(keys: Res<ButtonInput<KeyCode>>, mut focused_widget: ResMut<CosmicFocu
     }
 }
 
-fn escaper(keys: Res<ButtonInput<KeyCode>>, mut focused_widget: ResMut<CosmicFocusedWidget>) {
+fn escaper(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
     if keys.just_pressed(KeyCode::Escape) {
-        focused_widget.0 = None; // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
+        commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
         clear_focus();
     }
 }
 
 // on focus change, check if the focused element is in view, if not, scroll to it
 fn focus_scroller(
-    focused_widget: Res<CosmicFocusedWidget>,
-    cosmic_source_query: Query<(Entity, &CosmicSource)>,
+    focused_text_input_option: Option<Res<FocusedTextInput>>,
     data_query: Query<(&Node, &GlobalTransform, &Parent, &mut Style)>,
 ) {
-    if let Some(focused) = focused_widget.0 {
-        if let Some((cosmic_node_entity, _)) = cosmic_source_query.iter().find(|(_, source)| source.0 == focused) {
-            if let Ok((child_node, child_transform, child_parent, _)) = data_query.get(cosmic_node_entity) {
-                // TODO: what is this node ?
-                if let Ok((_, _, child_parent, _)) = data_query.get(child_parent.get()) {
-                    if let Ok((scrollable_node, scrollable_transform, scrollable_container, _)) =
-                        data_query.get(child_parent.get())
+    if let Some(focused_text_input) = focused_text_input_option.as_deref().map(Deref::deref).copied() {
+        if let Ok((child_node, child_transform, child_parent, _)) = data_query.get(focused_text_input) {
+            // TODO: what is this node ?
+            if let Ok((_, _, child_parent, _)) = data_query.get(child_parent.get()) {
+                if let Ok((scrollable_node, scrollable_transform, scrollable_container, _)) =
+                    data_query.get(child_parent.get())
+                {
+                    if let Ok((
+                        scrollable_container_node,
+                        scrollable_container_transform,
+                        _,
+                        scrollable_container_style,
+                    )) = data_query.get(scrollable_container.get())
                     {
-                        if let Ok((
-                            scrollable_container_node,
-                            scrollable_container_transform,
-                            _,
-                            scrollable_container_style,
-                        )) = data_query.get(scrollable_container.get())
-                        {
-                            let child_rect = child_node.logical_rect(child_transform);
-                            let scrollable_rect = scrollable_node.logical_rect(scrollable_transform);
-                            let scrollable_container_rect =
-                                scrollable_container_node.logical_rect(scrollable_container_transform);
-                            let scrolled_option = match scrollable_container_style.top {
-                                Val::Px(top) => Some(top),
-                                Val::Auto => Some(0.0),
-                                _ => None,
-                            };
-                            if let Some(scrolled) = scrolled_option {
-                                let container_base = scrollable_container_rect.min.y - scrolled;
-                                let child_offset = child_rect.min.y - scrolled - container_base;
-                                // TODO: is there a simpler/ more general way to check for node visibility ?
-                                if child_offset + INPUT_HEIGHT - scrolled > scrollable_container_rect.height() {
-                                    SCROLL_POSITION.set(
-                                        scrollable_rect.min.y - child_rect.min.y + scrollable_container_rect.height()
-                                            - INPUT_HEIGHT,
-                                    );
-                                } else if child_offset < scrolled {
-                                    SCROLL_POSITION.set(scrollable_rect.min.y - child_rect.min.y);
-                                }
+                        let child_rect = child_node.logical_rect(child_transform);
+                        let scrollable_rect = scrollable_node.logical_rect(scrollable_transform);
+                        let scrollable_container_rect =
+                            scrollable_container_node.logical_rect(scrollable_container_transform);
+                        let scrolled_option = match scrollable_container_style.top {
+                            Val::Px(top) => Some(top),
+                            Val::Auto => Some(0.0),
+                            _ => None,
+                        };
+                        if let Some(scrolled) = scrolled_option {
+                            let container_base = scrollable_container_rect.min.y - scrolled;
+                            let child_offset = child_rect.min.y - scrolled - container_base;
+                            // TODO: is there a simpler/ more general way to check for node visibility ?
+                            if child_offset + INPUT_HEIGHT - scrolled > scrollable_container_rect.height() {
+                                SCROLL_POSITION.set(
+                                    scrollable_rect.min.y - child_rect.min.y + scrollable_container_rect.height()
+                                        - INPUT_HEIGHT,
+                                );
+                            } else if child_offset < scrolled {
+                                SCROLL_POSITION.set(scrollable_rect.min.y - child_rect.min.y);
                             }
                         }
                     }

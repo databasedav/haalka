@@ -1,3 +1,5 @@
+//! Simple grid layout model ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Grid`](https://github.com/MoonZoon/MoonZoon/blob/f8fc31065f65bdb3ab7b94faf5e3916bc5550dd9/crates/zoon/src/element/grid.rs).
+
 use bevy::prelude::*;
 use bevy_mod_picking::picking_core::Pickable;
 use futures_signals::{
@@ -9,34 +11,39 @@ use super::{
     align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
     element::{IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
-    pointer_event_aware::{Cursorable, PointerEventAware},
+    mouse_wheel_scrollable::MouseWheelScrollable,
+    pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
-    scrollable::Scrollable,
     sizeable::Sizeable,
     stack::Stack,
     viewport_mutable::ViewportMutable,
 };
 
-/// [`Element`](super::Element) with children aligned in a grid using a simple [`.row_wrap_cell_width`](Grid::row_wrap_cell_width) grid layout model. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`Grid`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/grid.rs).
+/// [`Element`](super::element::Element) with children aligned in a grid using a simple [`.row_wrap_cell_width`](Grid::row_wrap_cell_width) grid layout model. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Grid`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/grid.rs).
+#[derive(Default)]
 pub struct Grid<NodeType> {
     raw_el: RawHaalkaEl,
     align: Option<AlignHolder>,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType: Bundle> From<NodeType> for Grid<NodeType> {
-    fn from(node_bundle: NodeType) -> Self {
+impl<NodeType: Bundle> From<RawHaalkaEl> for Grid<NodeType> {
+    fn from(value: RawHaalkaEl) -> Self {
         Self {
-            raw_el: {
-                RawHaalkaEl::from(node_bundle)
-                    .with_component::<Style>(|mut style| {
-                        style.display = Display::Grid;
-                    })
-                    .insert(Pickable::IGNORE)
-            },
+            raw_el: value
+                .with_component::<Style>(|mut style| {
+                    style.display = Display::Grid;
+                })
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
+    }
+}
+
+impl<NodeType: Bundle> From<NodeType> for Grid<NodeType> {
+    fn from(node_bundle: NodeType) -> Self {
+        RawHaalkaEl::from(node_bundle).into()
     }
 }
 
@@ -64,11 +71,11 @@ impl<NodeType: Bundle> RawElWrapper for Grid<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> Cursorable for Grid<NodeType> {}
+impl<NodeType: Bundle> CursorOnHoverable for Grid<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Grid<NodeType> {}
 impl<NodeType: Bundle> Nameable for Grid<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Grid<NodeType> {}
-impl<NodeType: Bundle> Scrollable for Grid<NodeType> {}
+impl<NodeType: Bundle> MouseWheelScrollable for Grid<NodeType> {}
 impl<NodeType: Bundle> Sizeable for Grid<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Grid<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Grid<NodeType> {}
@@ -77,7 +84,7 @@ impl<NodeType: Bundle> ViewportMutable for Grid<NodeType> {}
 pub const GRID_TRACK_FLOAT_PRECISION_SLACK: f32 = 0.0001;
 
 impl<NodeType: Bundle> Grid<NodeType> {
-    /// Simple grid layout model [ported from MooonZoon](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/grid.rs#L95).
+    /// Simple grid layout model [ported from MoonZoon](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/grid.rs#L95).
     /// The `cell_width` passed is simply the width all cells must occupy without overflowing their
     /// parent; if a cell with said width does overflow its parent, it will wrap around to the next
     /// row.
@@ -125,12 +132,11 @@ impl<NodeType: Bundle> Grid<NodeType> {
         cell_width_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(cell_width_signal) = cell_width_signal_option.into() {
-            self.raw_el = self.raw_el.on_signal_with_component::<f32, Style>(
-                cell_width_signal.map(|cell_width| cell_width.into()),
-                |mut style, cell_width| {
-                    style.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width)
-                },
-            );
+            self.raw_el =
+                self.raw_el
+                    .on_signal_with_component::<f32, Style>(cell_width_signal, |mut style, cell_width| {
+                        style.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width)
+                    });
         }
         self
     }

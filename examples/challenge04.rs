@@ -9,7 +9,7 @@ use std::sync::OnceLock;
 use bevy::{prelude::*, window::WindowResized};
 use bevy_nine_slice_ui::{prelude::*, NineSliceUiMaterialBundle};
 use futures_signals::signal::Mutable;
-use haalka::prelude::*;
+use haalka::{impl_haalka_methods, prelude::*};
 
 fn main() {
     App::new()

@@ -1,4 +1,4 @@
-//! Scrollable row of scrollable letter columns. Inspired by https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs.
+//! Scrollable row of scrollable letter columns. Inspired by <https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs>.
 
 use bevy::prelude::*;
 use haalka::prelude::*;
@@ -39,16 +39,13 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
     let hovered = Mutable::new(false);
     Column::<NodeBundle>::new()
         .height(Val::Px(5. * LETTER_SIZE))
-        .scrollable(
-            ScrollabilitySettings {
-                flex_direction: FlexDirection::Column,
-                overflow: Overflow::clip_y(),
-                scroll_handler: BasicScrollHandler::new()
-                    .direction(ScrollDirection::Vertical)
-                    .pixels(LETTER_SIZE)
-                    .into(),
-            },
-            signal::and(signal::not(SHIFTED.signal()), hovered.signal()),
+        .mutable_viewport(Overflow::clip_y(), LimitToBody::Vertical)
+        .on_scroll_with_system_disableable_signal(
+            BasicScrollHandler::new()
+                .direction(ScrollDirection::Vertical)
+                .pixels(LETTER_SIZE)
+                .into_system(),
+            signal::or(signal::not(hovered.signal()), SHIFTED.signal()),
         )
         .with_style(move |mut style| style.top = Val::Px(-LETTER_SIZE * rotate as f32))
         .hovered_sync(hovered)
@@ -60,39 +57,41 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
 }
 
 fn ui_root(world: &mut World) {
+    let hovered = Mutable::new(false);
     El::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
             Row::<NodeBundle>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(30.))
+                .with_style(|mut style: Mut<'_, Style>| {
+                    style.column_gap = Val::Px(30.);
+                    style.padding = UiRect::horizontal(Val::Px(7.5));
+                })
                 .width(Val::Px(300.))
-                .scrollable(
-                    ScrollabilitySettings {
-                        flex_direction: FlexDirection::Row,
-                        overflow: Overflow::clip_x(),
-                        scroll_handler: BasicScrollHandler::new()
-                            .direction(ScrollDirection::Horizontal)
-                            // TODO: special handler for auto discrete like rectray https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs
-                            .pixels(63.)
-                            .into(),
-                    },
-                    SHIFTED.signal(),
+                .mutable_viewport(Overflow::clip_x(), LimitToBody::Horizontal)
+                .on_scroll_with_system_disableable_signal(
+                    BasicScrollHandler::new()
+                        .direction(ScrollDirection::Horizontal)
+                        // TODO: special handler for auto discrete like rectray https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs
+                        .pixels(63.)
+                        .into_system(),
+                    signal::not(signal::and(hovered.signal(), SHIFTED.signal())),
                 )
+                .hovered_sync(hovered)
                 .items(
                     [
-                        Color::RED,
-                        Color::ORANGE,
-                        Color::YELLOW,
-                        Color::GREEN,
-                        Color::BLUE,
-                        Color::INDIGO,
-                        Color::VIOLET,
+                        bevy::color::palettes::css::RED,
+                        bevy::color::palettes::css::ORANGE,
+                        bevy::color::palettes::css::YELLOW,
+                        bevy::color::palettes::css::GREEN,
+                        bevy::color::palettes::css::BLUE,
+                        bevy::color::palettes::css::INDIGO,
+                        bevy::color::palettes::css::VIOLET,
                     ]
                     .into_iter()
                     .enumerate()
-                    .map(|(i, color)| letter_column(i, color)),
+                    .map(|(i, color)| letter_column(i, color.into())),
                 ),
         )
         .spawn(world);

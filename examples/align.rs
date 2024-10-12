@@ -73,7 +73,7 @@ fn alignment_button(alignment: Alignment) -> impl Element {
                     .signal()
                     .map(move |other_alignment| alignment == other_alignment),
             )
-            .map_bool(|| Color::GRAY, || Color::BLACK)
+            .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
             .map(BackgroundColor),
         )
         .hovered_sync(hovered)
@@ -131,7 +131,7 @@ fn ui_root(world: &mut World) {
 fn container_style<E: RawElWrapper + Sizeable>(el: E) -> E {
     el.width(Val::Px(278.)).height(Val::Px(200.)).update_raw_el(|raw_el| {
         raw_el
-            .insert::<BorderColor>(Color::GRAY.into())
+            .insert::<BorderColor>(bevy::color::palettes::basic::GRAY.into())
             .with_component::<Style>(|mut style| {
                 style.border = UiRect::all(Val::Px(3.));
             })
@@ -170,7 +170,7 @@ fn rectangle(index: i32) -> impl Element {
     El::<NodeBundle>::new()
         .width(Val::Px(size as f32))
         .height(Val::Px(size as f32))
-        .background_color(BackgroundColor(Color::DARK_GREEN))
+        .background_color(BackgroundColor(bevy::color::palettes::css::DARK_GREEN.into()))
         .align_signal(
             ALIGNMENT
                 .signal()
@@ -207,7 +207,10 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
                     .map(move |selected_option| selected_option == Some(rectangle_alignment)),
                 hovered_signal,
             )
-            .map_bool(|| Color::BLUE.into(), || Color::MIDNIGHT_BLUE.into()),
+            .map_bool(
+                || bevy::color::palettes::basic::BLUE.into(),
+                || bevy::color::palettes::css::MIDNIGHT_BLUE.into(),
+            ),
         )
         .with_style(|mut style| style.padding = UiRect::all(Val::Px(5.)))
         .child(El::<TextBundle>::new().text(text(&rectangle_alignment.to_string(), 14.)))

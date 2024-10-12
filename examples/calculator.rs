@@ -1,4 +1,4 @@
-//! Simple calculator. Spurred by https://discord.com/channels/691052431525675048/885021580353237032/1263661461364932639.
+//! Simple calculator. Spurred by <https://discord.com/channels/691052431525675048/885021580353237032/1263661461364932639>.
 
 use bevy::prelude::*;
 use calc::*;
@@ -21,8 +21,8 @@ fn main() {
         .run();
 }
 
-const BLUE: Color = Color::rgb(91. / 255., 206. / 255., 250. / 255.);
-const PINK: Color = Color::rgb(245. / 255., 169. / 255., 184. / 255.);
+const BLUE: Color = Color::srgb(91. / 255., 206. / 255., 250. / 255.);
+const PINK: Color = Color::srgb(245. / 255., 169. / 255., 184. / 255.);
 const FONT_SIZE: f32 = 60.0;
 const WIDTH: f32 = 500.;
 const BUTTON_SIZE: f32 = WIDTH / 5.;
@@ -97,7 +97,7 @@ fn display() -> impl Element {
             raw_el.component_signal::<Outline, _>(
                 ERROR
                     .signal()
-                    .map_true(|| Outline::new(Val::Px(4.0), Val::ZERO, Color::RED)),
+                    .map_true(|| Outline::new(Val::Px(4.0), Val::ZERO, bevy::color::palettes::basic::RED.into())),
             )
         })
         .width(Val::Px(BUTTON_SIZE * 3. + GAP * 2.))
@@ -117,7 +117,7 @@ fn clear_button() -> impl Element {
                     if *output_empty {
                         BLUE
                     } else if *hovered {
-                        Color::RED
+                        bevy::color::palettes::basic::RED.into()
                     } else {
                         PINK
                     }
@@ -126,7 +126,7 @@ fn clear_button() -> impl Element {
             .dedupe()
             .map(BackgroundColor),
         )
-        .cursor_disableable(CursorIcon::Pointer, output_empty.signal())
+        .cursor_disableable_signal(CursorIcon::Pointer, output_empty.signal())
         .hovered_sync(hovered)
         .on_click(|| OUTPUT.lock_mut().clear())
 }

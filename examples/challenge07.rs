@@ -9,6 +9,10 @@
 use std::convert::identity;
 
 use bevy::prelude::*;
+use bevy_cosmic_edit::{
+    cosmic_text::{Family, FamilyOwned},
+    CosmicBackgroundColor, CosmicWrap, CursorColor, FontWeight, MaxLines,
+};
 use haalka::prelude::*;
 
 fn main() {
@@ -38,6 +42,44 @@ fn ui_root(world: &mut World) {
             Column::<NodeBundle>::new()
                 .height(Val::Percent(80.))
                 .width(Val::Percent(60.))
+                .item({
+                    let focus = Mutable::new(false);
+                    TextInput::new()
+                        .width(Val::Px(100.))
+                        .height(Val::Px(30.))
+                        .mode(CosmicWrap::InfiniteLine)
+                        .font_size(16.)
+                        .max_lines(MaxLines(1))
+                        .attrs(
+                            TextAttrs::new()
+                                .family(FamilyOwned::new(Family::Name("Fira Mono")))
+                                .weight(FontWeight::MEDIUM),
+                        )
+                        .scroll_disabled()
+                        .cursor_color_signal(
+                            focus
+                                .signal()
+                                .map_bool(|| Color::WHITE, || Color::BLACK)
+                                .map(CursorColor),
+                        )
+                        // TODO: flip colors once https://github.com/Dimchikkk/bevy_cosmic_edit/issues/144
+                        .fill_color_signal(
+                            focus
+                                .signal()
+                                .map_bool(|| Color::BLACK, || Color::WHITE)
+                                .map(CosmicBackgroundColor),
+                        )
+                        .attrs(
+                            TextAttrs::new()
+                                .color_signal(focus.signal().map_bool(|| Color::WHITE, || Color::BLACK).map(Some)),
+                        )
+                        .focus_signal(focus.signal())
+                        .on_focused_change(clone!((focus) move |is_focused| {
+                            focus.set_neq(is_focused);
+                        }))
+                    // .text_signal(string.signal_cloned())
+                    // .on_change_sync(string)
+                })
                 .item(
                     Row::<NodeBundle>::new()
                         .with_style(|mut style| style.column_gap = Val::Px(15.))
@@ -48,9 +90,9 @@ fn ui_root(world: &mut World) {
         .spawn(world);
 }
 
-const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
-const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
-const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
+const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
+const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
+const PRESSED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
 
 const BASE_PADDING: f32 = 5.;
 
@@ -64,7 +106,7 @@ fn button() -> El<NodeBundle> {
             .signal()
             .map(|(pressed, hovered)| {
                 if pressed {
-                    Color::RED
+                    bevy::color::palettes::basic::RED.into()
                 } else if hovered {
                     Color::WHITE
                 } else {
@@ -95,7 +137,7 @@ fn button() -> El<NodeBundle> {
         .border_color_signal(border_color_signal)
         .background_color_signal(background_color_signal)
         .hovered_sync(hovered)
-        .cursor_disableable(CursorIcon::Grabbing, pressed.signal().dedupe())
+        .cursor_disableable_signal(CursorIcon::Grabbing, pressed.signal().dedupe())
         .pressed_sync(pressed)
 }
 
@@ -106,14 +148,18 @@ fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
         // stop propagation because otherwise clearing the dropdown will drop down the
         // options too; the x should eat the click
         .on_click_stop_propagation(on_click)
-        .child(El::<TextBundle>::new().text(text("x")).on_signal_with_text(
-            hovered.signal().map_bool(|| Color::RED, || Color::WHITE),
-            |mut text, color| {
-                if let Some(section) = text.sections.first_mut() {
-                    section.style.color = color;
-                }
-            },
-        ))
+        .child(
+            El::<TextBundle>::new().text(text("x")).on_signal_with_text(
+                hovered
+                    .signal()
+                    .map_bool(|| bevy::color::palettes::basic::RED.into(), || Color::WHITE),
+                |mut text, color| {
+                    if let Some(section) = text.sections.first_mut() {
+                        section.style.color = color;
+                    }
+                },
+            ),
+        )
         .hovered_sync(hovered)
 }
 

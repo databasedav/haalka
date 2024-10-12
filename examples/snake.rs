@@ -3,11 +3,12 @@
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     convert::identity,
+    time::Duration,
 };
 
 use bevy::prelude::*;
 use bevy_rand::prelude::*;
-use haalka::prelude::*;
+use haalka::{grid::GRID_TRACK_FLOAT_PRECISION_SLACK, prelude::*};
 use rand::prelude::*;
 use strum::{EnumIter, IntoEnumIterator};
 
@@ -65,9 +66,9 @@ fn main() {
 const STARTING_SIZE: usize = 20;
 const SIDE: usize = 720; // TODO: reactively auto fit to height
 const WIDTH: usize = 1280; // TODO: reactively auto fit to height
-const EMPTY_COLOR: Color = Color::rgb(91. / 255., 206. / 255., 250. / 255.);
-const SNAKE_COLOR: Color = Color::rgb(245. / 255., 169. / 255., 184. / 255.);
-const FOOD_COLOR: Color = Color::rgb(255. / 255., 255. / 255., 255. / 255.);
+const EMPTY_COLOR: Color = Color::srgb(91. / 255., 206. / 255., 250. / 255.);
+const SNAKE_COLOR: Color = Color::srgb(245. / 255., 169. / 255., 184. / 255.);
+const FOOD_COLOR: Color = Color::srgb(255. / 255., 255. / 255., 255. / 255.);
 const STARTING_TICKS_PER_SECOND: u32 = 10;
 
 #[derive(Resource)]
@@ -147,42 +148,44 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
                 .with_style(|mut style| style.column_gap = Val::Px(10.))
                 .item(El::<TextBundle>::new().text(text("grid size:")))
                 .item(El::<TextBundle>::new().text_signal(size.signal().map(|size| text(&size.to_string()))))
-                .item(text_button("-", || {
-                    async_world().send_event(GridSizeChange::Decr).apply(spawn).detach()
-                }))
-                .item(text_button("+", || {
-                    async_world().send_event(GridSizeChange::Incr).apply(spawn).detach()
-                })),
+                .item(text_button("-").on_pressing_with_system_with_sleep_throttle(
+                    |_: In<_>, mut grid_size_changes: EventWriter<GridSizeChange>| {
+                        grid_size_changes.send(GridSizeChange::Decr);
+                    },
+                    Duration::from_millis(100),
+                ))
+                .item(text_button("+").on_pressing_with_system_with_sleep_throttle(
+                    |_: In<_>, mut grid_size_changes: EventWriter<GridSizeChange>| {
+                        grid_size_changes.send(GridSizeChange::Incr);
+                    },
+                    Duration::from_millis(100),
+                )),
         )
         .item(
             Row::<NodeBundle>::new()
                 .with_style(|mut style| style.column_gap = Val::Px(10.))
                 .item(El::<TextBundle>::new().text(text("tick rate:")))
                 .item(El::<TextBundle>::new().text_signal(tick_rate.signal().map(|size| text(&size.to_string()))))
-                .item(text_button("-", || {
-                    async_world()
-                        .apply(|world: &mut World| {
-                            let tick_rate = &world.resource::<TickRate>().0;
-                            let cur_rate = tick_rate.get();
-                            if cur_rate > 1 {
-                                tick_rate.update(|rate| rate - 1);
-                                world.insert_resource(Time::<Fixed>::from_seconds(1. / (cur_rate - 1) as f64));
-                            }
-                        })
-                        .apply(spawn)
-                        .detach()
-                }))
-                .item(text_button("+", || {
-                    async_world()
-                        .apply(|world: &mut World| {
-                            let tick_rate = &world.resource::<TickRate>().0;
-                            let cur_rate = tick_rate.get();
-                            tick_rate.update(|rate| rate + 1);
-                            world.insert_resource(Time::<Fixed>::from_seconds(1. / (cur_rate + 1) as f64));
-                        })
-                        .apply(spawn)
-                        .detach()
-                })),
+                .item(text_button("-").on_pressing_with_system_with_sleep_throttle(
+                    |_: In<_>, world: &mut World| {
+                        let tick_rate = &world.resource::<TickRate>().0;
+                        let cur_rate = tick_rate.get();
+                        if cur_rate > 1 {
+                            tick_rate.update(|rate| rate - 1);
+                            world.insert_resource(Time::<Fixed>::from_seconds(1. / (cur_rate - 1) as f64));
+                        }
+                    },
+                    Duration::from_millis(100),
+                ))
+                .item(text_button("+").on_pressing_with_system_with_sleep_throttle(
+                    |_: In<_>, world: &mut World| {
+                        let tick_rate = &world.resource::<TickRate>().0;
+                        let cur_rate = tick_rate.get();
+                        tick_rate.update(|rate| rate + 1);
+                        world.insert_resource(Time::<Fixed>::from_seconds(1. / (cur_rate + 1) as f64));
+                    },
+                    Duration::from_millis(100),
+                )),
         )
 }
 
@@ -215,7 +218,7 @@ fn restart_button() -> impl Element {
         .background_color_signal(
             hovered
                 .signal()
-                .map_bool(|| Color::GRAY, || Color::BLACK)
+                .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
                 .map(BackgroundColor),
         )
         .hovered_sync(hovered)
@@ -298,7 +301,7 @@ fn grid_size_changer(
     }
 }
 
-fn text_button(text_: &str, on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
+fn text_button(text_: &str) -> impl Element + PointerEventAware {
     let hovered = Mutable::new(false);
     El::<NodeBundle>::new()
         .width(Val::Px(45.0))
@@ -310,7 +313,6 @@ fn text_button(text_: &str, on_click: impl FnMut() + Send + Sync + 'static) -> i
                 .map(BackgroundColor),
         )
         .hovered_sync(hovered)
-        .on_click(on_click)
         .child(El::<TextBundle>::new().text(text(text_)))
 }
 

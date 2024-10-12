@@ -9,6 +9,7 @@
 use std::{convert::identity, fmt::Display, hash::Hash, time::Duration};
 
 use bevy::prelude::*;
+use bevy_mod_picking::events::{Drag, DragEnd, DragStart, Pointer};
 use haalka::prelude::*;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
@@ -42,10 +43,10 @@ fn main() {
         .run();
 }
 
-const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
-const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
-const CLICKED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
-const TEXT_COLOR: Color = Color::rgb(0.9, 0.9, 0.9);
+const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
+const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
+const CLICKED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
+const TEXT_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
 const FONT_SIZE: f32 = 30.;
 const MAIN_MENU_SIDES: f32 = 300.;
 const SUB_MENU_HEIGHT: f32 = 700.;
@@ -63,6 +64,7 @@ enum SubMenu {
 }
 
 // core widget, pretty much every other widget uses the `Button`
+#[derive(Default)]
 struct Button {
     el: El<NodeBundle>,
     selected: Mutable<bool>,
@@ -91,7 +93,7 @@ impl Button {
                 .signal()
                 .map(|(selected, hovered)| {
                     if selected {
-                        Color::RED
+                        bevy::color::palettes::basic::RED.into()
                     } else if hovered {
                         Color::WHITE
                     } else {
@@ -143,21 +145,16 @@ impl Button {
         // what if we want the selectedness to persist? simply add another mutable that gets flipped
         // on click and then pass a signal of that to this method, which is exactly how the
         // `Checkbox` widget is implemented
-        let syncer = spawn(sync(self.selected.clone(), selected_signal));
+        let syncer = spawn(sync(selected_signal, self.selected.clone()));
         self.el = self.el.update_raw_el(|raw_el| raw_el.hold_tasks([syncer]));
         self
     }
 
     fn hovered_signal(mut self, hovered_signal: impl Signal<Item = bool> + Send + 'static) -> Self {
-        let syncer = spawn(sync(self.hovered.clone(), hovered_signal));
+        let syncer = spawn(sync(hovered_signal, self.hovered.clone()));
         self.el = self.el.update_raw_el(|raw_el| raw_el.hold_tasks([syncer]));
         self
     }
-}
-
-// TODO: make this a public util ?
-async fn sync<T>(mutable: Mutable<T>, signal: impl Signal<Item = T> + Send + 'static) {
-    signal.for_each_sync(|value| mutable.set(value)).await;
 }
 
 fn text(text: impl ToString) -> Text {
@@ -226,7 +223,7 @@ where
     fn controlling(&self) -> &Mutable<bool>;
 
     fn controlling_signal(mut self, controlling_signal: impl Signal<Item = bool> + Send + 'static) -> Self {
-        let syncer = spawn(sync(self.controlling().clone(), controlling_signal));
+        let syncer = spawn(sync(controlling_signal, self.controlling().clone()));
         self = self.update_raw_el(|raw_el| raw_el.hold_tasks([syncer]));
         self
     }
@@ -267,7 +264,6 @@ impl Checkbox {
                     })
                     .on_click(clone!((checked) move || flip(&checked)))
                     .selected_signal(checked.signal())
-                    .into_element()
             },
             controlling,
         }
@@ -293,13 +289,6 @@ enum Quality {
     Medium,
     High,
     Ultra,
-}
-
-fn signal_eq<T: PartialEq + Send>(
-    signal1: impl Signal<Item = T> + Send + 'static,
-    signal2: impl Signal<Item = T> + Send + 'static,
-) -> impl Signal<Item = bool> + Send + 'static {
-    map_ref!(signal1, signal2 => *signal1 == *signal2).dedupe()
 }
 
 struct RadioGroup {
@@ -633,7 +622,7 @@ fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<N
         .background_color_signal(
             hovered
                 .signal()
-                .map_bool(|| NORMAL_BUTTON.with_l(NORMAL_BUTTON.l() + 0.1), || NORMAL_BUTTON)
+                .map_bool(|| NORMAL_BUTTON.lighter(0.05), || NORMAL_BUTTON)
                 .map(BackgroundColor),
         )
         .on_hovered_change(move |is_hovered| only_one_up_flipper(&hovered, &MENU_ITEM_HOVERED_OPTION, Some(is_hovered)))
@@ -1067,14 +1056,18 @@ fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
         // stop propagation because otherwise clearing the dropdown will drop down the
         // options too; the x should eat the click
         .on_click_stop_propagation(on_click)
-        .child(El::<TextBundle>::new().text(text("x")).on_signal_with_text(
-            hovered.signal().map_bool(|| Color::RED, || TEXT_COLOR),
-            |mut text, color| {
-                if let Some(section) = text.sections.first_mut() {
-                    section.style.color = color;
-                }
-            },
-        ))
+        .child(
+            El::<TextBundle>::new().text(text("x")).on_signal_with_text(
+                hovered
+                    .signal()
+                    .map_bool(|| bevy::color::palettes::basic::RED.into(), || TEXT_COLOR),
+                |mut text, color| {
+                    if let Some(section) = text.sections.first_mut() {
+                        section.style.color = color;
+                    }
+                },
+            ),
+        )
 }
 
 static SUB_MENU_SELECTED: Lazy<Mutable<Option<SubMenu>>> = Lazy::new(default);
@@ -1082,7 +1075,7 @@ static SUB_MENU_SELECTED: Lazy<Mutable<Option<SubMenu>>> = Lazy::new(default);
 fn input_event_listener_controller<E: Element>(
     element: E,
     listening: impl Signal<Item = bool> + Send + 'static,
-    mut callback: impl FnMut() -> On<MenuInputEvent> + Send + 'static,
+    mut callback: impl FnMut() -> On<MenuInputEvent> + Send + Sync + 'static,
 ) -> E {
     element.update_raw_el(|raw_el| {
         raw_el.on_signal_with_entity(listening, move |mut entity, listening| {

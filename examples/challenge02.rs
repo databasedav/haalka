@@ -13,7 +13,11 @@ use std::{collections::HashMap, convert::identity, sync::OnceLock};
 
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
-use haalka::prelude::*;
+use bevy_mod_picking::{
+    events::{Click, Down, Move, Pointer, Up},
+    prelude::{Pickable, PointerButton},
+};
+use haalka::{prelude::*, raw::DeferredUpdaterAppendDirection};
 use rand::{
     distributions::{Bernoulli, Distribution},
     Rng,
@@ -187,6 +191,7 @@ static ITEM_NAMES: Lazy<HashMap<usize, &'static str>> = Lazy::new(|| {
     ])
 });
 
+// TODO: port to Lazy
 static ICON_TEXTURE_ATLAS: OnceLock<RpgIconSheet> = OnceLock::new();
 
 // using a global handle for this so we don't need to thread the texture atlas handle through the
@@ -199,7 +204,7 @@ fn icon_sheet() -> &'static RpgIconSheet {
 
 #[derive(AssetCollection, Resource, Clone, Debug)]
 struct RpgIconSheet {
-    #[asset(texture_atlas(tile_size_x = 48., tile_size_y = 48., columns = 10, rows = 27))]
+    #[asset(texture_atlas(tile_size_x = 48, tile_size_y = 48, columns = 10, rows = 27))]
     layout: Handle<TextureAtlasLayout>,
     #[asset(image(sampler = nearest))]
     #[asset(path = "rpg_icon_sheet.png")]
@@ -212,11 +217,17 @@ fn icon(
 ) -> Stack<NodeBundle> {
     Stack::new()
         .layer(
-            El::<AtlasImageBundle>::new()
+            El::<ImageBundle>::new()
                 .image(UiImage::from(icon_sheet().image.clone()))
-                .texture_atlas(TextureAtlas::from(icon_sheet().layout.clone()))
-                // TODO: fix grey flash when inserting into an empty cell, making the index static does not suffice
-                .on_signal_with_texture_atlas(index_signal, |mut image, index| image.index = index),
+                .update_raw_el(|raw_el| {
+                    raw_el
+                        .insert(TextureAtlas::from(icon_sheet().layout.clone()))
+                        // TODO: fix grey flash when inserting into an empty cell, making the index static does not
+                        // suffice; this might actually be the item label flashing on top before the frame it is moved
+                        .on_signal_with_component(index_signal, |mut texture_atlas: Mut<TextureAtlas>, index| {
+                            texture_atlas.index = index;
+                        })
+                }),
         )
         .layer(
             El::<TextBundle>::new()
@@ -244,14 +255,14 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
     let hovered = Mutable::new(false);
     let original_position = Mutable::new(None);
     let down = Mutable::new(false);
-    let stop_propagation_trigger = Mutable::new(false);
-    let cursor_disabling_forwarder = spawn(sync_neq(
-        signal::or(cell_data_option.signal_ref(Option::is_none), is_dragging()),
-        stop_propagation_trigger.clone(),
-    ));
+    // let stop_propagation_trigger = Mutable::new(false);
+    // let cursor_disabling_forwarder = spawn(sync_neq(
+    //     signal::or(cell_data_option.signal_ref(Option::is_none), is_dragging()),
+    //     stop_propagation_trigger.clone(),
+    // ));
     El::<NodeBundle>::new()
-        .update_raw_el(clone!((cell_data_option, hovered, down, stop_propagation_trigger) move |mut raw_el| {
-            raw_el = raw_el.hold_tasks([cursor_disabling_forwarder]);
+        .update_raw_el(clone!((cell_data_option, hovered, down/* , stop_propagation_trigger */) move |mut raw_el| {
+            // raw_el = raw_el.hold_tasks([cursor_disabling_forwarder]);
             if insertable {
                 raw_el = raw_el
                 .insert((
@@ -267,7 +278,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                     // the stack as it would immediately drop one down, so we track the `Down` state
                     signal::and(signal::not(down.signal()), hovered.signal()).dedupe()
                     .map_true(clone!((cell_data_option) move || {
-                        On::<Pointer<Click>>::run(clone!((cell_data_option => self_cell_data_option, stop_propagation_trigger) move |click: Listener<Pointer<Click>>| {
+                        On::<Pointer<Click>>::run(clone!((cell_data_option => self_cell_data_option/* , stop_propagation_trigger */) move |click: Listener<Pointer<Click>>/* , mut commands: Commands */| {
                             let mut consume = false;
                             if let Some(dragging_cell_data_option) = &*DRAGGING_OPTION.lock_ref() {
                                 if self_cell_data_option.lock_ref().is_none() {
@@ -307,16 +318,17 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                 // propagate, before clearing the dragging cell data, which fires the `Over` event
                                 //
                                 // TODO: how can i address this more ergonomically? do bubbling observers help?
-                                let waiter = stop_propagation_trigger.signal().wait_for(true);
-                                async {
-                                    waiter.await;
+                                // let waiter = stop_propagation_trigger.signal().wait_for(true);
+                                // async {
+                                //     waiter.await;
                                     if let Some(cell_data_option) = DRAGGING_OPTION.take() {
                                         cell_data_option.take();
+                                        // commands.entity(click.listener()).remove::<CursorDisabled>();
                                     }
-                                }
-                                .apply(spawn)
-                                .detach();
-                                stop_propagation_trigger.set_neq(true);
+                                // }
+                                // .apply(spawn)
+                                // .detach();
+                                // stop_propagation_trigger.set_neq(true);
                             }
                         }))
                     }))
@@ -356,11 +368,11 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
         // alternative to the stop propagation trigger pattern, which is kinda/pretty cringe
         .cursor_signal(
             map_ref! {
-                let populated = cell_data_option.signal_ref(Option::is_some),
-                let is_dragging = is_dragging() => {
-                    if *is_dragging {
+                let &populated = cell_data_option.signal_ref(Option::is_some),
+                let &is_dragging = is_dragging() => {
+                    if is_dragging {
                         CursorIcon::Grabbing
-                    } else if *populated{
+                    } else if populated {
                         CursorIcon::Grab
                     } else {
                         CursorIcon::Default
@@ -368,8 +380,9 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                 }
             }
         )
-        // TODO: this is more idiomatic and should work, but it doesn't ... yet
-        // .cursor_disableable(CursorIcon::Grab, stop_propagation_trigger.signal())
+        // .cursor_disableable_signal(CursorIcon::Grab, stop_propagation_trigger.signal())
+        // TODO: this is more idiomatic and should work, but it doesn't due to various shenanigans, see stop_propagation_trigger strat attempt for some exploration
+        // .cursor_disableable_signal(CursorIcon::Grab, signal::or(cell_data_option.signal_ref(Option::is_none), is_dragging()))
         .hovered_sync(hovered.clone())
         .width(Val::Px(CELL_WIDTH))
         .height(Val::Px(CELL_WIDTH))
@@ -637,7 +650,7 @@ fn is_dragging() -> impl Signal<Item = bool> {
 
 fn ui_root(world: &mut World) {
     Stack::<NodeBundle>::new()
-        .cursor_disableable(CursorIcon::Default, is_dragging())
+        .cursor_disableable_signal(CursorIcon::Default, is_dragging())
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .update_raw_el(|raw_el| {
@@ -658,7 +671,7 @@ fn ui_root(world: &mut World) {
                 .map_some(move |cell_data| {
                     icon(cell_data.index.signal(), cell_data.count.signal())
                         .update_raw_el(|raw_el| {
-                            raw_el.defer_update(DeferredUpdateAppendDirection::Front, |raw_el| {
+                            raw_el.defer_update(DeferredUpdaterAppendDirection::Front, |raw_el| {
                                 raw_el.insert(Pickable {
                                     // required to allow cell hover to leak through a dragging icon
                                     should_block_lower: false,

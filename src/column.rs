@@ -9,34 +9,39 @@ use super::{
     align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
     element::{IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
-    pointer_event_aware::{Cursorable, PointerEventAware},
+    mouse_wheel_scrollable::MouseWheelScrollable,
+    pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
-    scrollable::Scrollable,
     sizeable::Sizeable,
     viewport_mutable::ViewportMutable,
 };
 
-/// [`Element`](super::Element) with vertically stacked children. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`Column`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/column.rs).
+/// [`Element`](super::element::Element) with vertically stacked children. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Column`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/column.rs).
+#[derive(Default)]
 pub struct Column<NodeType> {
     raw_el: RawHaalkaEl,
     align: Option<AlignHolder>,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType: Bundle> From<NodeType> for Column<NodeType> {
-    fn from(node_bundle: NodeType) -> Self {
+impl<NodeType: Bundle> From<RawHaalkaEl> for Column<NodeType> {
+    fn from(value: RawHaalkaEl) -> Self {
         Self {
-            raw_el: {
-                RawHaalkaEl::from(node_bundle)
-                    .with_component::<Style>(|mut style| {
-                        style.display = Display::Flex;
-                        style.flex_direction = FlexDirection::Column;
-                    })
-                    .insert(Pickable::IGNORE)
-            },
+            raw_el: value
+                .with_component::<Style>(|mut style| {
+                    style.display = Display::Flex;
+                    style.flex_direction = FlexDirection::Column;
+                })
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
+    }
+}
+
+impl<NodeType: Bundle> From<NodeType> for Column<NodeType> {
+    fn from(node_bundle: NodeType) -> Self {
+        RawHaalkaEl::from(node_bundle).into()
     }
 }
 
@@ -57,11 +62,11 @@ impl<NodeType: Bundle> RawElWrapper for Column<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> Cursorable for Column<NodeType> {}
+impl<NodeType: Bundle> CursorOnHoverable for Column<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Column<NodeType> {}
 impl<NodeType: Bundle> Nameable for Column<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Column<NodeType> {}
-impl<NodeType: Bundle> Scrollable for Column<NodeType> {}
+impl<NodeType: Bundle> MouseWheelScrollable for Column<NodeType> {}
 impl<NodeType: Bundle> Sizeable for Column<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Column<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Column<NodeType> {}

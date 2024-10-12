@@ -19,9 +19,9 @@ fn main() {
         .run();
 }
 
-const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
-const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
-const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
+const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
+const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
+const PRESSED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
 
 fn button(font: Handle<Font>) -> impl Element {
     let (pressed, pressed_signal) = Mutable::new_and_signal(false);
@@ -33,7 +33,7 @@ fn button(font: Handle<Font>) -> impl Element {
             .signal()
             .map(|(pressed, hovered)| {
                 if pressed {
-                    Color::RED
+                    bevy::color::palettes::basic::RED.into()
                 } else if hovered {
                     Color::WHITE
                 } else {
@@ -63,6 +63,7 @@ fn button(font: Handle<Font>) -> impl Element {
         .align_content(Align::center())
         .border_color_signal(border_color_signal)
         .background_color_signal(background_color_signal)
+        .border_radius(BorderRadius::MAX)
         .hovered_sync(hovered)
         .pressed_sync(pressed)
         .child(
@@ -84,7 +85,7 @@ fn button(font: Handle<Font>) -> impl Element {
                             TextStyle {
                                 font: font.clone(),
                                 font_size: 40.0,
-                                color: Color::rgb(0.9, 0.9, 0.9),
+                                color: Color::srgb(0.9, 0.9, 0.9),
                                 ..default()
                             },
                         )
@@ -102,6 +103,8 @@ fn ui_root(world: &mut World) {
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
-        .child(button(world.resource::<AssetServer>().load("fonts/FiraSans-Bold.ttf")))
+        .child(button(
+            world.resource::<AssetServer>().load("fonts/FiraMono-subset.ttf"),
+        ))
         .spawn(world);
 }

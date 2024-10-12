@@ -9,38 +9,43 @@ use super::{
     align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
     element::{IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
-    pointer_event_aware::{Cursorable, PointerEventAware},
+    mouse_wheel_scrollable::MouseWheelScrollable,
+    pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
     row::Row,
-    scrollable::Scrollable,
     sizeable::Sizeable,
     viewport_mutable::ViewportMutable,
 };
 
-/// [`Element`](super::Element) with children stacked on directly on top of each other (e.g. along the z-axis), with siblings ordered youngest to oldest, top to bottom. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`Stack`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/stack.rs).
+/// [`Element`](super::element::Element) with children stacked on directly on top of each other (e.g. along the z-axis), with siblings ordered youngest to oldest, top to bottom. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Stack`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/stack.rs).
+#[derive(Default)]
 pub struct Stack<NodeType> {
     raw_el: RawHaalkaEl,
     align: Option<AlignHolder>,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType: Bundle> From<NodeType> for Stack<NodeType> {
-    fn from(node_bundle: NodeType) -> Self {
+impl<NodeType: Bundle> From<RawHaalkaEl> for Stack<NodeType> {
+    fn from(value: RawHaalkaEl) -> Self {
         Self {
-            raw_el: {
-                RawHaalkaEl::from(node_bundle)
-                    .with_component::<Style>(|mut style| {
-                        style.display = Display::Grid;
-                        style.grid_auto_columns =
-                            GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
-                        style.grid_auto_rows =
-                            GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
-                    })
-                    .insert(Pickable::IGNORE)
-            },
+            raw_el: value
+                .with_component::<Style>(|mut style| {
+                    style.display = Display::Grid;
+                    style.grid_auto_columns =
+                        GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
+                    style.grid_auto_rows =
+                        GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
+                })
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
+    }
+}
+
+impl<NodeType: Bundle> From<NodeType> for Stack<NodeType> {
+    fn from(node_bundle: NodeType) -> Self {
+        RawHaalkaEl::from(node_bundle).into()
     }
 }
 
@@ -61,11 +66,11 @@ impl<NodeType: Bundle> RawElWrapper for Stack<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> Cursorable for Stack<NodeType> {}
+impl<NodeType: Bundle> CursorOnHoverable for Stack<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Stack<NodeType> {}
 impl<NodeType: Bundle> Nameable for Stack<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Stack<NodeType> {}
-impl<NodeType: Bundle> Scrollable for Stack<NodeType> {}
+impl<NodeType: Bundle> MouseWheelScrollable for Stack<NodeType> {}
 impl<NodeType: Bundle> Sizeable for Stack<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Stack<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Stack<NodeType> {}

@@ -204,20 +204,17 @@ fn ui_root(world: &mut World) {
         yellow_count.clone(),
     ]);
     El::<NodeBundle>::new()
-    .width(Val::Percent(100.))
-    .height(Val::Percent(100.))
+        .width(Val::Percent(100.))
+        .height(Val::Percent(100.))
         .child(
             Row::<NodeBundle>::new()
                 .with_style(|mut style| style.column_gap = Val::Px(50.))
                 .item(
-                    El::<NodeBundle>::new()
-                    .width(Val::Px(HEIGHT))
-                    .height(Val::Px(HEIGHT))
-                    // can't put non ui nodes on top of ui nodes; yes u can https://discord.com/channels/691052431525675048/743663673393938453/1192729978744352858
-                    // Column::<NodeBundle>::new()
-                    // .with_z_index(|z_index| *z_index = ZIndex::Global(1))
-                    // .item(Row::<NodeBundle>::new().item(box_(Category::A)).item(box_(Category::B)))
-                    // .item(Row::<NodeBundle>::new().item(box_(Category::C)).item(box_(Category::D)))
+                    El::<NodeBundle>::new().width(Val::Px(HEIGHT)).height(Val::Px(HEIGHT)), // can't put non ui nodes on top of ui nodes; yes u can https://discord.com/channels/691052431525675048/743663673393938453/1192729978744352858
+                                                                                            // Column::<NodeBundle>::new()
+                                                                                            // .with_z_index(|z_index| *z_index = ZIndex::Global(1))
+                                                                                            // .item(Row::<NodeBundle>::new().item(box_(Category::A)).item(box_(Category::B)))
+                                                                                            // .item(Row::<NodeBundle>::new().item(box_(Category::C)).item(box_(Category::D)))
                 )
                 .item(
                     Column::<NodeBundle>::new()
@@ -245,7 +242,9 @@ fn ui_root(world: &mut World) {
                                             .dedupe()
                                     })
                                     .align(Align::new().right())
-                                    .update_raw_el(|raw_el| raw_el.with_component::<Style>(|mut style| style.right = Val::Px(100.)))
+                                    .update_raw_el(|raw_el| {
+                                        raw_el.with_component::<Style>(|mut style| style.right = Val::Px(100.))
+                                    }),
                                 ),
                         )
                         .item(
@@ -259,10 +258,10 @@ fn ui_root(world: &mut World) {
         .spawn(world);
 }
 
-const BLUE: Color = Color::rgb(0.25, 0.25, 0.75);
-const GREEN: Color = Color::rgb(0.25, 0.75, 0.25);
-const RED: Color = Color::rgb(0.75, 0.25, 0.25);
-const YELLOW: Color = Color::rgb(0.75, 0.75, 0.25);
+const BLUE: Color = Color::srgb(0.25, 0.25, 0.75);
+const GREEN: Color = Color::srgb(0.25, 0.75, 0.25);
+const RED: Color = Color::srgb(0.75, 0.25, 0.25);
+const YELLOW: Color = Color::srgb(0.75, 0.75, 0.25);
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());

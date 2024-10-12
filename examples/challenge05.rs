@@ -8,7 +8,8 @@
 //! - On the top of the UI is a text field for the character name.
 
 use bevy::prelude::*;
-use haalka::{prelude::*, ViewportMutable};
+use bevy_cosmic_edit::{CosmicBackgroundColor, CosmicWrap, CursorColor};
+use haalka::{prelude::*, text_input::FocusedTextInput};
 use strum::{self, IntoEnumIterator};
 
 fn main() {
@@ -27,9 +28,9 @@ fn main() {
         .run();
 }
 
-const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
-const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
-const CLICKED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
+const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
+const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
+const CLICKED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
 const BUTTON_WIDTH: Val = Val::Px(250.);
 const BUTTON_HEIGHT: Val = Val::Px(65.);
 
@@ -59,7 +60,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
             .signal()
             .map(|(selected, hovered)| {
                 if selected {
-                    Color::RED
+                    bevy::color::palettes::basic::RED.into()
                 } else if hovered {
                     Color::WHITE
                 } else {
@@ -96,7 +97,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
             shape.to_string(),
             TextStyle {
                 font_size: 40.0,
-                color: Color::rgb(0.9, 0.9, 0.9),
+                color: Color::srgb(0.9, 0.9, 0.9),
                 ..default()
             },
         )))
@@ -104,6 +105,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
 
 fn ui_root(world: &mut World) {
     El::<NodeBundle>::new()
+        .ui_root()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
@@ -143,11 +145,14 @@ fn ui_root(world: &mut World) {
                                 .placeholder(
                                     Placeholder::new()
                                         .text("name")
-                                        .attrs(TextAttrs::new().color(Color::GRAY)),
+                                        .attrs(TextAttrs::new().color(bevy::color::palettes::basic::GRAY)),
                                 )
                                 .focus_signal(focused.signal())
                                 .focused_sync(focused)
                                 .on_change_sync(name)
+                                .on_click_outside_with_system(|In(_), mut commands: Commands| {
+                                    commands.remove_resource::<FocusedTextInput>()
+                                })
                         })
                         .item({
                             let hovereds = MutableVec::new_with_values(
@@ -156,26 +161,19 @@ fn ui_root(world: &mut World) {
                             Column::<NodeBundle>::new()
                                 .height(Val::Px(200.))
                                 .align(Align::new().center_x())
-                                .scrollable_on_hover(ScrollabilitySettings {
-                                    flex_direction: FlexDirection::Column,
-                                    overflow: Overflow::clip_y(),
-                                    scroll_handler: BasicScrollHandler::new()
+                                .mutable_viewport(Overflow::clip_y(), LimitToBody::Vertical)
+                                .on_scroll_with_system_on_hover(
+                                    BasicScrollHandler::new()
                                         .direction(ScrollDirection::Vertical)
                                         .pixels(20.)
-                                        .into(),
-                                })
+                                        .into_system(),
+                                )
                                 .viewport_y_signal(SCROLL_POSITION.signal())
                                 .items({
                                     let hovereds = hovereds.lock_ref().into_iter().cloned().collect::<Vec<_>>();
                                     Shape::iter()
                                         .zip(hovereds)
                                         .map(move |(shape, hovered)| button(shape, hovered))
-                                })
-                                .on_click(|| {
-                                    async_world()
-                                        .insert_resource(CosmicFocusedWidget(None))
-                                        .apply(spawn)
-                                        .detach();
                                 })
                         }),
                 ),
@@ -202,7 +200,7 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>
         .apply(spawn)
         .detach();
     commands.spawn(PbrBundle {
-        material: materials.add(Color::rgb_u8(87, 108, 50)),
+        material: materials.add(Color::srgb_u8(87, 108, 50)),
         transform: Transform::from_xyz(-1., 0., 1.),
         ..default()
     });

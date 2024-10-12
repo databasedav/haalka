@@ -1,3 +1,5 @@
+//! High level UI building block/widget abstraction ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Element`](https://github.com/MoonZoon/MoonZoon/blob/f8fc31065f65bdb3ab7b94faf5e3916bc5550dd9/crates/zoon/src/element.rs#L84).
+
 use std::borrow::Cow;
 
 use super::{
@@ -5,13 +7,15 @@ use super::{
     raw::{RawElWrapper, RawElement, RawHaalkaEl},
 };
 use bevy::prelude::*;
+use bevy_mod_picking::prelude::Pickable;
 use futures_signals::signal::{Signal, SignalExt};
 
-/// The high level UI building block of [haalka](crate). [`Element`]s are [`RawElement`]s that wrap
-/// [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs)
-/// and be can be aligned using [haalka](crate)'s [simple alignability semantics](super::Align) and
-/// granted UI-specific abilities like [pointer event awareness](super::PointerEventAware),
-/// [scrollability](super::Scrollable), [viewport mutability](super::ViewportMutable), etc.
+/// [`Element`]s are [`RawElement`]s that wrap [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs)
+/// and be can be aligned using [haalka](crate)'s [simple alignability
+/// semantics](super::align::Align) and granted UI-specific abilities like [pointer event
+/// awareness](super::pointer_event_aware::PointerEventAware), [viewport
+/// mutability](super::viewport_mutable::ViewportMutable),
+/// [scrollability](super::mouse_wheel_scrollable::MouseWheelScrollable), etc.
 pub trait Element: RawElement + Alignable + ChildAlignable {}
 
 impl<E: RawElement + Alignable + ChildAlignable> Element for E {}
@@ -66,21 +70,21 @@ impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
 }
 
 /// [`ElementWrapper`]s can be passed to the child methods of all alignable types, e.g.
-/// [`.child`](super::El::child), [`.item_signal`](super::Column::item_signal),
-/// [`.layers`](super::Stack::layers), [`.cells_signal_vec`](super::Grid::cells_signal_vec), etc.
-/// This trait provides the foundation for building "widgets" using [haalka](crate).
+/// [`.child`](super::el::El::child), [`.item_signal`](super::column::Column::item_signal),
+/// [`.layers`](super::stack::Stack::layers),
+/// [`.cells_signal_vec`](super::grid::Grid::cells_signal_vec), etc. This trait provides the
+/// foundation for building "widgets" using [haalka](crate).
 ///
 /// For example one could create a selectable [`Button`](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/challenge01.rs#L83)
 /// widget and then [stack them horizontally](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/challenge01.rs#L354)
-/// in a [`Row`](super::Row) (or vertically in a [`Column`](super::Column)) and add some
-/// [exclusivity logic](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/challenge01.rs#L374)
+/// in a [`Row`](super::row::Row) (or vertically in a [`Column`](super::column::Column)) and add
+/// some [exclusivity logic](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/challenge01.rs#L374)
 /// to create a [`RadioGroup`](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/challenge01.rs#L314) widget.
 ///
 /// [`ElementWrapper`]s can also be granted UI-specific abilities, enabling consumers to easily add
 /// additional functionality to their custom widgets.
 ///
 /// # Example
-///
 /// ```
 /// use bevy::prelude::*;
 /// use haalka::prelude::*;
@@ -98,20 +102,38 @@ impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
 /// }
 ///
 /// impl PointerEventAware for MyWidget {}
-/// impl Scrollable for MyWidget {}
-/// impl Sizeable for MyWidget {}
 /// impl ViewportMutable for MyWidget {}
+/// impl MouseWheelScrollable for MyWidget {}
+/// impl Sizeable for MyWidget {}
 /// ```
 pub trait ElementWrapper: Sized {
     /// The type of the [`Element`] that this wrapper wraps; this can be another [`ElementWrapper`].
-    type EL: Element;
+    type EL: Element + Default;
     /// Mutable reference to the [`Element`] that this wrapper wraps.
     fn element_mut(&mut self) -> &mut Self::EL;
+
+    /// Indirection which allows trait consumers to define custom "build" or "render" logic outside
+    /// the body of the [`ElementWrapper`] itself, allowing the [`ElementWrapper`] to be more
+    /// ergonomically used as a configuration builder.
+    ///
+    /// Couldn't figure out how to do this without the [`Default`] constraint since it is required
+    /// by [`mem::take`], and was led to the [`mem::take`] solution since there didn't seem to
+    /// be a viable unsafe way to take ownership of a single field of a struct with only a
+    /// mutable reference to the field, i.e. via [`.element_mut()`](ElementWrapper::element_mut).
+    ///
+    /// [`mem::take`]: std::mem::take
+    fn into_el(mut self) -> Self::EL {
+        std::mem::take(self.element_mut())
+    }
 }
 
 impl<EW: ElementWrapper> RawElWrapper for EW {
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
         self.element_mut().raw_el_mut()
+    }
+
+    fn into_raw_el(self) -> RawHaalkaEl {
+        self.into_el().into_raw()
     }
 }
 
@@ -138,7 +160,8 @@ impl<T: Alignable> TypeEraseable for T {
     }
 }
 
-/// A resource for holding the root [`Entity`] of the UI tree.
+/// A resource for holding the root [`Entity`] of the UI tree. Use [`UiRootable::ui_root`] to
+/// register an [`Element`] as the [`UiRoot`].
 ///
 /// Used to register global event listeners.
 #[derive(Resource)]
@@ -149,9 +172,11 @@ pub trait UiRootable: RawElWrapper {
     /// Mark this node as the root of the UI tree.
     fn ui_root(self) -> Self {
         self.update_raw_el(|raw_el| {
-            raw_el.on_spawn(|world, entity| {
-                world.insert_resource(UiRoot(entity));
-            })
+            raw_el
+                .on_spawn(|world, entity| {
+                    world.insert_resource(UiRoot(entity));
+                })
+                .insert(Pickable::default())
         })
     }
 }

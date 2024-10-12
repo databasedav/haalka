@@ -1,32 +1,48 @@
-use std::{
-    future::Future,
-    mem,
-    ops::Not,
-    sync::{Arc, Mutex},
-};
+//! [haalka](crate)'s core abstraction, allowing one to rig any [`Entity`] with ergonomic
+//! [`futures_signals::Signal`](https://docs.rs/futures-signals/latest/futures_signals/signal/trait.Signal.html) driven reactivity, including
+//! methods for registering children, [`Component`]s, [event listeners](On), and [`System`]s all
+//! using a declarative builder pattern/[fluent interface](https://en.wikipedia.org/wiki/Fluent_interface).
+//! Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`raw_el`](https://github.com/MoonZoon/MoonZoon/tree/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/raw_el).
 
-use async_lock;
-use bevy::{prelude::*, tasks::Task};
+use std::{future::Future, marker::PhantomData, mem};
+
+use apply::Apply;
+use bevy::{
+    ecs::{
+        component::{ComponentHooks, StorageType},
+        system::{IntoObserverSystem, RunSystemOnce, RunSystemWithInput, SystemId},
+        world::DeferredWorld,
+    },
+    prelude::*,
+    tasks::Task,
+};
 use bevy_eventlistener::prelude::*;
 use enclose::enclose as clone;
 use futures_signals::{
-    signal::{always, Mutable, Signal, SignalExt},
+    signal::{Mutable, Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
+use haalka_futures_signals_ext::SignalExtBool;
 
 use super::{
     node_builder::{async_world, NodeBuilder, TaskHolder},
-    utils::{spawn, sync_neq},
+    raw::utils::remove_system_holder_on_remove,
 };
 
-/// [haalka](crate)'s core abstraction, allowing one to rig any [`Entity`] with ergonomic
-/// [`futures_signals::Signal`](https://docs.rs/futures-signals/latest/futures_signals/signal/trait.Signal.html) driven reactivity, including
-/// methods for registering children, [`Component`]s, [event listeners](On), and [`System`]s all
-/// using a declarative builder pattern/[fluent interface](https://en.wikipedia.org/wiki/Fluent_interface).
-/// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main)'s [`raw_el`](https://github.com/MoonZoon/MoonZoon/tree/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/raw_el).
+/// A thin layer over a [`NodeBuilder`] that exposes higher level ECS related methods.
+/// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`RawHtmlElement`](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/raw_el/raw_html_el.rs).
 pub struct RawHaalkaEl {
     node_builder: Option<NodeBuilder>,
     deferred_updaters: Vec<Box<dyn FnOnce(RawHaalkaEl) -> RawHaalkaEl + Send + 'static>>,
+}
+
+impl From<NodeBuilder> for RawHaalkaEl {
+    fn from(node_builder: NodeBuilder) -> Self {
+        Self {
+            node_builder: Some(node_builder),
+            ..Self::new_dummy()
+        }
+    }
 }
 
 impl<NodeType: Bundle> From<NodeType> for RawHaalkaEl {
@@ -44,10 +60,10 @@ impl Default for RawHaalkaEl {
     }
 }
 
-/// Whether to append the deferred updater to the front or the back *of the back of the line*. See
+/// Whether to append the deferred updater to the front or the back *of the back* of the line. See
 /// [`RawHaalkaEl::defer_update`].
 #[allow(missing_docs)]
-pub enum AppendDirection {
+pub enum DeferredUpdaterAppendDirection {
     Front,
     Back,
 }
@@ -73,10 +89,10 @@ impl RawHaalkaEl {
     /// Force updates to be in the back of the line, with some crude ordering.
     ///
     /// Useful when updates must be applied after some node is wrapped with another, for example,
-    /// the [`Sizeable`](super::Sizeable) methods defer their updates to the back of the line
-    /// because they must be applied after any [`Scrollable`](super::Scrollable) wrapping
-    /// container is applied, whose application is also deferred, but to the *front* of the back
-    /// of the line.
+    /// the [`Sizeable`](super::sizeable::Sizeable) methods defer their updates to the back of the
+    /// line because they must be applied after any
+    /// [`ViewportMutable`](super::viewport_mutable::ViewportMutable) wrapping container is
+    /// applied, whose application is also deferred, but to the *front* of the back of the line.
     ///
     /// # Notes
     /// Deferred updates is a lower level feature and is used internally to deal with update
@@ -84,15 +100,15 @@ impl RawHaalkaEl {
     /// to do things like apply wrapping nodes on their own custom elements built on top of
     /// [`RawHaalkaEl`], but should be more wary of using it through
     /// [`.update_raw_el`](RawElWrapper::update_raw_el) on the provided higher level UI elements
-    /// like [`El`](super::El) and [`Column`](super::Column).
+    /// like [`El`](super::el::El) and [`Column`](super::column::Column).
     pub fn defer_update(
         mut self,
-        append_direction: AppendDirection,
+        append_direction: DeferredUpdaterAppendDirection,
         updater: impl FnOnce(RawHaalkaEl) -> RawHaalkaEl + Send + 'static,
     ) -> Self {
         match append_direction {
-            AppendDirection::Front => self.deferred_updaters.insert(0, Box::new(updater)),
-            AppendDirection::Back => self.deferred_updaters.push(Box::new(updater)),
+            DeferredUpdaterAppendDirection::Front => self.deferred_updaters.insert(0, Box::new(updater)),
+            DeferredUpdaterAppendDirection::Back => self.deferred_updaters.push(Box::new(updater)),
         }
         self
     }
@@ -119,6 +135,11 @@ impl RawHaalkaEl {
         self.update_node_builder(|node_builder| node_builder.on_spawn(on_spawn))
     }
 
+    /// Run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`].
+    pub fn on_spawn_with_system<T: IntoSystem<Entity, (), Marker> + Send + 'static, Marker>(self, system: T) -> Self {
+        self.on_spawn(|world, entity| world.run_system_once_with(entity, system))
+    }
+
     /// Add a [`Bundle`] of components to this element.
     pub fn insert<B: Bundle>(self, bundle: B) -> Self {
         self.update_node_builder(|node_builder| node_builder.insert(bundle))
@@ -129,7 +150,7 @@ impl RawHaalkaEl {
     pub fn insert_forwarded(
         self,
         forwarder: impl FnOnce(&mut EntityWorldMut) -> Option<Entity> + Send + 'static,
-        bundle: impl Bundle + Send + 'static,
+        bundle: impl Bundle + 'static,
     ) -> Self {
         self.with_entity_forwarded(forwarder, move |mut entity| {
             entity.insert(bundle);
@@ -183,6 +204,13 @@ impl RawHaalkaEl {
         })
     }
 
+    /// Attach an [`Observer`] to this element.
+    ///
+    /// Attaches a special [`HaalkaObserver`] component to the entity, which allows it to be filtered by higher level tools (see [aalo](https://github.com/databasedav/aalo)).
+    pub fn observe<E: Event, B: Bundle, Marker>(self, observer: impl IntoObserverSystem<E, B, Marker>) -> Self {
+        self.on_spawn(|world, entity| observe(world, entity, observer))
+    }
+
     /// Drop the [`Task`]s when the element is despawned.
     pub fn hold_tasks(self, tasks: impl IntoIterator<Item = Task<()>> + Send + 'static) -> Self {
         self.with_component::<TaskHolder>(|mut task_holder| {
@@ -192,16 +220,17 @@ impl RawHaalkaEl {
         })
     }
 
-    // TODO: requires bevy 0.14
-    // pub fn on_remove(self, on_remove: impl FnOnce(&mut World, Entity) + Send + Sync + 'static) ->
-    // Self { self.on_spawn(|world, entity| {
-    //         if let Some(mut on_remove_component) = world.entity_mut(entity).get_mut::<OnRemove>() {
-    //             on_remove_component.0.push(Box::new(on_remove));
-    //         } else {
-    //             world.entity_mut(entity).insert(OnRemove(vec![Box::new(on_remove)]));
-    //         }
-    //     })
-    // }
+    /// When this element is despawned, run a function with mutable access to the [`DeferredWorld`]
+    /// and this element's [`Entity`].
+    pub fn on_remove(self, on_remove: impl FnOnce(&mut DeferredWorld, Entity) + Send + Sync + 'static) -> Self {
+        self.on_spawn(|world, entity| {
+            if let Some(mut on_remove_component) = world.entity_mut(entity).get_mut::<OnRemove>() {
+                on_remove_component.0.push(Box::new(on_remove));
+            } else {
+                world.entity_mut(entity).insert(OnRemove(vec![Box::new(on_remove)]));
+            }
+        })
+    }
 
     /// Reactively run a [`Future`]-returning function with this element's [`Entity`] and the output
     /// of the [`Signal`].
@@ -225,40 +254,94 @@ impl RawHaalkaEl {
         })
     }
 
+    /// Reactively run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and
+    /// the output of the [`Signal`].
+    pub fn on_signal_one_shot<T: Send + 'static, Marker>(
+        self,
+        signal: impl Signal<Item = T> + Send + 'static,
+        system: impl IntoSystem<(Entity, T), (), Marker> + Send + 'static,
+    ) -> Self {
+        let system_holder = Mutable::new(None);
+        self.on_spawn(clone!((system_holder) move |world, _| {
+            system_holder.set(Some(register_system(world, system)));
+        }))
+        .on_signal(
+            signal,
+            clone!((system_holder) move |entity, input| {
+                async_world().apply(RunSystemWithInput::new_with_input(
+                    // TODO: would caching this in a Local via SystemState be better/faster ?
+                    system_holder.get().unwrap(),
+                    (entity, input),
+                ))
+            }),
+        )
+        .apply(remove_system_holder_on_remove(system_holder))
+    }
+
+    /// Reactively run a [`System`], if the `forwarder` points to [`Some`] [`Entity`], which takes
+    /// [`In`](`System::In`) that element's [`Entity`] and the output of the [`Signal`].
+    pub fn on_signal_one_shot_forwarded<T: Send + 'static, Marker1, Marker2>(
+        self,
+        signal: impl Signal<Item = T> + Send + 'static,
+        forwarder: impl IntoSystem<Entity, Option<Entity>, Marker1> + Send + 'static,
+        system: impl IntoSystem<(Entity, T), (), Marker2> + Send + 'static,
+    ) -> Self {
+        let forwarder_system_holder = Mutable::new(None);
+        let handler_system_holder = Mutable::new(None);
+        self.on_spawn(clone!((forwarder_system_holder, handler_system_holder) move |world, _| {
+            forwarder_system_holder.set(Some(register_system(world, forwarder)));
+            handler_system_holder.set(Some(register_system(world, system)));
+        }))
+        .on_signal_one_shot(
+            signal,
+            clone!((forwarder_system_holder, handler_system_holder) move |In((entity, input)): In<(Entity, T)>, mut systems: Local<Option<(SystemId<Entity, Option<Entity>>, SystemId<(Entity, T)>)>>, mut commands: Commands| {
+                // only pay the read locking cost once
+                let &mut (forwarder, system) = systems.get_or_insert_with(|| (forwarder_system_holder.get().unwrap(), handler_system_holder.get().unwrap()));
+                commands.add(move |world: &mut World| {
+                    if let Ok(Some(forwardee)) = world.run_system_with_input(forwarder, entity) {
+                        let _ = world.run_system_with_input(system, (forwardee, input));
+                    }
+                })
+            }),
+        )
+        .apply(remove_system_holder_on_remove(forwarder_system_holder))
+        .apply(remove_system_holder_on_remove(handler_system_holder))
+    }
+
     /// Reactively run a function with this element's [`EntityWorldMut`] and the output of the
     /// [`Signal`].
     pub fn on_signal_with_entity<T: Send + 'static>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
-        f: impl FnMut(EntityWorldMut, T) + Send + 'static,
+        mut f: impl FnMut(EntityWorldMut, T) + Send + Sync + 'static,
     ) -> Self {
-        let f = Arc::new(Mutex::new(f));
-        self.on_signal(signal, move |entity, value| {
-            async_world().apply(clone!((f) move |world: &mut World| {
+        self.on_signal_one_shot(
+            signal,
+            move |In((entity, value)): In<(Entity, T)>, world: &mut World| {
                 if let Some(entity) = world.get_entity_mut(entity) {
-                    f.lock().unwrap()(entity, value)
+                    f(entity, value)
                 }
-            }))
-        })
+            },
+        )
     }
 
-    /// Reactively run a function with that [`Entity`]'s [`EntityWorldMut`] and the output of the
-    /// [`Signal`].
-    pub fn on_signal_with_entity_forwarded<T: Send + 'static>(
+    /// Reactively run a function, if the `forwarder` points to [`Some`] [`Entity`],
+    /// with that [`Entity`]'s [`EntityWorldMut`] and the output of the [`Signal`].
+    pub fn on_signal_with_entity_forwarded<T: Send + 'static, Marker>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
-        mut forwarder: impl FnMut(&mut EntityWorldMut) -> Option<Entity> + Send + 'static,
-        mut f: impl FnMut(EntityWorldMut, T) + Send + 'static,
+        forwarder: impl IntoSystem<Entity, Option<Entity>, Marker> + Send + 'static,
+        mut f: impl FnMut(EntityWorldMut, T) + Send + Sync + 'static,
     ) -> Self {
-        self.on_signal_with_entity(signal, move |mut entity, value| {
-            if let Some(forwardee) = forwarder(&mut entity) {
-                entity.world_scope(|world| {
-                    if let Some(forwardee) = world.get_entity_mut(forwardee) {
-                        f(forwardee, value);
-                    }
-                })
-            }
-        })
+        self.on_signal_one_shot_forwarded(
+            signal,
+            forwarder,
+            move |In((entity, value)): In<(Entity, T)>, world: &mut World| {
+                if let Some(entity) = world.get_entity_mut(entity) {
+                    f(entity, value)
+                }
+            },
+        )
     }
 
     /// Reactively run a function with mutable access (via [`Mut`]) to this element's `C`
@@ -266,28 +349,35 @@ impl RawHaalkaEl {
     pub fn on_signal_with_component<T: Send + 'static, C: Component>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
-        mut f: impl FnMut(Mut<C>, T) + Send + 'static,
+        mut f: impl FnMut(Mut<C>, T) + Send + Sync + 'static,
     ) -> Self {
-        self.on_signal_with_entity(signal, move |mut entity, value| {
-            if let Some(component) = entity.get_mut::<C>() {
-                f(component, value)
-            }
-        })
+        self.on_signal_one_shot(
+            signal,
+            move |In((entity, value)): In<(Entity, T)>, mut query: Query<&mut C>| {
+                if let Ok(component) = query.get_mut(entity) {
+                    f(component, value)
+                }
+            },
+        )
     }
 
     /// Reactively run a function, if the `forwarder` points to [`Some`] [`Entity`], with mutable
     /// access (via [`Mut`]) to that [`Entity`]'s `C` [`Component`] if it exists.
-    pub fn on_signal_with_component_forwarded<T: Send + 'static, C: Component>(
+    pub fn on_signal_with_component_forwarded<T: Send + 'static, C: Component, Marker>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
-        forwarder: impl FnMut(&mut EntityWorldMut) -> Option<Entity> + Send + 'static,
-        mut f: impl FnMut(Mut<C>, T) + Send + 'static,
+        forwarder: impl IntoSystem<Entity, Option<Entity>, Marker> + Send + 'static,
+        mut f: impl FnMut(Mut<C>, T) + Send + Sync + 'static,
     ) -> Self {
-        self.on_signal_with_entity_forwarded(signal, forwarder, move |mut entity, value| {
-            if let Some(component) = entity.get_mut::<C>() {
-                f(component, value)
-            }
-        })
+        self.on_signal_one_shot_forwarded(
+            signal,
+            forwarder,
+            move |In((entity, value)): In<(Entity, T)>, mut query: Query<&mut C>| {
+                if let Ok(component) = query.get_mut(entity) {
+                    f(component, value)
+                }
+            },
+        )
     }
 
     /// Reactively set this element's `C` [`Component`]. If the [`Signal`] outputs [`None`], the `C`
@@ -316,9 +406,9 @@ impl RawHaalkaEl {
     /// Reactively set the `C` [`Component`] of the [`Entity`] that the `forwarder` points to if it
     /// points to [`Some`] [`Entity`]. If the [`Signal`] outputs [`None`], the `C` [`Component`] is
     /// removed.
-    pub fn component_signal_forwarded<C: Component>(
+    pub fn component_signal_forwarded<C: Component, Marker>(
         self,
-        forwarder: impl FnMut(&mut EntityWorldMut) -> Option<Entity> + Send + 'static,
+        forwarder: impl IntoSystem<Entity, Option<Entity>, Marker> + Send + 'static,
         component_option_signal: impl Signal<Item = impl Into<Option<C>>> + Send + 'static,
     ) -> Self {
         self.on_signal_with_entity_forwarded(
@@ -346,196 +436,196 @@ impl RawHaalkaEl {
         })
     }
 
-    /// Reactively run an IO [`System`] that takes [`In`](`System::In`) this element's [`Entity`]
-    /// and the output of the [`Signal`] and then run a [`Future`]-returning function with this
-    /// element's [`Entity`] and the [`Out`](`System::Out`)put of the [`System`].
-    pub fn on_signal_one_shot_io<I: Send + 'static, O: Send + 'static, M, Fut: Future<Output = ()> + Send + 'static>(
+    /// When this element receives an `E` [`EntityEvent`] and does not have a `Disabled`
+    /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`]
+    /// and the [`EntityEvent`]; if the element has a `PropagationStopped` [`Component`], the
+    /// event will not bubble up the hierarchy.
+    pub fn on_event_with_system_disableable_propagation_stoppable<
+        E: EntityEvent,
+        Marker,
+        Disabled: Component,
+        PropagationStopped: Component,
+    >(
         self,
-        signal: impl Signal<Item = I> + Send + 'static,
-        system: impl IntoSystem<(Entity, I), O, M> + Send + 'static,
-        f: impl FnMut(Entity, O) -> Fut + Send + 'static,
+        handler: impl IntoSystem<(Entity, E), (), Marker> + Send + 'static,
     ) -> Self {
         let system_holder = Mutable::new(None);
-        let f = Arc::new(async_lock::Mutex::new(f));
-        self.hold_tasks([spawn(clone!((system_holder) async move {
-            system_holder.set(Some(async_world().register_io_system(system).await));
-        }))])
-        // .on_remove(move |world, _| {
-        //     if let Some(system) = system_holder.take() {
-        //         // TODO: https://github.com/dlom/bevy-async-ecs/issues/5#issuecomment-2119180363
-        //         world.remove_system(system.id)
-        //     }
-        // })
-        .on_signal(signal, move |entity, input| {
-            clone!((system_holder, f) async move {
-                if system_holder.lock_ref().is_none() {
-                    system_holder.signal_ref(Option::is_some).wait_for(true).await;
-                }
-                let output = system_holder.get_cloned().unwrap().run((entity, input)).await;
-                // need async mutex because sync mutex guards are not `Send`
-                f.lock().await(entity, output).await;
-            })
-        })
-    }
-
-    /// Reactively run an IO [`System`] that takes [`In`](`System::In`) this node's [`Entity`] and
-    /// the output of the [`Signal`] and then run a function with this element's [`EntityWorldMut`]
-    /// and the [`Out`](`System::Out`)put of the [`System`].
-    pub fn on_signal_one_shot_io_with_entity<I: Send + 'static, O: Send + 'static, M>(
-        self,
-        signal: impl Signal<Item = I> + Send + 'static,
-        system: impl IntoSystem<(Entity, I), O, M> + Send + 'static,
-        f: impl FnMut(EntityWorldMut, O) + Send + 'static,
-    ) -> Self {
-        let f = Arc::new(Mutex::new(f));
-        self.on_signal_one_shot_io(signal, system, move |entity, value| {
-            async_world().apply(clone!((f) move |world: &mut World| {
-                if let Some(entity) = world.get_entity_mut(entity) {
-                    f.lock().unwrap()(entity, value);
-                }
+        self
+            .with_entity(clone!((system_holder) move |mut entity| {
+                let handler = entity.world_scope(|world| register_system(world, handler));
+                system_holder.set(Some(handler));
+                let id = entity.id();
+                entity.insert(
+                    On::<E>::run(move |mut event: ListenerMut<E>, disabled: Query<&Disabled>, propagation_stopped: Query<&PropagationStopped>, mut commands: Commands| {
+                        if !disabled.contains(id) {
+                            commands.run_system_with_input(handler, (id, (**event).clone()));
+                            if propagation_stopped.contains(id) {
+                                event.stop_propagation();
+                            }
+                        }
+                    })
+                );
             }))
-        })
+            .apply(remove_system_holder_on_remove(system_holder))
     }
 
-    /// Reactively run an IO [`System`] that takes [`In`](`System::In`) this node's [`Entity`] and
-    /// the output of the [`Signal`] and then run a function with mutable access (via [`Mut`]) to
-    /// this element's `C` [`Component`] if it exists and the [`Out`](`System::Out`)put of the
-    /// [`System`].
-    pub fn on_signal_one_shot_io_with_component<I: Send + 'static, O: Send + 'static, M, C: Component>(
+    /// When this element receives an `E` [`EntityEvent`], run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and the [`EntityEvent`].
+    pub fn on_event_with_system<E: EntityEvent, Marker>(
         self,
-        signal: impl Signal<Item = I> + Send + 'static,
-        system: impl IntoSystem<(Entity, I), O, M> + Send + 'static,
-        mut f: impl FnMut(Mut<C>, O) + Send + 'static,
+        handler: impl IntoSystem<(Entity, E), (), Marker> + Send + 'static,
     ) -> Self {
-        self.on_signal_one_shot_io_with_entity(signal, system, move |mut entity, value| {
-            if let Some(component) = entity.get_mut::<C>() {
-                f(component, value);
-            }
-        })
-    }
-
-    /// Reactively run an IO [`System`] that takes [`In`](`System::In`) this node's [`Entity`] and
-    /// the output of the [`Signal`].
-    pub fn on_signal_one_shot<I: Send + 'static, M>(
-        self,
-        signal: impl Signal<Item = I> + Send + 'static,
-        system: impl IntoSystem<(Entity, I), (), M> + Send + 'static,
-    ) -> Self {
-        self.on_signal_one_shot_io(signal, system, |_, _| async {})
-    }
-
-    /// Reactively run an IO [`System`] that takes [`In`](`System::In`) this node's [`Entity`] and
-    /// the output of the [`Signal`] and then set this element's `C` [`Component`] to the
-    /// [`Out`](`System::Out`)put of the [`System`].
-    pub fn component_one_shot_signal<I: Send + 'static, M, C: Component, IOC: Into<Option<C>> + Send + 'static>(
-        self,
-        signal: impl Signal<Item = I> + Send + 'static,
-        system: impl IntoSystem<(Entity, I), IOC, M> + Send + 'static,
-    ) -> Self {
-        self.on_signal_one_shot_io_with_entity(signal, system, |mut entity, into_option_component| {
-            if let Some(component) = into_option_component.into() {
-                entity.insert(component);
-            } else {
-                entity.remove::<C>();
-            }
-        })
-    }
-
-    /// Run a [`System`] when this element receives an `E` [`EntityEvent`].
-    pub fn on_event_with_system<E: EntityEvent, Marker>(self, handler: impl IntoSystem<(), (), Marker>) -> Self {
-        self.insert(On::<E>::run(handler))
-    }
-
-    /// Run a [`System`] when this element receives an `E` [`EntityEvent`], reactively disabling
-    /// this handling.
-    pub fn on_event_with_system_disableable<E: EntityEvent, Marker>(
-        self,
-        handler: impl IntoSystem<(), (), Marker> + Send + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        let system_holder = Mutable::new(None);
-        let disabled_mutable = Mutable::new(false);
-        let syncer = spawn(sync_neq(disabled, disabled_mutable.clone()));
-        self.hold_tasks([syncer])
-            .on_spawn(clone!((system_holder) move |world, _| {
-                let system = world.register_system(handler);
-                system_holder.set(Some(system));
-            }))
-            .insert(On::<E>::run(move |world: &mut World| {
-                if disabled_mutable.get().not() {
-                    let _ = world.run_system(system_holder.get().unwrap());
-                }
-            }))
-    }
-
-    /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
-    /// data.
-    pub fn on_event<E: EntityEvent>(self, mut handler: impl FnMut(Listener<E>) + Send + Sync + 'static) -> Self {
-        self.on_event_with_system::<E, _>(move |event: Listener<E>| handler(event))
-    }
-
-    /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
-    /// data, reactively disabling this handling.
-    pub fn on_event_disableable<E: EntityEvent>(
-        self,
-        mut handler: impl FnMut(Listener<E>) + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        self.on_event_with_system_disableable::<E, _>(move |event: Listener<E>| handler(event), disabled)
-    }
-
-    /// When this element receives an `E` [`EntityEvent`], run a function with mutable access to the
-    /// event's data.
-    pub fn on_event_mut<E: EntityEvent>(self, mut handler: impl FnMut(ListenerMut<E>) + Send + Sync + 'static) -> Self {
-        self.on_event_with_system::<E, _>(move |event: ListenerMut<E>| handler(event))
-    }
-
-    /// When this element receives an `E` [`EntityEvent`], run a function with mutable access to the
-    /// event's data, reactively disabling this handling.
-    pub fn on_event_mut_disableable<E: EntityEvent>(
-        self,
-        mut handler: impl FnMut(ListenerMut<E>) + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        self.on_event_with_system_disableable::<E, _>(move |event: ListenerMut<E>| handler(event), disabled)
-    }
-
-    /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
-    /// data, reactively controlling whether the event bubbles up the hierarchy and reactively
-    /// disabling this handling.
-    pub fn on_event_propagation_stoppable_disableable<E: EntityEvent>(
-        self,
-        mut handler: impl FnMut(&E) + Send + Sync + 'static,
-        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        let propagation_stopped_mutable = Mutable::new(false);
-        let syncer = spawn(sync_neq(propagation_stopped, propagation_stopped_mutable.clone()));
-        self.hold_tasks([syncer]).on_event_mut_disableable::<E>(
-            move |mut event| {
-                if propagation_stopped_mutable.get() {
-                    event.stop_propagation();
-                }
-                handler(&**event);
-            },
-            disabled,
+        self.on_event_with_system_disableable_propagation_stoppable::<E, _, EventHandlingDisabled<E>, EventPropagationStopped<E>>(
+            handler,
         )
     }
 
-    /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
-    /// data, reactively controlling whether the event bubbles up the hierarchy.
-    pub fn on_event_propagation_stoppable<E: EntityEvent>(
+    /// When this element receives an `E` [`EntityEvent`] and does not have a `Disabled`
+    /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's
+    /// [`Entity`] and the [`EntityEvent`].
+    pub fn on_event_with_system_disableable<E: EntityEvent, Marker, Disabled: Component>(
         self,
-        handler: impl FnMut(&E) + Send + Sync + 'static,
-        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
+        handler: impl IntoSystem<(Entity, E), (), Marker> + Send + 'static,
     ) -> Self {
-        self.on_event_propagation_stoppable_disableable(handler, propagation_stopped, always(false))
+        self.on_event_with_system_disableable_propagation_stoppable::<E, _, Disabled, EventPropagationStopped<E>>(
+            handler,
+        )
     }
 
-    /// When this element receives an `E` [`EntityEvent`], run a function with access to the event's
-    /// data, stopping the event from bubbling up the hierarchy.
-    pub fn on_event_stop_propagation<E: EntityEvent>(self, handler: impl FnMut(&E) + Send + Sync + 'static) -> Self {
-        self.on_event_propagation_stoppable::<E>(handler, always(true))
+    /// When this element receives an `E` [`EntityEvent`], run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and the [`EntityEvent`], reactively
+    /// controlling whether this handling is disabled with a [`Signal`]. Critically
+    /// note that this disabling is not frame perfect, e.g. one should not expect the handler to
+    /// be disabled the same frame that the [`Signal`] outputs `true`. If one needs frame
+    /// perfect disabling, use
+    /// [`.on_event_with_system_disableable`](Self::on_event_with_system_disableable).
+    pub fn on_event_with_system_disableable_signal<E: EntityEvent, Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, E), (), Marker> + Send + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.component_signal::<EventHandlingDisabled<E>, _>(disabled.map_true(|| EventHandlingDisabled(PhantomData)))
+            .on_event_with_system_disableable::<E, _, EventHandlingDisabled<E>>(handler)
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and the [`EntityEvent`]; if the element has a
+    /// `PropagationStopped` [`Component`], the event will not bubble up the hierarchy.
+    pub fn on_event_with_system_propagation_stoppable<E: EntityEvent, Marker, PropagationStopped: Component>(
+        self,
+        handler: impl IntoSystem<(Entity, E), (), Marker> + Send + 'static,
+    ) -> Self {
+        self.on_event_with_system_disableable_propagation_stoppable::<E, _, EventHandlingDisabled<E>, PropagationStopped>(
+            handler,
+        )
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and the [`EntityEvent`], reactively
+    /// controlling whether this handling is disabled with a [`Signal`]. Critically
+    /// note that this propagation stopping is not frame perfect, e.g. one should not expect the
+    /// handler to stop propagation the same frame that the [`Signal`] outputs `true`. If one
+    /// needs frame perfect propagation stopping, use
+    /// [`.on_event_with_system_propagation_stoppable`](Self::on_event_with_system_propagation_stoppable).
+    pub fn on_event_with_system_propagation_stoppable_signal<E: EntityEvent, Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, E), (), Marker> + Send + 'static,
+        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.component_signal::<EventPropagationStopped<E>, _>(
+            propagation_stopped.map_true(|| EventPropagationStopped(PhantomData)),
+        )
+        .on_event_with_system_propagation_stoppable::<E, _, EventPropagationStopped<E>>(handler)
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a function with the [`EntityEvent`],
+    /// stopping the event from bubbling up the hierarchy.
+    pub fn on_event_with_system_stop_propagation<E: EntityEvent, Marker>(
+        self,
+        handler: impl IntoSystem<(Entity, E), (), Marker> + Send + 'static,
+    ) -> Self {
+        self.insert(EventPropagationStopped::<E>(PhantomData))
+            .on_event_with_system_propagation_stoppable::<E, _, EventPropagationStopped<E>>(handler)
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a function with the [`EntityEvent`].
+    pub fn on_event<E: EntityEvent>(self, mut handler: impl FnMut(E) + Send + Sync + 'static) -> Self {
+        self.on_event_with_system::<E, _>(move |In((_, event))| handler(event))
+    }
+
+    /// When this element receives an `E` [`EntityEvent`] and does not have a `Disabled`
+    /// [`Component`], run a function with the [`EntityEvent`].
+    pub fn on_event_disableable<E: EntityEvent, Marker, Disabled: Component>(
+        self,
+        mut handler: impl FnMut(E) + Send + Sync + 'static,
+    ) -> Self {
+        self.on_event_with_system_disableable::<E, _, Disabled>(move |In((_, event))| handler(event))
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a with the [`EntityEvent`],
+    /// reactively controlling whether this handling is disabled with a [`Signal`].
+    /// Critically note that this disabling is not frame perfect, e.g. one should not expect the
+    /// handler to be disabled the same frame that the [`Signal`] outputs `true`. If one needs
+    /// frame perfect disabling, use
+    /// [`.on_event_disableable`](Self::on_event_disableable)
+    pub fn on_event_disableable_signal<E: EntityEvent>(
+        self,
+        mut handler: impl FnMut(E) + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.on_event_with_system_disableable_signal::<E, _>(move |In((_, event))| handler(event), disabled)
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a function with the [`EntityEvent`];
+    /// if the element has a `PropagationStopped` [`Component`], the event will not bubble up
+    /// the hierarchy.
+    pub fn on_event_propagation_stoppable<E: EntityEvent, Marker, PropagationStopped: Component>(
+        self,
+        mut handler: impl FnMut(E) + Send + Sync + 'static,
+    ) -> Self {
+        self.on_event_with_system_propagation_stoppable::<E, _, PropagationStopped>(move |In((_, event))| {
+            handler(event)
+        })
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a function with the [`EntityEvent`],
+    /// reactively controlling whether the event bubbles up the hierarchy with a [`Signal`].
+    pub fn on_event_propagation_stoppable_signal<E: EntityEvent>(
+        self,
+        mut handler: impl FnMut(E) + Send + Sync + 'static,
+        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self.on_event_with_system_propagation_stoppable_signal(
+            move |In((_, event))| handler(event),
+            propagation_stopped,
+        )
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a function with the [`EntityEvent`],
+    /// stopping the event from bubbling up the hierarchy.
+    pub fn on_event_stop_propagation<E: EntityEvent>(self, mut handler: impl FnMut(E) + Send + Sync + 'static) -> Self {
+        self.on_event_with_system_stop_propagation::<E, _>(move |In((_, event))| handler(event))
+    }
+
+    /// When this element receives an `E` [`EntityEvent`], run a function run a function with the
+    /// [`EntityEvent`], reactively controlling whether the event bubbles up the hierarchy and
+    /// reactively disabling this handling. Critically note that this disabling and propagation
+    /// stopping is not frame perfect, e.g. one should not expect the handler to be disabled or
+    /// stop propagation the same frame that the respective [`Signal`] outputs `true`. If one needs
+    /// frame perfect disabling and propagation stopping, use
+    /// [`.on_event_with_system_disableable_propagation_stoppable`](Self::on_event_with_system_disableable_propagation_stoppable).
+    pub fn on_event_disableable_propagation_stoppable_signal<E: EntityEvent>(
+        self,
+        mut handler: impl FnMut(E) + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        self
+        .component_signal::<EventHandlingDisabled<E>, _>(disabled.map_true(|| EventHandlingDisabled(PhantomData)))
+        .component_signal::<EventPropagationStopped<E>, _>(propagation_stopped.map_true(|| EventPropagationStopped(PhantomData)))
+        .on_event_with_system_disableable_propagation_stoppable::<E, _, EventHandlingDisabled<E>, EventPropagationStopped<E>>(
+            move |In((_, event))| handler(event),
+        )
     }
 
     /// Declare a static child.
@@ -590,20 +680,53 @@ impl RawHaalkaEl {
     }
 }
 
-// struct OnRemove(Vec<Box<dyn FnOnce(&mut World, Entity) + Send + Sync + 'static>>);
+struct OnRemove(Vec<Box<dyn FnOnce(&mut DeferredWorld, Entity) + Send + Sync + 'static>>);
 
-// TODO: requires bevy 0.14
-// impl Component for OnRemove {
-//     const STORAGE_TYPE: StorageType = StorageType::Table;
+impl Component for OnRemove {
+    const STORAGE_TYPE: StorageType = StorageType::Table;
 
-//     fn register_component_hooks(hooks: &mut ComponentHooks) {
-//         hooks.on_remove.(|mut world, entity, component_id| {
-//             for f in world.get_mut::<OnRemove>(entity).unwrap().0.drain(..) {
-//                 f(&mut world, entity);
-//             }
-//         })
-//     }
-// }
+    fn register_component_hooks(hooks: &mut ComponentHooks) {
+        hooks.on_remove(|mut world, entity, _| {
+            let fs = world.get_mut::<Self>(entity).unwrap().0.drain(..).collect::<Vec<_>>();
+            for f in fs {
+                f(&mut world, entity);
+            }
+        });
+    }
+}
+
+/// Marker [`Component`] for filtering `SystemId` `Entity`s managed by haalka.
+#[derive(Component)]
+pub struct HaalkaOneShotSystem;
+
+pub(crate) fn register_system<I: 'static, O: 'static, Marker, S: IntoSystem<I, O, Marker> + 'static>(
+    world: &mut World,
+    system: S,
+) -> SystemId<I, O> {
+    let system = world.register_system(system);
+    if let Some(mut entity) = world.get_entity_mut(system.entity()) {
+        entity.insert(HaalkaOneShotSystem);
+    }
+    system
+}
+
+/// Marker [`Component`] for filtering `Observer` `Entity`s managed by haalka.
+#[derive(Component)]
+pub struct HaalkaObserver;
+
+pub(crate) fn observe<E: Event, B: Bundle, Marker>(
+    world: &mut World,
+    entity: Entity,
+    observer: impl IntoObserverSystem<E, B, Marker>,
+) {
+    world.spawn((Observer::new(observer).with_entity(entity), HaalkaObserver));
+}
+
+#[derive(Component)]
+struct EventHandlingDisabled<E: EntityEvent>(PhantomData<E>);
+
+#[derive(Component)]
+struct EventPropagationStopped<E: EntityEvent>(PhantomData<E>);
 
 /// Thin wrapper trait around [`RawHaalkaEl`] to allow consumers to target custom types when
 /// composing [`RawHaalkaEl`]s.
@@ -614,7 +737,7 @@ pub trait RawElement: Sized {
 
 impl<REW: RawElWrapper> RawElement for REW {
     fn into_raw(self) -> RawHaalkaEl {
-        self.into_raw_el().into()
+        self.into_raw_el()
     }
 }
 
@@ -666,8 +789,8 @@ impl<E: RawElement, IE: IntoRawElement<EL = E>> IntoOptionRawElement for IE {
 // TODO: proc macro for RawElWrapper which scans through the fields of a struct and implements the
 // trait for whatever RawHaalkaEl is found first
 /// [`RawElWrapper`]s can be passed to the child methods of [`RawHaalkaEl`]. This can be used to
-/// create custom non-UI "widgets". See [`ElementWrapper`](super::ElementWrapper) for what this
-/// looks like in a UI context.
+/// create custom non-UI "widgets". See [`ElementWrapper`](super::element::ElementWrapper) for what
+/// this looks like in a UI context.
 pub trait RawElWrapper: Sized {
     /// Mutable reference to the [`RawHaalkaEl`] that this wrapper wraps.
     fn raw_el_mut(&mut self) -> &mut RawHaalkaEl;
@@ -701,3 +824,36 @@ pub trait Spawnable: RawElement {
 }
 
 impl<REW: RawElement> Spawnable for REW {}
+
+#[allow(missing_docs)]
+pub mod utils {
+    use super::*;
+
+    /// If [`Some`] [`System`] is returned by the `getter`, remove it
+    /// from the [`World`] on element removal.
+    pub fn remove_system_on_remove<I: 'static, O: 'static>(
+        getter: impl FnOnce() -> Option<SystemId<I, O>> + Send + Sync + 'static,
+    ) -> impl FnOnce(RawHaalkaEl) -> RawHaalkaEl {
+        |raw_el| {
+            raw_el.on_remove(move |world, _| {
+                if let Some(system) = getter() {
+                    world.commands().add(move |world: &mut World| {
+                        let _ = world.remove_system(system);
+                    })
+                }
+            })
+        }
+    }
+
+    /// Remove the held system from the [`World`] on element removal.
+    pub fn remove_system_holder_on_remove<I: 'static, O: 'static>(
+        system_holder: Mutable<Option<SystemId<I, O>>>,
+    ) -> impl FnOnce(RawHaalkaEl) -> RawHaalkaEl {
+        remove_system_on_remove(move || system_holder.get())
+    }
+
+    /// Run an element's deferred updaters without spawning.
+    pub fn flush_deferred_updaters<T: RawElement>(raw_el: T) -> RawHaalkaEl {
+        raw_el.into_raw().into_node_builder().apply(RawHaalkaEl::from)
+    }
+}

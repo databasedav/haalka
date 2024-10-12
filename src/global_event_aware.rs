@@ -4,14 +4,15 @@ use bevy_eventlistener::prelude::*;
 
 // TODO: there should be a way to pass the entity into the system
 /// Enables registering "global" event listeners on the [`UiRoot`] node. The [`UiRoot`] must be
-/// manually registered with [`UiRootable::ui_root`] for this to work as expected.
+/// manually registered with [`UiRootable::ui_root`](super::element::UiRootable::ui_root) for this
+/// to work as expected.
 ///
 /// # Notes
 /// Since multiple [`bevy_eventlistener::On`](bevy_eventlistener::event_listener::On)s can't be
 /// registered on the same entity, this trait can't *yet* be used to do things like registering "on
 /// click outside" listeners.
 pub trait GlobalEventAware: RawElWrapper {
-    /// When an `E` [`EntityEvent`] propagates to the [`UiRoot`] node, run a `handler` [`System`].
+    /// When an `E` [`EntityEvent`] propagates to the [`UiRoot`] node, run a [`System`].
     fn on_global_event_with_system<E: EntityEvent, Marker>(
         self,
         handler: impl IntoSystem<(), (), Marker> + Send + 'static,

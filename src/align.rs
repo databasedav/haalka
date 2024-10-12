@@ -1,3 +1,24 @@
+//! Simple alignment semantics ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`align`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/style/align.rs) and [`align_content`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/style/align_content.rs).
+//!
+//! An [`Element`](`super::element::Element`) can be aligned in nine different areas in relation to
+//! its parent: top left, top center, top right, center left, center, center right, bottom left,
+//! bottom center, and bottom right. This provides a simple and clear to way to declare alignment as
+//! a thin layer on top of bevy_ui's flexbox implementation.
+//!
+//! [`Align`]s can be specified on individual elements using [`.align`](`Alignable::align`) and
+//! [`.align_signal`](`Alignable::align_signal`) or to all children using
+//! [`.align_content`](`Alignable::align_content`) and
+//! [`.align_content_signal`](`Alignable::align_content_signal`). See the [align](https://github.com/databasedav/haalka/blob/main/examples/align.rs)
+//! example for how each [`Align`] behaves for each built-in alignable type: [`El`], [`Column`],
+//! [`Row`], [`Stack`], and [`Grid`].
+//!
+//! # Notes
+//! [`Stack`] and [`Grid`] children (read: children that are either a [`Stack`] or a [`Grid`], not
+//! the children *of* [`Stack`]s or [`Grid`]s) do not behave as expected when aligned with a
+//! parent's [`.align_content`](`Alignable::align_content`) or
+//! [`.align_content_signal`](`Alignable::align_content_signal`); this is a known issue and one can
+//! simply align the [`Stack`] or [`Grid`] themselves as workaround.
+
 use std::{collections::BTreeSet, ops::Not};
 
 use bevy::prelude::*;
@@ -8,33 +29,15 @@ use super::{
     el::El,
     element::ElementWrapper,
     grid::Grid,
-    raw::{RawElWrapper, RawHaalkaEl},
+    raw::{DeferredUpdaterAppendDirection, RawElWrapper, RawHaalkaEl},
     row::Row,
     stack::Stack,
 };
 
 // TODO: replace moonzoon github links with docs.rs links once moonzoon crate published
 // TODO: create and link issue for Stack and Grid content alignment behavior
-/// Simple alignment semantics ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon/tree/main) ([`align`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/style/align.rs), [`align_content`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/style/align_content.rs)).
-///
-/// An [`Element`](`super::Element`) can be aligned in nine different areas in relation to its
-/// parent: top left, top center, top right, center left, center, center right, bottom left, bottom
-/// center, and bottom right. This provides a simple and clear to way to declare alignment as a thin
-/// layer on top of bevy_ui's flexbox implementation.
-///
-/// [`Align`]s can be specified on individual elements using [`.align`](`Alignable::align`) and
-/// [`.align_signal`](`Alignable::align_signal`) or to all children using
-/// [`.align_content`](`Alignable::align_content`) and
-/// [`.align_content_signal`](`Alignable::align_content_signal`). See the [align](https://github.com/databasedav/haalka/blob/main/examples/align.rs)
-/// example for how each [`Align`] behaves for each built-in alignable type: [`El`], [`Column`],
-/// [`Row`], [`Stack`], and [`Grid`].
-///
-/// # Notes
-/// [`Stack`] and [`Grid`] children (read: children that are either a [`Stack`] or a [`Grid`], not
-/// the children *of* [`Stack`]s or [`Grid`]s) do not behave as expected when aligned with a
-/// parent's [`.align_content`](`Alignable::align_content`) or
-/// [`.align_content_signal`](`Alignable::align_content_signal`); this is a known issue and one can
-/// simply align the [`Stack`] or [`Grid`] themselves as workaround.
+
+/// Holder of composable [`Alignment`]s.
 #[derive(Clone, Default)]
 pub struct Align {
     alignments: BTreeSet<Alignment>,
@@ -105,11 +108,16 @@ pub enum Alignment {
     CenterY,
 }
 
+/// Holder for [`Align`] data. See [`Alignable`] and [`ChildAlignable`].
 pub enum AlignHolder {
+    /// Static
     Align(Align),
+    /// Reactive
     AlignSignal(BoxSignal<'static, Option<Align>>),
 }
 
+/// Whether to add or remove an [`Alignment`]. See [`Alignable`] and [`ChildAlignable`].
+#[allow(missing_docs)]
 pub enum AddRemove {
     Add,
     Remove,
@@ -122,30 +130,32 @@ fn register_align_signal<REW: RawElWrapper>(
 ) -> REW {
     let mut last_alignments_option: Option<Vec<Alignment>> = None;
     element.update_raw_el(|raw_el| {
-        raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Style>(
-            align_signal,
-            move |mut style, aligns_option| {
-                if let Some(alignments) = aligns_option {
-                    // TODO: confirm that this last alignment removal strategy is working as intended
-                    if let Some(mut last_alignments) = last_alignments_option.take() {
-                        last_alignments.retain(|align| !alignments.contains(align));
-                        for alignment in last_alignments {
-                            apply_alignment(&mut style, alignment, AddRemove::Remove)
+        raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
+            raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Style>(
+                align_signal,
+                move |mut style, aligns_option| {
+                    if let Some(alignments) = aligns_option {
+                        // TODO: confirm that this last alignment removal strategy is working as intended
+                        if let Some(mut last_alignments) = last_alignments_option.take() {
+                            last_alignments.retain(|align| !alignments.contains(align));
+                            for alignment in last_alignments {
+                                apply_alignment(&mut style, alignment, AddRemove::Remove)
+                            }
+                        }
+                        for alignment in &alignments {
+                            apply_alignment(&mut style, *alignment, AddRemove::Add)
+                        }
+                        last_alignments_option = alignments.is_empty().not().then_some(alignments);
+                    } else {
+                        if let Some(last_aligns) = last_alignments_option.take() {
+                            for align in last_aligns {
+                                apply_alignment(&mut style, align, AddRemove::Remove)
+                            }
                         }
                     }
-                    for alignment in &alignments {
-                        apply_alignment(&mut style, *alignment, AddRemove::Add)
-                    }
-                    last_alignments_option = alignments.is_empty().not().then_some(alignments);
-                } else {
-                    if let Some(last_aligns) = last_alignments_option.take() {
-                        for align in last_aligns {
-                            apply_alignment(&mut style, align, AddRemove::Remove)
-                        }
-                    }
-                }
-            },
-        )
+                },
+            )
+        })
     })
 }
 
@@ -267,17 +277,23 @@ where
         mut child: Child,
         apply_alignment: fn(&mut Style, Alignment, AddRemove),
     ) -> Child {
-        child = child.update_raw_el(|raw_el| raw_el.with_component::<Style>(Self::update_style));
+        child = child.update_raw_el(|raw_el| {
+            raw_el.defer_update(DeferredUpdaterAppendDirection::Back, |raw_el| {
+                raw_el.with_component::<Style>(Self::update_style)
+            })
+        });
         // TODO: this .take means that child can't be passed around parents without losing align
         // info, but this can be easily added if desired
         if let Some(align) = child.align_mut().take() {
             match align {
                 AlignHolder::Align(align) => {
                     child = child.update_raw_el(|raw_el| {
-                        raw_el.with_component::<Style>(move |mut style| {
-                            for align in align.alignments {
-                                apply_alignment(&mut style, align, AddRemove::Add)
-                            }
+                        raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
+                            raw_el.with_component::<Style>(move |mut style| {
+                                for align in align.alignments {
+                                    apply_alignment(&mut style, align, AddRemove::Add)
+                                }
+                            })
                         })
                     })
                 }
@@ -325,21 +341,21 @@ impl<EW: ElementWrapper + 'static> ChildAlignable for EW {
 /// [`AlignabilityFacade`].
 #[derive(Clone, Copy)]
 pub enum Aligner {
-    /// [`El`](`super::El`)
+    /// [`El`](`super::el::El`)
     El,
-    /// [`Column`](`super::Column`)
+    /// [`Column`](`super::column::Column`)
     Column,
-    /// [`Row`](`super::Row`)
+    /// [`Row`](`super::row::Row`)
     Row,
-    /// [`Stack`](`super::Stack`)
+    /// [`Stack`](`super::stack::Stack`)
     Stack,
-    /// [`Grid`](`super::Grid`)
+    /// [`Grid`](`super::grid::Grid`)
     Grid,
     // TODO: allow specifying custom alignment functions
 }
 
 /// Provides type indirection for built-in alignable types, enabling simple "type erasure" via
-/// [`TypeEraseable::type_erase`](`super::TypeEraseable::type_erase`).
+/// [`TypeEraseable::type_erase`](`super::element::TypeEraseable::type_erase`).
 pub struct AlignabilityFacade {
     raw_el: RawHaalkaEl,
     align: Option<AlignHolder>,
