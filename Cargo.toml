@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "haalka"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 categories = ["asynchronous", "gui", "game-development"]
 description = "ergonomic reactive Bevy UI library powered by FRP signals"
@@ -34,7 +34,7 @@ bevy-async-ecs = "0.6.0"
 cfg-if = "1.0"
 enclose = "1.1"
 futures-signals = "0.3"
-haalka_futures_signals_ext = { path = "MoonZoon/crates/futures_signals_ext", version = "0.0.1" }
+haalka_futures_signals_ext = { path = "MoonZoon/crates/futures_signals_ext", version = "0.0.2" }
 once_cell = "1.19"
 paste = { version = "1.0", optional = true }
 
