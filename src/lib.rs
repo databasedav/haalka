@@ -15,17 +15,17 @@ cfg_if::cfg_if! {
         mod el;
         pub mod element;
         pub mod grid;
-        #[allow(missing_docs)]
+        // #[allow(missing_docs)]
         pub mod pointer_event_aware;
-        #[allow(missing_docs)]
+        // #[allow(missing_docs)]
         pub mod global_event_aware;
         mod row;
-        #[allow(missing_docs)]
+        // #[allow(missing_docs)]
         pub mod mouse_wheel_scrollable;
-        #[allow(missing_docs)]
+        // #[allow(missing_docs)]
         pub mod sizeable;
         mod stack;
-        #[allow(missing_docs)]
+        // #[allow(missing_docs)]
         pub mod viewport_mutable;
 
         cfg_if::cfg_if! {
@@ -69,7 +69,11 @@ impl Plugin for HaalkaPlugin {
             if !app.is_plugin_added::<bevy_mod_picking::backends::bevy_ui::BevyUiBackend>() {
                 app.add_plugins(bevy_mod_picking::backends::bevy_ui::BevyUiBackend);
             }
-            app.add_plugins((pointer_event_aware::plugin, mouse_wheel_scrollable::plugin));
+            app.add_plugins((
+                pointer_event_aware::plugin,
+                mouse_wheel_scrollable::plugin,
+                viewport_mutable::plugin,
+            ));
         }
         #[cfg(feature = "text_input")]
         app.add_plugins(text_input::plugin);

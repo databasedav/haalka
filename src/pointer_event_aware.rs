@@ -1,12 +1,7 @@
 use std::{future::Future, ops::Not, time::Duration};
 
 use apply::Apply;
-use bevy::{
-    ecs::system::SystemId,
-    log::prelude::*,
-    prelude::*,
-    window::PrimaryWindow,
-};
+use bevy::{ecs::system::SystemId, log::prelude::*, prelude::*, window::PrimaryWindow};
 use bevy_mod_picking::{picking_core::backend::HitData, prelude::*};
 use enclose::enclose as clone;
 use focus::HoverMap;
@@ -29,17 +24,19 @@ pub trait PointerEventAware: RawElWrapper {
         handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
-            let system_holder = Mutable::new(None);
-            raw_el
-                .insert(Pickable::default())
-                .insert(Hovered(false))
-                .on_spawn(clone!((system_holder) move |world, entity| {
-                    let system = register_system(world, handler);
-                    system_holder.set(Some(system));
-                    observe(world, entity, move |enter: Trigger<Pointer<Enter>>, mut commands: Commands| commands.run_system_with_input(system, (enter.entity(), true)));
-                    observe(world, entity, move |leave: Trigger<Pointer<Leave>>, mut commands: Commands| commands.run_system_with_input(system, (leave.entity(), false)));
-                }))
-                .apply(remove_system_holder_on_remove(system_holder))
+            raw_el.defer_update(super::raw::DeferredUpdaterAppendDirection::Back, |raw_el| {
+                let system_holder = Mutable::new(None);
+                raw_el
+                    .insert(Pickable::default())
+                    .insert(Hovered(false))
+                    .on_spawn(clone!((system_holder) move |world, entity| {
+                        let system = register_system(world, handler);
+                        system_holder.set(Some(system));
+                        observe(world, entity, move |enter: Trigger<Pointer<Enter>>, mut commands: Commands| commands.run_system_with_input(system, (enter.entity(), true)));
+                        observe(world, entity, move |leave: Trigger<Pointer<Leave>>, mut commands: Commands| commands.run_system_with_input(system, (leave.entity(), false)));
+                    }))
+                    .apply(remove_system_holder_on_remove(system_holder))
+            })
         })
     }
 
@@ -122,15 +119,15 @@ pub trait PointerEventAware: RawElWrapper {
         self.update_raw_el(|raw_el| {
             let system_holder = Mutable::new(None);
             raw_el
-            .insert(OnClickOutside)
-            .on_spawn(clone!((system_holder) move |world, entity| {
-                let system = register_system(world, handler);
-                system_holder.set(Some(system));
-                observe(world, entity, move |click_outside: Trigger<ClickOutside>, mut commands: Commands| {
-                    commands.run_system_with_input(system, (entity, click_outside.event().0.clone()));
-                });
-            }))
-            .apply(remove_system_holder_on_remove(system_holder))
+                .insert(OnClickOutside)
+                .on_spawn(clone!((system_holder) move |world, entity| {
+                    let system = register_system(world, handler);
+                    system_holder.set(Some(system));
+                    observe(world, entity, move |click_outside: Trigger<ClickOutside>, mut commands: Commands| {
+                        commands.run_system_with_input(system, (entity, click_outside.event().0.clone()));
+                    });
+                }))
+                .apply(remove_system_holder_on_remove(system_holder))
         })
     }
 
@@ -442,7 +439,9 @@ fn on_click_outside(
     mut commands: Commands,
 ) {
     for click in clicks.read() {
-        let entities = on_click_outside_listeners.iter().filter(|&entity| !is_inside_or_removed_from_dom(entity, click, ui_root.0, &children_query));
+        let entities = on_click_outside_listeners
+            .iter()
+            .filter(|&entity| !is_inside_or_removed_from_dom(entity, click, ui_root.0, &children_query));
         // TODO: avoid allocating entity vector
         commands.trigger_targets(ClickOutside(click.clone()), entities.collect::<Vec<_>>());
     }
@@ -482,7 +481,7 @@ struct CursorDisabled;
 /// [`Option<CursorIcon>`] queued by a [`CursorOnHoverable`] [`Element`] will be set as the window's
 /// cursor. Adding this [`Resource`] to the [`World`] will *not* unset any [`Option<CursorIcon>`]s
 /// previously set by a [`CursorOnHoverable`] [`Element`].
-/// 
+///
 /// [`Element`]: super::element::Element
 #[derive(Resource)]
 pub struct CursorOnHoverDisabled;
@@ -603,8 +602,9 @@ pub trait CursorOnHoverable: PointerEventAware {
         })
     }
 
-    /// When this [`Element`](super::element::Element) receives a [`Pointer<Over>`] event, set the window's cursor to
-    /// [`Some`] [`CursorIcon`] in the [`CursorOnHover`] [`Component`] or hide it if [`None`].
+    /// When this [`Element`](super::element::Element) receives a [`Pointer<Over>`] event, set the
+    /// window's cursor to [`Some`] [`CursorIcon`] in the [`CursorOnHover`] [`Component`] or
+    /// hide it if [`None`].
     fn cursor(self, cursor_option: impl Into<Option<CursorIcon>>) -> Self {
         self.cursor_disableable::<CursorDisabled>(cursor_option)
     }

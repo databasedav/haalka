@@ -4,6 +4,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## unreleased
 
+### fixed
+
+- `OnHoverMouseWheelScrollable` handles scrolling outside scene boundaries when `LimitToBody` is lax.
+
+### changed
+
+- `MutableViewportSettings` renamed to `MutableViewport`
+- `PointerEventAware::on_hovered_change_with_system` is a deferred update.
+
 # 0.2.1 (2024-10-19)
 
 ### added
