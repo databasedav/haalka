@@ -12,7 +12,7 @@ in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "
 While haalka is primarily targeted at UI and provides high level UI abstractions as such, its [core abstraction](https://docs.rs/haalka/latest/haalka/struct.RawHaalkaEl.html) can be used to manage signals-powered reactivity for any entity, not just [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs).
 
 ## considerations
-If one is using multiple cameras in the same world, they must enable the `multicam` feature AND add the `bevy_cosmic_edit::CosmicPrimaryCamera` marker component to the primary camera.
+If one is using the `text_input` feature (enabled by default) and using multiple cameras in the same world, they must enable the `multicam` feature AND add the `bevy_cosmic_edit::CosmicPrimaryCamera` marker component to the primary camera.
 
 ## examples
 <p align="center">

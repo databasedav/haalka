@@ -5,9 +5,12 @@ permissions:
   contents: write
 
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches:
       - main
+    paths:
+      - 'release/**'
 
 jobs:
   release-plz-release:
