@@ -11,8 +11,10 @@ in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "
 
 While haalka is primarily targeted at UI and provides high level UI abstractions as such, its [core abstraction](https://docs.rs/haalka/latest/haalka/struct.RawHaalkaEl.html) can be used to manage signals-powered reactivity for any entity, not just [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs).
 
-## examples
+## considerations
+If one is using multiple cameras in the same world, they must enable the `multicam` feature AND add the `bevy_cosmic_edit::CosmicPrimaryCamera` marker component to the primary camera.
 
+## examples
 <p align="center">
   <img src="https://raw.githubusercontent.com/databasedav/haalka/main/docs/static/counter.gif">
 </p>
@@ -100,11 +102,13 @@ cargo run --example challenge05  # character editor
 One can also run the examples with [`just`](https://github.com/casey/just) (`cargo install just`), e.g. `just example snake -r`.
 
 ## Bevy compatibility
-
 |bevy|haalka|
 |-|-|
 |`0.14`|`0.2`|
 |`0.13`|`0.1`|
+
+## development
+Remember to include submodules when fetching the repo `git clone --recurse-submodules https://github.com/databasedav/haalka.git`.
 
 ## license
 All code in this repository is dual-licensed under either:

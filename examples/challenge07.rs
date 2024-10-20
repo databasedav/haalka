@@ -251,4 +251,5 @@ fn text(text: impl ToString) -> Text {
 
 fn camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
+    commands.spawn((Camera2dBundle::default(), bevy_cosmic_edit::CosmicPrimaryCamera));
 }

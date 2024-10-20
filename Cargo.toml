@@ -47,6 +47,8 @@ text_input = ["ui", "bevy_cosmic_edit"]
 ui = ["bevy_mod_picking", "derive"]
 derive = ["paste"]
 utils = []
+# see https://github.com/Dimchikkk/bevy_cosmic_edit/blob/776605d549540d0b40edccc1eabe431f617875a0/Cargo.toml#L14
+multicam = ["bevy_cosmic_edit/multicam"]
 
 [dev-dependencies]
 bevy = { version = "0.14", features = ["bevy_dev_tools"] }
