@@ -22,7 +22,7 @@ use futures_signals::{
     signal::{Mutable, Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
-use haalka_futures_signals_ext::SignalExtBool;
+use haalka_futures_signals_ext::{future::AbortHandle, SignalExtBool};
 
 use super::{
     node_builder::{async_world, NodeBuilder, TaskHolder},
@@ -211,13 +211,27 @@ impl RawHaalkaEl {
         self.on_spawn(|world, entity| observe(world, entity, observer))
     }
 
-    /// Drop the [`Task`]s when the element is despawned.
-    pub fn hold_tasks(self, tasks: impl IntoIterator<Item = Task<()>> + Send + 'static) -> Self {
-        self.with_component::<TaskHolder>(|mut task_holder| {
-            for task in tasks.into_iter() {
-                task_holder.hold(task);
+    // TODO: 0.15 `Task` api is unified, can remove branching
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            /// Drop the [`Task`]s when the element is despawned.
+            pub fn hold_tasks(self, tasks: impl IntoIterator<Item = AbortHandle> + Send + 'static) -> Self {
+                self.with_component::<TaskHolder>(|mut task_holder| {
+                    for task in tasks.into_iter() {
+                        task_holder.hold(task);
+                    }
+                })
             }
-        })
+        } else {
+            /// Drop the [`Task`]s when the element is despawned.
+            pub fn hold_tasks(self, tasks: impl IntoIterator<Item = Task<()>> + Send + 'static) -> Self {
+                self.with_component::<TaskHolder>(|mut task_holder| {
+                    for task in tasks.into_iter() {
+                        task_holder.hold(task);
+                    }
+                })
+            }
+        }
     }
 
     /// When this element is despawned, run a function with mutable access to the [`DeferredWorld`]

@@ -24,9 +24,18 @@ fn main() {
                 ..default()
             }),
             HaalkaPlugin,
+            FpsOverlayPlugin,
         ))
         .add_plugins(EventListenerPlugin::<MenuInputEvent>::default())
-        .add_systems(Startup, (camera, ui_root))
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                camera,
+            ),
+        )
         .add_systems(Update, (keyboard_menu_input_events, gamepad_menu_input_events))
         .insert_resource(AUDIO_SETTINGS.clone())
         .insert_resource(GRAPHICS_SETTINGS.clone())
@@ -1385,11 +1394,10 @@ struct FocusedEntity(Entity);
 const MENU_INPUT_RATE_LIMIT: f32 = 0.15;
 const SLIDER_RATE_LIMIT: f32 = 0.001;
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     El::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(menu())
-        .spawn(world);
 }

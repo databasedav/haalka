@@ -25,16 +25,7 @@ use rand::{
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
-            HaalkaPlugin,
-        ))
+        .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
         .init_state::<AssetState>()
         .add_loading_state(
             LoadingState::new(AssetState::Loading)
@@ -42,7 +33,13 @@ fn main() {
                 .load_collection::<RpgIconSheet>(),
         )
         .add_systems(Startup, camera)
-        .add_systems(OnEnter(AssetState::Loaded), (set_icon_texture_atlas, ui_root).chain())
+        .add_systems(
+            OnEnter(AssetState::Loaded),
+            (set_icon_texture_atlas, |world: &mut World| {
+                ui_root().spawn(world);
+            })
+                .chain(),
+        )
         .run();
 }
 
@@ -648,7 +645,7 @@ fn is_dragging() -> impl Signal<Item = bool> {
     DRAGGING_OPTION.signal_ref(Option::is_some)
 }
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     Stack::<NodeBundle>::new()
         .cursor_disableable_signal(CursorIcon::Default, is_dragging())
         .width(Val::Percent(100.))
@@ -700,7 +697,6 @@ fn ui_root(world: &mut World) {
                         .on_signal_with_style(POINTER_POSITION.signal(), set_dragging_position)
                 }),
         )
-        .spawn(world);
 }
 
 fn set_dragging_position(mut style: Mut<Style>, pointer_position: (f32, f32)) {

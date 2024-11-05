@@ -10,16 +10,7 @@ use haalka::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
-            HaalkaPlugin,
-        ))
+        .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
         .add_systems(PreStartup, setup)
         .add_systems(Startup, ui_root)
         .add_systems(
@@ -241,7 +232,12 @@ fn respawn_button() -> impl Element {
         )
         .hovered_sync(hovered)
         .align_content(Align::center())
-        .on_click(|| async_world().send_event(SpawnPlayer).apply(spawn).detach())
+        .on_click(|| {
+            let task = async_world().send_event(SpawnPlayer).apply(spawn);
+            // TODO: 0.15 `Task` api is unified, always detach
+            #[cfg(not(target_arch = "wasm32"))]
+            task.detach();
+        })
         .child(El::<TextBundle>::new().text(Text::from_section(
             "respawn",
             TextStyle {

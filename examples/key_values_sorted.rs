@@ -512,19 +512,15 @@ fn focus_scroller(
         if let Ok((text_input_node, text_input_transform, _)) = data_query.get(focused_text_input) {
             for parent in parents.iter_ancestors(focused_text_input) {
                 if mutable_viewports.contains(parent) {
-                    if let Ok((scene_node, scene_transform, scene_style)) =
-                        data_query.get(parent)
-                    {
-                        if let Some((
-                            viewport_node,
-                            viewport_transform,
-                            viewport_style,
-                        )) = parents.get(parent).ok().and_then(|parent| data_query.get(parent.get()).ok())
+                    if let Ok((scene_node, scene_transform, scene_style)) = data_query.get(parent) {
+                        if let Some((viewport_node, viewport_transform, viewport_style)) = parents
+                            .get(parent)
+                            .ok()
+                            .and_then(|parent| data_query.get(parent.get()).ok())
                         {
                             let text_input_rect = text_input_node.logical_rect(text_input_transform);
                             let scene_rect = scene_node.logical_rect(scene_transform);
-                            let viewport_rect =
-                                viewport_node.logical_rect(viewport_transform);
+                            let viewport_rect = viewport_node.logical_rect(viewport_transform);
                             let scrolled_option = match scene_style.top {
                                 Val::Px(top) => Some(top),
                                 Val::Auto => Some(0.0),

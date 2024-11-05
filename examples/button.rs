@@ -5,17 +5,14 @@ use haalka::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
+        .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
+        .add_systems(
+            Startup,
+            (camera, |world: &mut World| {
+                let font = world.resource::<AssetServer>().load("fonts/FiraMono-subset.ttf");
+                ui_root(font).spawn(world);
             }),
-            HaalkaPlugin,
-        ))
-        .add_systems(Startup, (camera, ui_root))
+        )
         .run();
 }
 
@@ -98,13 +95,10 @@ fn camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 }
 
-fn ui_root(world: &mut World) {
+fn ui_root(font: Handle<Font>) -> impl Element {
     El::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
-        .child(button(
-            world.resource::<AssetServer>().load("fonts/FiraMono-subset.ttf"),
-        ))
-        .spawn(world);
+        .child(button(font))
 }

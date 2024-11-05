@@ -26,9 +26,14 @@ fn main() {
             HaalkaPlugin,
             NineSliceUiPlugin::default(),
         ))
-        .add_systems(Startup, (setup, ui_root).chain())
+        .add_systems(
+            Startup,
+            (setup, |world: &mut World| {
+                ui_root().spawn(world);
+            })
+                .chain(),
+        )
         .add_systems(Update, on_resize)
-        .insert_resource(Width(Mutable::new(0.)))
         .run();
 }
 
@@ -109,8 +114,7 @@ fn nine_slice_button() -> impl Element {
     .pressed_sync(pressed)
 }
 
-#[derive(Resource)]
-struct Width(Mutable<f32>);
+static WIDTH: Lazy<Mutable<f32>> = Lazy::new(default);
 
 fn horizontal() -> impl Element {
     Row::<NodeBundle>::new()
@@ -145,16 +149,16 @@ fn vertical() -> impl Element {
         )
 }
 
-fn menu(width: Mutable<f32>) -> impl Element {
+fn menu() -> impl Element {
     NineSliceEl::new(always(3))
         .height(Val::Px(BASE_SIZE))
         .with_style(|mut style| {
             style.padding = UiRect::all(Val::Px(GAP));
         })
-        .width_signal(width.signal().map(|width| BASE_SIZE.min(width)).dedupe().map(Val::Px))
+        .width_signal(WIDTH.signal().map(|width| BASE_SIZE.min(width)).dedupe().map(Val::Px))
         .0
         .child_signal(
-            width
+            WIDTH
                 .signal()
                 .map(|width| width > 400.)
                 .dedupe()
@@ -162,8 +166,7 @@ fn menu(width: Mutable<f32>) -> impl Element {
         )
 }
 
-fn ui_root(world: &mut World) {
-    let width = world.resource::<Width>().0.clone();
+fn ui_root() -> impl Element {
     El::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
@@ -181,7 +184,7 @@ fn ui_root(world: &mut World) {
                                 ..default()
                             },
                         )))
-                        .item(El::<TextBundle>::new().text_signal(width.signal().map(|width| {
+                        .item(El::<TextBundle>::new().text_signal(WIDTH.signal().map(|width| {
                             Text::from_section(
                                 width.to_string(),
                                 TextStyle {
@@ -191,9 +194,8 @@ fn ui_root(world: &mut World) {
                             )
                         }))),
                 )
-                .item(menu(width)),
+                .item(menu()),
         )
-        .spawn(world);
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -206,8 +208,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle::default());
 }
 
-fn on_resize(width: Res<Width>, mut resize_events: EventReader<WindowResized>) {
+fn on_resize(mut resize_events: EventReader<WindowResized>) {
     for event in resize_events.read() {
-        width.0.set(event.width)
+        WIDTH.set(event.width)
     }
 }

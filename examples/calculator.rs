@@ -7,17 +7,16 @@ use rust_decimal::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
-            HaalkaPlugin,
-        ))
-        .add_systems(Startup, (camera, ui_root))
+        .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                camera,
+            ),
+        )
         .run();
 }
 
@@ -131,7 +130,7 @@ fn clear_button() -> impl Element {
         .on_click(|| OUTPUT.lock_mut().clear())
 }
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     let error_clearer = OUTPUT.signal_ref(|_| ERROR.set_neq(false)).to_future().apply(spawn);
     El::<NodeBundle>::new()
         .update_raw_el(|raw_el| raw_el.hold_tasks([error_clearer]))
@@ -167,7 +166,6 @@ fn ui_root(world: &mut World) {
                         .items(buttons().into_iter().map(input_button)),
                 ),
         )
-        .spawn(world);
 }
 
 fn camera(mut commands: Commands) {

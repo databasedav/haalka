@@ -6,17 +6,16 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
-            HaalkaPlugin,
-        ))
-        .add_systems(Startup, (ui_root, camera))
+        .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                camera,
+            ),
+        )
         .run();
 }
 
@@ -88,7 +87,7 @@ fn alignment_button(alignment: Alignment) -> impl Element {
         )))
 }
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     Column::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
@@ -125,7 +124,6 @@ fn ui_root(world: &mut World) {
                 // TODO: is this align content behavior buggy?
                 .item(container("Stack", Stack::<NodeBundle>::new().layers(rectangles()))),
         )
-        .spawn(world);
 }
 
 fn container_style<E: RawElWrapper + Sizeable>(el: E) -> E {
