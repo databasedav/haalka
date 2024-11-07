@@ -1,5 +1,8 @@
 //! Simple button, port of <https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs>.
 
+mod utils;
+use utils::*;
+
 use bevy::prelude::*;
 use haalka::prelude::*;
 

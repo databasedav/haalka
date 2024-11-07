@@ -1,5 +1,8 @@
 //! Simple calculator. Spurred by <https://discord.com/channels/691052431525675048/885021580353237032/1263661461364932639>.
 
+mod utils;
+use utils::*;
+
 use bevy::prelude::*;
 use calc::*;
 use haalka::prelude::*;

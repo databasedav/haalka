@@ -21,6 +21,17 @@ cfg_if::cfg_if! {
     }
 }
 
+// TODO: 0.15 `Task` api is unified, can remove
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "wasm32")] {
+        pub struct WasmTaskAdapter(pub AbortHandle);
+
+        impl WasmTaskAdapter {
+            pub fn detach(self) {}
+        }
+    }
+}
+
 use super::utils::{clone, spawn};
 
 static ASYNC_WORLD: OnceLock<AsyncWorld> = OnceLock::new();
@@ -45,7 +56,7 @@ pub struct NodeBuilder {
     on_spawns: Vec<Box<dyn FnOnce(&mut World, Entity) + Send>>,
     // TODO: 0.15 `Task` api is unified, can remove branching
     #[cfg(target_arch = "wasm32")]
-    task_wrappers: Vec<Box<dyn FnOnce(Entity) -> AbortHandle + Send>>,
+    task_wrappers: Vec<Box<dyn FnOnce(Entity) -> WasmTaskAdapter + Send>>,
     #[cfg(not(target_arch = "wasm32"))]
     task_wrappers: Vec<Box<dyn FnOnce(Entity) -> Task<()> + Send>>,
     child_block_populations: MutableVec<usize>,
@@ -411,7 +422,7 @@ impl NodeBuilder {
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         /// Used to tie async reactivity tasks to the lifetime of an [`Entity`].
-        pub struct TaskHolder(Vec<AbortHandle>);
+        pub struct TaskHolder(Vec<WasmTaskAdapter>);
 
         impl Component for TaskHolder {
             const STORAGE_TYPE: StorageType = StorageType::Table;
@@ -419,7 +430,7 @@ cfg_if::cfg_if! {
             fn register_component_hooks(hooks: &mut ComponentHooks) {
                 hooks.on_remove(|mut world, entity, _| {
                     for task in world.get_mut::<Self>(entity).unwrap().0.drain(..) {
-                        task.abort();
+                        task.0.abort();
                     }
                 });
             }
@@ -440,7 +451,7 @@ impl TaskHolder {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             /// Drop the [`Task`] when the entity is despawned.
-            pub fn hold(&mut self, task: AbortHandle) {
+            pub fn hold(&mut self, task: WasmTaskAdapter) {
                 self.0.push(task);
             }
         } else {

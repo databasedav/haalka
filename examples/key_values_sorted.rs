@@ -3,6 +3,9 @@
 //! promises made promises kept ! <https://discord.com/channels/691052431525675048/1192585689460658348/1193431789465776198>
 //! (yes i take requests)
 
+mod utils;
+use utils::*;
+
 use std::{
     ops::{Deref, Not},
     time::Duration,
@@ -15,16 +18,11 @@ use haalka::{prelude::*, text_input::FocusedTextInput, viewport_mutable::Mutable
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
+            DefaultPlugins.set(example_window()),
             HaalkaPlugin,
+            FpsOverlayPlugin,
         ))
-        .add_systems(Startup, (ui_root, camera))
+        .add_systems(Startup, (|world: &mut World| { ui_root().spawn(world); }, camera))
         .add_systems(
             Update,
             (
@@ -155,7 +153,7 @@ fn text_input(
             if !is_focused {
                 if let Some(index) = index_option.get() {
                     // TODO: use an observer for this
-                    async_world().send_event(MaybeChanged(index)).apply(spawn).detach();
+                    async_world().send_event(MaybeChanged(index)).apply(spawn).detach()
                 }
             }
             focus.set_neq(is_focused);
@@ -368,7 +366,7 @@ fn x_button() -> impl Element + PointerEventAware {
         )
 }
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     El::<NodeBundle>::new()
         .ui_root()
         .width(Val::Percent(100.))
@@ -434,7 +432,6 @@ fn ui_root(world: &mut World) {
                         }),
                 ),
         )
-        .spawn(world);
 }
 
 fn scroll_to_bottom() {

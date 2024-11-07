@@ -1,5 +1,8 @@
 //! Alignment API demo, port of <https://github.com/MoonZoon/MoonZoon/tree/main/examples/align> and <https://github.com/MoonZoon/MoonZoon/tree/main/examples/align_content>.
 
+mod utils;
+use utils::*;
+
 use bevy::prelude::*;
 use haalka::prelude::*;
 use strum::{Display, EnumIter, IntoEnumIterator};

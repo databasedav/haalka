@@ -14,7 +14,6 @@ use bevy::{
         world::DeferredWorld,
     },
     prelude::*,
-    tasks::Task,
 };
 use bevy_eventlistener::prelude::*;
 use enclose::enclose as clone;
@@ -22,8 +21,15 @@ use futures_signals::{
     signal::{Mutable, Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
-use haalka_futures_signals_ext::{future::AbortHandle, SignalExtBool};
+use haalka_futures_signals_ext::SignalExtBool;
 
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "wasm32")] {
+        use super::node_builder::WasmTaskAdapter;
+    } else {
+        use bevy::tasks::Task;
+    }
+}
 use super::{
     node_builder::{async_world, NodeBuilder, TaskHolder},
     raw::utils::remove_system_holder_on_remove,
@@ -215,7 +221,7 @@ impl RawHaalkaEl {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             /// Drop the [`Task`]s when the element is despawned.
-            pub fn hold_tasks(self, tasks: impl IntoIterator<Item = AbortHandle> + Send + 'static) -> Self {
+            pub fn hold_tasks(self, tasks: impl IntoIterator<Item = WasmTaskAdapter> + Send + 'static) -> Self {
                 self.with_component::<TaskHolder>(|mut task_holder| {
                     for task in tasks.into_iter() {
                         task_holder.hold(task);

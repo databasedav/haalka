@@ -207,18 +207,18 @@ impl BasicScrollHandler {
         if let Some(direction_signal) = direction_signal_option {
             // TODO: these "leak" for as long as the source mutable is alive, is this an issue? revert to less
             // ergonomic task collection strat if so
-            let task = spawn(direction_signal.for_each_sync(clone!((direction) move |d| direction.set_neq(d))));
-            // TODO: 0.15 `Task` api is unified, always detach
-            #[cfg(not(target_arch = "wasm32"))]
-            task.detach();
+            direction_signal
+                .for_each_sync(clone!((direction) move |d| direction.set_neq(d)))
+                .apply(spawn)
+                .detach()
         }
         if let Some(magnitude_signal) = magnitude_signal_option {
             // TODO: these "leak" for as long as the source mutable is alive, is this an issue? revert to less
             // ergonomic task collection strat if so
-            let task = spawn(magnitude_signal.for_each_sync(clone!((magnitude) move |m| magnitude.set_neq(m))));
-            // TODO: 0.15 `Task` api is unified, always detach
-            #[cfg(not(target_arch = "wasm32"))]
-            task.detach();
+            magnitude_signal
+                .for_each_sync(clone!((magnitude) move |m| magnitude.set_neq(m)))
+                .apply(spawn)
+                .detach()
         }
         let f = move |In((entity, mouse_wheel)): In<(Entity, MouseWheel)>,
                       styles: Query<&Style>,

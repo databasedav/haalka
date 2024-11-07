@@ -2,6 +2,10 @@
 //!
 //! i can't believe it's not scrolling !
 
+mod utils;
+use utils::*;
+
+
 use bevy::{
     input::mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
@@ -41,16 +45,11 @@ fn main() {
         .collect::<Vec<_>>();
     App::new()
         .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
+            DefaultPlugins.set(example_window()),
             HaalkaPlugin,
+            FpsOverlayPlugin,
         ))
-        .add_systems(Startup, (ui_root, camera))
+        .add_systems(Startup, (|world: &mut World| { ui_root().spawn(world); }, camera))
         .add_systems(Update, (scroller.run_if(resource_exists::<HoveredCell>), shifter))
         .insert_resource(Rails { vertical, horizontal })
         .insert_resource(Shifted(false))
@@ -132,7 +131,7 @@ static CELLS: Lazy<Vec<Vec<Mutable<LetterColor>>>> = Lazy::new(|| {
     cells
 });
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     El::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
@@ -162,7 +161,6 @@ fn ui_root(world: &mut World) {
                         .flatten(),
                 ),
         )
-        .spawn(world);
 }
 
 fn scroller(

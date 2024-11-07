@@ -5,7 +5,7 @@ use super::{
     utils::clone,
 };
 use apply::Apply;
-use bevy::{prelude::*, ui::ui_layout_system};
+use bevy::prelude::*;
 use futures_signals::signal::{Mutable, Signal};
 
 #[derive(Clone, Copy)]

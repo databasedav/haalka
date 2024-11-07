@@ -1,5 +1,8 @@
 //! Snake with adjustable grid size and tick rate.
 
+mod utils;
+use utils::*;
+
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     convert::identity,
@@ -13,24 +16,16 @@ use rand::prelude::*;
 use strum::{EnumIter, IntoEnumIterator};
 
 fn main() {
-    let cells = (0..STARTING_SIZE)
-        .flat_map(|x| (0..STARTING_SIZE).map(move |y| ((x, y), Mutable::new(Cell::Empty))))
-        .collect::<BTreeMap<_, _>>();
     App::new()
         .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
+            DefaultPlugins.set(example_window()),
             HaalkaPlugin,
             EntropyPlugin::<ChaCha8Rng>::default(),
+            FpsOverlayPlugin,
         ))
         .add_systems(
             Startup,
-            (ui_root, camera, |mut restart: EventWriter<Restart>| {
+            (|world: &mut World| { ui_root().spawn(world); }, camera, |mut restart: EventWriter<Restart>| {
                 restart.send_default();
             }),
         )
@@ -49,14 +44,9 @@ fn main() {
             )
                 .chain(),
         )
-        .insert_resource(GridSize(Mutable::new(STARTING_SIZE)))
-        .insert_resource(Cells(cells.into()))
         .insert_resource(DirectionResource(Direction::Right))
-        .insert_resource(TickRate(Mutable::new(STARTING_TICKS_PER_SECOND)))
         .insert_resource(Time::<Fixed>::from_seconds(1. / STARTING_TICKS_PER_SECOND as f64))
-        .insert_resource(Score(Mutable::new(0)))
         .insert_resource(QueuedDirectionOption(None))
-        .insert_resource(GameOver(Mutable::new(false)))
         .add_event::<SpawnFood>()
         .add_event::<GridSizeChange>()
         .add_event::<Restart>()
@@ -92,19 +82,20 @@ impl Into<BackgroundColor> for Cell {
     }
 }
 
-#[derive(Resource)]
-struct TickRate(Mutable<u32>);
+static TICK_RATE: Lazy<Mutable<u32>> = Lazy::new(|| Mutable::new(STARTING_TICKS_PER_SECOND));
 
-#[derive(Resource)]
-struct Score(Mutable<u32>);
+static SCORE: Lazy<Mutable<u32>> = Lazy::new(default);
 
-#[derive(Resource)]
-struct GridSize(Mutable<usize>);
+static GRID_SIZE: Lazy<Mutable<usize>> = Lazy::new(|| Mutable::new(STARTING_SIZE));
 
 type CellsType = MutableBTreeMap<(usize, usize), Mutable<Cell>>;
 
-#[derive(Resource)]
-struct Cells(CellsType);
+static CELLS: Lazy<CellsType> = Lazy::new(|| {
+    (0..STARTING_SIZE)
+        .flat_map(|x| (0..STARTING_SIZE).map(move |y| ((x, y), Mutable::new(Cell::Empty))))
+        .collect::<BTreeMap<_, _>>()
+        .into()
+});
 
 fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
     let cell_size = size
@@ -168,10 +159,9 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
                 .item(El::<TextBundle>::new().text_signal(tick_rate.signal().map(|size| text(&size.to_string()))))
                 .item(text_button("-").on_pressing_with_system_with_sleep_throttle(
                     |_: In<_>, world: &mut World| {
-                        let tick_rate = &world.resource::<TickRate>().0;
-                        let cur_rate = tick_rate.get();
+                        let cur_rate = TICK_RATE.get();
                         if cur_rate > 1 {
-                            tick_rate.update(|rate| rate - 1);
+                            TICK_RATE.update(|rate| rate - 1);
                             world.insert_resource(Time::<Fixed>::from_seconds(1. / (cur_rate - 1) as f64));
                         }
                     },
@@ -179,9 +169,8 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
                 ))
                 .item(text_button("+").on_pressing_with_system_with_sleep_throttle(
                     |_: In<_>, world: &mut World| {
-                        let tick_rate = &world.resource::<TickRate>().0;
-                        let cur_rate = tick_rate.get();
-                        tick_rate.update(|rate| rate + 1);
+                        let cur_rate = TICK_RATE.get();
+                        TICK_RATE.update(|rate| rate + 1);
                         world.insert_resource(Time::<Fixed>::from_seconds(1. / (cur_rate + 1) as f64));
                     },
                     Duration::from_millis(100),
@@ -189,24 +178,19 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
         )
 }
 
-fn ui_root(world: &mut World) {
-    let size = world.resource::<GridSize>().0.clone();
-    let cells = world.resource::<Cells>().0.clone();
-    let score = world.resource::<Score>().0.clone();
-    let tick_rate = world.resource::<TickRate>().0.clone();
-    let game_over = world.resource::<GameOver>().0.clone();
+fn ui_root() -> impl Element {
     Stack::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .layer(
             Row::<NodeBundle>::new()
-                .width(Val::Percent(100.))
-                .height(Val::Percent(100.))
-                .item(grid(size.clone(), cells))
-                .item(hud(score, size, tick_rate)),
+                .align(Align::center())
+                // .width(Val::Percent(100.))
+                // .height(Val::Percent(100.))
+                .item(grid(GRID_SIZE.clone(), CELLS.clone()))
+                .item(hud(SCORE.clone(), GRID_SIZE.clone(), TICK_RATE.clone())),
         )
-        .layer_signal(game_over.signal().dedupe().map_true(restart_button))
-        .spawn(world);
+        .layer_signal(GAME_OVER.signal().dedupe().map_true(restart_button))
 }
 
 fn restart_button() -> impl Element {
@@ -254,24 +238,22 @@ enum GridSizeChange {
 // potentially addressing the grid float precision shenanigans)
 fn grid_size_changer(
     mut events: EventReader<GridSizeChange>,
-    size: Res<GridSize>,
-    cells: Res<Cells>,
     mut spawn_food: EventWriter<SpawnFood>,
 ) {
     for event in events.read() {
-        let cur_size = size.0.get();
+        let cur_size = GRID_SIZE.get();
         match event {
             GridSizeChange::Incr => {
-                let mut cells_lock = cells.0.lock_mut();
+                let mut cells_lock = CELLS.lock_mut();
                 for i in 0..cur_size + 1 {
                     cells_lock.insert_cloned((i, cur_size), Mutable::new(Cell::Empty));
                     cells_lock.insert_cloned((cur_size, i), Mutable::new(Cell::Empty));
                 }
-                size.0.update(|size| size + 1);
+                GRID_SIZE.update(|size| size + 1);
             }
             GridSizeChange::Decr => {
                 if cur_size > 2 {
-                    let mut cells_lock = cells.0.lock_mut();
+                    let mut cells_lock = CELLS.lock_mut();
                     let indices = (0..cur_size)
                         .map(|i| (i, cur_size - 1))
                         .chain((0..cur_size).map(|i| (cur_size - 1, i)))
@@ -293,7 +275,7 @@ fn grid_size_changer(
                         {
                             spawn_food.send_default();
                         }
-                        size.0.update(|size| size - 1);
+                        GRID_SIZE.update(|size| size - 1);
                     }
                 }
             }
@@ -320,8 +302,7 @@ fn text_button(text_: &str) -> impl Element + PointerEventAware {
 #[derive(Resource)]
 struct Snake(VecDeque<(usize, usize)>);
 
-#[derive(Resource)]
-struct GameOver(Mutable<bool>);
+static GAME_OVER: Lazy<Mutable<bool>> = Lazy::new(default);
 
 #[derive(Clone, Copy, EnumIter, PartialEq, Debug)]
 enum Direction {
@@ -347,34 +328,30 @@ struct DirectionResource(Direction);
 
 fn tick(
     mut commands: Commands,
-    cells: Res<Cells>,
     mut snake: ResMut<Snake>,
-    size: Res<GridSize>,
     direction: Res<DirectionResource>,
-    score: Res<Score>,
     mut spawn_food: EventWriter<SpawnFood>,
-    game_over: Res<GameOver>,
 ) {
     let (mut x, mut y) = snake.0.front().copied().unwrap();
     (x, y) = match direction.0 {
-        Direction::Up => (x, if y == size.0.get() - 1 { 0 } else { y + 1 }),
-        Direction::Down => (x, y.checked_sub(1).unwrap_or_else(|| size.0.get() - 1)),
-        Direction::Left => (x.checked_sub(1).unwrap_or_else(|| size.0.get() - 1), y),
-        Direction::Right => (if x == size.0.get() - 1 { 0 } else { x + 1 }, y),
+        Direction::Up => (x, if y == GRID_SIZE.get() - 1 { 0 } else { y + 1 }),
+        Direction::Down => (x, y.checked_sub(1).unwrap_or_else(|| GRID_SIZE.get() - 1)),
+        Direction::Left => (x.checked_sub(1).unwrap_or_else(|| GRID_SIZE.get() - 1), y),
+        Direction::Right => (if x == GRID_SIZE.get() - 1 { 0 } else { x + 1 }, y),
     };
     snake.0.push_front((x, y));
-    let cells_lock = cells.0.lock_ref();
+    let cells_lock = CELLS.lock_ref();
     if let Some(new) = cells_lock.get(&(x, y)) {
         match new.get() {
             Cell::Snake => {
-                game_over.0.set(true);
+                GAME_OVER.set(true);
                 commands.insert_resource(Paused);
             }
             cell @ (Cell::Food | Cell::Empty) => {
                 new.set(Cell::Snake);
                 match cell {
                     Cell::Food => {
-                        score.0.update(|score| score + 1);
+                        SCORE.update(|score| score + 1);
                         spawn_food.send_default();
                     }
                     Cell::Empty => {
@@ -394,8 +371,8 @@ fn tick(
 #[derive(Event, Default)]
 struct SpawnFood;
 
-fn spawn_food(cells: Res<Cells>, mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>) {
-    let cells_lock = cells.0.lock_ref();
+fn spawn_food(mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>) {
+    let cells_lock = CELLS.lock_ref();
     let empty_cells = cells_lock
         .iter()
         .filter_map(|(position, cell)| matches!(cell.get(), Cell::Empty).then_some(position));
@@ -410,20 +387,16 @@ struct Restart;
 
 fn restart(
     mut commands: Commands,
-    cells: Res<Cells>,
-    grid_size: Res<GridSize>,
-    game_over: Res<GameOver>,
     mut spawn_food: EventWriter<SpawnFood>,
-    score: Res<Score>,
     mut queued_direction_option: ResMut<QueuedDirectionOption>,
     mut direction: ResMut<DirectionResource>,
 ) {
-    for (_, cell) in cells.0.lock_ref().iter() {
+    for (_, cell) in CELLS.lock_ref().iter() {
         cell.set(Cell::Empty);
     }
-    let size = grid_size.0.get();
+    let size = GRID_SIZE.get();
     let init_snake = vec![(size / 2, size / 2 - 1), (size / 2 - 1, size / 2 - 1)];
-    let cells_lock = cells.0.lock_ref();
+    let cells_lock = CELLS.lock_ref();
     for (x, y) in init_snake.iter() {
         cells_lock.get(&(*x, *y)).unwrap().set_neq(Cell::Snake);
     }
@@ -431,8 +404,8 @@ fn restart(
     queued_direction_option.0 = None;
     direction.0 = Direction::Right;
     spawn_food.send_default();
-    score.0.set_neq(0);
-    game_over.0.set_neq(false);
+    SCORE.set_neq(0);
+    GAME_OVER.set_neq(false);
     commands.remove_resource::<Paused>();
 }
 

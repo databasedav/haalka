@@ -4,6 +4,9 @@
 //! - For 400px width and lower, the buttons fill the screen width and the image is above the
 //!   buttons.
 
+mod utils;
+use utils::*;
+
 use std::sync::OnceLock;
 
 use bevy::{prelude::*, window::WindowResized};
@@ -14,17 +17,10 @@ use haalka::{impl_haalka_methods, prelude::*};
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        position: WindowPosition::Centered(MonitorSelection::Primary),
-                        ..default()
-                    }),
-                    ..default()
-                })
-                .set(ImagePlugin::default_nearest()),
+            DefaultPlugins.set(example_window()).set(ImagePlugin::default_nearest()),
             HaalkaPlugin,
             NineSliceUiPlugin::default(),
+            FpsOverlayPlugin,
         ))
         .add_systems(
             Startup,

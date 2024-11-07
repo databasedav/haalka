@@ -6,6 +6,9 @@
 //!   - Mouse: Separate styles for hover and press.
 //!   - Keyboard/Controller: Separate styles for currently focused element.
 
+mod utils;
+use utils::*;
+
 use std::{convert::identity, fmt::Display, hash::Hash, time::Duration};
 
 use bevy::prelude::*;
@@ -15,17 +18,7 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
-            HaalkaPlugin,
-            FpsOverlayPlugin,
-        ))
+        .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
         .add_plugins(EventListenerPlugin::<MenuInputEvent>::default())
         .add_systems(
             Startup,

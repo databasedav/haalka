@@ -4,15 +4,15 @@ import re
 with open('examples/counter.rs', 'r') as file:
     lines = file.readlines()
 
-# Remove the first 3 lines
-lines = lines[3:]
+# Remove the first 6 lines
+lines = lines[6:]
 
 # Join the lines into a single string
 content = ''.join(lines)
 
 # Remove `.set(example_window())` and `FpsOverlayPlugin`
 content = re.sub(r'\.set\(example_window\(\)\)', '', content)
-content = re.sub(r'FpsOverlayPlugin', '', content)
+content = re.sub(r', FpsOverlayPlugin', '', content)
 
 # Read the content of README.md
 with open('README.md', 'r') as file:

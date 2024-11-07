@@ -1,5 +1,8 @@
 //! Demonstrates how to forward ECS changes to UI.
 
+mod utils;
+use utils::*;
+
 use std::time::Duration;
 
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
@@ -10,18 +13,15 @@ use rand::prelude::{IteratorRandom, Rng};
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
+            DefaultPlugins.set(example_window()),
             HaalkaPlugin,
             EntropyPlugin::<ChaCha8Rng>::default(),
+            FpsOverlayPlugin,
         ))
-        .add_systems(Startup, (ui_root, setup))
+        .add_systems(Startup, (|world: &mut World| { ui_root().spawn(world); }, setup))
         .add_systems(Update, (sync_timer, dot_spawner, dot_despawner))
+        .insert_resource(Spawner(MutableTimer::from(SPAWN_RATE.clone())))
+        .insert_resource(Despawner(MutableTimer::from(DESPAWN_RATE.clone())))
         .run();
 }
 
@@ -171,7 +171,7 @@ struct Spawner(MutableTimer);
 #[derive(Resource)]
 struct Despawner(MutableTimer);
 
-#[derive(Resource)]
+#[derive(Default)]
 struct Counts {
     blue: Mutable<u32>,
     green: Mutable<u32>,
@@ -182,30 +182,21 @@ struct Counts {
 const STARTING_SPAWN_RATE: f32 = 1.5;
 const STARTING_DESPAWN_RATE: f32 = 1.;
 
-fn ui_root(world: &mut World) {
-    let spawn_rate = Mutable::new(STARTING_SPAWN_RATE);
-    let despawn_rate = Mutable::new(STARTING_DESPAWN_RATE);
-    let blue_count = Mutable::new(0);
-    let green_count = Mutable::new(0);
-    let red_count = Mutable::new(0);
-    let yellow_count = Mutable::new(0);
-    world.insert_resource(Spawner(MutableTimer::from(spawn_rate.clone())));
-    world.insert_resource(Despawner(MutableTimer::from(despawn_rate.clone())));
-    world.insert_resource(Counts {
-        blue: blue_count.clone(),
-        green: green_count.clone(),
-        red: red_count.clone(),
-        yellow: yellow_count.clone(),
-    });
+static SPAWN_RATE: Lazy<Mutable<f32>> = Lazy::new(|| Mutable::new(STARTING_SPAWN_RATE));
+static DESPAWN_RATE: Lazy<Mutable<f32>> = Lazy::new(|| Mutable::new(STARTING_DESPAWN_RATE));
+static COUNTS: Lazy<Counts> = Lazy::new(default);
+
+fn ui_root() -> impl Element {
     let counts = MutableVec::new_with_values(vec![
-        blue_count.clone(),
-        green_count.clone(),
-        red_count.clone(),
-        yellow_count.clone(),
+        COUNTS.blue.clone(),
+        COUNTS.green.clone(),
+        COUNTS.red.clone(),
+        COUNTS.yellow.clone(),
     ]);
     El::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
+        .align_content(Align::center())
         .child(
             Row::<NodeBundle>::new()
                 .with_style(|mut style| style.column_gap = Val::Px(50.))
@@ -228,10 +219,10 @@ fn ui_root(world: &mut World) {
                                     Column::<NodeBundle>::new()
                                         .align_content(Align::new().left())
                                         .with_style(|mut style| style.row_gap = Val::Px(10.))
-                                        .item(category_count(ColorCategory::Blue, blue_count.signal()))
-                                        .item(category_count(ColorCategory::Green, green_count.signal()))
-                                        .item(category_count(ColorCategory::Red, red_count.signal()))
-                                        .item(category_count(ColorCategory::Yellow, yellow_count.signal())),
+                                        .item(category_count(ColorCategory::Blue, COUNTS.blue.signal()))
+                                        .item(category_count(ColorCategory::Green, COUNTS.green.signal()))
+                                        .item(category_count(ColorCategory::Red, COUNTS.red.signal()))
+                                        .item(category_count(ColorCategory::Yellow, COUNTS.yellow.signal())),
                                 )
                                 .item(
                                     text_labeled_count("total", {
@@ -250,12 +241,11 @@ fn ui_root(world: &mut World) {
                         .item(
                             Column::<NodeBundle>::new()
                                 .with_style(|mut style| style.row_gap = Val::Px(10.))
-                                .item(text_labeled_element("spawn rate", rate_element(spawn_rate)))
-                                .item(text_labeled_element("despawn rate", rate_element(despawn_rate))),
+                                .item(text_labeled_element("spawn rate", rate_element(SPAWN_RATE.clone())))
+                                .item(text_labeled_element("despawn rate", rate_element(DESPAWN_RATE.clone()))),
                         ),
                 ),
         )
-        .spawn(world);
 }
 
 const BLUE: Color = Color::srgb(0.25, 0.25, 0.75);
@@ -330,7 +320,6 @@ fn dot_spawner(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>,
-    counts: Res<Counts>,
 ) {
     if spawner.0.timer.tick(time.delta()).finished() {
         let translation = Vec3::new(rng.gen::<f32>() * HEIGHT, rng.gen::<f32>() * HEIGHT, 0.)
@@ -345,10 +334,10 @@ fn dot_spawner(
             Dot,
         ));
         let count = match position_to_color(translation) {
-            ColorCategory::Blue => &counts.blue,
-            ColorCategory::Green => &counts.green,
-            ColorCategory::Red => &counts.red,
-            ColorCategory::Yellow => &counts.yellow,
+            ColorCategory::Blue => &COUNTS.blue,
+            ColorCategory::Green => &COUNTS.green,
+            ColorCategory::Red => &COUNTS.red,
+            ColorCategory::Yellow => &COUNTS.yellow,
         };
         count.update(|count| count + 1);
         spawner.0.timer.reset();
@@ -361,16 +350,15 @@ fn dot_despawner(
     time: Res<Time>,
     dots: Query<(Entity, &Transform), With<Dot>>,
     mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>,
-    counts: Res<Counts>,
 ) {
     if despawner.0.timer.tick(time.delta()).finished() {
         if let Some((dot, transform)) = dots.iter().choose(rng.as_mut()) {
             commands.entity(dot).despawn_recursive();
             let count = match position_to_color(transform.translation) {
-                ColorCategory::Blue => &counts.blue,
-                ColorCategory::Green => &counts.green,
-                ColorCategory::Red => &counts.red,
-                ColorCategory::Yellow => &counts.yellow,
+                ColorCategory::Blue => &COUNTS.blue,
+                ColorCategory::Green => &COUNTS.green,
+                ColorCategory::Red => &COUNTS.red,
+                ColorCategory::Yellow => &COUNTS.yellow,
             };
             count.update(|count| count - 1);
         }

@@ -7,6 +7,9 @@
 //! - Changing the selection in the UI changes the 3D shapes in the 3D scene.
 //! - On the top of the UI is a text field for the character name.
 
+mod utils;
+use utils::*;
+
 use bevy::prelude::*;
 use bevy_cosmic_edit::{CosmicBackgroundColor, CosmicWrap, CursorColor};
 use haalka::{prelude::*, text_input::FocusedTextInput};
@@ -14,17 +17,14 @@ use strum::{self, IntoEnumIterator};
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
-            HaalkaPlugin,
-        ))
-        .add_systems(Startup, (setup, ui_root).chain())
+        .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
+        .add_systems(
+            Startup,
+            (setup, |world: &mut World| {
+                ui_root().spawn(world);
+            })
+                .chain(),
+        )
         .run();
 }
 
@@ -103,7 +103,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
         )))
 }
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     El::<NodeBundle>::new()
         .ui_root()
         .width(Val::Percent(100.))
@@ -178,7 +178,6 @@ fn ui_root(world: &mut World) {
                         }),
                 ),
         )
-        .spawn(world);
 }
 
 fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>) {

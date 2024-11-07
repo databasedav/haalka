@@ -9,6 +9,9 @@
 // TODO: fix cursor not updating when placing an item in an empty cell and then moving cursor
 // outside
 
+mod utils;
+use utils::*;
+
 use std::{collections::HashMap, convert::identity, sync::OnceLock};
 
 use bevy::prelude::*;

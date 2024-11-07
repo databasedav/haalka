@@ -6,6 +6,9 @@
 //!   - Text selection.
 //!   - Copy/paste/cut with the usual shortcuts.
 
+mod utils;
+use utils::*;
+
 use std::convert::identity;
 
 use bevy::prelude::*;
@@ -17,21 +20,20 @@ use haalka::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
-            HaalkaPlugin,
-        ))
-        .add_systems(Startup, (ui_root, camera))
+        .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                camera,
+            ),
+        )
         .run();
 }
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     El::<NodeBundle>::new()
         .ui_root()
         .cursor(CursorIcon::Default)
@@ -87,7 +89,6 @@ fn ui_root(world: &mut World) {
                         .item(dropdown(["UI", "cosmetics", "gameplay"], Some("type"))),
                 ),
         )
-        .spawn(world);
 }
 
 const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);

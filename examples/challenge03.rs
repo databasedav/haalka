@@ -4,6 +4,9 @@
 //! - The health starts at 10 and decreases by 1 every second. The health should be stored and
 //!   managed in Bevy ECS. When reaching 0 HP, the character should be despawned together with UI.
 
+mod utils;
+use utils::*;
+
 use bevy::prelude::*;
 use colorgrad::{self, Gradient};
 use haalka::prelude::*;
@@ -12,7 +15,9 @@ fn main() {
     App::new()
         .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
         .add_systems(PreStartup, setup)
-        .add_systems(Startup, ui_root)
+        .add_systems(Startup, |world: &mut World| {
+            ui_root().spawn(world);
+        })
         .add_systems(
             Update,
             (
@@ -26,12 +31,10 @@ fn main() {
                 .run_if(any_with_component::<Player>),
         )
         .add_systems(Update, spawn_player.run_if(on_event::<SpawnPlayer>()))
-        .insert_resource(StyleDataResource::default())
         .insert_resource(HealthTickTimer(Timer::from_seconds(
             HEALTH_TICK_RATE,
             TimerMode::Repeating,
         )))
-        .insert_resource(HealthOptionMutable(default()))
         .add_event::<SpawnPlayer>()
         .run();
 }
@@ -53,8 +56,7 @@ struct StyleData {
     scale: f32,
 }
 
-#[derive(Resource, Default)]
-struct StyleDataResource(Mutable<StyleData>);
+static STYLE_DATA: Lazy<Mutable<StyleData>> = Lazy::new(default);
 
 #[derive(Component)]
 struct Health(u32);
@@ -126,7 +128,6 @@ fn movement(
 }
 
 fn sync_tracking_healthbar_position(
-    style_data_resource: Res<StyleDataResource>,
     player: Query<&Transform, (With<Player>, Changed<Transform>)>,
     camera: Query<(&Camera, &Transform), (With<Camera3d>, Without<Player>)>,
     // mut ui_scale: ResMut<UiScale>,  // wanted more local ui scaling
@@ -138,7 +139,7 @@ fn sync_tracking_healthbar_position(
         .world_to_viewport(&GlobalTransform::from(*camera_transform), player_transform.translation)
         .map(|p| p.into())
     {
-        style_data_resource.0.set_neq(StyleData { left, top, scale });
+        STYLE_DATA.set_neq(StyleData { left, top, scale });
     }
     // let starting_distance = CAMERA_POSITION.distance(PLAYER_POSITION);
     // ui_scale.0 = starting_distance as f64 / scale as f64;
@@ -188,15 +189,13 @@ fn healthbar(
         )
 }
 
-#[derive(Resource)]
-struct HealthOptionMutable(Mutable<Option<Mutable<u32>>>);
+static HEALTH_OPTION_MUTABLE: Lazy<Mutable<Option<Mutable<u32>>>> = Lazy::new(default);
 
 #[derive(Event, Default)]
 struct SpawnPlayer;
 
 fn spawn_player(
     mut commands: Commands,
-    health_option: Res<HealthOptionMutable>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
@@ -215,7 +214,7 @@ fn spawn_player(
             ..default()
         },
     ));
-    health_option.0.set(Some(health));
+    HEALTH_OPTION_MUTABLE.set(Some(health));
 }
 
 fn respawn_button() -> impl Element {
@@ -232,12 +231,7 @@ fn respawn_button() -> impl Element {
         )
         .hovered_sync(hovered)
         .align_content(Align::center())
-        .on_click(|| {
-            let task = async_world().send_event(SpawnPlayer).apply(spawn);
-            // TODO: 0.15 `Task` api is unified, always detach
-            #[cfg(not(target_arch = "wasm32"))]
-            task.detach();
-        })
+        .on_click(|| async_world().send_event(SpawnPlayer).apply(spawn).detach())
         .child(El::<TextBundle>::new().text(Text::from_section(
             "respawn",
             TextStyle {
@@ -253,15 +247,13 @@ fn set_dragging_position(mut style: Mut<Style>, StyleData { left, top, .. }: Sty
     style.top = Val::Px(top - 30. * 2. - MINI.1 * 1.5);
 }
 
-fn ui_root(world: &mut World) {
-    let style_data = world.resource::<StyleDataResource>().0.clone();
-    let health_option = world.resource::<HealthOptionMutable>().0.clone();
+fn ui_root() -> impl Element {
     // let starting_distance = CAMERA_POSITION.distance(PLAYER_POSITION);
     El::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .child_signal(
-            health_option
+            HEALTH_OPTION_MUTABLE
                 .signal_cloned()
                 .map_option(
                     move |health| {
@@ -270,37 +262,33 @@ fn ui_root(world: &mut World) {
                             .map(|health| health > 0)
                             .dedupe()
                             .map_bool(
-                                clone!((style_data) move || {
+                                move || {
                                     Stack::<NodeBundle>::new()
-                                    .width(Val::Percent(100.))
-                                    .height(Val::Percent(100.))
+                                        .width(Val::Percent(100.))
+                                        .height(Val::Percent(100.))
                                         .with_style(|mut style| style.padding.bottom = Val::Px(10.))
                                         .layer(
                                             Column::<NodeBundle>::new()
-                                                .on_signal_with_style(
-                                                    style_data.signal(),
-                                                    set_dragging_position,
-                                                )
-                                                .with_style(clone!((style_data) move |mut style| {
+                                                .on_signal_with_style(STYLE_DATA.signal(), set_dragging_position)
+                                                .with_style(|mut style| {
                                                     style.row_gap = Val::Px(MINI.1 / 4.);
-                                                    set_dragging_position(style, style_data.get());
-                                                }))
-                                                // .on_signal_with_transform(style_data.signal(), move |transform, StyleData { scale, .. }| {
+                                                    set_dragging_position(style, STYLE_DATA.get());
+                                                })
+                                                // .on_signal_with_transform(style_data.signal(), move |transform,
+                                                // StyleData { scale, .. }| {
                                                 //     transform.scale = Vec3::splat(starting_distance / scale);
                                                 // })
                                                 .item(
                                                     El::<TextBundle>::new()
-                                                    .with_style(|mut style| style.left = Val::Px(MINI.1 / 4.))
-                                                        .text(
-                                                            Text::from_section(
-                                                                NAME,
-                                                                TextStyle {
-                                                                    font_size: MINI.1 * 3. / 4.,
-                                                                    color: Color::WHITE,
-                                                                    ..default()
-                                                                },
-                                                            )
-                                                        ),
+                                                        .with_style(|mut style| style.left = Val::Px(MINI.1 / 4.))
+                                                        .text(Text::from_section(
+                                                            NAME,
+                                                            TextStyle {
+                                                                font_size: MINI.1 * 3. / 4.,
+                                                                color: Color::WHITE,
+                                                                ..default()
+                                                            },
+                                                        )),
                                                 )
                                                 .item(
                                                     healthbar(
@@ -313,7 +301,7 @@ fn ui_root(world: &mut World) {
                                                             .unwrap(),
                                                     )
                                                     .width(Val::Px(MINI.0))
-                                                    .height(Val::Px(MINI.1))
+                                                    .height(Val::Px(MINI.1)),
                                                 ),
                                         )
                                         .layer(
@@ -328,10 +316,10 @@ fn ui_root(world: &mut World) {
                                             )
                                             .align(Align::new().bottom().center_x())
                                             .width(Val::Px(MAXI.0))
-                                            .height(Val::Px(MAXI.1))
+                                            .height(Val::Px(MAXI.1)),
                                         )
                                         .type_erase()
-                                }),
+                                },
                                 || respawn_button().type_erase(),
                             )
                             .boxed()
@@ -340,7 +328,6 @@ fn ui_root(world: &mut World) {
                 )
                 .flatten(),
         )
-        .spawn(world);
 }
 
 #[derive(Resource)]
