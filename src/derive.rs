@@ -9,8 +9,6 @@ use bevy::{
 use futures_signals::signal::Signal;
 use paste::paste;
 
-use super::{column::Column, el::El, grid::Grid, raw::RawElWrapper, row::Row, stack::Stack};
-
 // TODO: add link to usage in example challenge 4
 /// Implement [haalka](crate)-esque methods for any [`RawElWrapper`] over the named components,
 /// enabling one to quickly add high level signals-powered reactivity to any [`Bundle`], not just [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs).
@@ -98,92 +96,98 @@ macro_rules! impl_haalka_methods {
     }
 }
 
-macro_rules! impl_haalka_methods_for_aligners_and_node_bundles {
-    ($($el_type:ty),* $(,)?) => {
-        $(
-            paste! {
-                impl_haalka_methods! {
-                    $el_type<NodeBundle> {
-                        node: Node,
-                        style: Style,
-                        background_color: BackgroundColor,
-                        border_color: BorderColor,
-                        border_radius: BorderRadius,
-                        focus_policy: FocusPolicy,
-                        transform: Transform,
-                        global_transform: GlobalTransform,
-                        visibility: Visibility,
-                        inherited_visibility: InheritedVisibility,
-                        view_visibility: ViewVisibility,
-                        z_index: ZIndex,
-                    }
-                }
-                impl_haalka_methods! {
-                    $el_type<ImageBundle> {
-                        node: Node,
-                        style: Style,
-                        calculated_size: ContentSize,
-                        image: UiImage,
-                        background_color: BackgroundColor,
-                        image_size: UiImageSize,
-                        focus_policy: FocusPolicy,
-                        transform: Transform,
-                        global_transform: GlobalTransform,
-                        visibility: Visibility,
-                        inherited_visibility: InheritedVisibility,
-                        view_visibility: ViewVisibility,
-                        z_index: ZIndex,
-                    }
-                }
-                impl_haalka_methods! {
-                    $el_type<TextBundle> {
-                        node: Node,
-                        style: Style,
-                        text: Text,
-                        text_layout_info: TextLayoutInfo,
-                        text_flags: TextFlags,
-                        calculated_size: ContentSize,
-                        focus_policy: FocusPolicy,
-                        transform: Transform,
-                        global_transform: GlobalTransform,
-                        visibility: Visibility,
-                        inherited_visibility: InheritedVisibility,
-                        view_visibility: ViewVisibility,
-                        z_index: ZIndex,
-                        background_color: BackgroundColor,
-                    }
-                }
-                impl_haalka_methods! {
-                    $el_type<ButtonBundle> {
-                        node: Node,
-                        button: Button,
-                        style: Style,
-                        interaction: Interaction,
-                        focus_policy: FocusPolicy,
-                        border_color: BorderColor,
-                        border_radius: BorderRadius,
-                        image: UiImage,
-                        background_color: BackgroundColor,
-                        transform: Transform,
-                        global_transform: GlobalTransform,
-                        visibility: Visibility,
-                        inherited_visibility: InheritedVisibility,
-                        view_visibility: ViewVisibility,
-                        z_index: ZIndex,
-                    }
-                }
-            }
-        )*
-    }
-}
+cfg_if::cfg_if! {
+    if #[cfg(feature = "ui")] {
+        use super::{column::Column, el::El, grid::Grid, raw::RawElWrapper, row::Row, stack::Stack};
 
-// TODO: how expensive is it to have all these methods ?
-impl_haalka_methods_for_aligners_and_node_bundles! {
-    El,
-    Column,
-    Row,
-    Stack,
-    Grid,
+        macro_rules! impl_haalka_methods_for_aligners_and_node_bundles {
+            ($($el_type:ty),* $(,)?) => {
+                $(
+                    paste! {
+                        impl_haalka_methods! {
+                            $el_type<NodeBundle> {
+                                node: Node,
+                                style: Style,
+                                background_color: BackgroundColor,
+                                border_color: BorderColor,
+                                border_radius: BorderRadius,
+                                focus_policy: FocusPolicy,
+                                transform: Transform,
+                                global_transform: GlobalTransform,
+                                visibility: Visibility,
+                                inherited_visibility: InheritedVisibility,
+                                view_visibility: ViewVisibility,
+                                z_index: ZIndex,
+                            }
+                        }
+                        impl_haalka_methods! {
+                            $el_type<ImageBundle> {
+                                node: Node,
+                                style: Style,
+                                calculated_size: ContentSize,
+                                image: UiImage,
+                                background_color: BackgroundColor,
+                                image_size: UiImageSize,
+                                focus_policy: FocusPolicy,
+                                transform: Transform,
+                                global_transform: GlobalTransform,
+                                visibility: Visibility,
+                                inherited_visibility: InheritedVisibility,
+                                view_visibility: ViewVisibility,
+                                z_index: ZIndex,
+                            }
+                        }
+                        impl_haalka_methods! {
+                            $el_type<TextBundle> {
+                                node: Node,
+                                style: Style,
+                                text: Text,
+                                text_layout_info: TextLayoutInfo,
+                                text_flags: TextFlags,
+                                calculated_size: ContentSize,
+                                focus_policy: FocusPolicy,
+                                transform: Transform,
+                                global_transform: GlobalTransform,
+                                visibility: Visibility,
+                                inherited_visibility: InheritedVisibility,
+                                view_visibility: ViewVisibility,
+                                z_index: ZIndex,
+                                background_color: BackgroundColor,
+                            }
+                        }
+                        impl_haalka_methods! {
+                            $el_type<ButtonBundle> {
+                                node: Node,
+                                button: Button,
+                                style: Style,
+                                interaction: Interaction,
+                                focus_policy: FocusPolicy,
+                                border_color: BorderColor,
+                                border_radius: BorderRadius,
+                                image: UiImage,
+                                background_color: BackgroundColor,
+                                transform: Transform,
+                                global_transform: GlobalTransform,
+                                visibility: Visibility,
+                                inherited_visibility: InheritedVisibility,
+                                view_visibility: ViewVisibility,
+                                z_index: ZIndex,
+                            }
+                        }
+                    }
+                )*
+            }
+        }
+
+        // TODO: how expensive is it to have all these methods ?
+        impl_haalka_methods_for_aligners_and_node_bundles! {
+            El,
+            Column,
+            Row,
+            Stack,
+            Grid,
+        }
+    }
 }
 
 // TODO: macro doesn't play nice with generics and chatgpt can't figure it out

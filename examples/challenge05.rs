@@ -17,7 +17,7 @@ use strum::{self, IntoEnumIterator};
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
+        .add_plugins(examples_plugin)
         .add_systems(
             Startup,
             (setup, |world: &mut World| {

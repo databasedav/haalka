@@ -1,41 +1,32 @@
 use std::time::Duration;
 
-cfg_if::cfg_if! {
-    if #[cfg(not(target_arch = "wasm32"))] {
-        use bevy::tasks::Task;
-    }
-}
 use bevy::{
-    app::{App, Plugin},
-    diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
-    prelude::{resource_exists, TextBundle},
+    app::{App, Plugin, PostStartup, Update},
+    log::warn,
     tasks::IoTaskPool,
-    utils::default,
-    window::{MonitorSelection, Window, WindowPlugin, WindowPosition},
+    ui::IsDefaultUiCamera,
 };
-use cfg_if::cfg_if;
 #[doc(no_inline)]
 pub use enclose::enclose as clone;
 use futures_signals::{
     map_ref,
     signal::{Mutable, Signal, SignalExt},
 };
-cfg_if! {
+cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
-        use gloo_timers::future::TimeoutFuture;
         use super::node_builder::WasmTaskAdapter;
+    } else {
+        use bevy::tasks::Task;
     }
 }
 use haalka_futures_signals_ext::{futures_util::future::abortable, SignalExtExt};
 use std::{future::Future, ops::Not};
 
-use crate::raw::RawElWrapper;
-
 /// Block for the `duration`.
 pub async fn sleep(duration: Duration) {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
-            send_wrapper::SendWrapper::new(TimeoutFuture::new(duration.as_millis().try_into().unwrap())).await;
+            send_wrapper::SendWrapper::new(gloo_timers::future::TimeoutFuture::new(duration.as_millis().try_into().unwrap())).await;
         } else {
             async_io::Timer::after(duration).await;
         }
@@ -81,4 +72,46 @@ pub fn signal_eq<T: PartialEq + Send>(
     signal_2: impl Signal<Item = T> + Send + 'static,
 ) -> impl Signal<Item = bool> + Send + 'static {
     map_ref!(signal_1, signal_2 => *signal_1 == *signal_2).dedupe()
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "debug")] {
+        use bevy::{ecs::prelude::*, input::prelude::*, dev_tools::ui_debug_overlay};
+
+        fn toggle_overlay(
+            input: Res<ButtonInput<KeyCode>>,
+            mut options: ResMut<ui_debug_overlay::UiDebugOptions>,
+        ) {
+            if input.just_pressed(KeyCode::F1) {
+                options.toggle();
+            }
+        }
+
+        pub struct DebugUiPlugin;
+
+        impl Plugin for DebugUiPlugin {
+            fn build(&self, app: &mut App) {
+                cfg_if::cfg_if! {
+                    if #[cfg(feature = "text_input")] {
+                        app
+                        .insert_resource(bevy_cosmic_edit::CursorPluginDisabled)
+                        .add_systems(PostStartup, |default_cameras: Query<Entity, With<IsDefaultUiCamera>>, mut commands: Commands| {
+                            if let Ok(entity) = default_cameras.get_single() {
+                                if let Some(mut entity) = commands.get_entity(entity) {
+                                    entity.try_insert(bevy_cosmic_edit::CosmicPrimaryCamera);
+                                    commands.remove_resource::<bevy_cosmic_edit::CursorPluginDisabled>();
+                                }
+                            } else {
+                                warn!("DebugUiPlugin won't function without a camera with an IsDefaultUiCamera component");
+                            }
+                        })
+                        .add_systems(Update, toggle_overlay.run_if(any_with_component::<IsDefaultUiCamera>.and_then(any_with_component::<bevy_cosmic_edit::CosmicPrimaryCamera>)));
+                    } else {
+                        app.add_systems(Update, toggle_overlay.run_if(any_with_component::<IsDefaultUiCamera>));
+                    }
+                }
+                app.add_plugins(ui_debug_overlay::DebugUiPlugin);
+            }
+        }
+    }
 }

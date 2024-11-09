@@ -17,17 +17,18 @@ use strum::{EnumIter, IntoEnumIterator};
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(example_window()),
-            HaalkaPlugin,
-            EntropyPlugin::<ChaCha8Rng>::default(),
-            FpsOverlayPlugin,
-        ))
+        .add_plugins(examples_plugin)
         .add_systems(
             Startup,
-            (|world: &mut World| { ui_root().spawn(world); }, camera, |mut restart: EventWriter<Restart>| {
-                restart.send_default();
-            }),
+            (
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                camera,
+                |mut restart: EventWriter<Restart>| {
+                    restart.send_default();
+                },
+            ),
         )
         .add_systems(Update, (direction, restart.run_if(on_event::<Restart>())))
         .add_systems(
@@ -236,10 +237,7 @@ enum GridSizeChange {
 
 // TODO: move this back inside the on_click ? (initial motivation for moving to event was
 // potentially addressing the grid float precision shenanigans)
-fn grid_size_changer(
-    mut events: EventReader<GridSizeChange>,
-    mut spawn_food: EventWriter<SpawnFood>,
-) {
+fn grid_size_changer(mut events: EventReader<GridSizeChange>, mut spawn_food: EventWriter<SpawnFood>) {
     for event in events.read() {
         let cur_size = GRID_SIZE.get();
         match event {

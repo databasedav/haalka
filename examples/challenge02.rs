@@ -12,9 +12,12 @@
 mod utils;
 use utils::*;
 
-use std::{collections::HashMap, convert::identity, sync::OnceLock};
+use std::{collections::HashMap, convert::identity, sync::OnceLock, time::Duration};
 
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    winit::{UpdateMode, WinitSettings},
+};
 use bevy_asset_loader::prelude::*;
 use bevy_mod_picking::{
     events::{Click, Down, Move, Pointer, Up},
@@ -28,7 +31,7 @@ use rand::{
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
+        .add_plugins(examples_plugin)
         .init_state::<AssetState>()
         .add_loading_state(
             LoadingState::new(AssetState::Loading)
@@ -38,9 +41,20 @@ fn main() {
         .add_systems(Startup, camera)
         .add_systems(
             OnEnter(AssetState::Loaded),
-            (set_icon_texture_atlas, |world: &mut World| {
-                ui_root().spawn(world);
-            })
+            (
+                set_icon_texture_atlas,
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                |mut winit_settings: ResMut<WinitSettings>| {
+                    winit_settings.focused_mode = UpdateMode::Reactive {
+                        wait: Duration::from_secs_f32(1. / 240.),
+                        react_to_device_events: false,
+                        react_to_user_events: false,
+                        react_to_window_events: false,
+                    };
+                },
+            )
                 .chain(),
         )
         .run();
@@ -222,8 +236,6 @@ fn icon(
                 .update_raw_el(|raw_el| {
                     raw_el
                         .insert(TextureAtlas::from(icon_sheet().layout.clone()))
-                        // TODO: fix grey flash when inserting into an empty cell, making the index static does not
-                        // suffice; this might actually be the item label flashing on top before the frame it is moved
                         .on_signal_with_component(index_signal, |mut texture_atlas: Mut<TextureAtlas>, index| {
                             texture_atlas.index = index;
                         })
@@ -253,7 +265,7 @@ struct CellData {
 
 fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl Element {
     let hovered = Mutable::new(false);
-    let original_position = Mutable::new(None);
+    let original_position: Mutable<Option<Vec2>> = Mutable::new(None);
     let down = Mutable::new(false);
     // let stop_propagation_trigger = Mutable::new(false);
     // let cursor_disabling_forwarder = spawn(sync_neq(
@@ -400,7 +412,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                     .layer(icon(cell_data.index.signal(), cell_data.count.signal()))
                     .layer_signal(
                         signal::and(hovered.signal(), signal::not(is_dragging())).dedupe()
-                        .map_true(clone!((original_position) move ||
+                        .map_true(clone!((original_position) move || {
                             El::<NodeBundle>::new()
                                 // TODO: global transform isn't populated on spawn
                                 // .with_global_transform(clone!((original_position) move |transform| original_position.set(Some(transform.compute_transform().translation.xy()))))
@@ -410,6 +422,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                     style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
                                     style.padding = UiRect::horizontal(Val::Px(10.));
                                 })
+                                .visibility(Visibility::Hidden)
                                 .update_raw_el(clone!((original_position) move |raw_el| {
                                     raw_el
                                     .on_signal_with_entity(POINTER_POSITION.signal(), move |mut entity, (mut left, mut top)| {
@@ -421,6 +434,8 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                             let original_position = original_position.get().unwrap();
                                             left -= original_position.x - CELL_WIDTH / 2.;
                                             top -= original_position.y + CELL_WIDTH / 2.;
+                                            // this fixes grey flash when inserting into an empty cell, which is caused by the item tooltip flashing on top before the frame it is moved
+                                            entity.insert(Visibility::Visible);
                                         }
                                         if let Some(mut style) = entity.get_mut::<Style>() {
                                             style.left = Val::Px(left);
@@ -445,7 +460,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                         )
                                     )
                                 )
-                        ))
+                        }))
                     )
                 })
         )

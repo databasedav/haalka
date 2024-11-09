@@ -1,28 +1,26 @@
-use bevy::{app::prelude::*, diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin}, ecs::prelude::*, input::prelude::*, text::prelude::*, ui::prelude::*, utils::prelude::*, window::prelude::*};
+use bevy::{
+    app::prelude::*,
+    core_pipeline::prelude::*,
+    diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
+    ecs::prelude::*,
+    input::prelude::*,
+    text::prelude::*,
+    ui::prelude::*,
+    utils::prelude::*,
+    window::prelude::*,
+};
+use haalka::prelude::*;
 use haalka_futures_signals_ext::SignalExtBool;
 use once_cell::sync::Lazy;
-use haalka::prelude::*;
-
-
-pub fn example_window() -> WindowPlugin {
-    WindowPlugin {
-        primary_window: Some(Window {
-            position: WindowPosition::Centered(MonitorSelection::Primary),
-            fit_canvas_to_parent: true,
-            ..default()
-        }),
-        ..default()
-    }
-}
 
 /// [`haalka`](crate) port of bevy::dev_tools::fps_overlay::FpsOverlayPlugin.
 #[derive(Default)]
 pub struct FpsOverlayPlugin;
 
 const FPS_FONT_SIZE: f32 = 20.;
-const FPS_TOGGLE_KEY: KeyCode = KeyCode::F1;
+const FPS_TOGGLE_KEY: KeyCode = KeyCode::F2;
 const FPS_PADDING: f32 = 5.;
-pub const FPS_OVERLAY_ZINDEX: i32 = i32::MAX - 32;
+const FPS_OVERLAY_ZINDEX: i32 = i32::MAX - 32;
 
 impl Plugin for FpsOverlayPlugin {
     fn build(&self, app: &mut App) {
@@ -42,9 +40,10 @@ impl Plugin for FpsOverlayPlugin {
 
         fn fps_element(fps: impl Signal<Item = f64> + Send + 'static) -> impl Element {
             Row::<NodeBundle>::new()
-            // TODO: good place to use the text section signal abstraction, since doing a .text(...).text(...) does not work as expected
-            .item(El::<TextBundle>::new().text(text("fps: ")))
-            .item(El::<TextBundle>::new().text_signal(fps.map(|fps| format!("{fps:.2}")).map(text)))
+                // TODO: good place to use the text section signal abstraction, since doing a .text(...).text(...) does
+                // not work as expected
+                .item(El::<TextBundle>::new().text(text("fps: ")))
+                .item(El::<TextBundle>::new().text_signal(fps.map(|fps| format!("{fps:.2}")).map(text)))
         }
 
         static FPS: Lazy<Mutable<f64>> = Lazy::new(default);
@@ -67,14 +66,14 @@ impl Plugin for FpsOverlayPlugin {
                     style.padding.left = Val::Px(FPS_PADDING);
                 })
                 .update_raw_el(|raw_el| raw_el.insert(ZIndex::Global(FPS_OVERLAY_ZINDEX)))
-                .child_signal(
-                    SHOW.signal().map_true(move ||
-                        fps_element(FPS.signal())
-                    )
-                )
+                .child_signal(SHOW.signal().map_true(move || fps_element(FPS.signal())))
         }
 
-        fn toggle_overlay(input: Res<ButtonInput<KeyCode>>, mut commands: Commands, fps_overlay_enabled_option: Option<Res<FpsOverlayEnabled>>) {
+        fn toggle_overlay(
+            input: Res<ButtonInput<KeyCode>>,
+            mut commands: Commands,
+            fps_overlay_enabled_option: Option<Res<FpsOverlayEnabled>>,
+        ) {
             if input.just_pressed(FPS_TOGGLE_KEY) {
                 let exists = fps_overlay_enabled_option.is_some();
                 if exists {
@@ -89,9 +88,38 @@ impl Plugin for FpsOverlayPlugin {
         #[derive(Resource)]
         struct FpsOverlayEnabled;
 
-        app
-            .add_systems(Startup, |world: &mut World| { fps_ui_root().spawn(world); })
-            .add_systems(Update, (toggle_overlay, update_fps.run_if(resource_exists::<FpsOverlayEnabled>)))
-            ;
+        app.add_systems(Startup, |world: &mut World| {
+            fps_ui_root().spawn(world);
+        })
+        .add_systems(
+            Update,
+            (toggle_overlay, update_fps.run_if(resource_exists::<FpsOverlayEnabled>)),
+        );
     }
+}
+
+pub(crate) fn examples_plugin(app: &mut App) {
+    app.add_plugins((
+        bevy::DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                position: WindowPosition::Centered(MonitorSelection::Primary),
+                fit_canvas_to_parent: true,
+                ..default()
+            }),
+            ..default()
+        }),
+        HaalkaPlugin,
+        FpsOverlayPlugin,
+        DebugUiPlugin,
+    ))
+    .add_systems(
+        PostStartup,
+        |cameras: Query<Entity, With<Camera2d>>, mut commands: Commands| {
+            if let Ok(entity) = cameras.get_single() {
+                if let Some(mut entity) = commands.get_entity(entity) {
+                    entity.try_insert(IsDefaultUiCamera);
+                }
+            }
+        },
+    );
 }

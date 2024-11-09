@@ -224,10 +224,7 @@ impl BasicScrollHandler {
                       styles: Query<&Style>,
                       keys: Res<ButtonInput<KeyCode>>,
                       mut commands: Commands| {
-            let dy = match mouse_wheel.unit {
-                MouseScrollUnit::Line => mouse_wheel.y * magnitude.get(),
-                MouseScrollUnit::Pixel => mouse_wheel.y,
-            };
+            let dy = if mouse_wheel.y.is_sign_negative() { -1. } else { 1. } * magnitude.get();
             if let Ok(style) = styles.get(entity) {
                 let direction = direction.get();
                 if matches!(direction, ScrollDirection::Vertical)

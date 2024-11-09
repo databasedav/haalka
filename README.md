@@ -14,6 +14,8 @@ While haalka is primarily targeted at UI and provides high level UI abstractions
 ## considerations
 If one is using the `text_input` feature (enabled by default) and using multiple cameras in the same world, they must enable the `multicam` feature AND add the `bevy_cosmic_edit::CosmicPrimaryCamera` marker component to the primary camera.
 
+## [feature flags](https://docs.rs/haalka/latest/haalka/#feature-flags)
+
 ## examples
 <p align="center">
   <img src="https://raw.githubusercontent.com/databasedav/haalka/main/docs/static/counter.gif">

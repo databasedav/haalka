@@ -1,20 +1,36 @@
 //! Simple button, port of <https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs>.
 
 mod utils;
+use std::time::Duration;
+
 use utils::*;
 
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    winit::{UpdateMode, WinitSettings},
+};
 use haalka::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
+        .add_plugins(examples_plugin)
         .add_systems(
             Startup,
-            (camera, |world: &mut World| {
-                let font = world.resource::<AssetServer>().load("fonts/FiraMono-subset.ttf");
-                ui_root(font).spawn(world);
-            }),
+            (
+                |world: &mut World| {
+                    let font = world.resource::<AssetServer>().load("fonts/FiraMono-subset.ttf");
+                    ui_root(font).spawn(world);
+                },
+                camera,
+                |mut winit_settings: ResMut<WinitSettings>| {
+                    winit_settings.focused_mode = UpdateMode::Reactive {
+                        wait: Duration::from_secs_f32(1. / 240.),
+                        react_to_device_events: false,
+                        react_to_user_events: false,
+                        react_to_window_events: false,
+                    };
+                },
+            ),
         )
         .run();
 }
@@ -95,7 +111,7 @@ fn button(font: Handle<Font>) -> impl Element {
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn((Camera2dBundle::default(),));
 }
 
 fn ui_root(font: Handle<Font>) -> impl Element {

@@ -12,13 +12,16 @@ use rand::prelude::{IteratorRandom, Rng};
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(example_window()),
-            HaalkaPlugin,
-            EntropyPlugin::<ChaCha8Rng>::default(),
-            FpsOverlayPlugin,
-        ))
-        .add_systems(Startup, (|world: &mut World| { ui_root().spawn(world); }, setup))
+        .add_plugins(examples_plugin)
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                setup,
+            ),
+        )
         .add_systems(Update, (sync_timer, dot_spawner, dot_despawner))
         .insert_resource(Spawner(MutableTimer::from(SPAWN_RATE.clone())))
         .insert_resource(Despawner(MutableTimer::from(DESPAWN_RATE.clone())))

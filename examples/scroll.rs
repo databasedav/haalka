@@ -8,12 +8,16 @@ use haalka::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(example_window()),
-            HaalkaPlugin,
-            FpsOverlayPlugin,
-        ))
-        .add_systems(Startup, (|world: &mut World| { ui_root().spawn(world); }, camera))
+        .add_plugins(examples_plugin)
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                camera,
+            ),
+        )
         .add_systems(Update, shifter)
         .run();
 }

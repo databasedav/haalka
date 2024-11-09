@@ -18,7 +18,7 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
+        .add_plugins(examples_plugin)
         .add_plugins(EventListenerPlugin::<MenuInputEvent>::default())
         .add_systems(
             Startup,

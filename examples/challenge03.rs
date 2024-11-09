@@ -13,7 +13,7 @@ use haalka::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins.set(example_window()), HaalkaPlugin, FpsOverlayPlugin))
+        .add_plugins(examples_plugin)
         .add_systems(PreStartup, setup)
         .add_systems(Startup, |world: &mut World| {
             ui_root().spawn(world);

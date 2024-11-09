@@ -16,12 +16,7 @@ use haalka::{impl_haalka_methods, prelude::*};
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(example_window()).set(ImagePlugin::default_nearest()),
-            HaalkaPlugin,
-            NineSliceUiPlugin::default(),
-            FpsOverlayPlugin,
-        ))
+        .add_plugins(examples_plugin)
         .add_systems(
             Startup,
             (setup, |world: &mut World| {

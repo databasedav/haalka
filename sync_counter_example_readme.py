@@ -10,9 +10,8 @@ lines = lines[6:]
 # Join the lines into a single string
 content = ''.join(lines)
 
-# Remove `.set(example_window())` and `FpsOverlayPlugin`
-content = re.sub(r'\.set\(example_window\(\)\)', '', content)
-content = re.sub(r', FpsOverlayPlugin', '', content)
+# Replace `example_plugin` with `((DefaultPlugins, HaalkaPlugin))`
+content = re.sub(r'example_plugin', '(DefaultPlugins, HaalkaPlugin)', content)
 
 # Read the content of README.md
 with open('README.md', 'r') as file:
