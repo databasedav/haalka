@@ -22,14 +22,6 @@ fn main() {
                     ui_root(font).spawn(world);
                 },
                 camera,
-                |mut winit_settings: ResMut<WinitSettings>| {
-                    winit_settings.focused_mode = UpdateMode::Reactive {
-                        wait: Duration::from_secs_f32(1. / 240.),
-                        react_to_device_events: false,
-                        react_to_user_events: false,
-                        react_to_window_events: false,
-                    };
-                },
             ),
         )
         .run();

@@ -12,7 +12,7 @@ use rand::prelude::{IteratorRandom, Rng};
 
 fn main() {
     App::new()
-        .add_plugins(examples_plugin)
+        .add_plugins((examples_plugin, EntropyPlugin::<ChaCha8Rng>::default()))
         .add_systems(
             Startup,
             (
@@ -257,7 +257,7 @@ const RED: Color = Color::srgb(0.75, 0.25, 0.25);
 const YELLOW: Color = Color::srgb(0.75, 0.75, 0.25);
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn((Camera2dBundle::default(), IsDefaultUiCamera));
     commands.spawn((SpriteBundle {
         sprite: Sprite {
             color: BLUE,

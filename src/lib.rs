@@ -1,6 +1,9 @@
 #![doc = include_str!("../README.md")]
 //! ## feature flags
-#![doc = document_features::document_features!()]
+#![cfg_attr(
+    feature = "document-features",
+    doc = document_features::document_features!()
+)]
 
 use bevy::prelude::*;
 use bevy_async_ecs::AsyncEcsPlugin;

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::{
     app::prelude::*,
     core_pipeline::prelude::*,
@@ -8,6 +10,7 @@ use bevy::{
     ui::prelude::*,
     utils::prelude::*,
     window::prelude::*,
+    winit::*,
 };
 use haalka::prelude::*;
 use haalka_futures_signals_ext::SignalExtBool;
@@ -98,6 +101,17 @@ impl Plugin for FpsOverlayPlugin {
     }
 }
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+struct MarkDefaultUiCameraSet;
+
+fn mark_default_ui_camera(cameras: Query<Entity, With<Camera2d>>, mut commands: Commands) {
+    if let Ok(entity) = cameras.get_single() {
+        if let Some(mut entity) = commands.get_entity(entity) {
+            entity.try_insert(IsDefaultUiCamera);
+        }
+    }
+}
+
 pub(crate) fn examples_plugin(app: &mut App) {
     app.add_plugins((
         bevy::DefaultPlugins.set(WindowPlugin {
@@ -110,16 +124,27 @@ pub(crate) fn examples_plugin(app: &mut App) {
         }),
         HaalkaPlugin,
         FpsOverlayPlugin,
+        #[cfg(feature = "debug")]
         DebugUiPlugin,
     ))
     .add_systems(
         PostStartup,
-        |cameras: Query<Entity, With<Camera2d>>, mut commands: Commands| {
-            if let Ok(entity) = cameras.get_single() {
-                if let Some(mut entity) = commands.get_entity(entity) {
-                    entity.try_insert(IsDefaultUiCamera);
-                }
+        mark_default_ui_camera.run_if(not(any_with_component::<IsDefaultUiCamera>)),
+    )
+    .configure_sets(PostStartup, (MarkDefaultUiCameraSet, CosmicMulticamHandlerSet).chain());
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            {
+                const MAX_WASM_FPS: f32 = 120.;
+                app.add_systems(PostStartup, |mut winit_settings: ResMut<WinitSettings>| {
+                    winit_settings.focused_mode = UpdateMode::Reactive {
+                        wait: Duration::from_secs_f32(1. / MAX_WASM_FPS),
+                        react_to_device_events: false,
+                        react_to_user_events: false,
+                        react_to_window_events: false,
+                    };
+                });
             }
-        },
-    );
+        }
+    };
 }
