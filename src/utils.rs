@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use bevy::{
     app::{App, Plugin, PostStartup, Update},
-    log::warn,
+    log::prelude::*,
     tasks::IoTaskPool,
     ui::IsDefaultUiCamera,
 };
@@ -78,11 +78,13 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "debug")] {
         use bevy::{ecs::prelude::*, input::prelude::*, dev_tools::ui_debug_overlay};
 
+        const OVERLAY_TOGGLE_KEY: KeyCode = KeyCode::F1;
+
         fn toggle_overlay(
             input: Res<ButtonInput<KeyCode>>,
             mut options: ResMut<ui_debug_overlay::UiDebugOptions>,
         ) {
-            if input.just_pressed(KeyCode::F1) {
+            if input.just_pressed(OVERLAY_TOGGLE_KEY) {
                 options.toggle();
             }
         }

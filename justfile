@@ -1,11 +1,14 @@
-format:
-    cargo +nightly fmt
+format *extras:
+    cargo +nightly fmt {{ extras }}
 
 doc *extras:
-    cargo +nightly doc -Zunstable-options -Zrustdoc-scrape-examples -Fdebug {{ extras }}
+    cargo +nightly doc --all-features --no-deps -Zunstable-options -Zrustdoc-scrape-examples -Fdebug --locked {{ extras }}
 
 doctest:
-    cargo test --doc
+    cargo test --doc --all-features --locked
+
+clippy:
+    cargo clippy --all-features --all-targets --locked -- --deny warnings
 
 example name *extras:
     cargo run --example {{ name }} {{ extras }}

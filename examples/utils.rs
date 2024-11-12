@@ -104,7 +104,7 @@ impl Plugin for FpsOverlayPlugin {
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 struct MarkDefaultUiCameraSet;
 
-fn mark_default_ui_camera(cameras: Query<Entity, With<Camera2d>>, mut commands: Commands) {
+fn mark_default_ui_camera(cameras: Query<Entity, Or<(With<Camera2d>, With<Camera3d>)>>, mut commands: Commands) {
     if let Ok(entity) = cameras.get_single() {
         if let Some(mut entity) = commands.get_entity(entity) {
             entity.try_insert(IsDefaultUiCamera);
@@ -129,21 +129,40 @@ pub(crate) fn examples_plugin(app: &mut App) {
     ))
     .add_systems(
         PostStartup,
-        mark_default_ui_camera.run_if(not(any_with_component::<IsDefaultUiCamera>)),
+        mark_default_ui_camera.in_set(MarkDefaultUiCameraSet).run_if(not(any_with_component::<IsDefaultUiCamera>)),
     )
     .configure_sets(PostStartup, (MarkDefaultUiCameraSet, CosmicMulticamHandlerSet).chain());
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             {
-                const MAX_WASM_FPS: f32 = 120.;
-                app.add_systems(PostStartup, |mut winit_settings: ResMut<WinitSettings>| {
-                    winit_settings.focused_mode = UpdateMode::Reactive {
-                        wait: Duration::from_secs_f32(1. / MAX_WASM_FPS),
-                        react_to_device_events: false,
-                        react_to_user_events: false,
-                        react_to_window_events: false,
-                    };
+                const MAX_WASM_FPS: f32 = 240.;
+                const LIMIT_FRAMERATE_TOGGLE_KEY: KeyCode = KeyCode::F3;
+
+                static CAPPED_FRAMERATE_UPDATE_MODE: Lazy<UpdateMode> = Lazy::new(|| UpdateMode::Reactive {
+                    wait: Duration::from_secs_f32(1. / MAX_WASM_FPS),
+                    react_to_device_events: false,
+                    react_to_user_events: false,
+                    react_to_window_events: false,
                 });
+
+                fn toggle_framerate_cap(
+                    input: Res<ButtonInput<KeyCode>>,
+                    mut winit_settings: ResMut<WinitSettings>,
+                ) {
+                    if input.just_pressed(LIMIT_FRAMERATE_TOGGLE_KEY) {
+                        if matches!(winit_settings.focused_mode, UpdateMode::Continuous) {
+                            winit_settings.focused_mode = *CAPPED_FRAMERATE_UPDATE_MODE;
+                        } else {
+                            winit_settings.focused_mode = UpdateMode::Continuous;
+                        }
+                    }
+                }
+
+                app
+                .add_systems(PostStartup, |mut winit_settings: ResMut<WinitSettings>| {
+                    winit_settings.focused_mode = *CAPPED_FRAMERATE_UPDATE_MODE;
+                })
+                .add_systems(Update, toggle_framerate_cap);
             }
         }
     };

@@ -1,4 +1,4 @@
-name: release-plz
+name: release
 
 permissions:
   pull-requests: write
@@ -13,8 +13,8 @@ on:
       - 'release/**'
 
 jobs:
-  release-plz-release:
-    name: Release-plz release
+  release:
+    name: release
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo

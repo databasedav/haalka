@@ -257,7 +257,7 @@ const RED: Color = Color::srgb(0.75, 0.25, 0.25);
 const YELLOW: Color = Color::srgb(0.75, 0.75, 0.25);
 
 fn setup(mut commands: Commands) {
-    commands.spawn((Camera2dBundle::default(), IsDefaultUiCamera));
+    commands.spawn(Camera2dBundle::default());
     commands.spawn((SpriteBundle {
         sprite: Sprite {
             color: BLUE,

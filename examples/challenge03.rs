@@ -94,10 +94,10 @@ fn setup(
         transform: Transform::from_xyz(0., 8., 0.),
         ..default()
     });
-    commands.spawn((Camera3dBundle {
+    commands.spawn(Camera3dBundle {
         transform: Transform::from_translation(CAMERA_POSITION).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
-    }, IsDefaultUiCamera));
+    });
     spawn_player.send_default();
 }
 
