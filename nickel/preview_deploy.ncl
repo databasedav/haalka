@@ -43,7 +43,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
         },
         {
           name = "deploy",
-          uses = "databasedav/github-pages-deploy-action@1c6c498c02e73ef471100ac948132866d42a2a6c",
+          uses = "databasedav/github-pages-deploy-action@eb3eb01dbae06fc36588b52e2719388fd106e0da",
           with = {
             folder = "dist",
             branch = "pr_previews",
