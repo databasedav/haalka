@@ -24,7 +24,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 
   jobs = {
     deploy = {
-      concurrency = "deploy_${{ github.ref }}"
+      concurrency = "deploy_${{ github.ref }}",
       steps = [
         checkout,
         {

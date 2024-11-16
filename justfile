@@ -43,9 +43,9 @@ list_examples:
 generate_wasm_example_index pr example:
   nickel eval nickel/wasm_example_index_template.ncl --field index_html -- 'pr={{ pr }}' 'example="{{ example }}"' | sed 's/^"//; s/"$//; s/\\"/"/g; s/\\n/\n/g' > index.html
 
-build_wasm_example example:
-  just generate_wasm_example_index {{ example }}
-  trunk build --locked --release --example {{ example }}
+build_wasm_example pr example:
+  just generate_wasm_example_index {{ pr }} {{ example }}
+  trunk build --locked --release --public-url {{ pr }}/{{ example }} --example {{ example }}
 
 export_nickel file:
   nickel export --format yaml nickel/{{ file }}.ncl

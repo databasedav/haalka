@@ -32,7 +32,7 @@ jobs:
     - name: install build dependencies
       run: cargo binstall --no-confirm wasm-bindgen-cli wasm-opt nickel-lang-cli
     - name: build example
-      run: just build_wasm_example ${{ matrix.example }}
+      run: just build_wasm_example ${{ github.event.number }} ${{ matrix.example }}
     - name: upload dist
       uses: actions/upload-artifact@v4
       with:

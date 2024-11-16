@@ -52,7 +52,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         },
         {
           name = "build example",
-          run = "just build_wasm_example ${{ matrix.example }}"
+          run = "just build_wasm_example ${{ github.event.number }} ${{ matrix.example }}"
         },
         {
           name = "upload dist",
