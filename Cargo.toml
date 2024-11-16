@@ -113,7 +113,7 @@ doc-scrape-examples = true
 # TODO: relying on the features here for `cargo run --example ...` enables moving the
 # examples/utils.rs to src/utils.rs behind a feature flag; this already works for building docs
 # requires https://github.com/rust-lang/cargo/issues/4663#issue-268904412
-required-features = ["examples", "debug"]
+# required-features = ["examples", "debug"]
 
 [[example]]
 name = "button"
