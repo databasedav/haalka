@@ -18,12 +18,12 @@ jobs:
         path: dist
         run-id: ${{ inputs.parent_workflow_id }}
     - name: deploy
-      uses: JamesIves/github-pages-deploy-action@v4
+      uses: databasedav/github-pages-deploy-action@rsync_subdirs
       with:
         branch: pr_previews
         commit-message: https://github.com/databasedav/haalka/pull/${{ inputs.pr }}/commits/${{ github.sha }}
         folder: dist
-        target-folder: '"${{ inputs.pr }}-${{ inputs.example }}"'
+        target-folder: '"${{ inputs.pr }}/${{ inputs.example }}"'
 name: preview_deploy
 on:
   workflow_call:
