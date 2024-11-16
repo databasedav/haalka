@@ -24,6 +24,7 @@ jobs:
         branch: pr_previews
         commit-message: https://github.com/databasedav/haalka/pull/${{ inputs.pr }}/commits/${{ github.sha }}
         folder: dist
+        force: false
         target-folder: '"${{ inputs.pr }}/${{ inputs.example }}"'
 name: preview_deploy
 on:

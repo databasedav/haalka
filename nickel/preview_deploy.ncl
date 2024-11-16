@@ -47,6 +47,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
           with = {
             folder = "dist",
             branch = "pr_previews",
+            force = false,
             # double quoted because this must be a string https://github.com/JamesIves/github-pages-deploy-action/blob/3c4f14a9dd16589e133efef395ad4f3e79d1f277/src/constants.ts#L56 https://github.com/JamesIves/github-pages-deploy-action/blob/3c4f14a9dd16589e133efef395ad4f3e79d1f277/src/constants.ts#L144
             target-folder = m%""${{ inputs.pr }}/${{ inputs.example }}""%,
             commit-message = "%{ REPO }/pull/${{ inputs.pr }}/commits/${{ github.sha }}"

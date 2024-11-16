@@ -119,7 +119,9 @@ pub(crate) fn examples_plugin(app: &mut App) {
         bevy::DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 position: WindowPosition::Centered(MonitorSelection::Primary),
+                canvas: Some("#bevy".to_string()),
                 fit_canvas_to_parent: true,
+                prevent_default_event_handling: true,
                 ..default()
             }),
             ..default()

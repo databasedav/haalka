@@ -1,20 +1,21 @@
 # from https://github.com/tweag/nickel/issues/1864#issuecomment-2015333077
+let fill_height_width = "height: 100%; width: 100%;" in
 {
   pr | Number,
   example | String,
   index_html = m%"
       <!doctype html>
-      <html lang="en">
+      <html lang="en" style="%{ fill_height_width } background-color: #2b2c2f;">
 
       <head>
           <meta charset="utf-8" />
           <title>haalka %{ example }</title>
           <link data-trunk rel="copy-dir" href="assets" />
-          <link data-trunk rel="rust" data-cargo-features="debug" data-wasm-opt="s" href="." data-target-path="%{ pr |> std.string.from_number }/%{ example }" />
+          <link data-trunk rel="rust" data-cargo-features="debug" data-wasm-opt="s" href="." />
       </head>
 
-      <body>
-          <div id="game" class="center" style="background-color: #2b2c2f;">
+      <body style="%{ fill_height_width } margin: 0px">
+          <div id="game" style="%{ fill_height_width }">
               <canvas id="bevy">
                   js and canvas support is required
               </canvas>
