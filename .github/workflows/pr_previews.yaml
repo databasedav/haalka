@@ -95,7 +95,9 @@ jobs:
     - name: install just
       uses: extractions/setup-just@v2
     - name: output examples
-      run: echo "examples='$(just list_examples)'" >> $GITHUB_OUTPUT
+      run: |-
+        echo "examples='$(just list_examples)'"
+        echo "examples='$(just list_examples)'" >> $GITHUB_OUTPUT
 name: pr_previews
 on:
 - pull_request
