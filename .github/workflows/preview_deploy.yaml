@@ -12,13 +12,13 @@ jobs:
         path: dist
         run-id: ${{ inputs.parent_workflow_id }}
     - name: deploy
-      token: ${{ secrets.GITHUB_TOKEN }}
       uses: JamesIves/github-pages-deploy-action@v4
       with:
         branch: pr_previews
         commit-message: https://github.com/databasedav/haalka/pull/${{ inputs.pr }}/commits/${{ github.sha }}
         folder: dist
         target-folder: '"${{ inputs.pr }}/${{ inputs.example }}"'
+        token: ${{ secrets.GITHUB_TOKEN }}
 name: preview_deploy
 on:
   workflow_call:
