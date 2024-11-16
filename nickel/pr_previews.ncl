@@ -17,8 +17,8 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
           name = "output_examples",
           run = m%"
             examples=$(just list_examples)
-            echo "examples='$examples'"
-            echo "examples='$examples'" >> $GITHUB_OUTPUT
+            echo "examples=$examples"
+            echo "examples=$examples" >> $GITHUB_OUTPUT
           "%
         } |> name_id
       ]
@@ -68,7 +68,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
       needs = ["get_examples", "build_examples"],
       strategy = {
         matrix = {
-          example = "${{ fromJson(needs.get_exampless.outputs.examples) }}"
+          example = "${{ fromJson(needs.get_examples.outputs.examples) }}"
         }
       },
       steps = [
@@ -97,7 +97,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         {
           name = "links_markdown_list",
           run = m%"
-            examples=${{ needs.get_exampless.outputs.examples }}
+            examples=${{ needs.get_examples.outputs.examples }}
             url_base="https://databasedav.github.io/haalka/${{ github.event.number }}/"
             markdown_list=""
             for example in $(echo "${examples}" | jq -r '.[]'); do
