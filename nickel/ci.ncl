@@ -44,7 +44,11 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
     format = {
       steps = [
         checkout,
-        rust_toolchain & { with = { components = "rustfmt" } },
+        {
+          name = "install rust toolchain",
+          uses = "dtolnay/rust-toolchain@nightly",
+          with = { components = "rustfmt" }
+        },
         just,
         {
           name = "run format",
