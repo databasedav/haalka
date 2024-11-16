@@ -95,7 +95,7 @@ impl ViewportMutation {
 }
 
 #[derive(Component)]
-pub struct OnViewportLocationChange;
+struct OnViewportLocationChange;
 
 /// Enables the management of a limited visible window (viewport) onto the body of an element.
 /// CRITICALLY NOTE that methods expecting viewport mutability will not function without calling

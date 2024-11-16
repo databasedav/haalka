@@ -48,8 +48,8 @@ jobs:
     - build_examples
     permissions:
       contents: write
-      id-token: write
-    secrets: inherit
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN }}
     strategy:
       matrix:
         example: ${{ fromJson(needs.get_examples.outputs.examples) }}
