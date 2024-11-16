@@ -52,7 +52,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         },
         {
           name = "build example",
-          run = "just build_wasm_example ${{ github.event.number }} ${{ matrix.example }}"
+          run = "just build_wasm_example ${{ matrix.example }}"
         },
         {
           name = "upload dist",
@@ -82,11 +82,12 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
           name = "links_markdown_list",
           run = m%"
             examples=${{ needs.get_examples.outputs.examples }}
-            url_base="https://databasedav.github.io/haalka/${{ github.event.number }}/"
+            url_base="https://databasedav.github.io/haalka/pr_previews/${{ github.event.number }}/webgpu/"
             markdown_list=""
             for example in $(echo "${examples}" | jq -r '.[]'); do
               markdown_list+="\n- [$example](${url_base}${example})"
             done
+            echo "markdown_list=$markdown_list"
             echo "markdown_list=$markdown_list" >> $GITHUB_OUTPUT
           "%
         } |> name_id,

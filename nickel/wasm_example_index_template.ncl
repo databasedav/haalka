@@ -1,7 +1,6 @@
 # from https://github.com/tweag/nickel/issues/1864#issuecomment-2015333077
 let fill_height_width = "height: 100%; width: 100%;" in
 {
-  pr | Number,
   example | String,
   index_html = m%"
       <!doctype html>

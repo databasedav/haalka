@@ -40,11 +40,11 @@ exclude_examples := '"accordion", "challenge07", "draggable", "many_buttons", "u
 list_examples:
   @cargo metadata --no-deps --format-version 1 | jq -c --argjson exclude '[{{ exclude_examples }}]' '[.packages[].targets[] | select(.kind[] == "example" and (.name as $name | $exclude | index($name) | not)) | .name]'
 
-generate_wasm_example_index pr example:
-  nickel eval nickel/wasm_example_index_template.ncl --field index_html -- 'pr={{ pr }}' 'example="{{ example }}"' | sed 's/^"//; s/"$//; s/\\"/"/g; s/\\n/\n/g' > index.html
+generate_wasm_example_index example:
+  nickel eval nickel/wasm_example_index_template.ncl --field index_html -- 'example="{{ example }}"' | sed 's/^"//; s/"$//; s/\\"/"/g; s/\\n/\n/g' > index.html
 
-build_wasm_example pr example:
-  just generate_wasm_example_index {{ pr }} {{ example }}
+build_wasm_example example:
+  just generate_wasm_example_index {{ example }}
   trunk build --locked --release --public-url . --example {{ example }}
 
 export_nickel file:
