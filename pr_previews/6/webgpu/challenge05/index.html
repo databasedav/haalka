@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" style="height: 100%; width: 100%; background-color: #2b2c2f;">
+
+<head>
+    <meta charset="utf-8" />
+    <title>haalka challenge05</title>
+    
+    
+<script type="module" nonce="LrzgwIPlCgrOVuEi+KlP/A==">
+import init, * as bindings from './haalka-e8ae8127c1e1702a.js';
+const wasm = await init({ module_or_path: './haalka-e8ae8127c1e1702a_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+<link rel="modulepreload" href="./haalka-e8ae8127c1e1702a.js" crossorigin=anonymous integrity="sha384-iFl12CQDAUYrBwOAi8FLboCIGEM44Z6ogZpFXJMotimjQFrEMNPh6HmnIs099FLl"><link rel="preload" href="./haalka-e8ae8127c1e1702a_bg.wasm" crossorigin=anonymous integrity="sha384-396YTpfuxu7gX5tHx7NU9/ywoglHLWL2U1OLVXLGf+tbLHHHN/TYufvhf7vzal2Z" as="fetch" type="application/wasm"></head>
+
+<body style="height: 100%; width: 100%; margin: 0px">
+    <div id="game" style="height: 100%; width: 100%;">
+        <canvas id="bevy">
+            js and canvas support is required
+        </canvas>
+    </div>
+</body>
+
+</html>
