@@ -125,7 +125,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         example = "${{ matrix.example }}",
         parent_workflow_id = "${{ github.run_id }}"
       },
-      secrets = "inherit"
+      # secrets = "inherit"
     }
   }
   |> sync_name_field
