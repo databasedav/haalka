@@ -45,7 +45,7 @@ generate_wasm_example_index pr example:
 
 build_wasm_example pr example:
   just generate_wasm_example_index {{ pr }} {{ example }}
-  trunk build --locked --release --public-url {{ pr }}/{{ example }} --example {{ example }}
+  trunk build --locked --release --public-url . --example {{ example }}
 
 export_nickel file:
   nickel export --format yaml nickel/{{ file }}.ncl
