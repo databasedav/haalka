@@ -1,5 +1,6 @@
 # from https://github.com/tweag/nickel/issues/1864#issuecomment-2015333077
 {
+  pr | Number,
   example | String,
   index_html = m%"
       <!doctype html>
@@ -9,7 +10,7 @@
           <meta charset="utf-8" />
           <title>haalka %{ example }</title>
           <link data-trunk rel="copy-dir" href="assets" />
-          <link data-trunk rel="rust" data-cargo-features="debug" data-wasm-opt="s" href="." />
+          <link data-trunk rel="rust" data-cargo-features="debug" data-wasm-opt="s" href="." data-target-path="%{ pr |> std.string.from_number }/%{ example }" />
       </head>
 
       <body>

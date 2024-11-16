@@ -1,4 +1,3 @@
-# TODO: add concurrency group
 let { REPO, checkout, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 {
@@ -25,6 +24,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 
   jobs = {
     deploy = {
+      concurrency = "deploy_${{ github.ref }}"
       steps = [
         checkout,
         {
