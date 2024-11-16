@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" style="height: 100%; width: 100%; background-color: #2b2c2f;">
+
+<head>
+    <meta charset="utf-8" />
+    <title>haalka ecs_ui_sync</title>
+    
+    
+<script type="module" nonce="6O8iXh0oKo/n5w0i1iTv5A==">
+import init, * as bindings from './haalka-ddbfb0df85202ba7.js';
+const wasm = await init({ module_or_path: './haalka-ddbfb0df85202ba7_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+<link rel="modulepreload" href="./haalka-ddbfb0df85202ba7.js" crossorigin=anonymous integrity="sha384-YGZNhNW65pvV2MnNkFuaFKkgO7i+9kcvLtirn+0atTmaKMpFmsijByFwN2/+4zTw"><link rel="preload" href="./haalka-ddbfb0df85202ba7_bg.wasm" crossorigin=anonymous integrity="sha384-Yq7e97c6xv5vX1S3ZQv85J0C2roK+up4KPtdzOtgY4xOOhuxlgdBov12bLy0IxoV" as="fetch" type="application/wasm"></head>
+
+<body style="height: 100%; width: 100%; margin: 0px">
+    <div id="game" style="height: 100%; width: 100%;">
+        <canvas id="bevy">
+            js and canvas support is required
+        </canvas>
+    </div>
+</body>
+
+</html>
