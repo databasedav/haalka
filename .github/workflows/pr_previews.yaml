@@ -46,7 +46,6 @@ jobs:
     needs:
     - get_examples
     - build_examples
-    runs-on: ubuntu-latest
     strategy:
       matrix:
         example: ${{ fromJson(needs.get_examples.outputs.examples) }}
