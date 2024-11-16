@@ -1,5 +1,13 @@
 {
     // "rust-analyzer.cargo.target": "wasm32-unknown-unknown",
     "rust-analyzer.cargo.noDefaultFeatures": true,
-    "rust-analyzer.cargo.features": []
+    "rust-analyzer.cargo.features": [],
+    "filewatcher.commands": [
+        {
+            "match": ".*.ncl$",
+            // need to suppress stderr output, because otherwise file watcher extension complains
+            "cmd": "cd haalka && just sync_nickels 2> /dev/null",
+            "event": "onFileChange"
+        }
+    ]
 }
