@@ -12,6 +12,7 @@ jobs:
         path: dist
         run-id: ${{ inputs.parent_workflow_id }}
     - name: deploy
+      token: ${{ secrets.GITHUB_TOKEN }}
       uses: JamesIves/github-pages-deploy-action@v4
       with:
         branch: pr_previews

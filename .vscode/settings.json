@@ -1,6 +1,6 @@
 {
     // "rust-analyzer.cargo.target": "wasm32-unknown-unknown",
-    "rust-analyzer.cargo.noDefaultFeatures": true,
+    // "rust-analyzer.cargo.noDefaultFeatures": true,
     "rust-analyzer.cargo.features": [],
     "filewatcher.commands": [
         {

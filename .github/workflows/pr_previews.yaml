@@ -46,10 +46,7 @@ jobs:
     needs:
     - get_examples
     - build_examples
-    permissions:
-      contents: write
-      id-token: write
-      pull-requests: write
+    secrets: inherit
     strategy:
       matrix:
         example: ${{ fromJson(needs.get_examples.outputs.examples) }}
@@ -81,7 +78,9 @@ jobs:
           markdown_list+="\n- [$example](${url_base}${example})"
         done
         echo "markdown_list=$markdown_list" >> $GITHUB_OUTPUT
-    - uses: thollander/actions-comment-pull-request@v2
+    - permissions:
+        pull-requests: write
+      uses: thollander/actions-comment-pull-request@v2
       with:
         comment_tag: preview
         message: |-

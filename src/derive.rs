@@ -1,8 +1,4 @@
 use bevy_ecs::prelude::*;
-use bevy_render::prelude::*;
-use bevy_text::{prelude::*, TextLayoutInfo};
-use bevy_transform::prelude::*;
-use bevy_ui::{prelude::*, widget::*, *};
 use futures_signals::signal::Signal;
 use paste::paste;
 
@@ -96,6 +92,10 @@ macro_rules! impl_haalka_methods {
 cfg_if::cfg_if! {
     if #[cfg(feature = "ui")] {
         use super::{column::Column, el::El, grid::Grid, raw::RawElWrapper, row::Row, stack::Stack};
+        use bevy_ui::{prelude::*, widget::*, *};
+        use bevy_render::prelude::*;
+        use bevy_text::{prelude::*, TextLayoutInfo};
+        use bevy_transform::prelude::*;
 
         macro_rules! impl_haalka_methods_for_aligners_and_node_bundles {
             ($($el_type:ty),* $(,)?) => {

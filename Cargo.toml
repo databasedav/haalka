@@ -26,19 +26,19 @@ bevy_ecs = { version = "0.14", default-features = false }
 bevy_hierarchy = { version = "0.14", default-features = false }
 bevy_tasks = { version = "0.14", default-features = false, features = ["multi_threaded"] }
 bevy_utils = { version = "0.14", default-features = false }
-bevy_color = { version = "0.14", default-features = false, optional = true }
-bevy_core = { version = "0.14", default-features = false, optional = true }
-bevy_input = { version = "0.14", default-features = false, optional = true }
-bevy_log = { version = "0.14", default-features = false, optional = true }
-bevy_math = { version = "0.14", default-features = false, optional = true }
-bevy_reflect = { version = "0.14", default-features = false, optional = true }
-bevy_render = { version = "0.14", default-features = false, optional = true }
-bevy_text = { version = "0.14", default-features = false, optional = true }
-bevy_transform = { version = "0.14", default-features = false, optional = true }
-bevy_ui = { version = "0.14", default-features = false, optional = true }
-bevy_window = { version = "0.14", default-features = false, optional = true }
-bevy_derive = { version = "0.14", default-features = false, optional = true }
-bevy_dev_tools = { version = "0.14", default-features = false, features = ["bevy_ui_debug"], optional = true }
+bevy_color = { version = "0.14", optional = true, default-features = false }
+bevy_core = { version = "0.14", optional = true, default-features = false }
+bevy_input = { version = "0.14", optional = true, default-features = false }
+bevy_log = { version = "0.14", optional = true, default-features = false }
+bevy_math = { version = "0.14", optional = true, default-features = false }
+bevy_reflect = { version = "0.14", optional = true, default-features = false }
+bevy_render = { version = "0.14", optional = true, default-features = false }
+bevy_text = { version = "0.14", optional = true, default-features = false }
+bevy_transform = { version = "0.14", optional = true, default-features = false }
+bevy_ui = { version = "0.14", optional = true, default-features = false, features = ["bevy_text"] }
+bevy_window = { version = "0.14", optional = true, default-features = false }
+bevy_derive = { version = "0.14", optional = true, default-features = false }
+bevy_dev_tools = { version = "0.14", optional = true, default-features = false, features = ["bevy_ui_debug"] }
 bevy_cosmic_edit = { version = "0.24", optional = true }
 bevy_eventlistener = "0.8"
 bevy_mod_picking = { version = "0.20", default-features = false, features = ["backend_bevy_ui"], optional = true }

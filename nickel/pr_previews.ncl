@@ -89,6 +89,9 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         } |> name_id,
         {
           uses = "thollander/actions-comment-pull-request@v2",
+          permissions = {
+            pull-requests = "write",
+          },
           with = {
             message = m%"
               **previews:**
@@ -107,22 +110,21 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
   & {  # can't use runs-on for a workflow_call job
     deploy_examples = {
       needs = ["get_examples", "build_examples"],
-      permissions = {
-        contents = "write",
-        pull-requests = "write",
-        id-token = "write"
-      },
       strategy = {
         matrix = {
           example = "${{ fromJson(needs.get_examples.outputs.examples) }}"
         }
       },
+      # permissions = {
+      #   contents = "write",
+      # },
       uses = "./.github/workflows/preview_deploy.yaml",
       with = {
         pr = "${{ github.event.number }}",
         example = "${{ matrix.example }}",
         parent_workflow_id = "${{ github.run_id }}"
-      }
+      },
+      secrets = "inherit"
     }
   }
   |> sync_name_field

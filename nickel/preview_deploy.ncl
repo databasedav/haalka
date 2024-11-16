@@ -39,6 +39,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
         {
           name = "deploy",
           uses = "JamesIves/github-pages-deploy-action@v4",
+          token = "${{ secrets.GITHUB_TOKEN }}",
           with = {
             folder = "dist",
             branch = "pr_previews",
