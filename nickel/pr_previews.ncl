@@ -117,6 +117,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
       },
       permissions = {
         contents = "write",
+        id-token = "write",
       },
       uses = "./.github/workflows/preview_deploy.yaml",
       with = {
