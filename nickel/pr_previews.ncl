@@ -71,18 +71,12 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
           example = "${{ fromJson(needs.get_examples.outputs.examples) }}"
         }
       },
-      steps = [
-        checkout,
-        {
-          name = "deploy workflow",
-          uses = "./.github/workflows/preview_deploy.yaml",
-          with = {
-            pr = "${{ github.event.number }}",
-            example = "${{ matrix.example }}",
-            parent_workflow_id = "${{ github.run_id }}"
-          }
-        }
-      ]
+      uses = "./.github/workflows/preview_deploy.yaml",
+      with = {
+        pr = "${{ github.event.number }}",
+        example = "${{ matrix.example }}",
+        parent_workflow_id = "${{ github.run_id }}"
+      }
     },
     deployment_comment = {
       needs = ["get_examples", "deploy_examples"],

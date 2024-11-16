@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use bevy_tasks::prelude::*;
-use bevy_ui::prelude::*;
 #[doc(no_inline)]
 pub use enclose::enclose as clone;
 use futures_signals::{
@@ -94,6 +93,7 @@ cfg_if::cfg_if! {
             if #[cfg(feature = "text_input")] {
                 use bevy_app::{App, Plugin, PostStartup, Update};
                 use bevy_log::prelude::*;
+                use bevy_ui::prelude::*;
 
                 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
                 pub struct CosmicMulticamHandlerSet;

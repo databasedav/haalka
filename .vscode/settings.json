@@ -1,4 +1,5 @@
 {
-    "rust-analyzer.cargo.target": "wasm32-unknown-unknown",
-    "rust-analyzer.cargo.features": ["debug"]
+    // "rust-analyzer.cargo.target": "wasm32-unknown-unknown",
+    "rust-analyzer.cargo.noDefaultFeatures": true,
+    "rust-analyzer.cargo.features": []
 }

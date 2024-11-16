@@ -47,20 +47,14 @@ jobs:
     - get_examples
     - build_examples
     runs-on: ubuntu-latest
-    steps:
-    - name: checkout repo
-      uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: deploy workflow
-      uses: ./.github/workflows/preview_deploy.yaml
-      with:
-        example: ${{ matrix.example }}
-        parent_workflow_id: ${{ github.run_id }}
-        pr: ${{ github.event.number }}
     strategy:
       matrix:
         example: ${{ fromJson(needs.get_examples.outputs.examples) }}
+    uses: ./.github/workflows/preview_deploy.yaml
+    with:
+      example: ${{ matrix.example }}
+      parent_workflow_id: ${{ github.run_id }}
+      pr: ${{ github.event.number }}
   deployment_comment:
     name: deployment_comment
     needs:
