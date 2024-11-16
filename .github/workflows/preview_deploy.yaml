@@ -27,7 +27,7 @@ on:
         type: string
       parent_workflow_id:
         required: true
-        type: number
+        type: string
       pr:
         required: true
         type: number

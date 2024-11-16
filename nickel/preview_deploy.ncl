@@ -17,7 +17,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
         },
         parent_workflow_id = {
           required = true,
-          type = "number"
+          type = "string"
         }
       }
     }
