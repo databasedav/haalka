@@ -48,6 +48,7 @@ jobs:
     - build_examples
     permissions:
       contents: write
+      id-token: write
       pull-requests: write
     strategy:
       matrix:

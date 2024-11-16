@@ -109,7 +109,8 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
       needs = ["get_examples", "build_examples"],
       permissions = {
         contents = "write",
-        pull-requests = "write"
+        pull-requests = "write",
+        id-token = "write"
       },
       strategy = {
         matrix = {
