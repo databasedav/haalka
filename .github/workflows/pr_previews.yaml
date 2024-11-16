@@ -46,6 +46,9 @@ jobs:
     needs:
     - get_examples
     - build_examples
+    permissions:
+      contents: write
+      pull-requests: write
     strategy:
       matrix:
         example: ${{ fromJson(needs.get_examples.outputs.examples) }}

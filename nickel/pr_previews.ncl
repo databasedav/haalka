@@ -107,6 +107,10 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
   & {  # can't use runs-on for a workflow_call job
     deploy_examples = {
       needs = ["get_examples", "build_examples"],
+      permissions = {
+        contents = "write",
+        pull-requests = "write"
+      },
       strategy = {
         matrix = {
           example = "${{ fromJson(needs.get_examples.outputs.examples) }}"
