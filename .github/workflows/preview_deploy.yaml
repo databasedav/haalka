@@ -18,8 +18,9 @@ jobs:
         path: dist
         run-id: ${{ inputs.parent_workflow_id }}
     - name: deploy
-      uses: databasedav/github-pages-deploy-action@eb3eb01dbae06fc36588b52e2719388fd106e0da
+      uses: databasedav/github-pages-deploy-action@ec82a366a3ef75d20483861daeedcdb2c09a3fd5
       with:
+        attempt-limit: 1000
         branch: pr_previews
         commit-message: https://github.com/databasedav/haalka/pull/${{ inputs.pr }}/commits/${{ github.sha }}
         folder: dist
