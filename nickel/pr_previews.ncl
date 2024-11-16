@@ -32,7 +32,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
       },
       steps = [
         checkout,
-        rust_toolchain,
+        rust_toolchain & { with = { targets = "wasm32-unknown-unknown" } },
         bevy_dependencies,
         cached_target_populate,
         just,
@@ -52,7 +52,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         },
         {
           name = "build example",
-          run = "just build_example ${{ matrix.example }}"
+          run = "just build_wasm_example ${{ matrix.example }}"
         },
         {
           name = "upload dist",

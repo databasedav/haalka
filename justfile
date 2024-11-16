@@ -43,7 +43,7 @@ list_examples:
 generate_wasm_example_index example:
   nickel eval nickel/wasm_example_index_template.ncl --field index_html -- 'example="{{ example }}"' | sed 's/^"//; s/"$//; s/\\"/"/g; s/\\n/\n/g' > index.html
 
-build_example example:
+build_wasm_example example:
   just generate_wasm_example_index {{ example }}
   trunk build --locked --release --example {{ example }}
 
