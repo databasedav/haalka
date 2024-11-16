@@ -1,5 +1,5 @@
 # TODO: add concurrency group
-let { REPO, .. } = import "common.ncl" in
+let { REPO, checkout, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 {
   name = "preview_deploy",
@@ -19,11 +19,6 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
           required = true,
           type = "string"
         }
-      },
-      secrets = {
-        token = {
-          required = true
-        }
       }
     }
   },
@@ -31,6 +26,11 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
   jobs = {
     deploy = {
       steps = [
+        checkout,
+        {
+          name = "remove gitignore",
+          run = "rm .gitignore"
+        },
         {
           name = "download dist",
           uses = "actions/download-artifact@v4",
@@ -45,7 +45,6 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
           name = "deploy",
           uses = "JamesIves/github-pages-deploy-action@v4",
           with = {
-            token = "${{ secrets.token }}",
             folder = "dist",
             branch = "pr_previews",
             # double quoted because this must be a string https://github.com/JamesIves/github-pages-deploy-action/blob/3c4f14a9dd16589e133efef395ad4f3e79d1f277/src/constants.ts#L56 https://github.com/JamesIves/github-pages-deploy-action/blob/3c4f14a9dd16589e133efef395ad4f3e79d1f277/src/constants.ts#L144

@@ -4,6 +4,12 @@ jobs:
     name: deploy
     runs-on: ubuntu-latest
     steps:
+    - name: checkout repo
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+    - name: remove gitignore
+      run: rm .gitignore
     - name: download dist
       uses: actions/download-artifact@v4
       with:
@@ -18,7 +24,6 @@ jobs:
         commit-message: https://github.com/databasedav/haalka/pull/${{ inputs.pr }}/commits/${{ github.sha }}
         folder: dist
         target-folder: '"${{ inputs.pr }}/${{ inputs.example }}"'
-        token: ${{ secrets.token }}
 name: preview_deploy
 on:
   workflow_call:
@@ -32,6 +37,3 @@ on:
       pr:
         required: true
         type: number
-    secrets:
-      token:
-        required: true
