@@ -18,7 +18,7 @@ jobs:
         path: dist
         run-id: ${{ inputs.parent_workflow_id }}
     - name: deploy
-      uses: databasedav/github-pages-deploy-action@rsync_subdirs
+      uses: databasedav/github-pages-deploy-action@1c6c498c02e73ef471100ac948132866d42a2a6c
       with:
         branch: pr_previews
         commit-message: https://github.com/databasedav/haalka/pull/${{ inputs.pr }}/commits/${{ github.sha }}
