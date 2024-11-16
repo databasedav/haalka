@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" style="height: 100%; width: 100%; background-color: #2b2c2f;">
+
+<head>
+    <meta charset="utf-8" />
+    <title>haalka key_values_sorted</title>
+    
+    
+<script type="module" nonce="1coEQ2JgWmnvcpjNpgzLRQ==">
+import init, * as bindings from './haalka-340c53cd460b2b14.js';
+const wasm = await init({ module_or_path: './haalka-340c53cd460b2b14_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+<link rel="modulepreload" href="./haalka-340c53cd460b2b14.js" crossorigin=anonymous integrity="sha384-IMl7Ul5fBN7I6vetEoo3EirEuQ+HaC99cDyUaVteK1csoM31a1jKko3K9nMnn62i"><link rel="preload" href="./haalka-340c53cd460b2b14_bg.wasm" crossorigin=anonymous integrity="sha384-XF/G1kEplzox6pI+ZXupxvCFtxlGLAiegrvY1AiY3If+z5TftTeQTP3/WTuMmsgU" as="fetch" type="application/wasm"></head>
+
+<body style="height: 100%; width: 100%; margin: 0px">
+    <div id="game" style="height: 100%; width: 100%;">
+        <canvas id="bevy">
+            js and canvas support is required
+        </canvas>
+    </div>
+</body>
+
+</html>
