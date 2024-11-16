@@ -23,47 +23,47 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         } |> name_id
       ]
     },
-    # build_examples = {
-    #   needs = "get_examples",
-    #   strategy = {
-    #     matrix = {
-    #       example = "${{ fromJson(needs.get_examples.outputs.examples) }}"
-    #     }
-    #   },
-    #   steps = [
-    #     checkout,
-    #     rust_toolchain & { with = { targets = "wasm32-unknown-unknown" } },
-    #     bevy_dependencies,
-    #     cached_target_populate,
-    #     just,
-    #     binstall,
-    #     # TODO: just add to binstall once https://github.com/trunk-rs/trunk/pull/915 released
-    #     {
-    #       name = "install trunk",
-    #       run = m%"
-    #         wget https://github.com/databasedav/trunk/releases/download/v0.0.1/trunk
-    #         chmod +x trunk
-    #         mv trunk /usr/local/bin
-    #       "%
-    #     },
-    #     {
-    #       name = "install build dependencies",
-    #       run = "cargo binstall --no-confirm wasm-bindgen-cli wasm-opt nickel-lang-cli",
-    #     },
-    #     {
-    #       name = "build example",
-    #       run = "just build_wasm_example ${{ matrix.example }}"
-    #     },
-    #     {
-    #       name = "upload dist",
-    #       uses = "actions/upload-artifact@v4",
-    #       with = {
-    #         path = "dist",
-    #         name = "${{ matrix.example }}",
-    #       }
-    #     },
-    #   ]
-    # },
+    build_examples = {
+      needs = "get_examples",
+      strategy = {
+        matrix = {
+          example = "${{ fromJson(needs.get_examples.outputs.examples) }}"
+        }
+      },
+      steps = [
+        checkout,
+        rust_toolchain & { with = { targets = "wasm32-unknown-unknown" } },
+        bevy_dependencies,
+        cached_target_populate,
+        just,
+        binstall,
+        # TODO: just add to binstall once https://github.com/trunk-rs/trunk/pull/915 released
+        {
+          name = "install trunk",
+          run = m%"
+            wget https://github.com/databasedav/trunk/releases/download/v0.0.1/trunk
+            chmod +x trunk
+            mv trunk /usr/local/bin
+          "%
+        },
+        {
+          name = "install build dependencies",
+          run = "cargo binstall --no-confirm wasm-bindgen-cli wasm-opt nickel-lang-cli",
+        },
+        {
+          name = "build example",
+          run = "just build_wasm_example ${{ matrix.example }}"
+        },
+        {
+          name = "upload dist",
+          uses = "actions/upload-artifact@v4",
+          with = {
+            path = "dist",
+            name = "${{ matrix.example }}",
+          }
+        },
+      ]
+    },
     # deployment_comment = {
     #   needs = ["get_examples", "deploy_examples"],
     #   steps = [
