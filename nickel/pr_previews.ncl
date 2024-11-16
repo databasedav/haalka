@@ -66,6 +66,9 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
     },
     deployment_comment = {
       needs = ["get_examples", "deploy_examples"],
+      permissions = {
+        pull-requests = "write",
+      },
       steps = [
         {
           name = "deployment_timestamp",
@@ -89,9 +92,6 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         } |> name_id,
         {
           uses = "thollander/actions-comment-pull-request@v2",
-          permissions = {
-            pull-requests = "write",
-          },
           with = {
             message = m%"
               **previews:**
@@ -125,7 +125,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         example = "${{ matrix.example }}",
         parent_workflow_id = "${{ github.run_id }}"
       },
-      # secrets = "inherit"
+      secrets = "inherit"
     }
   }
   |> sync_name_field
