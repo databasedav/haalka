@@ -5,10 +5,7 @@
 mod utils;
 use utils::*;
 
-use bevy::{
-    input::mouse::{MouseScrollUnit, MouseWheel},
-    prelude::*,
-};
+use bevy::{input::mouse::MouseWheel, prelude::*};
 use haalka::prelude::*;
 
 fn main() {

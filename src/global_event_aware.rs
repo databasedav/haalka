@@ -1,5 +1,5 @@
 use super::{element::UiRoot, raw::RawElWrapper};
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
 use bevy_eventlistener::prelude::*;
 
 // TODO: there should be a way to pass the entity into the system

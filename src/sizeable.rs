@@ -1,5 +1,5 @@
 use super::raw::{DeferredUpdaterAppendDirection, RawElWrapper};
-use bevy::prelude::*;
+use bevy_ui::prelude::*;
 use futures_signals::signal::{Signal, SignalExt};
 
 /// Enables an element to have a static or reactive vertical and horizontal length, with

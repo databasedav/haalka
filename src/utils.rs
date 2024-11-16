@@ -1,11 +1,7 @@
 use std::time::Duration;
 
-use bevy::{
-    app::{App, Plugin, PostStartup, Update},
-    log::prelude::*,
-    tasks::IoTaskPool,
-    ui::IsDefaultUiCamera,
-};
+use bevy_tasks::prelude::*;
+use bevy_ui::prelude::*;
 #[doc(no_inline)]
 pub use enclose::enclose as clone;
 use futures_signals::{
@@ -16,10 +12,10 @@ cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         use super::node_builder::WasmTaskAdapter;
     } else {
-        use bevy::tasks::Task;
+        use bevy_tasks::*;
     }
 }
-use haalka_futures_signals_ext::{futures_util::future::abortable, SignalExtExt};
+use haalka_futures_signals_ext::SignalExtExt;
 use std::{future::Future, ops::Not};
 
 /// Block for the `duration`.
@@ -36,6 +32,7 @@ pub async fn sleep(duration: Duration) {
 // TODO: 0.15 `Task` api is unified, can remove branching
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
+        use haalka_futures_signals_ext::futures_util::future::abortable;
         /// Spawn a non-blocking future onto the [`IoTaskPool`].
         pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> WasmTaskAdapter {
             let (future, handle) = abortable(future);
@@ -76,7 +73,9 @@ pub fn signal_eq<T: PartialEq + Send>(
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "debug")] {
-        use bevy::{ecs::prelude::*, input::prelude::*, dev_tools::ui_debug_overlay};
+        use bevy_ecs::prelude::*;
+        use bevy_input::prelude::*;
+        use bevy_dev_tools::ui_debug_overlay;
 
         const OVERLAY_TOGGLE_KEY: KeyCode = KeyCode::F1;
 
@@ -91,17 +90,24 @@ cfg_if::cfg_if! {
 
         pub struct DebugUiPlugin;
 
-        #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-        pub struct CosmicMulticamHandlerSet;
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "text_input")] {
+                use bevy_app::{App, Plugin, PostStartup, Update};
+                use bevy_log::prelude::*;
 
-        fn handle_cosmic_multicam(default_cameras: Query<Entity, With<IsDefaultUiCamera>>, mut commands: Commands) {
-            if let Ok(entity) = default_cameras.get_single() {
-                if let Some(mut entity) = commands.get_entity(entity) {
-                    entity.try_insert(bevy_cosmic_edit::CosmicPrimaryCamera);
-                    commands.remove_resource::<bevy_cosmic_edit::CursorPluginDisabled>();
+                #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+                pub struct CosmicMulticamHandlerSet;
+
+                fn handle_cosmic_multicam(default_cameras: Query<Entity, With<IsDefaultUiCamera>>, mut commands: Commands) {
+                    if let Ok(entity) = default_cameras.get_single() {
+                        if let Some(mut entity) = commands.get_entity(entity) {
+                            entity.try_insert(bevy_cosmic_edit::CosmicPrimaryCamera);
+                            commands.remove_resource::<bevy_cosmic_edit::CursorPluginDisabled>();
+                        }
+                    } else {
+                        warn!("DebugUiPlugin won't function without a camera with an IsDefaultUiCamera component");
+                    }
                 }
-            } else {
-                warn!("DebugUiPlugin won't function without a camera with an IsDefaultUiCamera component");
             }
         }
 

@@ -5,7 +5,7 @@
     doc = document_features::document_features!()
 )]
 
-use bevy::prelude::*;
+use bevy_app::prelude::*;
 use bevy_async_ecs::AsyncEcsPlugin;
 
 pub mod node_builder;

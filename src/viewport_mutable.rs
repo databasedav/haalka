@@ -5,7 +5,13 @@ use super::{
     utils::clone,
 };
 use apply::Apply;
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_hierarchy::prelude::*;
+use bevy_math::prelude::*;
+use bevy_transform::prelude::*;
+use bevy_ui::prelude::*;
+use bevy_utils::prelude::*;
 use futures_signals::signal::{Mutable, Signal};
 
 #[derive(Clone, Copy)]
@@ -244,6 +250,7 @@ struct ViewportLocationChange {
     viewport: Viewport,
 }
 
+#[allow(clippy::type_complexity)]
 fn scene_change_dispatcher(
     mut data: Query<(Entity, &Node, &Style, &mut MutableViewport), Or<(Changed<Node>, Changed<Transform>)>>,
     mut commands: Commands,
@@ -263,6 +270,7 @@ fn scene_change_dispatcher(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn viewport_change_dispatcher(
     data: Query<(Entity, &Node), (With<ViewportMarker>, Changed<Node>)>,
     children: Query<&Children>,

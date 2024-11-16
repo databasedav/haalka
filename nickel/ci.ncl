@@ -1,4 +1,4 @@
-let { runs_on, checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, cargo_build_env, .. } = import "common.ncl" in
+let { checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, cargo_build_env, .. } = import "common.ncl" in
 let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 {
   name = "ci",
@@ -24,7 +24,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
         just,
         {
           name = "run tests",
-          run = "just doctest"
+          run = "just test"
         }
       ]
     },
@@ -62,6 +62,24 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
         {
           name = "check docs",
           run = "just doc"
+        }
+      ]
+    },
+    check_all_features = {
+      steps = [
+        checkout,
+        rust_toolchain,
+        bevy_dependencies,
+        cached_target_populate,
+        just,
+        binstall,
+        {
+          name = "install cargo all features",
+          run = "cargo binstall --no-confirm cargo-all-features"
+        },
+        {
+          name = "check all features",
+          run = "just check_all_features"
         }
       ]
     }

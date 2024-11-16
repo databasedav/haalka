@@ -5,11 +5,11 @@ use super::{
     viewport_mutable::{ViewportMutable, ViewportMutation},
 };
 use apply::Apply;
-use bevy::{
-    ecs::component::Component,
-    input::mouse::{MouseScrollUnit, MouseWheel},
-    prelude::*,
-};
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_input::{mouse::*, prelude::*};
+use bevy_ui::prelude::*;
+use bevy_utils::prelude::*;
 use futures_signals::signal::{always, BoxSignal, Mutable, Signal, SignalExt};
 use haalka_futures_signals_ext::{SignalExtBool, SignalExtExt};
 use std::convert::Into;
@@ -135,6 +135,7 @@ pub enum ScrollDirection {
 
 /// Allows setting the direction and magnitude (in pixels) of viewport movement in response to mouse
 /// wheel events. These settings can be either static or reactive via [`Signal`]s.
+#[derive(Default)]
 pub struct BasicScrollHandler {
     direction: Option<BoxSignal<'static, ScrollDirection>>,
     magnitude: Option<BoxSignal<'static, f32>>,
@@ -146,10 +147,7 @@ const DEFAULT_SCROLL_MAGNITUDE: f32 = 10.;
 impl BasicScrollHandler {
     #[allow(missing_docs)]
     pub fn new() -> Self {
-        Self {
-            direction: None,
-            magnitude: None,
-        }
+        default()
     }
 
     /// Reactively set the [`ScrollDirection`] of viewport movement in response to mouse wheel
@@ -193,6 +191,7 @@ impl BasicScrollHandler {
     }
 
     // TODO: is there a better return type for this ?
+    #[allow(clippy::type_complexity)]
     pub fn into_system(
         self,
     ) -> Box<

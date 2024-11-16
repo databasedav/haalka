@@ -3,11 +3,10 @@
 use std::sync::OnceLock;
 
 use apply::Apply;
-use bevy::{
-    ecs::component::{ComponentHooks, StorageType},
-    prelude::*,
-};
 use bevy_async_ecs::AsyncWorld;
+use bevy_ecs::prelude::*;
+use bevy_hierarchy::prelude::*;
+use bevy_utils::prelude::*;
 use futures_signals::{
     signal::{Mutable, Signal, SignalExt},
     signal_vec::{MutableVec, SignalVec, SignalVecExt, VecDiff},
@@ -17,7 +16,7 @@ cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         use haalka_futures_signals_ext::future::AbortHandle;
     } else {
-        use bevy::tasks::Task;
+        use bevy_tasks::Task;
     }
 }
 
@@ -53,9 +52,11 @@ pub(crate) fn init_async_world(world: &mut World) {
 /// Port of [Dominator](https://github.com/Pauan/rust-dominator)'s [`DomBuilder`](https://docs.rs/dominator/latest/dominator/struct.DomBuilder.html).
 #[derive(Default)]
 pub struct NodeBuilder {
+    #[allow(clippy::type_complexity)]
     on_spawns: Vec<Box<dyn FnOnce(&mut World, Entity) + Send>>,
     // TODO: 0.15 `Task` api is unified, can remove branching
     #[cfg(target_arch = "wasm32")]
+    #[allow(clippy::type_complexity)]
     task_wrappers: Vec<Box<dyn FnOnce(Entity) -> WasmTaskAdapter + Send>>,
     #[cfg(not(target_arch = "wasm32"))]
     task_wrappers: Vec<Box<dyn FnOnce(Entity) -> Task<()> + Send>>,
@@ -421,6 +422,8 @@ impl NodeBuilder {
 // TODO: 0.15 `Task` api is unified, can remove branching
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
+        use bevy_ecs::component::*;
+
         /// Used to tie async reactivity tasks to the lifetime of an [`Entity`].
         pub struct TaskHolder(Vec<WasmTaskAdapter>);
 

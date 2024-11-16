@@ -1,11 +1,8 @@
-use bevy::{
-    prelude::*,
-    text::TextLayoutInfo,
-    ui::{
-        widget::{TextFlags, UiImageSize},
-        ContentSize, FocusPolicy,
-    },
-};
+use bevy_ecs::prelude::*;
+use bevy_render::prelude::*;
+use bevy_text::{prelude::*, TextLayoutInfo};
+use bevy_transform::prelude::*;
+use bevy_ui::{prelude::*, widget::*, *};
 use futures_signals::signal::Signal;
 use paste::paste;
 
@@ -38,7 +35,7 @@ use paste::paste;
 /// impl ElementWrapper for MyEl {
 ///     type EL = El<MyBundle>;
 ///     fn element_mut(&mut self) -> &mut Self::EL {
-///         &mut self.0       
+///         &mut self.0
 ///     }
 /// }
 ///

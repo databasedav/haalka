@@ -7,15 +7,9 @@
 use std::{future::Future, marker::PhantomData, mem};
 
 use apply::Apply;
-use bevy::{
-    ecs::{
-        component::{ComponentHooks, StorageType},
-        system::{IntoObserverSystem, RunSystemOnce, RunSystemWithInput, SystemId},
-        world::DeferredWorld,
-    },
-    prelude::*,
-};
+use bevy_ecs::{component::*, prelude::*, system::*, world::*};
 use bevy_eventlistener::prelude::*;
+use bevy_utils::prelude::*;
 use enclose::enclose as clone;
 use futures_signals::{
     signal::{Mutable, Signal, SignalExt},
@@ -27,7 +21,7 @@ cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         use super::node_builder::WasmTaskAdapter;
     } else {
-        use bevy::tasks::Task;
+        use bevy_tasks::Task;
     }
 }
 use super::{
@@ -300,6 +294,7 @@ impl RawHaalkaEl {
 
     /// Reactively run a [`System`], if the `forwarder` points to [`Some`] [`Entity`], which takes
     /// [`In`](`System::In`) that element's [`Entity`] and the output of the [`Signal`].
+    #[allow(clippy::type_complexity)]
     pub fn on_signal_one_shot_forwarded<T: Send + 'static, Marker1, Marker2>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
@@ -700,6 +695,7 @@ impl RawHaalkaEl {
     }
 }
 
+#[allow(clippy::type_complexity)]
 struct OnRemove(Vec<Box<dyn FnOnce(&mut DeferredWorld, Entity) + Send + Sync + 'static>>);
 
 impl Component for OnRemove {

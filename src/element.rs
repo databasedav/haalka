@@ -6,7 +6,8 @@ use super::{
     align::{AlignabilityFacade, Alignable, Aligner, ChildAlignable},
     raw::{RawElWrapper, RawElement, RawHaalkaEl},
 };
-use bevy::prelude::*;
+use bevy_core::prelude::*;
+use bevy_ecs::prelude::*;
 use bevy_mod_picking::prelude::Pickable;
 use futures_signals::signal::{Signal, SignalExt};
 

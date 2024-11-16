@@ -1,2 +1,5 @@
 /target
 /Cargo.lock
+test.ncl
+index.html
+dist

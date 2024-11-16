@@ -9,12 +9,11 @@ let BEVY_DEPENDENCIES = [
 let CARGO_CACHE_VERSION = "v2" in
 let SETUP_JUST_VERSION = "v2" in
 {
-  runs_on = "ubuntu-latest",
+  REPO = "https://github.com/databasedav/haalka",
   checkout = {
     name = "checkout repo",
     uses = "actions/checkout@%{ CHECKOUT_VERSION }",
     with = {
-      fetch-depth = 0,
       submodules = true
     }
   },
@@ -42,5 +41,9 @@ let SETUP_JUST_VERSION = "v2" in
   just = {
     name = "install just",
     uses = "extractions/setup-just@%{ SETUP_JUST_VERSION }"
-  }
+  },
+  binstall = {
+    name = "install binstall",
+    uses = "cargo-bins/cargo-binstall@main"
+  },
 }

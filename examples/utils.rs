@@ -1,3 +1,5 @@
+#[allow(missing_docs)]
+#[allow(dead_code)]
 use std::time::Duration;
 
 use bevy::{
@@ -129,9 +131,16 @@ pub(crate) fn examples_plugin(app: &mut App) {
     ))
     .add_systems(
         PostStartup,
-        mark_default_ui_camera.in_set(MarkDefaultUiCameraSet).run_if(not(any_with_component::<IsDefaultUiCamera>)),
-    )
-    .configure_sets(PostStartup, (MarkDefaultUiCameraSet, CosmicMulticamHandlerSet).chain());
+        mark_default_ui_camera
+            .in_set(MarkDefaultUiCameraSet)
+            .run_if(not(any_with_component::<IsDefaultUiCamera>)),
+    );
+    cfg_if::cfg_if! {
+        if #[cfg(all(feature = "text_input", feature = "debug"))] {
+            use haalka::utils::CosmicMulticamHandlerSet;
+            app.configure_sets(PostStartup, (MarkDefaultUiCameraSet, CosmicMulticamHandlerSet).chain());
+        }
+    }
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             {

@@ -1,14 +1,9 @@
 //! Simple button, port of <https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs>.
 
 mod utils;
-use std::time::Duration;
-
 use utils::*;
 
-use bevy::{
-    prelude::*,
-    winit::{UpdateMode, WinitSettings},
-};
+use bevy::prelude::*;
 use haalka::prelude::*;
 
 fn main() {

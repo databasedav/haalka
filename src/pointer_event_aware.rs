@@ -1,8 +1,15 @@
 use std::{future::Future, ops::Not, time::Duration};
 
 use apply::Apply;
-use bevy::{ecs::system::SystemId, log::prelude::*, prelude::*, window::PrimaryWindow};
+use bevy_app::prelude::*;
+use bevy_derive::*;
+use bevy_ecs::{prelude::*, system::*};
+use bevy_hierarchy::prelude::*;
+use bevy_log::prelude::*;
 use bevy_mod_picking::{picking_core::backend::HitData, prelude::*};
+use bevy_reflect::prelude::*;
+use bevy_utils::prelude::*;
+use bevy_window::{prelude::*, *};
 use enclose::enclose as clone;
 use focus::HoverMap;
 use futures_signals::signal::{always, channel, Mutable, Signal, SignalExt};
@@ -414,6 +421,7 @@ struct Pressable;
 #[derive(Event, Deref)]
 struct Press(bool);
 
+#[allow(clippy::type_complexity)]
 fn pressable_system(
     mut interaction_query: Query<(Entity, &PickingInteraction), (With<Pressable>, Changed<PickingInteraction>)>,
     mut commands: Commands,

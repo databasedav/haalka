@@ -1,4 +1,4 @@
-let { runs_on, checkout, rust_toolchain, bevy_dependencies, cargo_build_env, .. } = import "common.ncl" in
+let { checkout, rust_toolchain, bevy_dependencies, cached_target_populate, cargo_build_env, .. } = import "common.ncl" in
 let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 {
   name = "release",
@@ -24,6 +24,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
         checkout,
         rust_toolchain,
         bevy_dependencies,
+        cached_target_populate,
         {
           name = "run release-plz",
           uses = "MarcoIeni/release-plz-action@v0.5",

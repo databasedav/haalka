@@ -514,7 +514,7 @@ fn focus_scroller(
             for parent in parents.iter_ancestors(focused_text_input) {
                 if mutable_viewports.contains(parent) {
                     if let Ok((scene_node, scene_transform, scene_style)) = data_query.get(parent) {
-                        if let Some((viewport_node, viewport_transform, viewport_style)) = parents
+                        if let Some((viewport_node, viewport_transform, _viewport_style)) = parents
                             .get(parent)
                             .ok()
                             .and_then(|parent| data_query.get(parent.get()).ok())
