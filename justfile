@@ -38,7 +38,7 @@ sync_counter_example_readme:
 exclude_examples := '"accordion", "challenge07", "many_buttons", "utils"'
 
 list_examples:
-  @cargo metadata --no-deps --format-version 1 | jq -r --argjson exclude '[{{ exclude_examples }}]' '[.packages[].targets[] | select(.kind[] == "example" and (.name as $name | $exclude | index($name) | not)) | .name]'
+  @cargo metadata --no-deps --format-version 1 | jq -c --argjson exclude '[{{ exclude_examples }}]' '[.packages[].targets[] | select(.kind[] == "example" and (.name as $name | $exclude | index($name) | not)) | .name]'
 
 generate_wasm_example_index example:
   nickel eval nickel/wasm_example_index_template.ncl --field index_html -- 'example="{{ example }}"' | sed 's/^"//; s/"$//; s/\\"/"/g; s/\\n/\n/g' > index.html
