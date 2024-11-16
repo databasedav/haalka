@@ -75,7 +75,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         checkout,
         {
           name = "deploy workflow",
-          uses = "./.github/workflows/preview_deploy.yml",
+          uses = "./.github/workflows/preview_deploy.yaml",
           with = {
             pr = "${{ github.event.number }}",
             example = "${{ matrix.example }}",

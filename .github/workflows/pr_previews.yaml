@@ -53,7 +53,7 @@ jobs:
       with:
         submodules: true
     - name: deploy workflow
-      uses: ./.github/workflows/preview_deploy.yml
+      uses: ./.github/workflows/preview_deploy.yaml
       with:
         example: ${{ matrix.example }}
         parent_workflow_id: ${{ github.run_id }}
