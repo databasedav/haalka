@@ -31,6 +31,3 @@ on:
       pr:
         required: true
         type: number
-permissions:
-  contents: write
-  pull-requests: write

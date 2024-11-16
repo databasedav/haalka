@@ -4,10 +4,10 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 {
   name = "preview_deploy",
 
-  permissions = {
-    contents = "write",
-    pull-requests = "write"
-  },
+  # permissions = {
+  #   contents = "write",
+  #   pull-requests = "write"
+  # },
 
   on = {
     workflow_call = {

@@ -54,6 +54,38 @@ jobs:
       example: ${{ matrix.example }}
       parent_workflow_id: ${{ github.run_id }}
       pr: ${{ github.event.number }}
+  deployment_comment:
+    name: deployment_comment
+    needs:
+    - get_examples
+    - deploy_examples
+    runs-on: ubuntu-latest
+    steps:
+    - id: deployment_timestamp
+      name: deployment_timestamp
+      run: |-
+        timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+        echo "timestamp=$timestamp"
+        echo "timestamp=$timestamp" >> $GITHUB_OUTPUT
+    - id: links_markdown_list
+      name: links_markdown_list
+      run: |-
+        examples=${{ needs.get_examples.outputs.examples }}
+        url_base="https://databasedav.github.io/haalka/${{ github.event.number }}/"
+        markdown_list=""
+        for example in $(echo "${examples}" | jq -r '.[]'); do
+          markdown_list+="\n- [$example](${url_base}${example})"
+        done
+        echo "markdown_list=$markdown_list" >> $GITHUB_OUTPUT
+    - uses: thollander/actions-comment-pull-request@v2
+      with:
+        comment_tag: preview
+        message: |-
+          **previews:**
+          ${{ steps.links_markdown_list.outputs.markdown_list }}
+          **commit:** https://github.com/databasedav/haalka/pull/${{ github.event.number }}/commits/${{ github.sha }}
+          **deployed:** ${{ steps.deployment_timestamp.outputs.timestamp }}
+        pr_number: ${{ github.event.number }}
   get_examples:
     name: get_examples
     outputs:
