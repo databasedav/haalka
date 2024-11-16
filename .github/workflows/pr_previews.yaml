@@ -48,6 +48,10 @@ jobs:
     - build_examples
     runs-on: ubuntu-latest
     steps:
+    - name: checkout repo
+      uses: actions/checkout@v4
+      with:
+        submodules: true
     - name: deploy workflow
       uses: ./.github/workflows/preview_deploy.yml
       with:
