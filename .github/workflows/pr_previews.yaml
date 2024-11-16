@@ -46,6 +46,8 @@ jobs:
     needs:
     - get_examples
     - build_examples
+    permissions:
+      contents: write
     secrets: inherit
     strategy:
       matrix:
