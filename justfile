@@ -35,7 +35,7 @@ sync_counter_example_readme:
   python sync_counter_example_readme.py
 
 # TODO: use an actual list https://github.com/casey/just/issues/2458
-exclude_examples := '"accordion", "challenge07", "many_buttons", "utils"'
+exclude_examples := '"accordion", "challenge07", "draggable", "many_buttons", "utils"'
 
 list_examples:
   @cargo metadata --no-deps --format-version 1 | jq -c --argjson exclude '[{{ exclude_examples }}]' '[.packages[].targets[] | select(.kind[] == "example" and (.name as $name | $exclude | index($name) | not)) | .name]'
