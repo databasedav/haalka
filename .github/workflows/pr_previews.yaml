@@ -28,7 +28,7 @@ jobs:
         chmod +x trunk
         mv trunk /usr/local/bin
     - name: install build dependencies
-      run: cargo binstall --no-confirm wasm-bindgen wasm-opt nickel-lang-cli
+      run: cargo binstall --no-confirm wasm-bindgen-cli wasm-opt nickel-lang-cli
     - name: build example
       run: just build_example ${{ matrix.example }}
     - name: upload dist

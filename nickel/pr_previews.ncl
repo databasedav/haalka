@@ -48,7 +48,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         },
         {
           name = "install build dependencies",
-          run = "cargo binstall --no-confirm wasm-bindgen wasm-opt nickel-lang-cli",
+          run = "cargo binstall --no-confirm wasm-bindgen-cli wasm-opt nickel-lang-cli",
         },
         {
           name = "build example",
