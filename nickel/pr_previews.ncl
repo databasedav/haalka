@@ -104,21 +104,21 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
     # }
   }
   |> std.record.map_values run_on_ubuntu_latest
-  # & {  # can't use runs-on for a workflow_call job
-  #   deploy_examples = {
-  #     needs = ["get_examples", "build_examples"],
-  #     strategy = {
-  #       matrix = {
-  #         example = "${{ fromJson(needs.get_examples.outputs.examples) }}"
-  #       }
-  #     },
-  #     uses = "./.github/workflows/preview_deploy.yaml",
-  #     with = {
-  #       pr = "${{ github.event.number }}",
-  #       example = "${{ matrix.example }}",
-  #       parent_workflow_id = "${{ github.run_id }}"
-  #     }
-  #   }
-  # }
+  & {  # can't use runs-on for a workflow_call job
+    deploy_examples = {
+      needs = ["get_examples", "build_examples"],
+      strategy = {
+        matrix = {
+          example = "${{ fromJson(needs.get_examples.outputs.examples) }}"
+        }
+      },
+      uses = "./.github/workflows/preview_deploy.yaml",
+      with = {
+        pr = "${{ github.event.number }}",
+        example = "${{ matrix.example }}",
+        parent_workflow_id = "${{ github.run_id }}"
+      }
+    }
+  }
   |> sync_name_field
 }
