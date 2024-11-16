@@ -64,7 +64,10 @@ jobs:
     steps:
     - id: deployment_timestamp
       name: deployment_timestamp
-      run: echo "timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+      run: |-
+        timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+        echo "timestamp=$timestamp"
+        echo "timestamp=$timestamp" >> $GITHUB_OUTPUT
     - id: links_markdown_list
       name: links_markdown_list
       run: |-
@@ -86,6 +89,8 @@ jobs:
         pr_number: ${{ github.event.number }}
   get_examples:
     name: get_examples
+    outputs:
+      examples: ${{ steps.output_examples.outputs.examples }}
     runs-on: ubuntu-latest
     steps:
     - name: checkout repo
@@ -94,10 +99,12 @@ jobs:
         submodules: true
     - name: install just
       uses: extractions/setup-just@v2
-    - name: output examples
+    - id: output_examples
+      name: output_examples
       run: |-
-        echo "examples='$(just list_examples)'"
-        echo "examples='$(just list_examples)'" >> $GITHUB_OUTPUT
+        examples=$(just list_examples)
+        echo "examples='$examples'"
+        echo "examples='$examples'" >> $GITHUB_OUTPUT
 name: pr_previews
 on:
 - pull_request

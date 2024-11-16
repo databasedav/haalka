@@ -7,16 +7,20 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
 
   jobs = {
     get_examples = {
+      outputs = {
+        examples = "${{ steps.output_examples.outputs.examples }}"
+      },
       steps = [
         checkout,
         just,
         {
-          name = "output examples",
+          name = "output_examples",
           run = m%"
-            echo "examples='$(just list_examples)'"
-            echo "examples='$(just list_examples)'" >> $GITHUB_OUTPUT
+            examples=$(just list_examples)
+            echo "examples='$examples'"
+            echo "examples='$examples'" >> $GITHUB_OUTPUT
           "%
-        }
+        } |> name_id
       ]
     },
     build_examples = {
@@ -84,7 +88,11 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
       steps = [
         {
           name = "deployment_timestamp",
-          run = m%"echo "timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT"%
+          run = m%"
+            timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            echo "timestamp=$timestamp"
+            echo "timestamp=$timestamp" >> $GITHUB_OUTPUT
+          "%
         } |> name_id,
         {
           name = "links_markdown_list",
