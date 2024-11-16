@@ -12,7 +12,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         just,
         {
           name = "output examples",
-          run = m%"echo examples=$(just list_examples) >> $GITHUB_OUTPUT"%
+          run = m%"echo "examples=$(just list_examples)" >> $GITHUB_OUTPUT"%
         }
       ]
     },
