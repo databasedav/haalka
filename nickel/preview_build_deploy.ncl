@@ -18,10 +18,6 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
           required = true,
           type = "string"
         },
-        parent_workflow_id = {
-          required = true,
-          type = "string"
-        }
       }
     }
   },
@@ -83,7 +79,6 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
             name = "${{ inputs.api }}_${{ inputs.example }}",
             path = "dist",
             github-token = "${{ secrets.GITHUB_TOKEN }}",
-            run-id = "${{ inputs.parent_workflow_id }}",
           }
         },
         {

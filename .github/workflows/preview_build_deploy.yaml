@@ -58,7 +58,6 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         name: ${{ inputs.api }}_${{ inputs.example }}
         path: dist
-        run-id: ${{ inputs.parent_workflow_id }}
     - name: deploy
       uses: databasedav/github-pages-deploy-action@ec82a366a3ef75d20483861daeedcdb2c09a3fd5
       with:
@@ -75,9 +74,6 @@ on:
         required: true
         type: string
       example:
-        required: true
-        type: string
-      parent_workflow_id:
         required: true
         type: string
       pr:

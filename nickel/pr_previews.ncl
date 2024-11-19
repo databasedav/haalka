@@ -44,7 +44,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
             base_url="https://databasedav.github.io/haalka/pr_previews/${{ github.event.number }}"
             markdown_list=""
             for example in $(echo "${examples}" | jq -r '.[]'); do
-              markdown_list+="\n- $example: [webgl2](${base_url}/webgl2/${example}) [webgpu](${base_url}/webgpu/${example})"
+              markdown_list="${markdown_list}- $example: [webgl2](${base_url}/webgl2/${example}) [webgpu](${base_url}/webgpu/${example})"$'\n'
             done
             echo "markdown_list=$markdown_list"
             echo "markdown_list=$markdown_list" >> $GITHUB_OUTPUT
@@ -84,7 +84,6 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         pr = "${{ github.event.number }}",
         api = "${{ matrix.api }}",
         example = "${{ matrix.example }}",
-        parent_workflow_id = "${{ github.run_id }}"
       },
     }
   }
