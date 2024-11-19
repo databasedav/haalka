@@ -1,4 +1,4 @@
-let { REPO, checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, cargo_build_env, .. } = import "common.ncl" in
+let { REPO, checkout, cargo_build_env, just, .. } = import "common.ncl" in
 let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" in
 {
   name = "pr_previews",
@@ -23,56 +23,8 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         } |> name_id
       ]
     },
-    build_examples = {
-      needs = "get_examples",
-      strategy = {
-        matrix = {
-          api = ["webgl2", "webgpu"],
-          example = "${{ fromJson(needs.get_examples.outputs.examples) }}"
-        }
-      },
-      steps = [
-        checkout,
-        rust_toolchain & { with = { targets = "wasm32-unknown-unknown" } },
-        bevy_dependencies,
-        cached_target_populate,
-        just,
-        binstall,
-        # TODO: just add to binstall once https://github.com/trunk-rs/trunk/pull/915 released
-        {
-          name = "install trunk",
-          run = m%"
-            wget https://github.com/databasedav/trunk/releases/download/v0.0.1/trunk
-            chmod +x trunk
-            mv trunk /usr/local/bin
-          "%
-        },
-        {
-          name = "install build dependencies",
-          run = "cargo binstall --no-confirm wasm-bindgen-cli wasm-opt nickel-lang-cli",
-        },
-        {
-          name = "build example",
-          "if" = "${{ matrix.api == 'webgl2' }}",
-          run = "just build_wasm_example ${{ matrix.example }}"
-        },
-        {
-          name = "build example",
-          "if" = "${{ matrix.api == 'webgpu' }}",
-          run = "just build_wasm_example ${{ matrix.example }} webgpu"
-        },
-        {
-          name = "upload dist",
-          uses = "actions/upload-artifact@v4",
-          with = {
-            path = "dist",
-            name = "${{ matrix.api }}_${{ matrix.example }}",
-          }
-        },
-      ]
-    },
     deployment_comment = {
-      needs = ["get_examples", "deploy_examples"],
+      needs = ["get_examples", "build_and_deploy_examples"],
       permissions = {
         pull-requests = "write",
       },
@@ -116,17 +68,18 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
   }
   |> std.record.map_values run_on_ubuntu_latest
   & {  # can't use runs-on for a workflow_call job
-    deploy_examples = {
-      needs = ["get_examples", "build_examples"],
+    build_and_deploy_examples = {
+      needs = "get_examples",
       strategy = {
         matrix = {
-          example = "${{ fromJson(needs.get_examples.outputs.examples) }}"
+          example = "${{ fromJson(needs.get_examples.outputs.examples) }}",
+          api = ["webgl2", "webgpu"],
         }
       },
       permissions = {
         contents = "write",
       },
-      uses = "./.github/workflows/preview_deploy.yaml",
+      uses = "./.github/workflows/preview_build_deploy.yaml",
       with = {
         pr = "${{ github.event.number }}",
         api = "${{ matrix.api }}",

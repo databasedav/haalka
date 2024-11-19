@@ -1,7 +1,7 @@
-let { REPO, checkout, .. } = import "common.ncl" in
+let { REPO, checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 {
-  name = "preview_deploy",
+  name = "preview_build_deploy",
 
   on = {
     workflow_call = {
@@ -27,6 +27,47 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
   },
 
   jobs = {
+    build = {
+      steps = [
+        checkout,
+        rust_toolchain & { with = { targets = "wasm32-unknown-unknown" } },
+        bevy_dependencies,
+        cached_target_populate,
+        just,
+        binstall,
+        # TODO: just add to binstall once https://github.com/trunk-rs/trunk/pull/915 released
+        {
+          name = "install trunk",
+          run = m%"
+            wget https://github.com/databasedav/trunk/releases/download/v0.0.1/trunk
+            chmod +x trunk
+            mv trunk /usr/local/bin
+          "%
+        },
+        {
+          name = "install build dependencies",
+          run = "cargo binstall --no-confirm wasm-bindgen-cli wasm-opt nickel-lang-cli",
+        },
+        {
+          name = "build example",
+          "if" = "${{ inputs.api == 'webgl2' }}",
+          run = "just build_wasm_example ${{ inputs.example }}"
+        },
+        {
+          name = "build example",
+          "if" = "${{ inputs.api == 'webgpu' }}",
+          run = "just build_wasm_example ${{ inputs.example }} webgpu"
+        },
+        {
+          name = "upload dist",
+          uses = "actions/upload-artifact@v4",
+          with = {
+            path = "dist",
+            name = "${{ inputs.api }}_${{ inputs.example }}",
+          }
+        },
+      ]
+    },
     deploy = {
       steps = [
         checkout,
