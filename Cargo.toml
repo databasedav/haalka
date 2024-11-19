@@ -20,29 +20,29 @@ all-features = true
 
 # TODO: use MoonZoon's futures-signals/futures-util extensions directly when it is published as a crate
 [dependencies]
-apply = "0.3"
-bevy_app = { version = "0.14", default-features = false }
-bevy_ecs = { version = "0.14", default-features = false }
-bevy_hierarchy = { version = "0.14", default-features = false }
-bevy_tasks = { version = "0.14", default-features = false, features = ["multi_threaded"] }
-bevy_utils = { version = "0.14", default-features = false }
-bevy_color = { version = "0.14", optional = true, default-features = false }
-bevy_core = { version = "0.14", optional = true, default-features = false }
-bevy_input = { version = "0.14", optional = true, default-features = false }
-bevy_log = { version = "0.14", optional = true, default-features = false }
-bevy_math = { version = "0.14", optional = true, default-features = false }
-bevy_reflect = { version = "0.14", optional = true, default-features = false }
-bevy_render = { version = "0.14", optional = true, default-features = false }
-bevy_text = { version = "0.14", optional = true, default-features = false }
-bevy_transform = { version = "0.14", optional = true, default-features = false }
-bevy_ui = { version = "0.14", optional = true, default-features = false, features = ["bevy_text"] }
-bevy_window = { version = "0.14", optional = true, default-features = false }
-bevy_derive = { version = "0.14", optional = true, default-features = false }
-bevy_dev_tools = { version = "0.14", optional = true, default-features = false, features = ["bevy_ui_debug"] }
-bevy_cosmic_edit = { version = "0.24", optional = true }
+bevy_app = { version = "0.14" }
+bevy_ecs = { version = "0.14" }
+bevy_hierarchy = { version = "0.14" }
+bevy_tasks = { version = "0.14", features = ["multi_threaded"] }
+bevy_utils = { version = "0.14" }
+bevy_color = { version = "0.14", optional = true }
+bevy_core = { version = "0.14", optional = true }
+bevy_input = { version = "0.14", optional = true }
+bevy_log = { version = "0.14", optional = true }
+bevy_math = { version = "0.14", optional = true }
+bevy_reflect = { version = "0.14", optional = true }
+bevy_render = { version = "0.14", optional = true, features = ["webgl"] }
+bevy_text = { version = "0.14", optional = true }
+bevy_transform = { version = "0.14", optional = true }
+bevy_ui = { version = "0.14", optional = true, features = ["bevy_text"] }
+bevy_window = { version = "0.14", optional = true }
+bevy_derive = { version = "0.14", optional = true }
+bevy_dev_tools = { version = "0.14", optional = true, features = ["bevy_ui_debug"] }
+bevy_cosmic_edit = { version = "0.25", optional = true }
 bevy_eventlistener = "0.8"
 bevy_mod_picking = { version = "0.20", default-features = false, features = ["backend_bevy_ui"], optional = true }
 bevy-async-ecs = "0.6"
+apply = "0.3"
 cfg-if = "1.0"
 enclose = "1.1"
 futures-signals = "0.3"
@@ -82,8 +82,10 @@ multicam = ["bevy_cosmic_edit?/multicam"]
 ## `DebugUiPlugin` which enables toggling [`bevy_dev_tools::ui_debug_overlay::DebugUiPlugin`](https://docs.rs/bevy/latest/bevy/dev_tools/ui_debug_overlay/struct.DebugUiPlugin.html) with the `F1` key; requires a camera to be marked with the [`IsDefaultCamera`](https://docs.rs/bevy/latest/bevy/prelude/struct.IsDefaultUiCamera.html#) component.
 debug = ["ui", "bevy_dev_tools", "multicam"]
 
-## Pass-through for optionally enabling webgl2 for examples.
-webgl = ["bevy_render/webgl"]
+## Pass-through for optionally enabling webgpu for examples.
+webgpu = ["bevy_render?/webgpu", "bevy_cosmic_edit?/webgpu"]
+
+deployed_wasm_example = []
 
 [dev-dependencies]
 bevy = "0.14"
