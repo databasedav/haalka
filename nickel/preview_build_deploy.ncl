@@ -69,6 +69,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
       ]
     },
     deploy = {
+      needs = "build",
       steps = [
         checkout,
         {

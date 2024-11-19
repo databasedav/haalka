@@ -43,6 +43,7 @@ jobs:
         path: dist
   deploy:
     name: deploy
+    needs: build
     runs-on: ubuntu-latest
     steps:
     - name: checkout repo
