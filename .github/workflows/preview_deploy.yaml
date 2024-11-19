@@ -14,7 +14,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
-        name: ${{ inputs.example }}
+        name: ${{ inputs.api }}/${{ inputs.example }}
         path: dist
         run-id: ${{ inputs.parent_workflow_id }}
     - name: deploy
@@ -29,6 +29,9 @@ name: preview_deploy
 on:
   workflow_call:
     inputs:
+      api:
+        required: true
+        type: string
       example:
         required: true
         type: string

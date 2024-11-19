@@ -27,6 +27,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
       needs = "get_examples",
       strategy = {
         matrix = {
+          api = ["webgl2", "webgpu"],
           example = "${{ fromJson(needs.get_examples.outputs.examples) }}"
         }
       },
@@ -52,14 +53,20 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         },
         {
           name = "build example",
+          "if" = "${{ matrix.api == 'webgl2' }}",
           run = "just build_wasm_example ${{ matrix.example }}"
+        },
+        {
+          name = "build example",
+          "if" = "${{ matrix.api == 'webgpu' }}",
+          run = "just build_wasm_example ${{ matrix.example }} webgpu"
         },
         {
           name = "upload dist",
           uses = "actions/upload-artifact@v4",
           with = {
             path = "dist",
-            name = "${{ matrix.example }}",
+            name = "${{ matrix.api }}/${{ matrix.example }}",
           }
         },
       ]
@@ -81,7 +88,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         {
           name = "links_markdown_list",
           run = m%"
-            examples=${{ needs.get_examples.outputs.examples }}
+            examples='${{ needs.get_examples.outputs.examples }}'
             url_base="https://databasedav.github.io/haalka/pr_previews/${{ github.event.number }}/webgpu/"
             markdown_list=""
             for example in $(echo "${examples}" | jq -r '.[]'); do
@@ -97,7 +104,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
             message = m%"
               **previews:**
               ${{ steps.links_markdown_list.outputs.markdown_list }}
-              **commit:** %{ REPO }/pull/${{ github.event.number }}/commits/${{ github.sha }}
+              **commit:** %{ REPO }/pull/${{ github.event.number }}/commits/${{ github.event.pull_request.head.sha }}
               **deployed:** ${{ steps.deployment_timestamp.outputs.timestamp }}
             "%,
             pr_number = "${{ github.event.number }}",
@@ -122,6 +129,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
       uses = "./.github/workflows/preview_deploy.yaml",
       with = {
         pr = "${{ github.event.number }}",
+        api = "${{ matrix.api }}",
         example = "${{ matrix.example }}",
         parent_workflow_id = "${{ github.run_id }}"
       },

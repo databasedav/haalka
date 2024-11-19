@@ -10,6 +10,10 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
           required = true,
           type = "number"
         },
+        api = {
+          required = true,
+          type = "string"
+        },
         example = {
           required = true,
           type = "string"
@@ -34,7 +38,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
           name = "download dist",
           uses = "actions/download-artifact@v4",
           with = {
-            name = "${{ inputs.example }}",
+            name = "${{ inputs.api }}/${{ inputs.example }}",
             path = "dist",
             github-token = "${{ secrets.GITHUB_TOKEN }}",
             run-id = "${{ inputs.parent_workflow_id }}",

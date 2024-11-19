@@ -31,15 +31,22 @@ jobs:
         mv trunk /usr/local/bin
     - name: install build dependencies
       run: cargo binstall --no-confirm wasm-bindgen-cli wasm-opt nickel-lang-cli
-    - name: build example
+    - if: ${{ matrix.api == 'webgl2' }}
+      name: build example
       run: just build_wasm_example ${{ matrix.example }}
+    - if: ${{ matrix.api == 'webgpu' }}
+      name: build example
+      run: just build_wasm_example ${{ matrix.example }} webgpu
     - name: upload dist
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.example }}
+        name: ${{ matrix.api }}/${{ matrix.example }}
         path: dist
     strategy:
       matrix:
+        api:
+        - webgl2
+        - webgpu
         example: ${{ fromJson(needs.get_examples.outputs.examples) }}
   deploy_examples:
     name: deploy_examples
@@ -53,6 +60,7 @@ jobs:
         example: ${{ fromJson(needs.get_examples.outputs.examples) }}
     uses: ./.github/workflows/preview_deploy.yaml
     with:
+      api: ${{ matrix.api }}
       example: ${{ matrix.example }}
       parent_workflow_id: ${{ github.run_id }}
       pr: ${{ github.event.number }}
@@ -74,7 +82,7 @@ jobs:
     - id: links_markdown_list
       name: links_markdown_list
       run: |-
-        examples=${{ needs.get_examples.outputs.examples }}
+        examples='${{ needs.get_examples.outputs.examples }}'
         url_base="https://databasedav.github.io/haalka/pr_previews/${{ github.event.number }}/webgpu/"
         markdown_list=""
         for example in $(echo "${examples}" | jq -r '.[]'); do
@@ -88,7 +96,7 @@ jobs:
         message: |-
           **previews:**
           ${{ steps.links_markdown_list.outputs.markdown_list }}
-          **commit:** https://github.com/databasedav/haalka/pull/${{ github.event.number }}/commits/${{ github.sha }}
+          **commit:** https://github.com/databasedav/haalka/pull/${{ github.event.number }}/commits/${{ github.event.pull_request.head.sha }}
           **deployed:** ${{ steps.deployment_timestamp.outputs.timestamp }}
         pr_number: ${{ github.event.number }}
   get_examples:
