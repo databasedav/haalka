@@ -41,10 +41,10 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
           name = "links_markdown_list",
           run = m%"
             examples='${{ needs.get_examples.outputs.examples }}'
-            url_base="https://databasedav.github.io/haalka/pr_previews/${{ github.event.number }}/webgpu/"
+            base_url="https://databasedav.github.io/haalka/pr_previews/${{ github.event.number }}"
             markdown_list=""
             for example in $(echo "${examples}" | jq -r '.[]'); do
-              markdown_list+="\n- [$example](${url_base}${example})"
+              markdown_list+="\n- $example: [webgl2](${base_url}/webgl2/${example}) [webgpu](${base_url}/webgpu/${example})"
             done
             echo "markdown_list=$markdown_list"
             echo "markdown_list=$markdown_list" >> $GITHUB_OUTPUT
@@ -67,7 +67,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
     }
   }
   |> std.record.map_values run_on_ubuntu_latest
-  & {  # can't use runs-on for a workflow_call job
+  & {  # can't use runs-on for a reusable workflow
     build_and_deploy_examples = {
       needs = "get_examples",
       strategy = {

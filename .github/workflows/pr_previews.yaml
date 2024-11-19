@@ -36,10 +36,10 @@ jobs:
       name: links_markdown_list
       run: |-
         examples='${{ needs.get_examples.outputs.examples }}'
-        url_base="https://databasedav.github.io/haalka/pr_previews/${{ github.event.number }}/webgpu/"
+        base_url="https://databasedav.github.io/haalka/pr_previews/${{ github.event.number }}"
         markdown_list=""
         for example in $(echo "${examples}" | jq -r '.[]'); do
-          markdown_list+="\n- [$example](${url_base}${example})"
+          markdown_list+="\n- $example: [webgl2](${base_url}/webgl2/${example}) [webgpu](${base_url}/webgpu/${example})"
         done
         echo "markdown_list=$markdown_list"
         echo "markdown_list=$markdown_list" >> $GITHUB_OUTPUT
