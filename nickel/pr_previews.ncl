@@ -66,7 +66,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
           uses = "actions/upload-artifact@v4",
           with = {
             path = "dist",
-            name = "${{ matrix.api }}/${{ matrix.example }}",
+            name = "${{ matrix.api }}_${{ matrix.example }}",
           }
         },
       ]
