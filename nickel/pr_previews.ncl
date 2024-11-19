@@ -67,7 +67,8 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
     }
   }
   |> std.record.map_values run_on_ubuntu_latest
-  & {  # can't use runs-on for a reusable workflow
+  # can't use runs-on for a reusable workflow
+  & {
     build_and_deploy_examples = {
       needs = "get_examples",
       strategy = {

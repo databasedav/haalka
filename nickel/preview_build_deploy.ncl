@@ -90,7 +90,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
             attempt-limit = 1000,
             # double quoted because this must be a string https://github.com/JamesIves/github-pages-deploy-action/blob/3c4f14a9dd16589e133efef395ad4f3e79d1f277/src/constants.ts#L56 https://github.com/JamesIves/github-pages-deploy-action/blob/3c4f14a9dd16589e133efef395ad4f3e79d1f277/src/constants.ts#L144
             # TODO: figure out webgl2 compile shenanigans and add to matrix
-            target-folder = m%""pr_previews/${{ inputs.pr }}/webgpu/${{ inputs.example }}""%,
+            target-folder = m%""pr_previews/${{ inputs.pr }}/${{ inputs.api }}/${{ inputs.example }}""%,
             commit-message = "%{ REPO }/pull/${{ inputs.pr }}/commits/${{ github.sha }}"
           }
         },

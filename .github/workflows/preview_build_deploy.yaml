@@ -65,7 +65,7 @@ jobs:
         commit-message: https://github.com/databasedav/haalka/pull/${{ inputs.pr }}/commits/${{ github.sha }}
         folder: dist
         force: false
-        target-folder: '"pr_previews/${{ inputs.pr }}/webgpu/${{ inputs.example }}"'
+        target-folder: '"pr_previews/${{ inputs.pr }}/${{ inputs.api }}/${{ inputs.example }}"'
 name: preview_build_deploy
 on:
   workflow_call:
