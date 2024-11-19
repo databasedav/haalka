@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" style="height: 100%; width: 100%; background-color: #2b2c2f;">
+
+<head>
+    <meta charset="utf-8" />
+    <title>haalka snake</title>
+    
+    
+<script type="module" nonce="cp2yeC3G/wyxxxQFXJTprA==">
+import init, * as bindings from './haalka-2dc1cd97ea91b808.js';
+const wasm = await init({ module_or_path: './haalka-2dc1cd97ea91b808_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+<link rel="modulepreload" href="./haalka-2dc1cd97ea91b808.js" crossorigin=anonymous integrity="sha384-lIXV3oUy/6Y0Iuf3eKTW23LEr8gw0pDstERPT5v9cVu11ZM9tZdjZW9gw+P3g/Yd"><link rel="preload" href="./haalka-2dc1cd97ea91b808_bg.wasm" crossorigin=anonymous integrity="sha384-p3bGpTJNUBaP27EOLuKNBQNlzVsOLD/g1t3uZP9KRs7qzFT4k5WonSLqQ/M2hyIj" as="fetch" type="application/wasm"></head>
+
+<body style="height: 100%; width: 100%; margin: 0px">
+    <div id="game" style="height: 100%; width: 100%;">
+        <canvas id="bevy">
+            js and canvas support is required
+        </canvas>
+    </div>
+</body>
+
+</html>
