@@ -9,7 +9,7 @@ let fill_height_width = "height: 100%; width: 100%;" in
 
       <head>
           <meta charset="utf-8" />
-          <title>haalka %{ example }</title>
+          <title>haalka %{ example } example</title>
           <link data-trunk rel="copy-dir" href="assets" />
           <link data-trunk rel="rust" data-cargo-features="debug,deployed_wasm_example,%{ features |> std.string.join "," }" data-wasm-opt="s" href="." />
       </head>

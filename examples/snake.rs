@@ -17,7 +17,7 @@ use strum::{EnumIter, IntoEnumIterator};
 
 fn main() {
     App::new()
-        .add_plugins(examples_plugin)
+        .add_plugins((examples_plugin, EntropyPlugin::<ChaCha8Rng>::default()))
         .add_systems(
             Startup,
             (
