@@ -24,18 +24,18 @@ bevy_ecs = { version = "0.14", features = ["multi_threaded"] }
 bevy_hierarchy = "0.14"
 bevy_tasks = { version = "0.14", features = ["multi_threaded"] }
 bevy_utils = "0.14"
-bevy_color = { version = "0.14", default-features = false, optional = true }
-bevy_core = { version = "0.14", default-features = false, optional = true }
-bevy_input = { version = "0.14", default-features = false, optional = true }
-bevy_log = { version = "0.14", default-features = false, optional = true }
-bevy_math = { version = "0.14", default-features = false, optional = true }
-bevy_reflect = { version = "0.14", default-features = false, optional = true }
-bevy_render = { version = "0.14", default-features = false, optional = true, features = ["webgl"] }
-bevy_text = { version = "0.14", default-features = false, optional = true }
-bevy_transform = { version = "0.14", default-features = false, optional = true }
-bevy_ui = { version = "0.14", default-features = false, optional = true, features = ["bevy_text"] }
-bevy_window = { version = "0.14", default-features = false, optional = true }
-bevy_derive = { version = "0.14", default-features = false, optional = true }
+bevy_color = { version = "0.14", optional = true, default-features = false }
+bevy_core = { version = "0.14", optional = true, default-features = false }
+bevy_input = { version = "0.14", optional = true, default-features = false }
+bevy_log = { version = "0.14", optional = true, default-features = false }
+bevy_math = { version = "0.14", optional = true, default-features = false }
+bevy_reflect = { version = "0.14", optional = true, default-features = false }
+bevy_render = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
+bevy_text = { version = "0.14", optional = true, default-features = false }
+bevy_transform = { version = "0.14", optional = true, default-features = false }
+bevy_ui = { version = "0.14", optional = true, default-features = false, features = ["bevy_text"] }
+bevy_window = { version = "0.14", optional = true, default-features = false }
+bevy_derive = { version = "0.14", optional = true, default-features = false }
 bevy_dev_tools = { version = "0.14", optional = true, features = ["bevy_ui_debug"] }
 bevy_cosmic_edit = { version = "0.25", optional = true }
 bevy_eventlistener = "0.8"
@@ -58,6 +58,12 @@ async-io = "2.3"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 gloo-timers = { version = "0.3", features = ["futures"] }
 send_wrapper = { version = "0.6", features = ["futures"] }
+bevy_winit = { version = "0.14", optional = true }
+bevy_audio = { version = "0.14", optional = true, features = ["android_shared_stdcxx"] }
+bevy_core_pipeline = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
+bevy_pbr = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
+bevy_gizmos = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
+bevy_sprite = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
 
 [features]
 default = [
@@ -86,13 +92,17 @@ debug = ["ui", "bevy_dev_tools", "multicam"]
 ## Pass-through for optionally enabling webgpu for examples.
 webgpu = [
     "bevy_render?/webgpu",
+    "bevy_core_pipeline?/webgpu",
+    "bevy_pbr?/webgpu",
+    "bevy_gizmos?/webgpu",
+    "bevy_sprite?/webgpu",
     "bevy_cosmic_edit?/webgpu",
 ]
 
 deployed_wasm_example = []
 
 [dev-dependencies]
-bevy = { version = "0.14" }
+bevy = "0.14"
 bevy_asset_loader = { version = "0.21", features = ["2d"] }
 bevy_nine_slice_ui = "0.7"
 bevy_rand = { version = "0.7", features = ["rand_chacha"] }

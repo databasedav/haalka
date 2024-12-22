@@ -9,7 +9,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
       branches = ["main"],
     },
     pull_request = {
-      branches = ["main"],
+      branches = ["main", "[0-9]+.[0-9]+"],
     }
   },
 

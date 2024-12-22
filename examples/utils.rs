@@ -18,6 +18,12 @@ use haalka::prelude::*;
 use haalka_futures_signals_ext::SignalExtBool;
 use once_cell::sync::Lazy;
 
+// TODO: port https://github.com/mintlu8/bevy-rectray/blob/main/examples/accordion.rs
+// requires tweening api
+// TODO: port https://github.com/mintlu8/bevy-rectray/blob/main/examples/draggable.rs
+// requires tweening api ?
+
+
 /// [`haalka`](crate) port of bevy::dev_tools::fps_overlay::FpsOverlayPlugin.
 #[derive(Default)]
 pub struct FpsOverlayPlugin;
@@ -119,7 +125,7 @@ pub(crate) fn examples_plugin(app: &mut App) {
         bevy::DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 position: WindowPosition::Centered(MonitorSelection::Primary),
-                #[cfg(feature = "deployed_wasm_example")]
+                // #[cfg(feature = "deployed_wasm_example")]
                 canvas: Some("#bevy".to_string()),
                 fit_canvas_to_parent: true,
                 prevent_default_event_handling: true,
@@ -144,38 +150,38 @@ pub(crate) fn examples_plugin(app: &mut App) {
             app.configure_sets(PostStartup, (MarkDefaultUiCameraSet, CosmicMulticamHandlerSet).chain());
         }
     }
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-            {
-                const MAX_WASM_FPS: f32 = 240.;
-                const LIMIT_FRAMERATE_TOGGLE_KEY: KeyCode = KeyCode::F3;
+    // cfg_if::cfg_if! {
+    //     if #[cfg(target_arch = "wasm32")] {
+    //         {
+    //             const MAX_WASM_FPS: f32 = 240.;
+    //             const LIMIT_FRAMERATE_TOGGLE_KEY: KeyCode = KeyCode::F3;
 
-                static CAPPED_FRAMERATE_UPDATE_MODE: Lazy<UpdateMode> = Lazy::new(|| UpdateMode::Reactive {
-                    wait: Duration::from_secs_f32(1. / MAX_WASM_FPS),
-                    react_to_device_events: false,
-                    react_to_user_events: false,
-                    react_to_window_events: false,
-                });
+    //             static CAPPED_FRAMERATE_UPDATE_MODE: Lazy<UpdateMode> = Lazy::new(|| UpdateMode::Reactive {
+    //                 wait: Duration::from_secs_f32(1. / MAX_WASM_FPS),
+    //                 react_to_device_events: false,
+    //                 react_to_user_events: false,
+    //                 react_to_window_events: false,
+    //             });
 
-                fn toggle_framerate_cap(
-                    input: Res<ButtonInput<KeyCode>>,
-                    mut winit_settings: ResMut<WinitSettings>,
-                ) {
-                    if input.just_pressed(LIMIT_FRAMERATE_TOGGLE_KEY) {
-                        if matches!(winit_settings.focused_mode, UpdateMode::Continuous) {
-                            winit_settings.focused_mode = *CAPPED_FRAMERATE_UPDATE_MODE;
-                        } else {
-                            winit_settings.focused_mode = UpdateMode::Continuous;
-                        }
-                    }
-                }
+    //             fn toggle_framerate_cap(
+    //                 input: Res<ButtonInput<KeyCode>>,
+    //                 mut winit_settings: ResMut<WinitSettings>,
+    //             ) {
+    //                 if input.just_pressed(LIMIT_FRAMERATE_TOGGLE_KEY) {
+    //                     if matches!(winit_settings.focused_mode, UpdateMode::Continuous) {
+    //                         winit_settings.focused_mode = *CAPPED_FRAMERATE_UPDATE_MODE;
+    //                     } else {
+    //                         winit_settings.focused_mode = UpdateMode::Continuous;
+    //                     }
+    //                 }
+    //             }
 
-                app
-                .add_systems(PostStartup, |mut winit_settings: ResMut<WinitSettings>| {
-                    winit_settings.focused_mode = *CAPPED_FRAMERATE_UPDATE_MODE;
-                })
-                .add_systems(Update, toggle_framerate_cap);
-            }
-        }
-    };
+    //             app
+    //             .add_systems(PostStartup, |mut winit_settings: ResMut<WinitSettings>| {
+    //                 winit_settings.focused_mode = *CAPPED_FRAMERATE_UPDATE_MODE;
+    //             })
+    //             .add_systems(Update, toggle_framerate_cap);
+    //         }
+    //     }
+    // };
 }
