@@ -111,10 +111,4 @@ jobs:
     - name: run tests
       run: just test
 name: ci
-on:
-  pull_request:
-    branches:
-    - main
-  push:
-    branches:
-    - main
+on: push

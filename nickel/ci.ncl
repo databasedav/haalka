@@ -4,18 +4,12 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
 {
   name = "ci",
 
-  on = {
-    push = {
-      branches = ["main"],
-    },
-    pull_request = {
-      branches = ["main", "[0-9]+.[0-9]+"],
-    }
-  },
+  on = "push",
 
   env = cargo_build_env |> uppercase_fields,
 
   jobs = {
+
     test = {
       steps = [
         checkout,

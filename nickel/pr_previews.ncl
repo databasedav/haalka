@@ -1,30 +1,16 @@
-let { REPO, checkout, cargo_build_env, just, .. } = import "common.ncl" in
-let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" in
+let { REPO, checkout, cargo_build_env, just, get_examples, build_and_deploy_examples, .. } = import "common.ncl" in
+let { sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" in
 {
   name = "pr_previews",
 
-  on = ["pull_request"],
+  on = "pull_request",
 
   jobs = {
-    get_examples = {
-      outputs = {
-        examples = "${{ steps.output_examples.outputs.examples }}"
-      },
-      steps = [
-        checkout,
-        just,
-        {
-          name = "output_examples",
-          run = m%"
-            examples=$(just list_examples)
-            echo "examples=$examples"
-            echo "examples=$examples" >> $GITHUB_OUTPUT
-          "%
-        } |> name_id
-      ]
-    },
+    # TODO: file nickel issue, field and value matching should not cause recursion
+    get_examples_ = get_examples,
+    build_and_deploy_examples_ = build_and_deploy_examples "${{ github.event.number }}",
     deployment_comment = {
-      needs = ["get_examples", "build_and_deploy_examples"],
+      needs = ["get_examples_", "build_and_deploy_examples_"],
       permissions = {
         pull-requests = "write",
       },
@@ -40,7 +26,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
         {
           name = "links_markdown_list",
           run = m%"
-            examples='${{ needs.get_examples.outputs.examples }}'
+            examples='${{ needs._get_examples.outputs.examples }}'
             base_url="https://databasedav.github.io/haalka/pr_previews/${{ github.event.number }}"
             markdown_list=""
             for example in $(echo "${examples}" | jq -r '.[]'); do
@@ -54,39 +40,17 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = i
           uses = "thollander/actions-comment-pull-request@v2",
           with = {
             message = m%"
-              **previews:**
-              ${{ steps.links_markdown_list.outputs.markdown_list }}
               **commit:** %{ REPO }/pull/${{ github.event.number }}/commits/${{ github.event.pull_request.head.sha }}
               **deployed:** ${{ steps.deployment_timestamp.outputs.timestamp }}
+              **previews:**
+              ${{ steps.links_markdown_list.outputs.markdown_list }}
             "%,
             pr_number = "${{ github.event.number }}",
             comment_tag = "preview"
           }
         }
       ]
-    }
-  }
-  |> std.record.map_values run_on_ubuntu_latest
-  # can't use runs-on for a reusable workflow
-  & {
-    build_and_deploy_examples = {
-      needs = "get_examples",
-      strategy = {
-        matrix = {
-          example = "${{ fromJson(needs.get_examples.outputs.examples) }}",
-          api = ["webgl2", "webgpu"],
-        }
-      },
-      permissions = {
-        contents = "write",
-      },
-      uses = "./.github/workflows/preview_build_deploy.yaml",
-      with = {
-        pr = "${{ github.event.number }}",
-        api = "${{ matrix.api }}",
-        example = "${{ matrix.example }}",
-      },
-    }
+    } |> run_on_ubuntu_latest
   }
   |> sync_name_field
 }

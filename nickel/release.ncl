@@ -1,5 +1,6 @@
 let { checkout, rust_toolchain, bevy_dependencies, cached_target_populate, cargo_build_env, .. } = import "common.ncl" in
 let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
+let RELEASE_PLZ_ACTION_VERSION = "0.5" in
 {
   name = "release",
 
@@ -11,8 +12,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
   on = {
     pull_request = {
       types = ["closed"],
-      branches = ["main"],
-      paths = ["release/**"]
+      branches = ["[0-9]+.[0-9]+"],
     }
   },
 
@@ -20,6 +20,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
 
   jobs = {
     release = {
+      "if" = "${{ github.event.pull_request.merged == true }}",
       steps = [
         checkout,
         rust_toolchain,
@@ -27,7 +28,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
         cached_target_populate,
         {
           name = "run release-plz",
-          uses = "MarcoIeni/release-plz-action@v0.5",
+          uses = "MarcoIeni/release-plz-action@v%{ RELEASE_PLZ_ACTION_VERSION }",
           with = {
             command = "release"
           },

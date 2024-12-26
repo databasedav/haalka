@@ -1,5 +1,6 @@
 let { REPO, checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
+let ATTEMPT_LIMIT = 1000 in
 {
   name = "preview_build_deploy",
 
@@ -7,7 +8,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
     workflow_call = {
       inputs = {
         pr = {
-          required = true,
+          required = false,
           type = "number"
         },
         api = {
@@ -31,7 +32,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
         cached_target_populate,
         just,
         binstall,
-        # TODO: just add to binstall once https://github.com/trunk-rs/trunk/pull/915 released
+        // ...existing code...
         {
           name = "install trunk",
           run = m%"
@@ -87,11 +88,9 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
           with = {
             folder = "dist",
             force = false,
-            attempt-limit = 1000,
-            # double quoted because this must be a string https://github.com/JamesIves/github-pages-deploy-action/blob/3c4f14a9dd16589e133efef395ad4f3e79d1f277/src/constants.ts#L56 https://github.com/JamesIves/github-pages-deploy-action/blob/3c4f14a9dd16589e133efef395ad4f3e79d1f277/src/constants.ts#L144
-            # TODO: figure out webgl2 compile shenanigans and add to matrix
-            target-folder = m%""pr_previews/${{ inputs.pr }}/${{ inputs.api }}/${{ inputs.example }}""%,
-            commit-message = "%{ REPO }/pull/${{ inputs.pr }}/commits/${{ github.sha }}"
+            attempt-limit = ATTEMPT_LIMIT,
+            target-folder = m%""${{ inputs.pr != '' ? 'pr_previews/' + inputs.pr : 'examples/' + inputs.api + '/' + inputs.example }}""%,
+            commit-message = m%""${{ inputs.pr != '' ? '%{ REPO }' + '/pull/' + inputs.pr + '/commits/' + github.sha : '%{ REPO }' + '/commit/' + github.sha }}""%
           }
         },
       ]

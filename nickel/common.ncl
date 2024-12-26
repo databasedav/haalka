@@ -1,3 +1,5 @@
+let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" in
+
 let CHECKOUT_VERSION = "v4" in
 let RUST_TOOLCHAIN_VERSION = "stable" in
 let BEVY_DEPENDENCIES = [
@@ -46,4 +48,39 @@ let SETUP_JUST_VERSION = "v2" in
     name = "install binstall",
     uses = "cargo-bins/cargo-binstall@main"
   },
+  get_examples = {
+    outputs = {
+      examples = "${{ steps.output_examples.outputs.examples }}"
+    },
+    steps = [
+      checkout,
+      just,
+      {
+        name = "output_examples",
+        run = m%"
+          examples=$(just list_examples)
+          echo "examples=$examples"
+          echo "examples=$examples" >> $GITHUB_OUTPUT
+        "%
+      } |> name_id
+    ]
+  } |> run_on_ubuntu_latest,
+  build_and_deploy_examples = fun pr_ => {
+    needs = "get_examples_",
+    strategy = {
+      matrix = {
+        example = "${{ fromJson(needs.get_examples_.outputs.examples) }}",
+        api = ["webgl2", "webgpu"],
+      }
+    },
+    permissions = {
+      contents = "write",
+    },
+    uses = "./.github/workflows/preview_build_deploy.yaml",
+    with = {
+      pr = pr_,
+      api = "${{ matrix.api }}",
+      example = "${{ matrix.example }}",
+    },
+  }
 }

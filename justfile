@@ -51,7 +51,7 @@ export_nickel file:
   nickel export --format yaml nickel/{{ file }}.ncl
 
 # TODO: use an actual list https://github.com/casey/just/issues/2458
-export_nickels := "ci pr_previews preview_build_deploy release"
+export_nickels := "ci pr_previews examples_on_main release"
 
 # TODO: use https://github.com/rhysd/actionlint after
 sync_nickels:
