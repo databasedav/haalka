@@ -76,7 +76,7 @@ let SETUP_JUST_VERSION = "v2" in
     permissions = {
       contents = "write",
     },
-    uses = "./.github/workflows/preview_build_deploy.yaml",
+    uses = "./.github/workflows/build_and_deploy_example.yaml",
     with = {
       pr = pr_,
       api = "${{ matrix.api }}",

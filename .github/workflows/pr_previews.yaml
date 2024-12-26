@@ -11,7 +11,7 @@ jobs:
         - webgl2
         - webgpu
         example: ${{ fromJson(needs.get_examples_.outputs.examples) }}
-    uses: ./.github/workflows/preview_build_deploy.yaml
+    uses: ./.github/workflows/build_and_deploy_example.yaml
     with:
       api: ${{ matrix.api }}
       example: ${{ matrix.example }}
@@ -70,5 +70,4 @@ jobs:
         echo "examples=$examples"
         echo "examples=$examples" >> $GITHUB_OUTPUT
 name: pr_previews
-on:
-- pull_request
+on: pull_request
