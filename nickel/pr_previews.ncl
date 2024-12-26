@@ -26,7 +26,7 @@ let { sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" 
         {
           name = "links_markdown_list",
           run = m%"
-            examples='${{ needs._get_examples.outputs.examples }}'
+            examples='${{ needs.get_examples_.outputs.examples }}'
             base_url="https://databasedav.github.io/haalka/pr_previews/${{ github.event.number }}"
             markdown_list=""
             for example in $(echo "${examples}" | jq -r '.[]'); do

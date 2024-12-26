@@ -34,7 +34,7 @@ jobs:
     - id: links_markdown_list
       name: links_markdown_list
       run: |-
-        examples='${{ needs._get_examples.outputs.examples }}'
+        examples='${{ needs.get_examples_.outputs.examples }}'
         base_url="https://databasedav.github.io/haalka/pr_previews/${{ github.event.number }}"
         markdown_list=""
         for example in $(echo "${examples}" | jq -r '.[]'); do
