@@ -2,7 +2,7 @@ let { REPO, checkout, rust_toolchain, bevy_dependencies, cached_target_populate,
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 let ATTEMPT_LIMIT = 1000 in
 {
-  name = "preview_build_deploy",
+  name = "build_and_deploy_example",
 
   on = {
     workflow_call = {

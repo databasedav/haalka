@@ -70,5 +70,4 @@ jobs:
         echo "examples=$examples"
         echo "examples=$examples" >> $GITHUB_OUTPUT
 name: pr_previews
-on:
-- pull_request
+on: pull_request

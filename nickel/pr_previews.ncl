@@ -3,7 +3,7 @@ let { sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" 
 {
   name = "pr_previews",
 
-  on = ["pull_request"],
+  on = "pull_request",
 
   jobs = {
     # TODO: file nickel issue, field and value matching should not cause recursion
