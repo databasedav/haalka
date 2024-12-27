@@ -1,6 +1,6 @@
 let { REPO, checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
-let GITHUB_PAGES_DEPLOY_ACTION = "4" in
+let GITHUB_PAGES_DEPLOY_ACTION = "4.7.2" in
 let ATTEMPT_LIMIT = 1000 in
 {
   name = "build_and_deploy_example",
@@ -69,7 +69,7 @@ let ATTEMPT_LIMIT = 1000 in
     deploy = {
       needs = "build",
       env = {
-        SUFFIX = "{{ inputs.api + '/' + inputs.example }}",
+        SUFFIX = "${{ inputs.api + '/' + inputs.example }}",
       },
       steps = [
         checkout,

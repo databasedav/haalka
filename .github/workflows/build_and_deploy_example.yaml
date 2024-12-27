@@ -43,7 +43,7 @@ jobs:
         path: dist
   deploy:
     env:
-      SUFFIX: '{{ inputs.api + ''/'' + inputs.example }}'
+      SUFFIX: ${{ inputs.api + '/' + inputs.example }}
     name: deploy
     needs: build
     runs-on: ubuntu-latest
@@ -61,7 +61,7 @@ jobs:
         name: ${{ inputs.api }}_${{ inputs.example }}
         path: dist
     - name: deploy
-      uses: JamesIves/github-pages-deploy-action@v4
+      uses: JamesIves/github-pages-deploy-action@v4.7.2
       with:
         attempt-limit: 1000
         commit-message: ${{ inputs.pr && format('https://github.com/databasedav/haalka/pull/{0}/commits/{1}', inputs.pr, github.sha) || format('https://github.com/databasedav/haalka/commit/{0}', github.sha) }}

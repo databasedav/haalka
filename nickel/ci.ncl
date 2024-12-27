@@ -9,7 +9,16 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
   env = cargo_build_env |> uppercase_fields,
 
   jobs = {
-
+    # assert_nickels_synced = {
+    #   steps = [
+    #     checkout,
+    #     just,
+    #     {
+    #       name = "run tests",
+    #       run = "just test"
+    #     }
+    #   ]
+    # },
     test = {
       steps = [
         checkout,
