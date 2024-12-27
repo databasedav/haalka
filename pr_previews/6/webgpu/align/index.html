@@ -6,7 +6,7 @@
     <title>haalka align example</title>
     
     
-<script type="module" nonce="M7w1uxcljpqfJB3zGI5+9A==">
+<script type="module" nonce="U8azpfHQM7WlbaFsGhLeYg==">
 import init, * as bindings from './haalka-6b22031fae617156.js';
 const wasm = await init({ module_or_path: './haalka-6b22031fae617156_bg.wasm' });
 
@@ -21,7 +21,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 <body style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
     <div id="game" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
-        <canvas id="bevy">
+        <canvas id="bevy" style="margin: 0; padding: 0; border: 0;">
             js and canvas support is required
         </canvas>
     </div>
