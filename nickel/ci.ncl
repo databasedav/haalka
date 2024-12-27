@@ -14,7 +14,7 @@ let INSTALL_NIX_ACTION_VERSION = "30" in
       steps = [
         checkout,
         {
-          name = "install nix"
+          name = "install nix",
           uses = "cachix/install-nix-action@v%{ INSTALL_NIX_ACTION_VERSION }",
           run = "nix profile install github:tweag/nickel"
         },
