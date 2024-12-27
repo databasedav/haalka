@@ -1,5 +1,6 @@
 let { REPO, checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
+let GITHUB_PAGES_DEPLOY_ACTION = "4" in
 let ATTEMPT_LIMIT = 1000 in
 {
   name = "build_and_deploy_example",
@@ -67,6 +68,12 @@ let ATTEMPT_LIMIT = 1000 in
     },
     deploy = {
       needs = "build",
+      env = {
+        SUFFIX = m%"
+          
+          {{ inputs.api + '/' + inputs.example }}
+        "%,
+      },
       steps = [
         checkout,
         {
@@ -84,13 +91,19 @@ let ATTEMPT_LIMIT = 1000 in
         },
         {
           name = "deploy",
-          uses = "databasedav/github-pages-deploy-action@ec82a366a3ef75d20483861daeedcdb2c09a3fd5",
+          uses = "JamesIves/github-pages-deploy-action@v%{ GITHUB_PAGES_DEPLOY_ACTION }",
           with = {
             folder = "dist",
             force = false,
             attempt-limit = ATTEMPT_LIMIT,
-            target-folder = m%""${{ inputs.pr != '' ? 'pr_previews/' + inputs.pr : 'examples/' + inputs.api + '/' + inputs.example }}""%,
-            commit-message = m%""${{ inputs.pr != '' ? '%{ REPO }' + '/pull/' + inputs.pr + '/commits/' + github.sha : '%{ REPO }' + '/commit/' + github.sha }}""%
+            target-folder = m%"
+
+              ${{ inputs.pr ? 'pr_previews/' + inputs.pr + '/' + env.SUFFIX : 'examples/' + env.SUFFIX }}
+            "%,
+            commit-message = m%"
+              
+              ${{ inputs.pr ? '%{ REPO }' + '/pull/' + inputs.pr + '/commits/' + github.sha : '%{ REPO }' + '/commit/' + github.sha }}
+            "%
           }
         },
       ]
