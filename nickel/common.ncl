@@ -62,6 +62,7 @@ let CACHIX_ACTION_VERSION = "15" in
         name = "nickel binary cache",
         uses = "cachix/cachix-action@v%{ CACHIX_ACTION_VERSION }",
         with = {
+          name = "tweag-nickel-cache",
           extraPullNames = "tweag-nickel"
         }
       },
