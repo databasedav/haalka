@@ -17,7 +17,7 @@ jobs:
     - name: install nickel
       run: |-
         alias nickel='nix run github:tweag/nickel --'
-        nickel
+        nickel --version
     - name: install just
       uses: extractions/setup-just@v2
     - name: assert nickels synced

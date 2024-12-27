@@ -21,7 +21,7 @@ let INSTALL_NIX_ACTION_VERSION = "30" in
           name = "install nickel",
           run = m%"
             alias nickel='nix run github:tweag/nickel --'
-            nickel
+            nickel --version
           "%
         },
         just,
