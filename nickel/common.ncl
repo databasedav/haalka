@@ -57,6 +57,13 @@ let INSTALL_NIX_ACTION_VERSION = "30" in
         name = "install nix",
         uses = "cachix/install-nix-action@v%{ INSTALL_NIX_ACTION_VERSION }",
         with = {
+          
+        }
+      },
+      {
+        name = "nickel binary cache",
+        uses = "cachix/cachix-action@vXX",
+        with = {
           extraPullNames = "tweag-nickel"
         }
       },
