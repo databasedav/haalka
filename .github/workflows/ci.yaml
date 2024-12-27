@@ -16,8 +16,8 @@ jobs:
       uses: cachix/install-nix-action@v30
     - name: install nickel
       run: |-
-        alias nickel='nix run github:tweag/nickel'
-        nickel --version
+        alias nickel='nix run github:tweag/nickel --'
+        nickel
     - name: install just
       uses: extractions/setup-just@v2
     - name: assert nickels synced
