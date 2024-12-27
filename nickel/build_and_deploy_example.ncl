@@ -69,7 +69,7 @@ let ATTEMPT_LIMIT = 1000 in
     deploy = {
       needs = "build",
       env = {
-        SUFFIX = "${{ inputs.api + '/' + inputs.example }}",
+        SUFFIX = "${{ inputs.api }}/{{ inputs.example }}",
       },
       steps = [
         checkout,
