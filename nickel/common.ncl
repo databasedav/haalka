@@ -57,9 +57,6 @@ let CACHIX_ACTION_VERSION = "15" in
       {
         name = "install nix",
         uses = "cachix/install-nix-action@v%{ INSTALL_NIX_ACTION_VERSION }",
-        with = {
-          
-        }
       },
       {
         name = "nickel binary cache",

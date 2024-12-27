@@ -14,7 +14,6 @@ jobs:
         submodules: true
     - name: install nix
       uses: cachix/install-nix-action@v30
-      with: {}
     - name: nickel binary cache
       uses: cachix/cachix-action@v15
       with:
