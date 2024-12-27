@@ -16,6 +16,9 @@ let INSTALL_NIX_ACTION_VERSION = "30" in
         {
           name = "install nix",
           uses = "cachix/install-nix-action@v%{ INSTALL_NIX_ACTION_VERSION }",
+        },
+        {
+          name = "install nickel",
           run = "nix profile install github:tweag/nickel"
         },
         just,

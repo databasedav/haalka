@@ -13,8 +13,9 @@ jobs:
       with:
         submodules: true
     - name: install nix
-      run: nix profile install github:tweag/nickel
       uses: cachix/install-nix-action@v30
+    - name: install nickel
+      run: nix profile install github:tweag/nickel
     - name: install just
       uses: extractions/setup-just@v2
     - name: assert nickels synced
