@@ -12,6 +12,7 @@ in
 let CARGO_CACHE_VERSION = "2" in
 let SETUP_JUST_VERSION = "2" in
 let INSTALL_NIX_ACTION_VERSION = "30" in
+let CACHIX_ACTION_VERSION = "15" in
 {
   REPO = "https://github.com/databasedav/haalka",
   checkout = {
@@ -62,7 +63,7 @@ let INSTALL_NIX_ACTION_VERSION = "30" in
       },
       {
         name = "nickel binary cache",
-        uses = "cachix/cachix-action@vXX",
+        uses = "cachix/cachix-action@v%{ CACHIX_ACTION_VERSION }",
         with = {
           extraPullNames = "tweag-nickel"
         }

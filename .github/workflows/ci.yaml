@@ -16,7 +16,7 @@ jobs:
       uses: cachix/install-nix-action@v30
       with: {}
     - name: nickel binary cache
-      uses: cachix/cachix-action@vXX
+      uses: cachix/cachix-action@v15
       with:
         extraPullNames: tweag-nickel
     - name: install nickel
