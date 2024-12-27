@@ -23,7 +23,6 @@ use once_cell::sync::Lazy;
 // TODO: port https://github.com/mintlu8/bevy-rectray/blob/main/examples/draggable.rs
 // requires tweening api ?
 
-
 /// [`haalka`](crate) port of bevy::dev_tools::fps_overlay::FpsOverlayPlugin.
 #[derive(Default)]
 pub struct FpsOverlayPlugin;
@@ -156,8 +155,8 @@ pub(crate) fn examples_plugin(app: &mut App) {
     //             const MAX_WASM_FPS: f32 = 240.;
     //             const LIMIT_FRAMERATE_TOGGLE_KEY: KeyCode = KeyCode::F3;
 
-    //             static CAPPED_FRAMERATE_UPDATE_MODE: Lazy<UpdateMode> = Lazy::new(|| UpdateMode::Reactive {
-    //                 wait: Duration::from_secs_f32(1. / MAX_WASM_FPS),
+    //             static CAPPED_FRAMERATE_UPDATE_MODE: Lazy<UpdateMode> = Lazy::new(||
+    // UpdateMode::Reactive {                 wait: Duration::from_secs_f32(1. / MAX_WASM_FPS),
     //                 react_to_device_events: false,
     //                 react_to_user_events: false,
     //                 react_to_window_events: false,

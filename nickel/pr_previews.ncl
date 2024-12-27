@@ -5,27 +5,30 @@ let { sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" 
 
   on = "pull_request",
 
-  jobs = {
-    # TODO: file nickel issue, field and value matching should not cause recursion
-    get_examples_ = get_examples,
-    build_and_deploy_examples_ = build_and_deploy_examples "${{ github.event.number }}",
-    deployment_comment = {
-      needs = ["get_examples_", "build_and_deploy_examples_"],
-      permissions = {
-        pull-requests = "write",
-      },
-      steps = [
+  jobs =
+    {
+      # TODO: https://github.com/tweag/nickel/issues/747
+      get_examples_ = get_examples,
+      build_and_deploy_examples_ = build_and_deploy_examples "${{ github.event.number }}",
+      deployment_comment =
         {
-          name = "deployment_timestamp",
-          run = m%"
+          needs = ["get_examples_", "build_and_deploy_examples_"],
+          permissions = {
+            pull-requests = "write",
+          },
+          steps = [
+            {
+              name = "deployment_timestamp",
+              run = m%"
             timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
             echo "timestamp=$timestamp"
             echo "timestamp=$timestamp" >> $GITHUB_OUTPUT
           "%
-        } |> name_id,
-        {
-          name = "links_markdown_list",
-          run = m%"
+            }
+            |> name_id,
+            {
+              name = "links_markdown_list",
+              run = m%"
             examples='${{ needs.get_examples_.outputs.examples }}'
             base_url="https://databasedav.github.io/haalka/pr_previews/${{ github.event.number }}"
             markdown_list=""
@@ -41,22 +44,24 @@ let { sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" 
               echo "EOF"
             } >> $GITHUB_OUTPUT
           "%
-        } |> name_id,
-        {
-          uses = "thollander/actions-comment-pull-request@v2",
-          with = {
-            message = m%"
+            }
+            |> name_id,
+            {
+              uses = "thollander/actions-comment-pull-request@v2",
+              with = {
+                message = m%"
               **commit:** %{ REPO }/pull/${{ github.event.number }}/commits/${{ github.event.pull_request.head.sha }}
               **deployed:** ${{ steps.deployment_timestamp.outputs.timestamp }}
               **previews:**
               ${{ steps.links_markdown_list.outputs.markdown_list }}
             "%,
-            pr_number = "${{ github.event.number }}",
-            comment_tag = "preview"
-          }
+                pr_number = "${{ github.event.number }}",
+                comment_tag = "preview"
+              }
+            }
+          ]
         }
-      ]
-    } |> run_on_ubuntu_latest
-  }
-  |> sync_name_field
+        |> run_on_ubuntu_latest
+    }
+    |> sync_name_field
 }

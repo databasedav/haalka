@@ -1,5 +1,6 @@
 format *extras:
   cargo +nightly fmt {{ extras }}
+  nickel format nickel/*.ncl
 
 doc *extras:
   cargo +nightly doc --all-features --no-deps -Zunstable-options -Zrustdoc-scrape-examples --locked {{ extras }}

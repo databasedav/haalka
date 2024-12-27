@@ -7,9 +7,11 @@ let BEVY_DEPENDENCIES = [
   "libudev-dev",
   "libwayland-dev",
   "libxkbcommon-dev",
-] in
-let CARGO_CACHE_VERSION = "v2" in
-let SETUP_JUST_VERSION = "v2" in
+]
+in
+let CARGO_CACHE_VERSION = "2" in
+let SETUP_JUST_VERSION = "2" in
+let INSTALL_NIX_ACTION_VERSION = "30" in
 {
   REPO = "https://github.com/databasedav/haalka",
   checkout = {
@@ -35,53 +37,83 @@ let SETUP_JUST_VERSION = "v2" in
   },
   cached_target_populate = {
     name = "populated target directory from cache",
-    uses = "Leafwing-Studios/cargo-cache@%{ CARGO_CACHE_VERSION }",
+    uses = "Leafwing-Studios/cargo-cache@v%{ CARGO_CACHE_VERSION }",
     with = {
       sweep-cache = true,
     }
   },
   just = {
     name = "install just",
-    uses = "extractions/setup-just@%{ SETUP_JUST_VERSION }"
+    uses = "extractions/setup-just@v%{ SETUP_JUST_VERSION }"
   },
   binstall = {
     name = "install binstall",
     uses = "cargo-bins/cargo-binstall@main"
   },
-  
-  get_examples = {
-    outputs = {
-      examples = "${{ steps.output_examples.outputs.examples }}"
-    },
+  assert_nickels_synced = {
     steps = [
       checkout,
+      {
+        name = "install nix",
+        uses = "cachix/install-nix-action@v%{ INSTALL_NIX_ACTION_VERSION }",
+        with = {
+          extraPullNames = "tweag-nickel"
+        }
+      },
+      {
+        name = "install nickel",
+        run = m%"
+          alias nickel='nix run github:tweag/nickel'
+          nickel --version
+        "%
+      },
       just,
       {
-        name = "output_examples",
+        name = "assert nickels synced",
         run = m%"
+        just sync_nickels
+        [[ -n $(git status --porcelain) ]] && echo "nickels are not synced; run `just sync_nickels`" && exit 1 || exit 0
+      "%
+      }
+    ]
+  },
+  get_examples =
+    {
+      outputs = {
+        examples = "${{ steps.output_examples.outputs.examples }}"
+      },
+      steps = [
+        checkout,
+        just,
+        {
+          name = "output_examples",
+          run = m%"
           examples=$(just list_examples)
           echo "examples=$examples"
           echo "examples=$examples" >> $GITHUB_OUTPUT
         "%
-      } |> name_id
-    ]
-  } |> run_on_ubuntu_latest,
-  build_and_deploy_examples = fun pr_ => {
-    needs = "get_examples_",
-    strategy = {
-      matrix = {
-        example = "${{ fromJson(needs.get_examples_.outputs.examples) }}",
-        api = ["webgl2", "webgpu"],
-      }
-    },
-    permissions = {
-      contents = "write",
-    },
-    uses = "./.github/workflows/build_and_deploy_example.yaml",
-    with = {
-      pr = pr_,
-      api = "${{ matrix.api }}",
-      example = "${{ matrix.example }}",
-    },
-  }
+        }
+        |> name_id
+      ]
+    }
+    |> run_on_ubuntu_latest,
+  build_and_deploy_examples = fun pr_ =>
+    {
+      needs = "get_examples_",
+      strategy = {
+        matrix = {
+          example = "${{ fromJson(needs.get_examples_.outputs.examples) }}",
+          api = ["webgl2", "webgpu"],
+        }
+      },
+      permissions = {
+        contents = "write",
+      },
+      uses = "./.github/workflows/build_and_deploy_example.yaml",
+      with = {
+        pr = pr_,
+        api = "${{ matrix.api }}",
+        example = "${{ matrix.example }}",
+      },
+    }
 }
