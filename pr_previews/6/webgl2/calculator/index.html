@@ -6,7 +6,7 @@
     <title>haalka calculator example</title>
     
     
-<script type="module" nonce="P5tm6dwzoAuenomkhSveRw==">
+<script type="module" nonce="f4A2Mxq5dyv1A7QbW8E6Ug==">
 import init, * as bindings from './haalka-c3a78c3662c7e60e.js';
 const wasm = await init({ module_or_path: './haalka-c3a78c3662c7e60e_bg.wasm' });
 
@@ -21,7 +21,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 <body style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
     <div id="game" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
-        <canvas id="bevy">
+        <canvas id="bevy" style="margin: 0; padding: 0; border: 0;">
             js and canvas support is required
         </canvas>
     </div>
