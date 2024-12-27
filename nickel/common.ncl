@@ -68,7 +68,6 @@ let CACHIX_ACTION_VERSION = "15" in
       {
         name = "install nickel",
         run = m%"
-        
           nix run github:tweag/nickel
           alias nickel='nix run github:tweag/nickel'
           nickel --version
@@ -78,9 +77,9 @@ let CACHIX_ACTION_VERSION = "15" in
       {
         name = "assert nickels synced",
         run = m%"
-        just sync_nickels
-        [[ -n $(git status --porcelain) ]] && echo "nickels are not synced; run `just sync_nickels`" && exit 1 || exit 0
-      "%
+          just sync_nickels
+          [[ -n $(git status --porcelain) ]] && echo "nickels are not synced; run `just sync_nickels`" && exit 1 || exit 0
+        "%
       }
     ]
   },
