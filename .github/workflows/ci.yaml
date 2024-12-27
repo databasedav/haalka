@@ -20,8 +20,7 @@ jobs:
         name: tweag-nickel
     - name: install nickel
       run: |-
-        nix run github:tweag/nickel &&
-        alias nickel='nix run github:tweag/nickel' &&
+        alias nickel='nix run github:tweag/nickel'
         nickel --version
     - name: install just
       uses: extractions/setup-just@v2
