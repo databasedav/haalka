@@ -40,8 +40,14 @@ jobs:
         for example in $(echo "${examples}" | jq -r '.[]'); do
           markdown_list="${markdown_list}- $example: [webgl2](${base_url}/webgl2/${example}) [webgpu](${base_url}/webgpu/${example})"$'\n'
         done
+
         echo "markdown_list=$markdown_list"
-        echo "markdown_list=$markdown_list" >> $GITHUB_OUTPUT
+
+        {
+          echo "markdown_list<<EOF"
+          echo "$markdown_list"
+          echo "EOF"
+        } >> $GITHUB_OUTPUT
     - uses: thollander/actions-comment-pull-request@v2
       with:
         comment_tag: preview

@@ -32,8 +32,14 @@ let { sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" 
             for example in $(echo "${examples}" | jq -r '.[]'); do
               markdown_list="${markdown_list}- $example: [webgl2](${base_url}/webgl2/${example}) [webgpu](${base_url}/webgpu/${example})"$'\n'
             done
+
             echo "markdown_list=$markdown_list"
-            echo "markdown_list=$markdown_list" >> $GITHUB_OUTPUT
+
+            {
+              echo "markdown_list<<EOF"
+              echo "$markdown_list"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
           "%
         } |> name_id,
         {

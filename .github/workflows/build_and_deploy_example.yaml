@@ -43,7 +43,7 @@ jobs:
         path: dist
   deploy:
     env:
-      SUFFIX: ${{ inputs.api }}/${{ inputs.example }}
+      SUFFIX: ${{ inputs.api + '/' + inputs.example }}
     name: deploy
     needs: build
     runs-on: ubuntu-latest
