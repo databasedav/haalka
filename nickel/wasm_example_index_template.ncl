@@ -14,8 +14,8 @@ let global_styles = "height: 100%; width: 100%; margin: 0; padding: 0; border: 0
           <link data-trunk rel="rust" data-cargo-features="debug,deployed_wasm_example,%{ features |> std.string.join "," }" data-wasm-opt="s" href="." />
       </head>
 
-      <body style="%{ global_styles } display: flex;">
-          <div id="game" style="%{ global_styles }">
+      <body style="%{ global_styles }">
+          <div id="game" style="%{ global_styles } display: flex;">
               <canvas id="bevy">
                   js and canvas support is required
               </canvas>
