@@ -6,7 +6,7 @@
     <title>haalka button example</title>
     
     
-<script type="module" nonce="UI6Fb/crEmTJkbAX2ff4Xg==">
+<script type="module" nonce="b0tA8l95QYjxn+ZEcpHbeA==">
 import init, * as bindings from './haalka-b9e6ac248999483f.js';
 const wasm = await init({ module_or_path: './haalka-b9e6ac248999483f_bg.wasm' });
 
@@ -21,7 +21,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 <body style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
     <div id="game" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
-        <canvas id="bevy">
+        <canvas id="bevy" style="margin: 0; padding: 0; border: 0;">
             js and canvas support is required
         </canvas>
     </div>
