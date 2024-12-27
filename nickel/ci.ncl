@@ -1,6 +1,7 @@
 # TODO: ci should run for the wasm32 target as well
 let { checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, cargo_build_env, .. } = import "common.ncl" in
 let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
+let INSTALL_NIX_ACTION_VERSION = "30" in
 {
   name = "ci",
 
@@ -9,16 +10,24 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
   env = cargo_build_env |> uppercase_fields,
 
   jobs = {
-    # assert_nickels_synced = {
-    #   steps = [
-    #     checkout,
-    #     just,
-    #     {
-    #       name = "run tests",
-    #       run = "just test"
-    #     }
-    #   ]
-    # },
+    assert_nickels_synced = {
+      steps = [
+        checkout,
+        {
+          name = "install nix"
+          uses = "cachix/install-nix-action@v%{ INSTALL_NIX_ACTION_VERSION }",
+          run = "nix profile install github:tweag/nickel"
+        },
+        just,
+        {
+          name = "assert nickels synced",
+          run = m%"
+            just sync_nickels
+            [[ -n $(git status --porcelain) ]] && echo "nickels are not synced; run `just sync_nickels`" && exit 1 || exit 0
+          "%
+        }
+      ]
+    },
     test = {
       steps = [
         checkout,

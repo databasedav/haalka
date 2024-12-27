@@ -48,6 +48,7 @@ let SETUP_JUST_VERSION = "v2" in
     name = "install binstall",
     uses = "cargo-bins/cargo-binstall@main"
   },
+  
   get_examples = {
     outputs = {
       examples = "${{ steps.output_examples.outputs.examples }}"
