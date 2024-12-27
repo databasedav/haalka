@@ -93,8 +93,8 @@ let ATTEMPT_LIMIT = 1000 in
             folder = "dist",
             force = false,
             attempt-limit = ATTEMPT_LIMIT,
-            target-folder = "${{ inputs.pr && 'pr_previews/' + inputs.pr + '/' + env.SUFFIX || 'examples/' + env.SUFFIX }}",
-            commit-message = "${{ inputs.pr && '%{ REPO }' + '/pull/' + inputs.pr + '/commits/' + github.sha || '%{ REPO }' + '/commit/' + github.sha }}"
+            target-folder = "${{ inputs.pr && format('pr_previews/{}/{}', inputs.pr, env.SUFFIX) || format('examples/{}', env.SUFFIX) }}",
+            commit-message = "${{ inputs.pr && format('%{ REPO }/pull/{}'/commits/{}, inputs.pr, github.sha) || format('%{ REPO }/commit/{}', github.sha) }}"
           }
         },
       ]
