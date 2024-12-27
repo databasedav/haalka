@@ -16,7 +16,7 @@ let global_styles = "height: 100%; width: 100%; margin: 0; padding: 0; border: 0
 
       <body style="%{ global_styles }">
           <div id="game" style="%{ global_styles }">
-              <canvas id="bevy">
+              <canvas id="bevy" style="margin: 0; padding: 0; border: 0;">
                   js and canvas support is required
               </canvas>
           </div>
