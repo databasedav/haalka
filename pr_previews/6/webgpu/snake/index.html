@@ -6,7 +6,7 @@
     <title>haalka snake example</title>
     
     
-<script type="module" nonce="G3xgBmbYI38ApLC6xYX/cA==">
+<script type="module" nonce="d0Pfr8wqg+UeLNvUES1ZMA==">
 import init, * as bindings from './haalka-64f225ae1457bae9.js';
 const wasm = await init({ module_or_path: './haalka-64f225ae1457bae9_bg.wasm' });
 
@@ -21,7 +21,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 <body style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
     <div id="game" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
-        <canvas id="bevy">
+        <canvas id="bevy" style="margin: 0; padding: 0; border: 0;">
             js and canvas support is required
         </canvas>
     </div>
