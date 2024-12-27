@@ -42,8 +42,6 @@ jobs:
         name: ${{ inputs.api }}_${{ inputs.example }}
         path: dist
   deploy:
-    env:
-      SUFFIX: ${{ inputs.api }}/{{ inputs.example }}
     name: deploy
     needs: build
     runs-on: ubuntu-latest
@@ -67,7 +65,7 @@ jobs:
         commit-message: ${{ inputs.pr && format('https://github.com/databasedav/haalka/pull/{0}/commits/{1}', inputs.pr, github.sha) || format('https://github.com/databasedav/haalka/commit/{0}', github.sha) }}
         folder: dist
         force: false
-        target-folder: ${{ inputs.pr && format('pr_previews/{0}/{1}', inputs.pr, env.SUFFIX) || format('examples/{0}', env.SUFFIX) }}
+        target-folder: ${{ inputs.pr && format('pr_previews/{0}/{1}/{2}', inputs.pr, inputs.api, inputs.example) || format('examples/{0}/{1}', inputs.api, inputs.example) }}
 name: build_and_deploy_example
 on:
   workflow_call:

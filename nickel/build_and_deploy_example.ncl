@@ -68,9 +68,6 @@ let ATTEMPT_LIMIT = 1000 in
     },
     deploy = {
       needs = "build",
-      env = {
-        SUFFIX = "${{ inputs.api }}/{{ inputs.example }}",
-      },
       steps = [
         checkout,
         {
@@ -93,7 +90,7 @@ let ATTEMPT_LIMIT = 1000 in
             folder = "dist",
             force = false,
             attempt-limit = ATTEMPT_LIMIT,
-            target-folder = "${{ inputs.pr && format('pr_previews/{0}/{1}', inputs.pr, env.SUFFIX) || format('examples/{0}', env.SUFFIX) }}",
+            target-folder = "${{ inputs.pr && format('pr_previews/{0}/{1}/{2}', inputs.pr, inputs.api, inputs.example) || format('examples/{0}/{1}', inputs.api, inputs.example) }}",
             commit-message = "${{ inputs.pr && format('%{ REPO }/pull/{0}/commits/{1}', inputs.pr, github.sha) || format('%{ REPO }/commit/{0}', github.sha) }}"
           }
         },
