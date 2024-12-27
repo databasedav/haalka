@@ -64,7 +64,7 @@ jobs:
       uses: JamesIves/github-pages-deploy-action@v4
       with:
         attempt-limit: 1000
-        commit-message: ${{ inputs.pr && format('https://github.com/databasedav/haalka/pull/{}'/commits/{}, inputs.pr, github.sha) || format('https://github.com/databasedav/haalka/commit/{}', github.sha) }}
+        commit-message: ${{ inputs.pr && format('https://github.com/databasedav/haalka/pull/{}/commits/{}', inputs.pr, github.sha) || format('https://github.com/databasedav/haalka/commit/{}', github.sha) }}
         folder: dist
         force: false
         target-folder: ${{ inputs.pr && format('pr_previews/{}/{}', inputs.pr, env.SUFFIX) || format('examples/{}', env.SUFFIX) }}

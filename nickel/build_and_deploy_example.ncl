@@ -94,7 +94,7 @@ let ATTEMPT_LIMIT = 1000 in
             force = false,
             attempt-limit = ATTEMPT_LIMIT,
             target-folder = "${{ inputs.pr && format('pr_previews/{}/{}', inputs.pr, env.SUFFIX) || format('examples/{}', env.SUFFIX) }}",
-            commit-message = "${{ inputs.pr && format('%{ REPO }/pull/{}'/commits/{}, inputs.pr, github.sha) || format('%{ REPO }/commit/{}', github.sha) }}"
+            commit-message = "${{ inputs.pr && format('%{ REPO }/pull/{}/commits/{}', inputs.pr, github.sha) || format('%{ REPO }/commit/{}', github.sha) }}"
           }
         },
       ]
