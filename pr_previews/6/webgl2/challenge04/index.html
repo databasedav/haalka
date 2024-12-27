@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en" style="margin: 0; padding: 0; border: 0; background-color: #2b2c2f;">
+<html lang="en" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0; background-color: #2b2c2f;">
 
 <head>
     <meta charset="utf-8" />
     <title>haalka challenge04 example</title>
     
     
-<script type="module" nonce="199/kC4mJ9Ealu60xgSaxg==">
+<script type="module" nonce="iXBd6ERNisebY1KasK4AYQ==">
 import init, * as bindings from './haalka-a28e5f1240fa794e.js';
 const wasm = await init({ module_or_path: './haalka-a28e5f1240fa794e_bg.wasm' });
 
@@ -19,9 +19,9 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 </script>
 <link rel="modulepreload" href="./haalka-a28e5f1240fa794e.js" crossorigin=anonymous integrity="sha384-BJWPbhI3oHQ+FW187ZsKqLvIMLCmq3/bhIFmqNc1jNu1nd2CHR4H1/o73QK0M+IL"><link rel="preload" href="./haalka-a28e5f1240fa794e_bg.wasm" crossorigin=anonymous integrity="sha384-XU6w7gMMtkxordPX38iFeoer9rnxnsedxXQwxofawPusNvr/KitSUHijxmOSpqOa" as="fetch" type="application/wasm"></head>
 
-<body style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
+<body style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0; display: flex;">
     <div id="game" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
-        <canvas id="bevy" style="margin: 0; padding: 0; border: 0;">
+        <canvas id="bevy">
             js and canvas support is required
         </canvas>
     </div>
