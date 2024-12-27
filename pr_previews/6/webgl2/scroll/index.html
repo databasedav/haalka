@@ -6,7 +6,7 @@
     <title>haalka scroll example</title>
     
     
-<script type="module" nonce="GHO5M1FQjphQfosHhFtM6w==">
+<script type="module" nonce="82VB1JwM7nTOevB8Nsm0lg==">
 import init, * as bindings from './haalka-5459bd02ed52493a.js';
 const wasm = await init({ module_or_path: './haalka-5459bd02ed52493a_bg.wasm' });
 
@@ -21,7 +21,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 <body style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
     <div id="game" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
-        <canvas id="bevy">
+        <canvas id="bevy" style="margin: 0; padding: 0; border: 0;">
             js and canvas support is required
         </canvas>
     </div>
