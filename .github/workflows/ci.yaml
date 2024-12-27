@@ -17,8 +17,7 @@ jobs:
     - name: nickel binary cache
       uses: cachix/cachix-action@v15
       with:
-        extraPullNames: tweag-nickel
-        name: tweag-nickel-cache
+        name: tweag-nickel
     - name: install nickel
       run: |-
         nix run github:tweag/nickel
