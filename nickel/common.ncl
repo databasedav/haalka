@@ -54,38 +54,40 @@ let CACHIX_ACTION_VERSION = "15" in
     name = "install binstall",
     uses = "cargo-bins/cargo-binstall@main"
   },
-  assert_nickels_synced = {
-    steps = [
-      checkout,
-      {
-        name = "install nix",
-        uses = "cachix/install-nix-action@v%{ INSTALL_NIX_ACTION_VERSION }",
-      },
-      {
-        name = "nickel binary cache",
-        uses = "cachix/cachix-action@v%{ CACHIX_ACTION_VERSION }",
-        with = {
-          name = "tweag-nickel",
-        }
-      },
-      {
-        name = "install nickel",
-        run = m%"
+  assert_nickels_synced =
+    {
+      steps = [
+        checkout,
+        {
+          name = "install nix",
+          uses = "cachix/install-nix-action@v%{ INSTALL_NIX_ACTION_VERSION }",
+        },
+        {
+          name = "nickel binary cache",
+          uses = "cachix/cachix-action@v%{ CACHIX_ACTION_VERSION }",
+          with = {
+            name = "tweag-nickel",
+          }
+        },
+        {
+          name = "install nickel",
+          run = m%"
           nix profile install github:tweag/nickel
           echo "$HOME/.nix-profile/bin" >> $GITHUB_PATH
           nickel --version
         "%
-      },
-      just,
-      {
-        name = "assert nickels synced",
-        run = m%"
+        },
+        just,
+        {
+          name = "assert nickels synced",
+          run = m%"
           just format_nickels sync_nickels
-          [[ -n $(git status --porcelain) ]] && echo "nickels are not synced; run `just format_nickels sync_nickels`" && exit 1 || exit 0
+          [[ -n $(git status --porcelain) ]] && echo 'nickels are not synced; run `just format_nickels sync_nickels`' && exit 1 || exit 0
         "%
-      }
-    ]
-  } |> run_on_ubuntu_latest,
+        }
+      ]
+    }
+    |> run_on_ubuntu_latest,
   get_examples =
     {
       outputs = {
