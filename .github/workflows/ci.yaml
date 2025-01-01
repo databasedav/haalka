@@ -20,14 +20,15 @@ jobs:
         name: tweag-nickel
     - name: install nickel
       run: |-
-        alias nickel='nix run github:tweag/nickel'
+        nix profile install github:tweag/nickel
+        echo "$HOME/.nix-profile/bin" >> $GITHUB_PATH
         nickel --version
     - name: install just
       uses: extractions/setup-just@v2
     - name: assert nickels synced
       run: |-
-        just sync_nickels
-        [[ -n $(git status --porcelain) ]] && echo "nickels are not synced; run `just sync_nickels`" && exit 1 || exit 0
+        just format_nickels sync_nickels
+        [[ -n $(git status --porcelain) ]] && echo "nickels are not synced; run `just format_nickels sync_nickels`" && exit 1 || exit 0
   check_all_features:
     name: check_all_features
     needs: assert_nickels_synced_

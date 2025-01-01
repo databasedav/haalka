@@ -1,6 +1,5 @@
 format *extras:
   cargo +nightly fmt {{ extras }}
-  nickel format nickel/*.ncl
 
 doc *extras:
   cargo +nightly doc --all-features --no-deps -Zunstable-options -Zrustdoc-scrape-examples --locked {{ extras }}
@@ -47,6 +46,9 @@ generate_wasm_example_index example *features:
 build_wasm_example example *features:
   just generate_wasm_example_index {{ example }} {{ features }} > index.html
   trunk build --locked --release --public-url . --example {{ example }}
+
+format_nickels:
+  nickel format nickel/*.ncl
 
 export_nickel file:
   nickel export --format yaml nickel/{{ file }}.ncl

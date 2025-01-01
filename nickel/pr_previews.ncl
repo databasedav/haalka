@@ -1,4 +1,4 @@
-let { REPO, checkout, cargo_build_env, just, get_examples, build_and_deploy_examples, .. } = import "common.ncl" in
+let { REPO, checkout, cargo_build_env, just, get_examples, build_and_deploy_examples, assert_nickels_synced, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" in
 {
   name = "pr_previews",
@@ -7,8 +7,9 @@ let { sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" 
 
   jobs =
     {
-      # TODO: https://github.com/tweag/nickel/issues/747
-      get_examples_ = get_examples,
+      # TODO https://github.com/tweag/nickel/issues/747
+      assert_nickels_synced_ = assert_nickels_synced,
+      get_examples_ = get_examples & { needs = "assert_nickels_synced_" },
       build_and_deploy_examples_ = build_and_deploy_examples "${{ github.event.number }}",
       deployment_comment =
         {
