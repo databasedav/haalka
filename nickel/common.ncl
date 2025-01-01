@@ -15,6 +15,8 @@ let INSTALL_NIX_ACTION_VERSION = "30" in
 let CACHIX_ACTION_VERSION = "15" in
 {
   REPO = "https://github.com/databasedav/haalka",
+  GITHUB_PAGES_DEPLOY_ACTION_VERSION = "4.7.2",
+  GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT = 1000,
   checkout = {
     name = "checkout repo",
     uses = "actions/checkout@%{ CHECKOUT_VERSION }",
@@ -72,18 +74,18 @@ let CACHIX_ACTION_VERSION = "15" in
         {
           name = "install nickel",
           run = m%"
-          nix profile install github:tweag/nickel
-          echo "$HOME/.nix-profile/bin" >> $GITHUB_PATH
-          nickel --version
-        "%
+            nix profile install github:tweag/nickel
+            echo "$HOME/.nix-profile/bin" >> $GITHUB_PATH
+            nickel --version
+          "%
         },
         just,
         {
           name = "assert nickels synced",
           run = m%"
-          just format_nickels sync_nickels
-          [[ -n $(git status --porcelain) ]] && echo 'nickels are not synced; run `just format_nickels sync_nickels`' && exit 1 || exit 0
-        "%
+            just format_nickels sync_nickels
+            [[ -n $(git status --porcelain) ]] && echo 'nickels are not synced; run `just format_nickels sync_nickels`' && exit 1 || exit 0
+          "%
         }
       ]
     }
@@ -99,10 +101,10 @@ let CACHIX_ACTION_VERSION = "15" in
         {
           name = "output_examples",
           run = m%"
-          examples=$(just list_examples)
-          echo "examples=$examples"
-          echo "examples=$examples" >> $GITHUB_OUTPUT
-        "%
+            examples=$(just list_examples)
+            echo "examples=$examples"
+            echo "examples=$examples" >> $GITHUB_OUTPUT
+          "%
         }
         |> name_id
       ]
@@ -110,7 +112,6 @@ let CACHIX_ACTION_VERSION = "15" in
     |> run_on_ubuntu_latest,
   build_and_deploy_examples = fun pr_ =>
     {
-      needs = "get_examples_",
       strategy = {
         matrix = {
           example = "${{ fromJson(needs.get_examples_.outputs.examples) }}",

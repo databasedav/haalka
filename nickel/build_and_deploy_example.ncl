@@ -1,7 +1,5 @@
-let { REPO, checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, .. } = import "common.ncl" in
+let { REPO, GITHUB_PAGES_DEPLOY_ACTION_VERSION, GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT, checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
-let GITHUB_PAGES_DEPLOY_ACTION = "4.7.2" in
-let ATTEMPT_LIMIT = 1000 in
 {
   name = "build_and_deploy_example",
 
@@ -38,10 +36,10 @@ let ATTEMPT_LIMIT = 1000 in
           {
             name = "install trunk",
             run = m%"
-            wget https://github.com/databasedav/trunk/releases/download/v0.0.1/trunk
-            chmod +x trunk
-            mv trunk /usr/local/bin
-          "%
+              wget https://github.com/databasedav/trunk/releases/download/v0.0.1/trunk
+              chmod +x trunk
+              mv trunk /usr/local/bin
+            "%
           },
           {
             name = "install build dependencies",
@@ -86,11 +84,11 @@ let ATTEMPT_LIMIT = 1000 in
           },
           {
             name = "deploy",
-            uses = "JamesIves/github-pages-deploy-action@v%{ GITHUB_PAGES_DEPLOY_ACTION }",
+            uses = "JamesIves/github-pages-deploy-action@v%{ GITHUB_PAGES_DEPLOY_ACTION_VERSION }",
             with = {
               folder = "dist",
               force = false,
-              attempt-limit = ATTEMPT_LIMIT,
+              attempt-limit = GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT,
               target-folder = "${{ inputs.pr && format('pr_previews/{0}/{1}/{2}', inputs.pr, inputs.api, inputs.example) || format('examples/{0}/{1}', inputs.api, inputs.example) }}",
               commit-message = "${{ inputs.pr && format('%{ REPO }/pull/{0}/commits/{1}', inputs.pr, github.sha) || format('%{ REPO }/commit/{0}', github.sha) }}"
             }
