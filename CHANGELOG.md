@@ -4,6 +4,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## unreleased
 
+### added
+
+- serve wasm examples via github pages, including pr previews
+
 ### fixed
 
 - `OnHoverMouseWheelScrollable` handles scrolling outside scene boundaries when `LimitToBody` is lax.
@@ -12,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `MutableViewportSettings` renamed to `MutableViewport`
 - `PointerEventAware::on_hovered_change_with_system` is a deferred update.
+- don't `.gitignore` `Cargo.lock`
+- use granular `bevy_...` dependencies
 
 # 0.2.1 (2024-10-19)
 
@@ -66,7 +72,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### added
 
 - Reactive cursor API via `Cursorable` trait.
-- Cursor API usage in the `challenge02` example (with issues).
+- Cursor API usage in the `inventory` example (with issues).
 - `calculator` example.
 - Convenience methods for `RawHaalkaEl`: `on_event_disableable`, `on_event_mut_disableable`, and `on_event_propagation_stoppable_disableable`.
 - `Nameable` convenience trait, for reactively setting the `Name` component.

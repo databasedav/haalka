@@ -1,7 +1,5 @@
 #[allow(missing_docs)]
 #[allow(dead_code)]
-use std::time::Duration;
-
 use bevy::{
     app::prelude::*,
     core_pipeline::prelude::*,
@@ -12,8 +10,8 @@ use bevy::{
     ui::prelude::*,
     utils::prelude::*,
     window::prelude::*,
-    winit::*,
 };
+use bevy_window::WindowResolution;
 use haalka::prelude::*;
 use haalka_futures_signals_ext::SignalExtBool;
 use once_cell::sync::Lazy;
@@ -123,8 +121,9 @@ pub(crate) fn examples_plugin(app: &mut App) {
     app.add_plugins((
         bevy::DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
+                resolution: WindowResolution::new(1400., 900.),
                 position: WindowPosition::Centered(MonitorSelection::Primary),
-                // #[cfg(feature = "deployed_wasm_example")]
+                #[cfg(feature = "deployed_wasm_example")]
                 canvas: Some("#bevy".to_string()),
                 fit_canvas_to_parent: true,
                 prevent_default_event_handling: true,
@@ -139,9 +138,40 @@ pub(crate) fn examples_plugin(app: &mut App) {
     ))
     .add_systems(
         PostStartup,
-        mark_default_ui_camera
-            .in_set(MarkDefaultUiCameraSet)
-            .run_if(not(any_with_component::<IsDefaultUiCamera>)),
+        (
+            mark_default_ui_camera
+                .in_set(MarkDefaultUiCameraSet)
+                .run_if(not(any_with_component::<IsDefaultUiCamera>)),
+            |world: &mut World| {
+                fn text(text: impl ToString) -> Text {
+                    Text::from_section(
+                        text.to_string(),
+                        TextStyle {
+                            font_size: FPS_FONT_SIZE,
+                            ..default()
+                        },
+                    )
+                }
+                let mut el = Column::<NodeBundle>::new()
+                    .align(Align::new().bottom().left())
+                    .with_style(|mut style| style.row_gap = Val::Px(10.));
+                cfg_if::cfg_if! {
+                    if #[cfg(feature = "debug")] {
+                        el = el.item(El::<TextBundle>::new().text(text("press f1 to toggle debug overlay")));
+                    }
+                }
+                el = el.item(El::<TextBundle>::new().text(text("press f2 to toggle fps counter")));
+                El::<NodeBundle>::new()
+                    .with_style(|mut style| {
+                        style.padding.bottom = Val::Px(FPS_PADDING);
+                        style.padding.left = Val::Px(FPS_PADDING);
+                    })
+                    .height(Val::Percent(100.))
+                    .width(Val::Percent(100.))
+                    .child(el)
+                    .spawn(world);
+            },
+        ),
     );
     cfg_if::cfg_if! {
         if #[cfg(all(feature = "text_input", feature = "debug"))] {
@@ -149,38 +179,4 @@ pub(crate) fn examples_plugin(app: &mut App) {
             app.configure_sets(PostStartup, (MarkDefaultUiCameraSet, CosmicMulticamHandlerSet).chain());
         }
     }
-    // cfg_if::cfg_if! {
-    //     if #[cfg(target_arch = "wasm32")] {
-    //         {
-    //             const MAX_WASM_FPS: f32 = 240.;
-    //             const LIMIT_FRAMERATE_TOGGLE_KEY: KeyCode = KeyCode::F3;
-
-    //             static CAPPED_FRAMERATE_UPDATE_MODE: Lazy<UpdateMode> = Lazy::new(||
-    // UpdateMode::Reactive {                 wait: Duration::from_secs_f32(1. / MAX_WASM_FPS),
-    //                 react_to_device_events: false,
-    //                 react_to_user_events: false,
-    //                 react_to_window_events: false,
-    //             });
-
-    //             fn toggle_framerate_cap(
-    //                 input: Res<ButtonInput<KeyCode>>,
-    //                 mut winit_settings: ResMut<WinitSettings>,
-    //             ) {
-    //                 if input.just_pressed(LIMIT_FRAMERATE_TOGGLE_KEY) {
-    //                     if matches!(winit_settings.focused_mode, UpdateMode::Continuous) {
-    //                         winit_settings.focused_mode = *CAPPED_FRAMERATE_UPDATE_MODE;
-    //                     } else {
-    //                         winit_settings.focused_mode = UpdateMode::Continuous;
-    //                     }
-    //                 }
-    //             }
-
-    //             app
-    //             .add_systems(PostStartup, |mut winit_settings: ResMut<WinitSettings>| {
-    //                 winit_settings.focused_mode = *CAPPED_FRAMERATE_UPDATE_MODE;
-    //             })
-    //             .add_systems(Update, toggle_framerate_cap);
-    //         }
-    //     }
-    // };
 }

@@ -142,28 +142,28 @@ path = "examples/calculator.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "challenge01"
-path = "examples/challenge01.rs"
+name = "main_menu"
+path = "examples/main_menu.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "challenge02"
-path = "examples/challenge02.rs"
+name = "inventory"
+path = "examples/inventory.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "challenge03"
-path = "examples/challenge03.rs"
+name = "healthbar"
+path = "examples/healthbar.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "challenge04"
-path = "examples/challenge04.rs"
+name = "responsive_menu"
+path = "examples/responsive_menu.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "challenge05"
-path = "examples/challenge05.rs"
+name = "character_editor"
+path = "examples/character_editor.rs"
 doc-scrape-examples = true
 
 [[example]]

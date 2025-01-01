@@ -10,7 +10,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
 
   jobs =
     {
-      assert_nickels_synced_ = assert_nickels_synced,      
+      assert_nickels_synced_ = assert_nickels_synced,
     }
     & (
       {
