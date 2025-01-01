@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0; background-color: #2b2c2f;">
+
+<head>
+    <meta charset="utf-8" />
+    <title>haalka responsive_menu example</title>
+    
+    
+<script type="module" nonce="p5LYqKoHQT0nuVQqhZJD5A==">
+import init, * as bindings from './haalka-e50700b0241b19c1.js';
+const wasm = await init({ module_or_path: './haalka-e50700b0241b19c1_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+<link rel="modulepreload" href="./haalka-e50700b0241b19c1.js" crossorigin=anonymous integrity="sha384-oSGdJAU7iZlLpcROnprvC47jkKvpsHGfDdvEkscq7qdEXvSzTPvfp85KA7X8Xsb8"><link rel="preload" href="./haalka-e50700b0241b19c1_bg.wasm" crossorigin=anonymous integrity="sha384-17QYkKVaqRNtR2Qb5VRhi/Kim7FiDQsDyw46k75uK82dHGm7mL7x3hX7Y6UZT8R0" as="fetch" type="application/wasm"></head>
+
+<body style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
+    <div id="game" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0; display: flex;">
+        <canvas id="bevy">
+            js and canvas support is required
+        </canvas>
+    </div>
+</body>
+
+</html>
