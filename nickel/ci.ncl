@@ -43,11 +43,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
         format = {
           steps = [
             checkout,
-            {
-              name = "install rust toolchain",
-              uses = "dtolnay/rust-toolchain@nightly",
-              with = { components = "rustfmt" }
-            },
+            rust_toolchain & { with = { toolchain = "nightly", components = "rustfmt" } },
             just,
             {
               name = "run format",
@@ -58,7 +54,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
         docs = {
           steps = [
             checkout,
-            rust_toolchain,
+            rust_toolchain & { with = { toolchain = "nightly" } },
             bevy_dependencies,
             cached_target_populate,
             just,

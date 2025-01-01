@@ -39,7 +39,9 @@ jobs:
       with:
         submodules: true
     - name: install rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
     - name: install bevy dependencies
       run: sudo apt-get update && sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
       shell: bash
@@ -65,9 +67,10 @@ jobs:
       with:
         submodules: true
     - name: install rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
       with:
         components: clippy
+        toolchain: stable
     - name: install bevy dependencies
       run: sudo apt-get update && sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
       shell: bash
@@ -89,7 +92,9 @@ jobs:
       with:
         submodules: true
     - name: install rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: nightly
     - name: install bevy dependencies
       run: sudo apt-get update && sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
       shell: bash
@@ -111,9 +116,10 @@ jobs:
       with:
         submodules: true
     - name: install rust toolchain
-      uses: dtolnay/rust-toolchain@nightly
+      uses: dtolnay/rust-toolchain@master
       with:
         components: rustfmt
+        toolchain: nightly
     - name: install just
       uses: extractions/setup-just@v2
     - name: run format
@@ -128,7 +134,9 @@ jobs:
       with:
         submodules: true
     - name: install rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
     - name: install bevy dependencies
       run: sudo apt-get update && sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
       shell: bash

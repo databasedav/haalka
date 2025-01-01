@@ -1,7 +1,7 @@
 let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" in
 
 let CHECKOUT_VERSION = "v4" in
-let RUST_TOOLCHAIN_VERSION = "stable" in
+let DEFAULT_RUST_TOOLCHAIN_VERSION = "stable" in
 let BEVY_DEPENDENCIES = [
   "libasound2-dev",
   "libudev-dev",
@@ -24,7 +24,10 @@ let CACHIX_ACTION_VERSION = "15" in
   },
   rust_toolchain = {
     name = "install rust toolchain",
-    uses = "dtolnay/rust-toolchain@%{ RUST_TOOLCHAIN_VERSION }"
+    uses = "dtolnay/rust-toolchain@master",
+    with = {
+      toolchain | default = DEFAULT_RUST_TOOLCHAIN_VERSION
+    }
   },
   bevy_dependencies = {
     name = "install bevy dependencies",
@@ -82,7 +85,7 @@ let CACHIX_ACTION_VERSION = "15" in
         "%
       }
     ]
-  },
+  } |> run_on_ubuntu_latest,
   get_examples =
     {
       outputs = {

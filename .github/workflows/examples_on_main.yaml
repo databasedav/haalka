@@ -2,6 +2,7 @@
 jobs:
   assert_nickels_synced_:
     name: assert_nickels_synced_
+    runs-on: ubuntu-latest
     steps:
     - name: checkout repo
       uses: actions/checkout@v4

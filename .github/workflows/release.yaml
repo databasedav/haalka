@@ -14,7 +14,9 @@ jobs:
       with:
         submodules: true
     - name: install rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
     - name: install bevy dependencies
       run: sudo apt-get update && sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
       shell: bash
