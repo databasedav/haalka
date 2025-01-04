@@ -90,7 +90,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
               force = false,
               attempt-limit = GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT,
               target-folder = "${{ inputs.pr && format('pr_previews/{0}/{1}/{2}', inputs.pr, inputs.api, inputs.example) || format('examples/{0}/{1}', inputs.api, inputs.example) }}",
-              commit-message = "${{ inputs.pr && format('%{ REPO }/pull/{0}/commits/{1}', inputs.pr, github.sha) || format('%{ REPO }/commit/{0}', github.sha) }}"
+              commit-message = "${{ inputs.api }} ${{ inputs.example }} ${{ inputs.pr && format('%{ REPO }/pull/{0}/commits/{1}', inputs.pr, github.sha) || format('%{ REPO }/commit/{0}', github.sha) }}"
             }
           },
         ]
