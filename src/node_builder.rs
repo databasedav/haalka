@@ -2,13 +2,34 @@
 
 use std::sync::OnceLock;
 
-use bevy::{prelude::*, tasks::Task};
+use apply::Apply;
 use bevy_async_ecs::AsyncWorld;
+use bevy_ecs::prelude::*;
+use bevy_hierarchy::prelude::*;
+use bevy_utils::prelude::*;
 use futures_signals::{
     signal::{Mutable, Signal, SignalExt},
     signal_vec::{MutableVec, SignalVec, SignalVecExt, VecDiff},
 };
 use haalka_futures_signals_ext::{Future, MutableExt};
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "wasm32")] {
+        use haalka_futures_signals_ext::future::AbortHandle;
+    } else {
+        use bevy_tasks::Task;
+    }
+}
+
+// TODO: 0.15 `Task` api is unified, can remove
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "wasm32")] {
+        pub struct WasmTaskAdapter(pub AbortHandle);
+
+        impl WasmTaskAdapter {
+            pub fn detach(self) {}
+        }
+    }
+}
 
 use super::utils::{clone, spawn};
 
@@ -31,7 +52,13 @@ pub(crate) fn init_async_world(world: &mut World) {
 /// Port of [Dominator](https://github.com/Pauan/rust-dominator)'s [`DomBuilder`](https://docs.rs/dominator/latest/dominator/struct.DomBuilder.html).
 #[derive(Default)]
 pub struct NodeBuilder {
+    #[allow(clippy::type_complexity)]
     on_spawns: Vec<Box<dyn FnOnce(&mut World, Entity) + Send>>,
+    // TODO: 0.15 `Task` api is unified, can remove branching
+    #[cfg(target_arch = "wasm32")]
+    #[allow(clippy::type_complexity)]
+    task_wrappers: Vec<Box<dyn FnOnce(Entity) -> WasmTaskAdapter + Send>>,
+    #[cfg(not(target_arch = "wasm32"))]
     task_wrappers: Vec<Box<dyn FnOnce(Entity) -> Task<()> + Send>>,
     child_block_populations: MutableVec<usize>,
 }
@@ -73,7 +100,7 @@ impl NodeBuilder {
         mut f: impl FnMut(Entity, T) -> Fut + Send + 'static,
     ) -> Self {
         self.task_wrappers.push(Box::new(move |entity: Entity| {
-            spawn(signal.for_each(move |value| f(entity, value)))
+            signal.for_each(move |value| f(entity, value)).apply(spawn)
         }));
         self
     }
@@ -110,7 +137,7 @@ impl NodeBuilder {
         let child_block_populations = self.child_block_populations.clone();
         let task_wrapper = move |entity: Entity| {
             let existing_child_option = Mutable::new(None);
-            spawn(clone!((entity => parent) async move {
+            clone!((entity => parent) async move {
                 child_option.for_each(move |child_option| {
                     clone!((existing_child_option, child_block_populations) async move {
                         if let Some(child) = child_option.into() {
@@ -146,7 +173,8 @@ impl NodeBuilder {
                         }
                     })
                 }).await;
-            }))
+            })
+            .apply(spawn)
         };
         self.task_wrappers.push(Box::new(task_wrapper));
         self
@@ -191,7 +219,7 @@ impl NodeBuilder {
         self.child_block_populations.lock_mut().push(0);
         let child_block_populations = self.child_block_populations.clone();
         let task_wrapper = move |entity: Entity| {
-            spawn(clone!((entity => parent) {
+            clone!((entity => parent) {
                 let children_entities = MutableVec::default();
                 children_signal_vec
                 .for_each(clone!((parent, children_entities, child_block_populations) move |diff| {
@@ -355,7 +383,8 @@ impl NodeBuilder {
                         }
                     })
                 }))
-            }))
+            })
+            .apply(spawn)
         };
         self.task_wrappers.push(Box::new(task_wrapper));
         self
@@ -390,18 +419,50 @@ impl NodeBuilder {
 }
 
 // TODO: tasks that resolve never get cleaned up (for the lifetime of the entity)
-/// Used to tie async reactivity tasks to the lifetime of an [`Entity`].
-#[derive(Component)]
-pub struct TaskHolder(Vec<Task<()>>);
+// TODO: 0.15 `Task` api is unified, can remove branching
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "wasm32")] {
+        use bevy_ecs::component::*;
+
+        /// Used to tie async reactivity tasks to the lifetime of an [`Entity`].
+        pub struct TaskHolder(Vec<WasmTaskAdapter>);
+
+        impl Component for TaskHolder {
+            const STORAGE_TYPE: StorageType = StorageType::Table;
+
+            fn register_component_hooks(hooks: &mut ComponentHooks) {
+                hooks.on_remove(|mut world, entity, _| {
+                    for task in world.get_mut::<Self>(entity).unwrap().0.drain(..) {
+                        task.0.abort();
+                    }
+                });
+            }
+        }
+    } else {
+        /// Used to tie async reactivity tasks to the lifetime of an [`Entity`].
+        #[derive(Component)]
+        pub struct TaskHolder(Vec<Task<()>>);
+    }
+}
 
 impl TaskHolder {
     fn new() -> Self {
         Self(Vec::new())
     }
 
-    /// Drop the [`Task`] when the entity is despawned.
-    pub fn hold(&mut self, task: Task<()>) {
-        self.0.push(task);
+    // TODO: 0.15 `Task` api is unified, can remove branching
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            /// Drop the [`Task`] when the entity is despawned.
+            pub fn hold(&mut self, task: WasmTaskAdapter) {
+                self.0.push(task);
+            }
+        } else {
+            /// Drop the [`Task`] when the entity is despawned.
+            pub fn hold(&mut self, task: Task<()>) {
+                self.0.push(task);
+            }
+        }
     }
 }
 

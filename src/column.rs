@@ -1,5 +1,6 @@
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
 use bevy_mod_picking::picking_core::Pickable;
+use bevy_ui::prelude::*;
 use futures_signals::{
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},

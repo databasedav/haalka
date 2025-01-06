@@ -1,7 +1,3 @@
-[workspace]
-members = ["examples/*", "MoonZoon/crates/*"]
-resolver = "2"
-
 [package]
 name = "haalka"
 version = "0.2.1"
@@ -20,38 +16,93 @@ unsafe_code = "deny"
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+all-features = true
 
-# TODO: use MoonZoon's futures-signals/futures-util extensions directly when it is published as a crate
 [dependencies]
-apply = "0.3"
-async-io = "2.3"
-async-lock = "3.3"
-bevy = "0.14"
-bevy_cosmic_edit = { version = "0.24", optional = true }
+bevy_app = "0.14"
+bevy_ecs = { version = "0.14", features = ["multi_threaded"] }
+bevy_hierarchy = "0.14"
+bevy_tasks = { version = "0.14", features = ["multi_threaded"] }
+bevy_utils = "0.14"
+bevy_color = { version = "0.14", optional = true, default-features = false }
+bevy_core = { version = "0.14", optional = true, default-features = false }
+bevy_input = { version = "0.14", optional = true, default-features = false }
+bevy_log = { version = "0.14", optional = true, default-features = false }
+bevy_math = { version = "0.14", optional = true, default-features = false }
+bevy_reflect = { version = "0.14", optional = true, default-features = false }
+bevy_render = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
+bevy_text = { version = "0.14", optional = true, default-features = false }
+bevy_transform = { version = "0.14", optional = true, default-features = false }
+bevy_ui = { version = "0.14", optional = true, default-features = false, features = ["bevy_text"] }
+bevy_window = { version = "0.14", optional = true, default-features = false }
+bevy_derive = { version = "0.14", optional = true, default-features = false }
+bevy_dev_tools = { version = "0.14", optional = true, features = ["bevy_ui_debug"] }
+bevy_cosmic_edit = { version = "0.25", optional = true }
 bevy_eventlistener = "0.8"
 bevy_mod_picking = { version = "0.20", default-features = false, features = ["backend_bevy_ui"], optional = true }
-bevy-async-ecs = "0.6.0"
+bevy-async-ecs = "0.6"
+apply = "0.3"
 cfg-if = "1.0"
 enclose = "1.1"
 futures-signals = "0.3"
-haalka_futures_signals_ext = { path = "MoonZoon/crates/futures_signals_ext", version = "0.0.2" }
 once_cell = "1.19"
 paste = { version = "1.0", optional = true }
+document-features = { version = "0.2", optional = true }
+
+# TODO: use MoonZoon's futures-signals/futures-util extensions directly when it is published as a crate
+haalka_futures_signals_ext = { path = "MoonZoon/crates/futures_signals_ext", version = "0.0.2" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+async-io = "2.3"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-timers = { version = "0.3", features = ["futures"] }
+send_wrapper = { version = "0.6", features = ["futures"] }
+bevy_winit = { version = "0.14", optional = true }
+bevy_audio = { version = "0.14", optional = true, features = ["android_shared_stdcxx"] }
+bevy_core_pipeline = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
+bevy_pbr = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
+bevy_gizmos = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
+bevy_sprite = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
 
 [features]
 default = [
     "text_input",
     "utils",
 ]
-text_input = ["ui", "bevy_cosmic_edit"]
-ui = ["bevy_mod_picking", "derive"]
+
+## High level UI abstractions integrated with signals.
+ui = ["bevy_core", "bevy_ui", "bevy_render", "bevy_text", "bevy_transform", "bevy_mod_picking", "bevy_log", "bevy_window", "bevy_reflect", "bevy_derive", "bevy_input", "bevy_math", "derive"]
+
+## [bevy_cosmic_edit](https://github.com/Dimchikkk/bevy_cosmic_edit) text input widget integrated with signals.
+text_input = ["ui", "bevy_color", "bevy_cosmic_edit"]
+
+## Macro ([`impl_haalka_methods!`](https://docs.rs/haalka/latest/haalka/macro.impl_haalka_methods.html)) for deriving convenience methods for modifying components on custom element structs with static values, functions, or signals.
 derive = ["paste"]
+
+## Utilities for working with async, [`futures_signals::Mutable`](https://docs.rs/futures-signals/0.3.34/futures_signals/signal/struct.Mutable.html)s and [`futures_signals::Signal`](https://docs.rs/futures-signals/latest/futures_signals/signal/trait.Signal.html)s.
 utils = []
-# see https://github.com/Dimchikkk/bevy_cosmic_edit/blob/776605d549540d0b40edccc1eabe431f617875a0/Cargo.toml#L14
-multicam = ["bevy_cosmic_edit/multicam"]
+
+## Compatibility feature threaded to [bevy_cosmic_edit](https://github.com/Dimchikkk/bevy_cosmic_edit/blob/776605d549540d0b40edccc1eabe431f617875a0/Cargo.toml#L14) to handle multiple cameras, see [considerations](#considerations).
+multicam = ["bevy_cosmic_edit?/multicam"]
+
+## `DebugUiPlugin` which enables toggling [`bevy_dev_tools::ui_debug_overlay::DebugUiPlugin`](https://docs.rs/bevy/latest/bevy/dev_tools/ui_debug_overlay/struct.DebugUiPlugin.html) with the `F1` key; requires a camera to be marked with the [`IsDefaultCamera`](https://docs.rs/bevy/latest/bevy/prelude/struct.IsDefaultUiCamera.html#) component.
+debug = ["ui", "bevy_dev_tools", "multicam"]
+
+## Pass-through for optionally enabling webgpu for examples.
+webgpu = [
+    "bevy_render?/webgpu",
+    "bevy_core_pipeline?/webgpu",
+    "bevy_pbr?/webgpu",
+    "bevy_gizmos?/webgpu",
+    "bevy_sprite?/webgpu",
+    "bevy_cosmic_edit?/webgpu",
+]
+
+deployed_wasm_example = []
 
 [dev-dependencies]
-bevy = { version = "0.14", features = ["bevy_dev_tools"] }
+bevy = "0.14"
 bevy_asset_loader = { version = "0.21", features = ["2d"] }
 bevy_nine_slice_ui = "0.7"
 bevy_rand = { version = "0.7", features = ["rand_chacha"] }
@@ -61,10 +112,24 @@ strum = { version = "0.25", features = ["derive"] }
 calc = { version = "0.4", default-features = false }
 rust_decimal = "1.35"
 
+[package.metadata.cargo-all-features]
+allowlist = [
+    "text_input",
+    "ui",
+    "derive",
+    "utils",
+    "multicam",
+    "debug",
+]
+
 [[example]]
 name = "align"
 path = "examples/align.rs"
 doc-scrape-examples = true
+# TODO: relying on the features here for `cargo run --example ...` enables moving the
+# examples/utils.rs to src/utils.rs behind a feature flag; this already works for building docs
+# requires https://github.com/rust-lang/cargo/issues/4663#issue-268904412
+# required-features = ["examples", "debug"]
 
 [[example]]
 name = "button"
@@ -77,28 +142,28 @@ path = "examples/calculator.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "challenge01"
-path = "examples/challenge01.rs"
+name = "main_menu"
+path = "examples/main_menu.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "challenge02"
-path = "examples/challenge02.rs"
+name = "inventory"
+path = "examples/inventory.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "challenge03"
-path = "examples/challenge03.rs"
+name = "healthbar"
+path = "examples/healthbar.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "challenge04"
-path = "examples/challenge04.rs"
+name = "responsive_menu"
+path = "examples/responsive_menu.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "challenge05"
-path = "examples/challenge05.rs"
+name = "character_editor"
+path = "examples/character_editor.rs"
 doc-scrape-examples = true
 
 [[example]]

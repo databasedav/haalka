@@ -2,10 +2,10 @@
 //!
 //! i can't believe it's not scrolling !
 
-use bevy::{
-    input::mouse::{MouseScrollUnit, MouseWheel},
-    prelude::*,
-};
+mod utils;
+use utils::*;
+
+use bevy::{input::mouse::MouseWheel, prelude::*};
 use haalka::prelude::*;
 
 fn main() {
@@ -40,17 +40,16 @@ fn main() {
         })
         .collect::<Vec<_>>();
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
-            HaalkaPlugin,
-        ))
-        .add_systems(Startup, (ui_root, camera))
+        .add_plugins(examples_plugin)
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                camera,
+            ),
+        )
         .add_systems(Update, (scroller.run_if(resource_exists::<HoveredCell>), shifter))
         .insert_resource(Rails { vertical, horizontal })
         .insert_resource(Shifted(false))
@@ -132,7 +131,7 @@ static CELLS: Lazy<Vec<Vec<Mutable<LetterColor>>>> = Lazy::new(|| {
     cells
 });
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     El::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
@@ -149,20 +148,13 @@ fn ui_root(world: &mut World) {
                 .width(Val::Px(300.))
                 .height(Val::Px(5. * LETTER_SIZE))
                 .align(Align::center())
-                .cells(
-                    CELLS
+                .cells(CELLS.iter().enumerate().flat_map(|(x, cells)| {
+                    cells
                         .iter()
                         .enumerate()
-                        .map(|(x, cells)| {
-                            cells
-                                .iter()
-                                .enumerate()
-                                .map(move |(y, cell)| letter(x, y, cell.signal_cloned()))
-                        })
-                        .flatten(),
-                ),
+                        .map(move |(y, cell)| letter(x, y, cell.signal_cloned()))
+                })),
         )
-        .spawn(world);
 }
 
 fn scroller(
@@ -172,11 +164,11 @@ fn scroller(
     shifted: Res<Shifted>,
 ) {
     for mouse_wheel_event in mouse_wheel_events.read() {
-        let is_negative = match mouse_wheel_event.unit {
-            MouseScrollUnit::Line => mouse_wheel_event.y.is_sign_negative(),
-            MouseScrollUnit::Pixel => mouse_wheel_event.y.is_sign_negative(),
+        let scroll = if mouse_wheel_event.y.is_sign_negative() {
+            Scroll::Up
+        } else {
+            Scroll::Down
         };
-        let scroll = if is_negative { Scroll::Up } else { Scroll::Down };
         let HoveredCell(x, y) = *hovered_cell;
         let Rails { vertical, horizontal } = &mut *rails;
         match scroll {

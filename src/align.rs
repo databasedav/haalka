@@ -21,7 +21,8 @@
 
 use std::{collections::BTreeSet, ops::Not};
 
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ui::prelude::*;
 use futures_signals::signal::{BoxSignal, Signal, SignalExt};
 
 use super::{
@@ -146,11 +147,9 @@ fn register_align_signal<REW: RawElWrapper>(
                             apply_alignment(&mut style, *alignment, AddRemove::Add)
                         }
                         last_alignments_option = alignments.is_empty().not().then_some(alignments);
-                    } else {
-                        if let Some(last_aligns) = last_alignments_option.take() {
-                            for align in last_aligns {
-                                apply_alignment(&mut style, align, AddRemove::Remove)
-                            }
+                    } else if let Some(last_aligns) = last_alignments_option.take() {
+                        for align in last_aligns {
+                            apply_alignment(&mut style, align, AddRemove::Remove)
                         }
                     }
                 },

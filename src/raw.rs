@@ -7,16 +7,9 @@
 use std::{future::Future, marker::PhantomData, mem};
 
 use apply::Apply;
-use bevy::{
-    ecs::{
-        component::{ComponentHooks, StorageType},
-        system::{IntoObserverSystem, RunSystemOnce, RunSystemWithInput, SystemId},
-        world::DeferredWorld,
-    },
-    prelude::*,
-    tasks::Task,
-};
+use bevy_ecs::{component::*, prelude::*, system::*, world::*};
 use bevy_eventlistener::prelude::*;
+use bevy_utils::prelude::*;
 use enclose::enclose as clone;
 use futures_signals::{
     signal::{Mutable, Signal, SignalExt},
@@ -24,6 +17,13 @@ use futures_signals::{
 };
 use haalka_futures_signals_ext::SignalExtBool;
 
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "wasm32")] {
+        use super::node_builder::WasmTaskAdapter;
+    } else {
+        use bevy_tasks::Task;
+    }
+}
 use super::{
     node_builder::{async_world, NodeBuilder, TaskHolder},
     raw::utils::remove_system_holder_on_remove,
@@ -211,13 +211,27 @@ impl RawHaalkaEl {
         self.on_spawn(|world, entity| observe(world, entity, observer))
     }
 
-    /// Drop the [`Task`]s when the element is despawned.
-    pub fn hold_tasks(self, tasks: impl IntoIterator<Item = Task<()>> + Send + 'static) -> Self {
-        self.with_component::<TaskHolder>(|mut task_holder| {
-            for task in tasks.into_iter() {
-                task_holder.hold(task);
+    // TODO: 0.15 `Task` api is unified, can remove branching
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            /// Drop the [`Task`]s when the element is despawned.
+            pub fn hold_tasks(self, tasks: impl IntoIterator<Item = WasmTaskAdapter> + Send + 'static) -> Self {
+                self.with_component::<TaskHolder>(|mut task_holder| {
+                    for task in tasks.into_iter() {
+                        task_holder.hold(task);
+                    }
+                })
             }
-        })
+        } else {
+            /// Drop the [`Task`]s when the element is despawned.
+            pub fn hold_tasks(self, tasks: impl IntoIterator<Item = Task<()>> + Send + 'static) -> Self {
+                self.with_component::<TaskHolder>(|mut task_holder| {
+                    for task in tasks.into_iter() {
+                        task_holder.hold(task);
+                    }
+                })
+            }
+        }
     }
 
     /// When this element is despawned, run a function with mutable access to the [`DeferredWorld`]
@@ -280,6 +294,7 @@ impl RawHaalkaEl {
 
     /// Reactively run a [`System`], if the `forwarder` points to [`Some`] [`Entity`], which takes
     /// [`In`](`System::In`) that element's [`Entity`] and the output of the [`Signal`].
+    #[allow(clippy::type_complexity)]
     pub fn on_signal_one_shot_forwarded<T: Send + 'static, Marker1, Marker2>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
@@ -680,6 +695,7 @@ impl RawHaalkaEl {
     }
 }
 
+#[allow(clippy::type_complexity)]
 struct OnRemove(Vec<Box<dyn FnOnce(&mut DeferredWorld, Entity) + Send + Sync + 'static>>);
 
 impl Component for OnRemove {

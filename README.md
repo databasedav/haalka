@@ -14,6 +14,8 @@ While haalka is primarily targeted at UI and provides high level UI abstractions
 ## considerations
 If one is using the `text_input` feature (enabled by default) and using multiple cameras in the same world, they must enable the `multicam` feature AND add the `bevy_cosmic_edit::CosmicPrimaryCamera` marker component to the primary camera.
 
+## [feature flags](https://docs.rs/haalka/latest/haalka/#feature-flags)
+
 ## examples
 <p align="center">
   <img src="https://raw.githubusercontent.com/databasedav/haalka/main/docs/static/counter.gif">
@@ -26,14 +28,22 @@ use haalka::prelude::*;
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, HaalkaPlugin))
-        .add_systems(Startup, (ui_root, camera))
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                camera,
+            ),
+        )
         .run();
 }
 
 #[derive(Component)]
 struct Counter(Mutable<i32>);
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     let counter = Mutable::new(0);
     El::<NodeBundle>::new()
         .height(Val::Percent(100.))
@@ -47,7 +57,6 @@ fn ui_root(world: &mut World) {
                 .item(counter_button(counter.clone(), "+", 1))
                 .update_raw_el(move |raw_el| raw_el.insert(Counter(counter))),
         )
-        .spawn(world);
 }
 
 fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element {
@@ -93,13 +102,13 @@ cargo run --example key_values_sorted  # text inputs, scrolling/viewport control
 cargo run --example calculator  # simple calculator, spurred by https://discord.com/channels/691052431525675048/885021580353237032/1263661461364932639
 
 # ui challenges from https://github.com/bevyengine/bevy/discussions/11100
-cargo run --example challenge01  # game menu
-cargo run --example challenge02  # inventory
-cargo run --example challenge03  # health bar
-cargo run --example challenge04  # responsive menu
-cargo run --example challenge05  # character editor
+cargo run --example main_menu  # sub menus, sliders, dropdowns, reusable composable widgets, gamepad navigation
+cargo run --example inventory  # grid, icons, drag and drop, tooltips
+cargo run --example healthbar  # 3d character anchor, customizable widgets
+cargo run --example responsive_menu  # nine-patch buttons, screen size reactivity
+cargo run --example character_editor  # scrollable buttons, mutable viewport, text input reactivity
 ```
-One can also run the examples with [`just`](https://github.com/casey/just) (`cargo install just`), e.g. `just example snake -r`.
+One can also run the examples with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 
 ## Bevy compatibility
 |bevy|haalka|
@@ -108,7 +117,13 @@ One can also run the examples with [`just`](https://github.com/casey/just) (`car
 |`0.13`|`0.1`|
 
 ## development
-Remember to include submodules when fetching the repo `git clone --recurse-submodules https://github.com/databasedav/haalka.git`.
+1. include submodules when fetching the repo
+    ```bash
+    git clone --recurse-submodules https://github.com/databasedav/haalka.git
+    ```
+1. install [just](https://github.com/casey/just?tab=readme-ov-file#installation)
+1. install [nickel](https://github.com/tweag/nickel?tab=readme-ov-file#run) for modifying CI configuration (`nickel` must be in your PATH)
+1. install [File Watcher](https://marketplace.visualstudio.com/items?itemName=appulate.filewatcher) for automatically syncing nickels
 
 ## license
 All code in this repository is dual-licensed under either:

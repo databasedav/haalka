@@ -1,5 +1,8 @@
 //! Simple calculator. Spurred by <https://discord.com/channels/691052431525675048/885021580353237032/1263661461364932639>.
 
+mod utils;
+use utils::*;
+
 use bevy::prelude::*;
 use calc::*;
 use haalka::prelude::*;
@@ -7,17 +10,16 @@ use rust_decimal::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
-            HaalkaPlugin,
-        ))
-        .add_systems(Startup, (camera, ui_root))
+        .add_plugins(examples_plugin)
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                camera,
+            ),
+        )
         .run();
 }
 
@@ -131,7 +133,7 @@ fn clear_button() -> impl Element {
         .on_click(|| OUTPUT.lock_mut().clear())
 }
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     let error_clearer = OUTPUT.signal_ref(|_| ERROR.set_neq(false)).to_future().apply(spawn);
     El::<NodeBundle>::new()
         .update_raw_el(|raw_el| raw_el.hold_tasks([error_clearer]))
@@ -167,7 +169,6 @@ fn ui_root(world: &mut World) {
                         .items(buttons().into_iter().map(input_button)),
                 ),
         )
-        .spawn(world);
 }
 
 fn camera(mut commands: Commands) {

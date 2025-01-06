@@ -3,6 +3,9 @@
 //! promises made promises kept ! <https://discord.com/channels/691052431525675048/1192585689460658348/1193431789465776198>
 //! (yes i take requests)
 
+mod utils;
+use utils::*;
+
 use std::{
     ops::{Deref, Not},
     time::Duration,
@@ -10,21 +13,20 @@ use std::{
 
 use bevy::prelude::*;
 use bevy_cosmic_edit::{CosmicBackgroundColor, CosmicWrap, CursorColor, MaxLines};
-use haalka::{prelude::*, text_input::FocusedTextInput};
+use haalka::{prelude::*, text_input::FocusedTextInput, viewport_mutable::MutableViewport};
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
-            HaalkaPlugin,
-        ))
-        .add_systems(Startup, (ui_root, camera))
+        .add_plugins(examples_plugin)
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                camera,
+            ),
+        )
         .add_systems(
             Update,
             (
@@ -155,7 +157,7 @@ fn text_input(
             if !is_focused {
                 if let Some(index) = index_option.get() {
                     // TODO: use an observer for this
-                    async_world().send_event(MaybeChanged(index)).apply(spawn).detach();
+                    async_world().send_event(MaybeChanged(index)).apply(spawn).detach()
                 }
             }
             focus.set_neq(is_focused);
@@ -368,7 +370,7 @@ fn x_button() -> impl Element + PointerEventAware {
         )
 }
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     El::<NodeBundle>::new()
         .ui_root()
         .width(Val::Percent(100.))
@@ -434,7 +436,6 @@ fn ui_root(world: &mut World) {
                         }),
                 ),
         )
-        .spawn(world);
 }
 
 fn scroll_to_bottom() {
@@ -463,10 +464,8 @@ fn tabber(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
                     last.value.focus.set(true);
                 }
             }
-        } else {
-            if let Some(last) = pairs.last() {
-                last.value.focus.set(true);
-            }
+        } else if let Some(last) = pairs.last() {
+            last.value.focus.set(true);
         }
     } else if keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::Enter) {
         commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
@@ -486,10 +485,8 @@ fn tabber(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
                     first.key.focus.set(true);
                 }
             }
-        } else {
-            if let Some(first) = pairs.first() {
-                first.key.focus.set(true);
-            }
+        } else if let Some(first) = pairs.first() {
+            first.key.focus.set(true);
         }
     }
 }
@@ -504,42 +501,40 @@ fn escaper(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
 // on focus change, check if the focused element is in view, if not, scroll to it
 fn focus_scroller(
     focused_text_input_option: Option<Res<FocusedTextInput>>,
-    data_query: Query<(&Node, &GlobalTransform, &Parent, &mut Style)>,
+    data_query: Query<(&Node, &GlobalTransform, &mut Style)>,
+    parents: Query<&Parent>,
+    mutable_viewports: Query<&MutableViewport>,
 ) {
     if let Some(focused_text_input) = focused_text_input_option.as_deref().map(Deref::deref).copied() {
-        if let Ok((child_node, child_transform, child_parent, _)) = data_query.get(focused_text_input) {
-            // TODO: what is this node ?
-            if let Ok((_, _, child_parent, _)) = data_query.get(child_parent.get()) {
-                if let Ok((scrollable_node, scrollable_transform, scrollable_container, _)) =
-                    data_query.get(child_parent.get())
-                {
-                    if let Ok((
-                        scrollable_container_node,
-                        scrollable_container_transform,
-                        _,
-                        scrollable_container_style,
-                    )) = data_query.get(scrollable_container.get())
-                    {
-                        let child_rect = child_node.logical_rect(child_transform);
-                        let scrollable_rect = scrollable_node.logical_rect(scrollable_transform);
-                        let scrollable_container_rect =
-                            scrollable_container_node.logical_rect(scrollable_container_transform);
-                        let scrolled_option = match scrollable_container_style.top {
-                            Val::Px(top) => Some(top),
-                            Val::Auto => Some(0.0),
-                            _ => None,
-                        };
-                        if let Some(scrolled) = scrolled_option {
-                            let container_base = scrollable_container_rect.min.y - scrolled;
-                            let child_offset = child_rect.min.y - scrolled - container_base;
-                            // TODO: is there a simpler/ more general way to check for node visibility ?
-                            if child_offset + INPUT_HEIGHT - scrolled > scrollable_container_rect.height() {
-                                SCROLL_POSITION.set(
-                                    scrollable_rect.min.y - child_rect.min.y + scrollable_container_rect.height()
-                                        - INPUT_HEIGHT,
-                                );
-                            } else if child_offset < scrolled {
-                                SCROLL_POSITION.set(scrollable_rect.min.y - child_rect.min.y);
+        if let Ok((text_input_node, text_input_transform, _)) = data_query.get(focused_text_input) {
+            for parent in parents.iter_ancestors(focused_text_input) {
+                if mutable_viewports.contains(parent) {
+                    if let Ok((scene_node, scene_transform, _scene_style)) = data_query.get(parent) {
+                        if let Some((viewport_node, viewport_transform, viewport_style)) = parents
+                            .get(parent)
+                            .ok()
+                            .and_then(|parent| data_query.get(parent.get()).ok())
+                        {
+                            let text_input_rect = text_input_node.logical_rect(text_input_transform);
+                            let scene_rect = scene_node.logical_rect(scene_transform);
+                            let viewport_rect = viewport_node.logical_rect(viewport_transform);
+                            let scrolled_option = match viewport_style.top {
+                                Val::Px(top) => Some(top),
+                                Val::Auto => Some(0.0),
+                                _ => None,
+                            };
+                            if let Some(scrolled) = scrolled_option {
+                                let container_base = viewport_rect.min.y - scrolled;
+                                let child_offset = text_input_rect.min.y - scrolled - container_base;
+                                // TODO: is there a simpler/ more general way to check for node visibility ?
+                                if child_offset + INPUT_HEIGHT - scrolled > viewport_rect.height() {
+                                    SCROLL_POSITION.set(
+                                        scene_rect.min.y - text_input_rect.min.y + viewport_rect.height()
+                                            - INPUT_HEIGHT,
+                                    );
+                                } else if child_offset < scrolled {
+                                    SCROLL_POSITION.set(scene_rect.min.y - text_input_rect.min.y);
+                                }
                             }
                         }
                     }

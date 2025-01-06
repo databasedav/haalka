@@ -7,7 +7,7 @@ TODO: this should be able to be automated with a selenium type abstraction layer
 ## `align`
 1. click through all the alignments for both self alignment and content alignment, waiting a second between each
 
-## `challenge01`
+## `main_menu`
 1. hover the audio button, wait a second, then hover the graphics button
 1. click the audio button
 1. hover over each menu item up and down, and then again faster
@@ -37,7 +37,7 @@ TODO: this should be able to be automated with a selenium type abstraction layer
 1. click the x button in the top right to close the graphics menu
 1. click the graphics button, wait a second, then click the x button in the top right
 
-## `challenge02`
+## `inventory`
 1. slowly hover over various items, then faster
 1. click on an item and then hover it over other items/slots, then hover it outside the inventory
 1. place the item in an empty slot, then pick it up and place it in another empty slot
@@ -49,16 +49,16 @@ TODO: this should be able to be automated with a selenium type abstraction layer
 1. replace the items in the crafting slots a few times
 1. take the item from the crafting output and place it in the upper inventory
 
-## `challenge03`
+## `healthbar`
 1. move the character to each corner of the screen, then respawn and wiggle a bit
 
-## `challenge04`
+## `responsive_menu`
 1. hover over each button up and down, and then again faster
 1. click on a few of the buttons
 1. slowly resize the window down to the minimum width
 1. resize the window back to slightly above 400 and then wiggle it over and under a few times
 
-## `challenge05`
+## `character_editor`
 1. click the sphere option, then click the plane option
 1. scroll the options up and down a few times
 1. scroll all the way down and click through those options

@@ -1,21 +1,24 @@
 //! Simple button, port of <https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs>.
 
+mod utils;
+use utils::*;
+
 use bevy::prelude::*;
 use haalka::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
-            HaalkaPlugin,
-        ))
-        .add_systems(Startup, (camera, ui_root))
+        .add_plugins(examples_plugin)
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    let font = world.resource::<AssetServer>().load("fonts/FiraMono-subset.ttf");
+                    ui_root(font).spawn(world);
+                },
+                camera,
+            ),
+        )
         .run();
 }
 
@@ -86,7 +89,6 @@ fn button(font: Handle<Font>) -> impl Element {
                                 font: font.clone(),
                                 font_size: 40.0,
                                 color: Color::srgb(0.9, 0.9, 0.9),
-                                ..default()
                             },
                         )
                     }),
@@ -95,16 +97,13 @@ fn button(font: Handle<Font>) -> impl Element {
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn((Camera2dBundle::default(),));
 }
 
-fn ui_root(world: &mut World) {
+fn ui_root(font: Handle<Font>) -> impl Element {
     El::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
-        .child(button(
-            world.resource::<AssetServer>().load("fonts/FiraMono-subset.ttf"),
-        ))
-        .spawn(world);
+        .child(button(font))
 }

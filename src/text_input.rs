@@ -2,10 +2,14 @@
 
 use std::{ops::{Deref, Not}, pin::Pin};
 
-use bevy::{
-    ecs::system::SystemState,
-    prelude::*,
-};
+use bevy_ecs::system::*;
+use bevy_ecs::prelude::*;
+use bevy_ui::prelude::*;
+use bevy_hierarchy::prelude::*;
+use bevy_color::prelude::*;
+use bevy_utils::prelude::*;
+use bevy_app::prelude::*;
+use bevy_derive::*;
 use bevy_mod_picking::{
     events::{Down, Pointer},
     picking_core::Pickable,
@@ -145,6 +149,7 @@ impl TextInput {
             let id = entity.id();
             entity.world_scope(|world| {
                 // TODO: is this stuff repeated for every call ?
+                #[allow(clippy::type_complexity)]
                 let mut system_state: SystemState<(
                     ResMut<CosmicFontSystem>,
                     Query<(&mut CosmicBuffer, &DefaultAttrs)>,
@@ -597,11 +602,11 @@ impl TextInput {
                 }
                 if let Some(metadata_signal) = attrs.metadata {
                     self = self.on_signal_with_cosmic_edit(metadata_signal, move |mut cosmic_edit, metadata| {
-                        if let Some(placeholder) = cosmic_edit.get_mut::<bevy_cosmic_edit::Placeholder>() {
-                            placeholder.attrs.metadata(metadata);
+                        if let Some(mut placeholder) = cosmic_edit.get_mut::<bevy_cosmic_edit::Placeholder>() {
+                            placeholder.attrs.metadata = metadata;
                         } else {
-                            let attrs = cosmic_text::Attrs::new();
-                            attrs.metadata(metadata);
+                            let mut attrs = cosmic_text::Attrs::new();
+                            attrs.metadata = metadata;
                             cosmic_edit.insert(bevy_cosmic_edit::Placeholder::new("", attrs));
                         }
                     });
@@ -739,7 +744,7 @@ fn on_focus_changed(
                 cosmic_focused_widget.0 = Some(cosmic_edit);
             }
         }
-    } else if cosmic_focused_widget.0 != None {
+    } else if cosmic_focused_widget.0.is_some() {
         cosmic_focused_widget.0 = None;
     }
 }
@@ -748,6 +753,7 @@ fn on_focus_changed(
 pub type BoxSignalSync<'a, T> = Pin<Box<dyn Signal<Item = T> + Send + Sync + 'a>>;
 
 /// Allows setting the text attributes of a [`TextInput`] and its [placeholder](`TextInput::placeholder`). These settings can be either static or reactive via [`Signal`]s. See [`cosmic_text::AttrsOwned`].
+#[derive(Default)]
 pub struct TextAttrs {
     color_opt: Option<BoxSignalSync<'static, Option<CosmicColor>>>,
     family_owned: Option<BoxSignalSync<'static, cosmic_text::FamilyOwned>>,
@@ -761,15 +767,7 @@ pub struct TextAttrs {
 impl TextAttrs {
     #[allow(missing_docs)]
     pub fn new() -> Self {
-        Self {
-            color_opt: None,
-            family_owned: None,
-            stretch: None,
-            style: None,
-            weight: None,
-            metadata: None,
-            cache_key_flags: None,
-        }
+        default()
         // .family(FamilyOwned::new(bevy_cosmic_edit::Family::Name("Fira Mono")))
     }
 
@@ -915,6 +913,7 @@ impl TextAttrs {
 }
 
 /// A placeholder for a [`TextInput`]. The text and text attributes can be either static or reactive via [`Signal`]s.
+#[derive(Default)]
 pub struct Placeholder {
     text: Option<BoxSignal<'static, &'static str>>,
     attrs: Option<TextAttrs>,
@@ -923,10 +922,7 @@ pub struct Placeholder {
 impl Placeholder {
     #[allow(missing_docs)]
     pub fn new() -> Self {
-        Self {
-            text: None,
-            attrs: None,
-        }
+        default()
     }
 
     /// Reactively set the text of this placeholder. If the signal outputs [`None`] the text is set to an empty string.
@@ -1013,6 +1009,7 @@ impl_text_input_cosmic_edit_methods! {
 }
 
 pub(super) fn plugin(app: &mut App) {
+    // TODO: this requires including the assets in the crate but we want to avoid that
     let font_bytes: &[u8] = include_bytes!("../assets/fonts/FiraMono-subset.ttf");
     let font_config = bevy_cosmic_edit::CosmicFontConfig {
         fonts_dir_path: None,

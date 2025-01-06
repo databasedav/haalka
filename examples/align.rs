@@ -1,22 +1,24 @@
 //! Alignment API demo, port of <https://github.com/MoonZoon/MoonZoon/tree/main/examples/align> and <https://github.com/MoonZoon/MoonZoon/tree/main/examples/align_content>.
 
+mod utils;
+use utils::*;
+
 use bevy::prelude::*;
 use haalka::prelude::*;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
-            HaalkaPlugin,
-        ))
-        .add_systems(Startup, (ui_root, camera))
+        .add_plugins(examples_plugin)
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                camera,
+            ),
+        )
         .run();
 }
 
@@ -35,7 +37,7 @@ enum RectangleAlignment {
 }
 
 impl RectangleAlignment {
-    fn to_align(&self) -> Align {
+    fn to_align(self) -> Align {
         match self {
             Self::TopLeft => Align::new().top().left(),
             Self::Top => Align::new().top().center_x(),
@@ -88,7 +90,7 @@ fn alignment_button(alignment: Alignment) -> impl Element {
         )))
 }
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     Column::<NodeBundle>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
@@ -125,7 +127,6 @@ fn ui_root(world: &mut World) {
                 // TODO: is this align content behavior buggy?
                 .item(container("Stack", Stack::<NodeBundle>::new().layers(rectangles()))),
         )
-        .spawn(world);
 }
 
 fn container_style<E: RawElWrapper + Sizeable>(el: E) -> E {

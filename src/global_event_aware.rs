@@ -1,8 +1,11 @@
+//! Semantics for managing global event listeners.
+
 use super::{element::UiRoot, raw::RawElWrapper};
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
 use bevy_eventlistener::prelude::*;
 
 // TODO: there should be a way to pass the entity into the system
+// TODO: 0.15
 /// Enables registering "global" event listeners on the [`UiRoot`] node. The [`UiRoot`] must be
 /// manually registered with [`UiRootable::ui_root`](super::element::UiRootable::ui_root) for this
 /// to work as expected.

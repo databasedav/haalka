@@ -1,21 +1,23 @@
 //! Scrollable row of scrollable letter columns. Inspired by <https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs>.
 
+mod utils;
+use utils::*;
+
 use bevy::prelude::*;
 use haalka::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    position: WindowPosition::Centered(MonitorSelection::Primary),
-                    ..default()
-                }),
-                ..default()
-            }),
-            HaalkaPlugin,
-        ))
-        .add_systems(Startup, (ui_root, camera))
+        .add_plugins(examples_plugin)
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
+                camera,
+            ),
+        )
         .add_systems(Update, shifter)
         .run();
 }
@@ -56,7 +58,7 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
         )
 }
 
-fn ui_root(world: &mut World) {
+fn ui_root() -> impl Element {
     let hovered = Mutable::new(false);
     El::<NodeBundle>::new()
         .width(Val::Percent(100.))
@@ -94,7 +96,6 @@ fn ui_root(world: &mut World) {
                     .map(|(i, color)| letter_column(i, color.into())),
                 ),
         )
-        .spawn(world);
 }
 
 fn shifter(keys: Res<ButtonInput<KeyCode>>) {
