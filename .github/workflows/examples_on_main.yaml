@@ -40,7 +40,6 @@ jobs:
     with:
       api: ${{ matrix.api }}
       example: ${{ matrix.example }}
-      pr: ''
   get_examples_:
     name: get_examples_
     needs: assert_nickels_synced_

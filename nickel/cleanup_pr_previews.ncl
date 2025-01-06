@@ -1,4 +1,4 @@
-let { REPO, GITHUB_PAGES_DEPLOY_ACTION_VERSION, GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT, .. } = import "common.ncl" in
+let { REPO, GITHUB_PAGES_DEPLOY_ACTION_VERSION, GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT, checkout, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 {
   name = "cleanup_pr_previews",
@@ -21,6 +21,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
     {
       cleanup = {
         steps = [
+          checkout,
           {
             name = "make empty dir",
             run = "mkdir -p empty_dir"
