@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "haalka"
-version = "0.2.4"
+version = "0.3.0"
 edition = "2021"
 categories = ["asynchronous", "gui", "game-development"]
 description = "ergonomic reactive Bevy UI library powered by FRP signals"
@@ -23,28 +23,26 @@ cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 all-features = true
 
 [dependencies]
-bevy_app = "0.14"
-bevy_ecs = { version = "0.14", features = ["multi_threaded"] }
-bevy_hierarchy = "0.14"
-bevy_tasks = { version = "0.14", features = ["multi_threaded"] }
-bevy_utils = "0.14"
-bevy_color = { version = "0.14", optional = true, default-features = false }
-bevy_core = { version = "0.14", optional = true, default-features = false }
-bevy_input = { version = "0.14", optional = true, default-features = false }
-bevy_log = { version = "0.14", optional = true, default-features = false }
-bevy_math = { version = "0.14", optional = true, default-features = false }
-bevy_reflect = { version = "0.14", optional = true, default-features = false }
-bevy_render = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
-bevy_text = { version = "0.14", optional = true, default-features = false }
-bevy_transform = { version = "0.14", optional = true, default-features = false }
-bevy_ui = { version = "0.14", optional = true, default-features = false, features = ["bevy_text"] }
-bevy_window = { version = "0.14", optional = true, default-features = false }
-bevy_derive = { version = "0.14", optional = true, default-features = false }
-bevy_dev_tools = { version = "0.14", optional = true, features = ["bevy_ui_debug"] }
-bevy_cosmic_edit = { version = "0.25", optional = true }
-bevy_eventlistener = "0.8"
-bevy_mod_picking = { version = "0.20", default-features = false, features = ["backend_bevy_ui"], optional = true }
-bevy-async-ecs = "0.6"
+bevy_app = "0.15"
+bevy_ecs = { version = "0.15", features = ["multi_threaded"] }
+bevy_hierarchy = "0.15"
+bevy_tasks = { version = "0.15", features = ["multi_threaded"] }
+bevy_utils = "0.15"
+bevy_color = { version = "0.15", optional = true, default-features = false }
+bevy_core = { version = "0.15", optional = true, default-features = false }
+bevy_input = { version = "0.15", optional = true, default-features = false }
+bevy_log = { version = "0.15", optional = true, default-features = false }
+bevy_math = { version = "0.15", optional = true, default-features = false }
+bevy_reflect = { version = "0.15", optional = true, default-features = false }
+bevy_render = { version = "0.15", optional = true, default-features = false, features = ["webgl"] }
+bevy_text = { version = "0.15", optional = true, default-features = false }
+bevy_transform = { version = "0.15", optional = true, default-features = false }
+bevy_ui = { version = "0.15", optional = true, default-features = false }
+bevy_window = { version = "0.15", optional = true, default-features = false }
+bevy_derive = { version = "0.15", optional = true, default-features = false }
+bevy_dev_tools = { version = "0.15", optional = true, features = ["bevy_ui_debug"] }
+bevy_cosmic_edit = { version = "0.26", optional = true }
+bevy-async-ecs = "0.7"
 apply = "0.3"
 cfg-if = "1.0"
 enclose = "1.1"
@@ -62,12 +60,12 @@ async-io = "2.3"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 gloo-timers = { version = "0.3", features = ["futures"] }
 send_wrapper = { version = "0.6", features = ["futures"] }
-bevy_winit = { version = "0.14", optional = true }
-bevy_audio = { version = "0.14", optional = true, features = ["android_shared_stdcxx"] }
-bevy_core_pipeline = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
-bevy_pbr = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
-bevy_gizmos = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
-bevy_sprite = { version = "0.14", optional = true, default-features = false, features = ["webgl"] }
+bevy_winit = { version = "0.15", optional = true }
+bevy_audio = { version = "0.15", optional = true, features = ["android_shared_stdcxx"] }
+bevy_core_pipeline = { version = "0.15", optional = true, default-features = false, features = ["webgl"] }
+bevy_pbr = { version = "0.15", optional = true, default-features = false, features = ["webgl"] }
+bevy_gizmos = { version = "0.15", optional = true, default-features = false, features = ["webgl"] }
+bevy_sprite = { version = "0.15", optional = true, default-features = false, features = ["webgl"] }
 
 [features]
 default = [
@@ -76,7 +74,7 @@ default = [
 ]
 
 ## High level UI abstractions integrated with signals.
-ui = ["bevy_core", "bevy_ui", "bevy_render", "bevy_text", "bevy_transform", "bevy_mod_picking", "bevy_log", "bevy_window", "bevy_reflect", "bevy_derive", "bevy_input", "bevy_math", "derive"]
+ui = ["bevy_core", "bevy_ui", "bevy_render", "bevy_text", "bevy_transform", "bevy_log", "bevy_window", "bevy_reflect", "bevy_derive", "bevy_input", "bevy_math", "derive"]
 
 ## [bevy_cosmic_edit](https://github.com/Dimchikkk/bevy_cosmic_edit) text input widget integrated with signals.
 text_input = ["ui", "bevy_color", "bevy_cosmic_edit"]
@@ -100,16 +98,14 @@ webgpu = [
     "bevy_pbr?/webgpu",
     "bevy_gizmos?/webgpu",
     "bevy_sprite?/webgpu",
-    "bevy_cosmic_edit?/webgpu",
 ]
 
 deployed_wasm_example = []
 
 [dev-dependencies]
-bevy = "0.14"
-bevy_asset_loader = { version = "0.21", features = ["2d"] }
-bevy_nine_slice_ui = "0.7"
-bevy_rand = { version = "0.7", features = ["rand_chacha"] }
+bevy = "0.15"
+bevy_asset_loader = { version = "0.22", features = ["2d"] }
+bevy_rand = { version = "0.9", features = ["rand_chacha"] }
 colorgrad = "0.6"
 rand = "0.8"
 strum = { version = "0.25", features = ["derive"] }
