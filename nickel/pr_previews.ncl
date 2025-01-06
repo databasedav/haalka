@@ -10,7 +10,7 @@ let { sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" 
       # TODO: https://github.com/tweag/nickel/issues/747
       assert_nickels_synced_ = assert_nickels_synced,
       get_examples_ = get_examples & { needs = "assert_nickels_synced_" },
-      build_and_deploy_examples_ = build_and_deploy_examples "${{ github.event.number }}",
+      build_and_deploy_examples_ = build_and_deploy_examples "${{ github.event.number }}" & { needs = "get_examples_" },
       deployment_comment =
         {
           needs = ["get_examples_", "build_and_deploy_examples_"],

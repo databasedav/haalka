@@ -27,6 +27,7 @@ jobs:
         [[ -n $(git status --porcelain) ]] && echo 'nickels are not synced; run `just format_nickels sync_nickels`' && exit 1 || exit 0
   build_and_deploy_examples_:
     name: build_and_deploy_examples_
+    needs: get_examples_
     permissions:
       contents: write
     strategy:

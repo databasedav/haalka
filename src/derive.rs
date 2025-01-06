@@ -1,5 +1,8 @@
+#[allow(unused_imports)]
 use bevy_ecs::prelude::*;
+#[allow(unused_imports)]
 use futures_signals::signal::Signal;
+#[allow(unused_imports)]
 use paste::paste;
 
 // TODO: add link to usage in example challenge 4
