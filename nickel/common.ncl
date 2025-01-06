@@ -16,7 +16,8 @@ let CACHIX_ACTION_VERSION = "15" in
 let build_and_deploy_base_args = {
   api = "${{ matrix.api }}",
   example = "${{ matrix.example }}",
-} in
+}
+in
 {
   REPO = "https://github.com/databasedav/haalka",
   GITHUB_PAGES_DEPLOY_ACTION_VERSION = "4.7.2",
