@@ -170,7 +170,7 @@ fn ui_root() -> impl Element {
                                 )
                                 .viewport_y_signal(SCROLL_POSITION.signal())
                                 .items({
-                                    let hovereds = hovereds.lock_ref().into_iter().cloned().collect::<Vec<_>>();
+                                    let hovereds = hovereds.lock_ref().iter().cloned().collect::<Vec<_>>();
                                     Shape::iter()
                                         .zip(hovereds)
                                         .map(move |(shape, hovered)| button(shape, hovered))

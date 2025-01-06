@@ -89,7 +89,6 @@ fn button(font: Handle<Font>) -> impl Element {
                                 font: font.clone(),
                                 font_size: 40.0,
                                 color: Color::srgb(0.9, 0.9, 0.9),
-                                ..default()
                             },
                         )
                     }),

@@ -5,7 +5,6 @@ use utils::*;
 
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
-    convert::identity,
     time::Duration,
 };
 
@@ -59,7 +58,7 @@ const SIDE: usize = 720; // TODO: reactively auto fit to height
 const WIDTH: usize = 1280; // TODO: reactively auto fit to height
 const EMPTY_COLOR: Color = Color::srgb(91. / 255., 206. / 255., 250. / 255.);
 const SNAKE_COLOR: Color = Color::srgb(245. / 255., 169. / 255., 184. / 255.);
-const FOOD_COLOR: Color = Color::srgb(255. / 255., 255. / 255., 255. / 255.);
+const FOOD_COLOR: Color = Color::srgb(1., 1., 1.);
 const STARTING_TICKS_PER_SECOND: u32 = 10;
 
 #[derive(Resource)]
@@ -72,9 +71,9 @@ enum Cell {
     Food,
 }
 
-impl Into<BackgroundColor> for Cell {
-    fn into(self) -> BackgroundColor {
-        match self {
+impl From<Cell> for BackgroundColor {
+    fn from(val: Cell) -> Self {
+        match val {
             Cell::Empty => EMPTY_COLOR,
             Cell::Snake => SNAKE_COLOR,
             Cell::Food => FOOD_COLOR,
@@ -268,7 +267,7 @@ fn grid_size_changer(mut events: EventReader<GridSizeChange>, mut spawn_food: Ev
                         }
                         if removed
                             .into_iter()
-                            .filter_map(identity)
+                            .flatten()
                             .any(|removed| matches!(removed.get(), Cell::Food))
                         {
                             spawn_food.send_default();
@@ -375,7 +374,7 @@ fn spawn_food(mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>) {
         .iter()
         .filter_map(|(position, cell)| matches!(cell.get(), Cell::Empty).then_some(position));
     cells_lock
-        .get(&empty_cells.choose(&mut *rng).unwrap())
+        .get(empty_cells.choose(&mut *rng).unwrap())
         .unwrap()
         .set(Cell::Food);
 }

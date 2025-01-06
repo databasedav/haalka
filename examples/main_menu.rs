@@ -470,7 +470,7 @@ impl IterableOptions {
                     .on_click(clone!((selected, options) move || {
                         let options_lock = options.lock_ref();
                         if let Some(i) = options_lock.iter().position(|option| option == &*selected.lock_ref()) {
-                            selected.set_neq(options_lock.iter().rev().cycle().skip(options_lock.len() - i).next().unwrap().clone());
+                            selected.set_neq(options_lock.iter().rev().cycle().nth(options_lock.len() - i).unwrap().clone());
                         }
                     }))
                     .body(centered_arrow_text(LeftRight::Left))
@@ -485,7 +485,7 @@ impl IterableOptions {
                     .on_click(clone!((selected, options) move || {
                         let options_lock = options.lock_ref();
                         if let Some(i) = options_lock.iter().position(|option| option == &*selected.lock_ref()) {
-                            selected.set_neq(options_lock.iter().cycle().skip(i + 1).next().unwrap().clone());
+                            selected.set_neq(options_lock.iter().cycle().nth(i + 1).unwrap().clone());
                         }
                     }))
                     .body(centered_arrow_text(LeftRight::Right))
@@ -549,7 +549,7 @@ impl Slider {
                     .update_raw_el(|raw_el| raw_el.hold_tasks([value_setter]))
                     .with_style(|mut style| style.column_gap = Val::Px(10.))
                     .item(
-                        El::<TextBundle>::new().text_signal(value.signal().map(|value| text(&format!("{:.1}", value)))),
+                        El::<TextBundle>::new().text_signal(value.signal().map(|value| text(format!("{:.1}", value)))),
                     )
                     .item(
                         Stack::<NodeBundle>::new()
@@ -600,9 +600,9 @@ fn options(n: usize) -> Vec<String> {
     (1..=n).map(|i| format!("option {}", i)).collect()
 }
 
-fn only_one_up_flipper<'a>(
+fn only_one_up_flipper(
     to_flip: &Mutable<bool>,
-    already_up_option: &'a Mutable<Option<Mutable<bool>>>,
+    already_up_option: &Mutable<Option<Mutable<bool>>>,
     target_option: Option<bool>,
 ) {
     let cur = target_option.map(|target| !target).unwrap_or(to_flip.get());
@@ -670,12 +670,8 @@ impl Dropdown {
         let show_dropdown = Mutable::new(false);
         let hovered = Mutable::new(false);
         let controlling = Mutable::new(false);
-        let options_hovered = MutableVec::new_with_values(
-            (0..options.lock_ref().len())
-                .into_iter()
-                .map(|_| Mutable::new(false))
-                .collect(),
-        );
+        let options_hovered =
+            MutableVec::new_with_values((0..options.lock_ref().len()).map(|_| Mutable::new(false)).collect());
         let el = {
             El::<NodeBundle>::new()
             .apply(|element| focus_on_signal(element, controlling.signal()))
@@ -984,7 +980,7 @@ fn graphics_menu() -> Column<NodeBundle> {
         non_preset_qualities.signal_vec_cloned()
         .map_signal(|quality| quality.signal())
         .to_signal_map(|qualities| {
-            let mut qualities = qualities.into_iter();
+            let mut qualities = qualities.iter();
             let mut preset = preset_quality.lock_mut();
             if preset.is_none() {
                 let first = qualities.next().unwrap();  // always populated
@@ -1005,13 +1001,13 @@ fn graphics_menu() -> Column<NodeBundle> {
         ("bloom quality", bloom_quality, false),
     ];
     let l = items.len();
-    let hovereds = MutableVec::new_with_values((0..l).into_iter().map(|_| Mutable::new(false)).collect::<Vec<_>>());
+    let hovereds = MutableVec::new_with_values((0..l).map(|_| Mutable::new(false)).collect::<Vec<_>>());
     menu_base(SUB_MENU_WIDTH, SUB_MENU_HEIGHT, "graphics menu")
         .apply(|element| focus_on_no_child_hovered(element, hovereds.signal_vec_cloned()))
         .apply(|element| sub_menu_child_hover_manager(element, hovereds.clone()))
         .update_raw_el(|raw_el| raw_el.hold_tasks([preset_broadcaster, preset_controller]))
         .items({
-            let hovereds = hovereds.lock_ref().into_iter().cloned().collect::<Vec<_>>();
+            let hovereds = hovereds.lock_ref().iter().cloned().collect::<Vec<_>>();
             items
                 .into_iter()
                 .zip(hovereds)
@@ -1105,9 +1101,9 @@ fn menu() -> impl Element {
                                     if let Some(i) = SubMenu::iter().position(|sub_menu| cur_sub_menu == sub_menu) {
                                         let sub_menus = SubMenu::iter().collect::<Vec<_>>();
                                         SUB_MENU_SELECTED.set(if matches!(event.input, MenuInput::Down) {
-                                            sub_menus.iter().rev().cycle().skip(sub_menus.len() - i).next().copied()
+                                            sub_menus.iter().rev().cycle().nth(sub_menus.len() - i).copied()
                                         } else {
-                                            sub_menus.iter().cycle().skip(i + 1).next().copied()
+                                            sub_menus.iter().cycle().nth(i + 1).copied()
                                         })
                                     }
                                 } else {
@@ -1331,6 +1327,7 @@ fn keyboard_menu_input_events(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn gamepad_menu_input_events(
     sliders: Query<Entity, With<SliderTag>>,
     focused_entity: Res<FocusedEntity>,

@@ -118,7 +118,7 @@ fn horizontal() -> impl Element {
                 .height(Val::Percent(100.))
                 .with_style(|mut style| style.row_gap = Val::Px(GAP))
                 .align_content(Align::center())
-                .items((0..8).into_iter().map(|_| nine_slice_button())),
+                .items((0..8).map(|_| nine_slice_button())),
         )
         .item(El::<ImageBundle>::new().image(UiImage::new(image().clone())))
 }
@@ -136,7 +136,7 @@ fn vertical() -> impl Element {
                 .width(Val::Percent(100.))
                 .height(Val::Percent(50.))
                 .with_style(|mut style| style.column_gap = Val::Px(GAP))
-                .items((0..8).into_iter().map(|_| nine_slice_button())),
+                .items((0..8).map(|_| nine_slice_button())),
         )
 }
 

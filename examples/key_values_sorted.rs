@@ -464,10 +464,8 @@ fn tabber(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
                     last.value.focus.set(true);
                 }
             }
-        } else {
-            if let Some(last) = pairs.last() {
-                last.value.focus.set(true);
-            }
+        } else if let Some(last) = pairs.last() {
+            last.value.focus.set(true);
         }
     } else if keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::Enter) {
         commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
@@ -487,10 +485,8 @@ fn tabber(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
                     first.key.focus.set(true);
                 }
             }
-        } else {
-            if let Some(first) = pairs.first() {
-                first.key.focus.set(true);
-            }
+        } else if let Some(first) = pairs.first() {
+            first.key.focus.set(true);
         }
     }
 }
@@ -513,7 +509,7 @@ fn focus_scroller(
         if let Ok((text_input_node, text_input_transform, _)) = data_query.get(focused_text_input) {
             for parent in parents.iter_ancestors(focused_text_input) {
                 if mutable_viewports.contains(parent) {
-                    if let Ok((scene_node, scene_transform, scene_style)) = data_query.get(parent) {
+                    if let Ok((scene_node, scene_transform, _scene_style)) = data_query.get(parent) {
                         if let Some((viewport_node, viewport_transform, viewport_style)) = parents
                             .get(parent)
                             .ok()

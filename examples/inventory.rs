@@ -12,12 +12,9 @@
 mod utils;
 use utils::*;
 
-use std::{collections::HashMap, convert::identity, sync::OnceLock, time::Duration};
+use std::{collections::HashMap, convert::identity, sync::OnceLock};
 
-use bevy::{
-    prelude::*,
-    winit::{UpdateMode, WinitSettings},
-};
+use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use bevy_mod_picking::{
     events::{Click, Down, Move, Pointer, Up},
@@ -514,20 +511,20 @@ fn dot() -> impl Element {
 }
 
 fn dot_row(n: usize) -> impl Element {
-    Row::<NodeBundle>::new().items((0..n).into_iter().map(|_| dot()))
+    Row::<NodeBundle>::new().items((0..n).map(|_| dot()))
 }
 
 fn arrow() -> impl Element {
     Column::<NodeBundle>::new()
         .align_content(Align::center())
-        .items((0..=6).into_iter().map(|i| dot_row(2 * i + 1)))
-        .items((0..6).into_iter().map(|_| dot_row(3)))
+        .items((0..=6).map(|i| dot_row(2 * i + 1)))
+        .items((0..6).map(|_| dot_row(3)))
 }
 
 fn side_column() -> impl Element {
     Column::<NodeBundle>::new()
         .with_style(|mut style| style.row_gap = Val::Px(CELL_GAP))
-        .items((0..4).into_iter().map(|_| bern_cell(0.5, true)))
+        .items((0..4).map(|_| bern_cell(0.5, true)))
 }
 
 fn inventory() -> impl Element {
@@ -570,7 +567,7 @@ fn inventory() -> impl Element {
                                 .align_content(Align::center())
                                 .child({
                                     let inputs = MutableVec::new_with_values(
-                                        (0..4).into_iter().map(|_| bern_cell_data_option(0.2)).collect(),
+                                        (0..4).map(|_| bern_cell_data_option(0.2)).collect(),
                                     );
                                     let output: Mutable<Option<CellData>> = default();
                                     let outputter = spawn(clone!((inputs, output) async move {
@@ -618,7 +615,7 @@ fn inventory() -> impl Element {
                                         )
                                         .item(arrow())
                                         .item({
-                                            let cell_data_options = inputs.lock_ref().into_iter().cloned().collect::<Vec<_>>();
+                                            let cell_data_options = inputs.lock_ref().iter().cloned().collect::<Vec<_>>();
                                             El::<NodeBundle>::new()
                                                 .width(Val::Px(CELL_WIDTH * 2. + CELL_GAP))
                                                 .child(grid(cell_data_options).align_content(Align::new().center_x()))
@@ -630,7 +627,7 @@ fn inventory() -> impl Element {
                     El::<NodeBundle>::new()
                         .width(Val::Percent(100.))
                         .child(
-                            grid((0..27).into_iter().map(|_| bern_cell_data_option(0.5)))
+                            grid((0..27).map(|_| bern_cell_data_option(0.5)))
                                 .align_content(Align::new().center_x()),
                         ),
                 )
@@ -639,7 +636,7 @@ fn inventory() -> impl Element {
                         .with_style(|mut style| {
                             style.column_gap = Val::Px(CELL_GAP);
                         })
-                        .items((0..9).into_iter().map(|_| bern_cell(0.5, true))),
+                        .items((0..9).map(|_| bern_cell(0.5, true))),
                 ),
         )
 }

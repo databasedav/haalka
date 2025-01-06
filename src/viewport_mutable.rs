@@ -1,3 +1,6 @@
+//! Semantics for managing elements whose contents can be partially visible, see
+//! [`ViewportMutable`].
+
 use crate::raw::{observe, register_system};
 
 use super::{
@@ -14,42 +17,17 @@ use bevy_ui::prelude::*;
 use bevy_utils::prelude::*;
 use futures_signals::signal::{Mutable, Signal};
 
-#[derive(Clone, Copy)]
-pub enum LimitToBody {
-    Horizontal,
-    Vertical,
-    Both,
+/// Dimensions of an element's "scene", which contains both its visible (via its [`Viewport`]) and
+/// hidden parts.
+#[derive(Clone, Copy, Default, Debug)]
+pub struct Scene {
+    #[allow(missing_docs)]
+    pub width: f32,
+    #[allow(missing_docs)]
+    pub height: f32,
 }
 
-// can also be used to query for mutable viewports
-#[derive(Component)]
-pub struct MutableViewport {
-    limit_to_body: Option<LimitToBody>,
-    scene: Scene,
-    viewport: Viewport,
-}
-
-impl MutableViewport {
-    pub fn new(limit_to_body: Option<LimitToBody>) -> Self {
-        Self {
-            limit_to_body,
-            scene: default(),
-            viewport: default(),
-        }
-    }
-
-    pub fn scene(&self) -> Scene {
-        self.scene
-    }
-
-    pub fn viewport(&self) -> Viewport {
-        self.viewport
-    }
-}
-
-#[derive(Component)]
-pub struct ViewportMarker;
-
+/// Data specifying the visible portion of an element's [`Scene`].
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Viewport {
     /// Horizontal offset.
@@ -62,32 +40,80 @@ pub struct Viewport {
     pub height: f32,
 }
 
-#[derive(Clone, Copy, Default, Debug)]
-pub struct Scene {
-    pub width: f32,
-    pub height: f32,
+/// Specifies which axes viewport mutation is limited to the body of the [`Scene`].
+///
+/// For example, if no [`LimitToBody`] were specified, one could mutate the viewport (e.g. scroll)
+/// past the actual content of the element.
+#[derive(Clone, Copy)]
+pub enum LimitToBody {
+    #[allow(missing_docs)]
+    Horizontal,
+    #[allow(missing_docs)]
+    Vertical,
+    #[allow(missing_docs)]
+    Both,
 }
 
+/// [`Component`] for holding the [`Scene`], [`Viewport`], and relavant configuration.
+#[derive(Component)]
+pub struct MutableViewport {
+    scene: Scene,
+    viewport: Viewport,
+    limit_to_body: Option<LimitToBody>,
+}
+
+impl MutableViewport {
+    #[allow(missing_docs)]
+    pub fn new(limit_to_body: Option<LimitToBody>) -> Self {
+        Self {
+            limit_to_body,
+            scene: default(),
+            viewport: default(),
+        }
+    }
+
+    #[allow(missing_docs)]
+    pub fn scene(&self) -> Scene {
+        self.scene
+    }
+
+    #[allow(missing_docs)]
+    pub fn viewport(&self) -> Viewport {
+        self.viewport
+    }
+}
+
+/// Marker [`Component`] for identifying the [`Viewport`] [`Entity`] of a [`MutableViewport`].
+#[derive(Component)]
+pub struct ViewportMarker;
+
+/// Event for modifying the horizontal and vertical offset of the [`Viewport`].
 #[derive(Default, Event)]
 pub struct ViewportMutation {
+    /// Optional horizontal offset mutation.
     x: Option<f32>,
+    /// Optional vertical offset mutation.
     y: Option<f32>,
 }
 
 impl ViewportMutation {
+    #[allow(missing_docs)]
     pub fn x(x: f32) -> Self {
         Self::default().with_x(x)
     }
 
+    #[allow(missing_docs)]
     pub fn y(y: f32) -> Self {
         Self::default().with_y(y)
     }
 
+    #[allow(missing_docs)]
     pub fn with_x(mut self, x: f32) -> Self {
         self.x = Some(x);
         self
     }
 
+    #[allow(missing_docs)]
     pub fn with_y(mut self, y: f32) -> Self {
         self.y = Some(y);
         self
@@ -183,6 +209,9 @@ pub trait ViewportMutable: RawElWrapper {
         })
     }
 
+    /// When this element's [`Scene`] or [`Viewport`] changes, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`], [`Scene`], and [`Viewport`]. This method
+    /// can be called repeatedly to register many such handlers.
     fn on_viewport_location_change_with_system<Marker>(
         self,
         handler: impl IntoSystem<(Entity, (Scene, Viewport)), (), Marker> + Send + 'static,
@@ -203,6 +232,8 @@ pub trait ViewportMutable: RawElWrapper {
         })
     }
 
+    /// When this element's [`Scene`] or [`Viewport`] changes, run a function with its [`Scene`] and
+    /// [`Viewport`]. This method can be called repeatedly to register many such handlers.
     fn on_viewport_location_change(self, mut handler: impl FnMut(Scene, Viewport) + Send + Sync + 'static) -> Self {
         self.on_viewport_location_change_with_system(move |In((_, (scene, viewport)))| handler(scene, viewport))
     }

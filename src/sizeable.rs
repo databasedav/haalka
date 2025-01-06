@@ -1,3 +1,6 @@
+//! Semantics for managing elements' static or reactive vertical and horizontal length, integrated
+//! with the wrapper elements that [haalka](crate) employs, see [`Sizeable`].
+
 use super::raw::{DeferredUpdaterAppendDirection, RawElWrapper};
 use bevy_ui::prelude::*;
 use futures_signals::signal::{Signal, SignalExt};

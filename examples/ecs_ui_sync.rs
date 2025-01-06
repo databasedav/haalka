@@ -373,16 +373,16 @@ fn position_to_color(position: Vec3) -> ColorCategory {
     let x = position.x + WIDTH / 2.0;
     let y = position.y + BOX_SIZE;
 
-    if x >= 0.0 && x < BOX_SIZE {
-        if y >= 0.0 && y < BOX_SIZE {
+    if (0.0..BOX_SIZE).contains(&x) {
+        if (0.0..BOX_SIZE).contains(&y) {
             return ColorCategory::Red;
-        } else if y >= BOX_SIZE && y < 2.0 * BOX_SIZE {
+        } else if (BOX_SIZE..2.0 * BOX_SIZE).contains(&y) {
             return ColorCategory::Blue;
         }
-    } else if x >= BOX_SIZE && x < 2.0 * BOX_SIZE {
-        if y >= 0.0 && y < BOX_SIZE {
+    } else if (BOX_SIZE..2.0 * BOX_SIZE).contains(&x) {
+        if (0.0..BOX_SIZE).contains(&y) {
             return ColorCategory::Yellow;
-        } else if y >= BOX_SIZE && y < 2.0 * BOX_SIZE {
+        } else if (BOX_SIZE..2.0 * BOX_SIZE).contains(&y) {
             return ColorCategory::Green;
         }
     }

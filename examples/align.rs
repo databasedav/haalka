@@ -37,7 +37,7 @@ enum RectangleAlignment {
 }
 
 impl RectangleAlignment {
-    fn to_align(&self) -> Align {
+    fn to_align(self) -> Align {
         match self {
             Self::TopLeft => Align::new().top().left(),
             Self::Top => Align::new().top().center_x(),

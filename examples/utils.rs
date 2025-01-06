@@ -1,5 +1,6 @@
-#[allow(missing_docs)]
-#[allow(dead_code)]
+#![allow(missing_docs)]
+#![allow(dead_code)]
+
 use bevy::{
     app::prelude::*,
     core_pipeline::prelude::*,
@@ -109,6 +110,7 @@ impl Plugin for FpsOverlayPlugin {
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 struct MarkDefaultUiCameraSet;
 
+#[allow(clippy::type_complexity)]
 fn mark_default_ui_camera(cameras: Query<Entity, Or<(With<Camera2d>, With<Camera3d>)>>, mut commands: Commands) {
     if let Ok(entity) = cameras.get_single() {
         if let Some(mut entity) = commands.get_entity(entity) {
@@ -180,3 +182,5 @@ pub(crate) fn examples_plugin(app: &mut App) {
         }
     }
 }
+
+fn main() {}

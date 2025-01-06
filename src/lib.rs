@@ -20,17 +20,12 @@ cfg_if::cfg_if! {
         mod el;
         pub mod element;
         pub mod grid;
-        // #[allow(missing_docs)]
         pub mod pointer_event_aware;
-        // #[allow(missing_docs)]
         pub mod global_event_aware;
         mod row;
-        // #[allow(missing_docs)]
         pub mod mouse_wheel_scrollable;
-        // #[allow(missing_docs)]
         pub mod sizeable;
         mod stack;
-        // #[allow(missing_docs)]
         pub mod viewport_mutable;
 
         cfg_if::cfg_if! {

@@ -25,7 +25,7 @@ jobs:
         nickel --version
     - name: install just
       uses: extractions/setup-just@v2
-    - name: assert nickels synced yeehaw
+    - name: assert nickels synced
       run: |-
         just format_nickels sync_nickels
         [[ -n $(git status --porcelain) ]] && echo 'nickels are not synced; run `just format_nickels sync_nickels`' && exit 1 || exit 0

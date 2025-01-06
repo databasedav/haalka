@@ -127,6 +127,7 @@ fn movement(
     player.translation.z += movement.z;
 }
 
+#[allow(clippy::type_complexity)]
 fn sync_tracking_healthbar_position(
     player: Query<&Transform, (With<Player>, Changed<Transform>)>,
     camera: Query<(&Camera, &Transform), (With<Camera3d>, Without<Player>)>,
@@ -205,10 +206,7 @@ fn spawn_player(
         Health(PLAYER_HEALTH),
         HealthMutable(health.clone()),
         PbrBundle {
-            mesh: meshes.add(Mesh::from(Sphere {
-                radius: RADIUS,
-                ..default()
-            })),
+            mesh: meshes.add(Mesh::from(Sphere { radius: RADIUS })),
             transform: Transform::from_translation(PLAYER_POSITION),
             material: materials.add(Color::srgb_u8(228, 147, 58)),
             ..default()

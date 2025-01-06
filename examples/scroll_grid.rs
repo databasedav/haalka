@@ -148,18 +148,12 @@ fn ui_root() -> impl Element {
                 .width(Val::Px(300.))
                 .height(Val::Px(5. * LETTER_SIZE))
                 .align(Align::center())
-                .cells(
-                    CELLS
+                .cells(CELLS.iter().enumerate().flat_map(|(x, cells)| {
+                    cells
                         .iter()
                         .enumerate()
-                        .map(|(x, cells)| {
-                            cells
-                                .iter()
-                                .enumerate()
-                                .map(move |(y, cell)| letter(x, y, cell.signal_cloned()))
-                        })
-                        .flatten(),
-                ),
+                        .map(move |(y, cell)| letter(x, y, cell.signal_cloned()))
+                })),
         )
 }
 

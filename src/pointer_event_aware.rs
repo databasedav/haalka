@@ -1,3 +1,6 @@
+//! Semantics for managing how an [`Element`](super::element::Element) reacts to pointer events like
+//! hover, click, and press, see [`PointerEventAware`].
+
 use std::{future::Future, ops::Not, time::Duration};
 
 use apply::Apply;

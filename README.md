@@ -118,7 +118,7 @@ One can also run the examples with [`just`](https://github.com/casey/just), e.g.
 
 ## development
 1. include submodules when fetching the repo
-    ```
+    ```bash
     git clone --recurse-submodules https://github.com/databasedav/haalka.git
     ```
 1. install [just](https://github.com/casey/just?tab=readme-ov-file#installation)
