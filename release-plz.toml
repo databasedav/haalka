@@ -2,8 +2,6 @@
 changelog_update = false
 git_release_type = "auto"
 git_release_draft = true
-release_always = false
-pr_branch_prefix = "release/"
 
 [[package]]
 name = "haalka"

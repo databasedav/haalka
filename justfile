@@ -11,7 +11,7 @@ doctest:
 test: doctest
 
 clippy *extras:
-  cargo clippy --all-features --all-targets --locked -- --deny warnings {{ extras }}
+  cargo clippy --all-features --all-targets --locked -- --deny warnings --no-deps {{ extras }}
 
 # TODO: --all-features flag doesn't work because examples shenanigans
 check_all_features:

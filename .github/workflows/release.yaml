@@ -5,7 +5,6 @@ env:
   RUSTFLAGS: --deny warnings
 jobs:
   release:
-    if: ${{ github.event.pull_request.merged == true }}
     name: release
     runs-on: ubuntu-latest
     steps:
@@ -33,11 +32,8 @@ jobs:
         command: release
 name: release
 on:
-  pull_request:
+  push:
     branches:
     - '[0-9]+.[0-9]+'
-    types:
-    - closed
 permissions:
   contents: write
-  pull-requests: write

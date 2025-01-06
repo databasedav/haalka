@@ -1,3 +1,7 @@
+[workspace]
+members = ["MoonZoon/crates/*"]
+resolver = "2"
+
 [package]
 name = "haalka"
 version = "0.2.2"

@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## unreleased
 
+# 0.2.2 (2025-01-05)
+
 ### added
 
 - wasm support

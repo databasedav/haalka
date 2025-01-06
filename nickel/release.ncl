@@ -5,13 +5,11 @@ let RELEASE_PLZ_ACTION_VERSION = "0.5" in
   name = "release",
 
   permissions = {
-    pull-requests = "write",
     contents = "write"
   },
 
   on = {
-    pull_request = {
-      types = ["closed"],
+    push = {
       branches = ["[0-9]+.[0-9]+"],
     }
   },
@@ -21,7 +19,6 @@ let RELEASE_PLZ_ACTION_VERSION = "0.5" in
   jobs =
     {
       release = {
-        "if" = "${{ github.event.pull_request.merged == true }}",
         steps = [
           checkout,
           rust_toolchain,
