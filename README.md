@@ -95,42 +95,55 @@ All examples are compiled to wasm for both webgl2 and webgpu (check [compatibili
 - counter [webgl2](https://databasedav.github.io/haalka/examples/webgl2/counter/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/counter/)
 
     the example above, a simple counter
+
 - button [webgl2](https://databasedav.github.io/haalka/examples/webgl2/button/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/button/)
 
     a basic button, port of https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs
+
 - align [webgl2](https://databasedav.github.io/haalka/examples/webgl2/align/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/align/)
 
     alignment API demo, port of https://github.com/MoonZoon/MoonZoon/tree/main/examples/align and https://github.com/MoonZoon/MoonZoon/tree/main/examples/align_content
+
 - scroll [webgl2](https://databasedav.github.io/haalka/examples/webgl2/scroll/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/scroll/)
 
     scrollability API demo, inspired by https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs
+
 - scroll_grid [webgl2](https://databasedav.github.io/haalka/examples/webgl2/scroll_grid/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/scroll_grid/)
 
     i can't believe it's not scrolling!
+
 - snake [webgl2](https://databasedav.github.io/haalka/examples/webgl2/snake/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/snake/)
 
     the classic, with adjustable grid size and tick rate
+
 - ecs_ui_sync [webgl2](https://databasedav.github.io/haalka/examples/webgl2/ecs_ui_sync/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/ecs_ui_sync/)
 
     forward ecs changes to the ui
+
 - key_values_sorted [webgl2](https://databasedav.github.io/haalka/examples/webgl2/key_values_sorted/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/key_values_sorted/)
 
     text inputs, scrolling/viewport control, and reactive lists; promises made promises kept! https://discord.com/channels/691052431525675048/1192585689460658348/1193431789465776198 (yes I take requests)
+
 - calculator [webgl2](https://databasedav.github.io/haalka/examples/webgl2/calculator/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/calculator/)
 
     simple calculator, spurred by https://discord.com/channels/691052431525675048/885021580353237032/1263661461364932639
+
 - main_menu [webgl2](https://databasedav.github.io/haalka/examples/webgl2/main_menu/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/main_menu/)
 
     sub menus, sliders, dropdowns, reusable composable widgets, gamepad navigation
+
 - inventory [webgl2](https://databasedav.github.io/haalka/examples/webgl2/inventory/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/inventory/)
-    
+
     grid, icons, drag and drop, tooltips
+
 - healthbar [webgl2](https://databasedav.github.io/haalka/examples/webgl2/healthbar/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/healthbar/)
 
     3D character anchor, customizable widgets
+
 - responsive_menu [webgl2](https://databasedav.github.io/haalka/examples/webgl2/responsive_menu/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/responsive_menu/)
 
     nine-patch buttons, screen size reactivity
+
 - character_editor [webgl2](https://databasedav.github.io/haalka/examples/webgl2/character_editor/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/character_editor/)
 
     scrollable buttons, mutable viewport, text input reactivity
