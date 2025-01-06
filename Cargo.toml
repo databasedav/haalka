@@ -4,11 +4,11 @@ resolver = "2"
 
 [package]
 name = "haalka"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 categories = ["asynchronous", "gui", "game-development"]
 description = "ergonomic reactive Bevy UI library powered by FRP signals"
-exclude = [".github/", "crates/"]
+exclude = [".github/", ".vscode/", "MoonZoon/"]
 keywords = ["ui", "reactive", "signals", "gamedev", "bevy"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/databasedav/haalka"

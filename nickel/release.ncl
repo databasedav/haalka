@@ -23,7 +23,6 @@ let RELEASE_PLZ_ACTION_VERSION = "0.5" in
           checkout,
           rust_toolchain,
           bevy_dependencies,
-          cached_target_populate,
           {
             name = "run release-plz",
             uses = "MarcoIeni/release-plz-action@v%{ RELEASE_PLZ_ACTION_VERSION }",
