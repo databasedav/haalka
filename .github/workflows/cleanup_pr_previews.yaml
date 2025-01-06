@@ -6,6 +6,10 @@ jobs:
     name: cleanup
     runs-on: ubuntu-latest
     steps:
+    - name: checkout repo
+      uses: actions/checkout@v4
+      with:
+        submodules: true
     - name: make empty dir
       run: mkdir -p empty_dir
     - name: cleanup

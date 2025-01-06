@@ -13,6 +13,11 @@ let CARGO_CACHE_VERSION = "2" in
 let SETUP_JUST_VERSION = "2" in
 let INSTALL_NIX_ACTION_VERSION = "30" in
 let CACHIX_ACTION_VERSION = "15" in
+let build_and_deploy_base_args = {
+  api = "${{ matrix.api }}",
+  example = "${{ matrix.example }}",
+}
+in
 {
   REPO = "https://github.com/databasedav/haalka",
   GITHUB_PAGES_DEPLOY_ACTION_VERSION = "4.7.2",
@@ -122,10 +127,6 @@ let CACHIX_ACTION_VERSION = "15" in
         contents = "write",
       },
       uses = "./.github/workflows/build_and_deploy_example.yaml",
-      with = {
-        pr = pr_,
-        api = "${{ matrix.api }}",
-        example = "${{ matrix.example }}",
-      },
+      with = if pr_ == "" then build_and_deploy_base_args else { pr = pr_ } & build_and_deploy_base_args,
     }
 }
