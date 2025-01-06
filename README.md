@@ -90,40 +90,87 @@ fn camera(mut commands: Commands) {
 }
 ```
 
+All examples are compiled to wasm for both webgl2 and webgpu (check [compatibility](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status#implementation-status)) and deployed to github pages.
+
+- counter [webgl2](https://databasedav.github.io/haalka/examples/webgl2/counter/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/counter/)
+
+    the example above, a simple counter
+- button [webgl2](https://databasedav.github.io/haalka/examples/webgl2/button/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/button/)
+
+    a basic button, port of https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs
+- align [webgl2](https://databasedav.github.io/haalka/examples/webgl2/align/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/align/)
+
+    alignment API demo, port of https://github.com/MoonZoon/MoonZoon/tree/main/examples/align and https://github.com/MoonZoon/MoonZoon/tree/main/examples/align_content
+- scroll [webgl2](https://databasedav.github.io/haalka/examples/webgl2/scroll/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/scroll/)
+
+    scrollability API demo, inspired by https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs
+- scroll_grid [webgl2](https://databasedav.github.io/haalka/examples/webgl2/scroll_grid/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/scroll_grid/)
+
+    i can't believe it's not scrolling!
+- snake [webgl2](https://databasedav.github.io/haalka/examples/webgl2/snake/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/snake/)
+
+    the classic, with adjustable grid size and tick rate
+- ecs_ui_sync [webgl2](https://databasedav.github.io/haalka/examples/webgl2/ecs_ui_sync/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/ecs_ui_sync/)
+
+    forward ecs changes to the ui
+- key_values_sorted [webgl2](https://databasedav.github.io/haalka/examples/webgl2/key_values_sorted/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/key_values_sorted/)
+
+    text inputs, scrolling/viewport control, and reactive lists; promises made promises kept! https://discord.com/channels/691052431525675048/1192585689460658348/1193431789465776198 (yes I take requests)
+- calculator [webgl2](https://databasedav.github.io/haalka/examples/webgl2/calculator/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/calculator/)
+
+    simple calculator, spurred by https://discord.com/channels/691052431525675048/885021580353237032/1263661461364932639
+- main_menu [webgl2](https://databasedav.github.io/haalka/examples/webgl2/main_menu/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/main_menu/)
+
+    sub menus, sliders, dropdowns, reusable composable widgets, gamepad navigation
+- inventory [webgl2](https://databasedav.github.io/haalka/examples/webgl2/inventory/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/inventory/)
+    
+    grid, icons, drag and drop, tooltips
+- healthbar [webgl2](https://databasedav.github.io/haalka/examples/webgl2/healthbar/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/healthbar/)
+
+    3D character anchor, customizable widgets
+- responsive_menu [webgl2](https://databasedav.github.io/haalka/examples/webgl2/responsive_menu/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/responsive_menu/)
+
+    nine-patch buttons, screen size reactivity
+- character_editor [webgl2](https://databasedav.github.io/haalka/examples/webgl2/character_editor/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/character_editor/)
+
+    scrollable buttons, mutable viewport, text input reactivity
+
+Or run them locally with `cargo`.
 ```bash
-cargo run --example counter  # the example above
-cargo run --example button  # port of https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs
-cargo run --example align  # alignment API demo, port of https://github.com/MoonZoon/MoonZoon/tree/main/examples/align and https://github.com/MoonZoon/MoonZoon/tree/main/examples/align_content
-cargo run --example scroll  # scrollability API demo, inspired by https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs
-cargo run --example scroll_grid  # i can't believe it's not scrolling !
-cargo run --example snake  # with adjustable grid size and tick rate
-cargo run --example ecs_ui_sync  # forward ecs changes to the ui
-cargo run --example key_values_sorted  # text inputs, scrolling/viewport control, and reactive lists; promises made promises kept ! https://discord.com/channels/691052431525675048/1192585689460658348/1193431789465776198 (yes i take requests)
-cargo run --example calculator  # simple calculator, spurred by https://discord.com/channels/691052431525675048/885021580353237032/1263661461364932639
+cargo run --example counter
+cargo run --example button
+cargo run --example align
+cargo run --example scroll
+cargo run --example scroll_grid
+cargo run --example snake
+cargo run --example ecs_ui_sync
+cargo run --example key_values_sorted
+cargo run --example calculator
 
 # ui challenges from https://github.com/bevyengine/bevy/discussions/11100
-cargo run --example main_menu  # sub menus, sliders, dropdowns, reusable composable widgets, gamepad navigation
-cargo run --example inventory  # grid, icons, drag and drop, tooltips
-cargo run --example healthbar  # 3d character anchor, customizable widgets
-cargo run --example responsive_menu  # nine-patch buttons, screen size reactivity
-cargo run --example character_editor  # scrollable buttons, mutable viewport, text input reactivity
+cargo run --example main_menu
+cargo run --example inventory
+cargo run --example healthbar
+cargo run --example responsive_menu
+cargo run --example character_editor
 ```
-One can also run the examples with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
+Or with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 
 ## Bevy compatibility
 |bevy|haalka|
 |-|-|
+|`0.15`|`0.3`|
 |`0.14`|`0.2`|
 |`0.13`|`0.1`|
 
 ## development
-1. include submodules when fetching the repo
+- include submodules when fetching the repo
     ```bash
     git clone --recurse-submodules https://github.com/databasedav/haalka.git
     ```
-1. install [just](https://github.com/casey/just?tab=readme-ov-file#installation)
-1. install [nickel](https://github.com/tweag/nickel?tab=readme-ov-file#run) for modifying CI configuration (`nickel` must be in your PATH)
-1. install [File Watcher](https://marketplace.visualstudio.com/items?itemName=appulate.filewatcher) for automatically syncing nickels
+- install [just](https://github.com/casey/just?tab=readme-ov-file#installation)
+- install [nickel](https://github.com/tweag/nickel?tab=readme-ov-file#run) for modifying CI configuration (`nickel` must be in your PATH)
+- install [File Watcher](https://marketplace.visualstudio.com/items?itemName=appulate.filewatcher) for automatically syncing nickels
 
 ## license
 All code in this repository is dual-licensed under either:
