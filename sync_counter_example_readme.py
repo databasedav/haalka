@@ -11,7 +11,7 @@ lines = lines[6:]
 content = ''.join(lines)
 
 # Replace `example_plugin` with `((DefaultPlugins, HaalkaPlugin))`
-content = re.sub(r'example_plugin', '(DefaultPlugins, HaalkaPlugin)', content)
+content = re.sub(r'examples_plugin', '(DefaultPlugins, HaalkaPlugin)', content)
 
 # Read the content of README.md
 with open('README.md', 'r') as file:
