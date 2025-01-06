@@ -169,21 +169,21 @@ cargo run --example character_editor
 ```
 Or with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 
-
 ## Bevy compatibility
 |bevy|haalka|
 |-|-|
+|`0.15`|`0.3`|
 |`0.14`|`0.2`|
 |`0.13`|`0.1`|
 
 ## development
-1. include submodules when fetching the repo
+- include submodules when fetching the repo
     ```bash
     git clone --recurse-submodules https://github.com/databasedav/haalka.git
     ```
-1. install [just](https://github.com/casey/just?tab=readme-ov-file#installation)
-1. install [nickel](https://github.com/tweag/nickel?tab=readme-ov-file#run) for modifying CI configuration (`nickel` must be in your PATH)
-1. install [File Watcher](https://marketplace.visualstudio.com/items?itemName=appulate.filewatcher) for automatically syncing nickels
+- install [just](https://github.com/casey/just?tab=readme-ov-file#installation)
+- install [nickel](https://github.com/tweag/nickel?tab=readme-ov-file#run) for modifying CI configuration (`nickel` must be in your PATH)
+- install [File Watcher](https://marketplace.visualstudio.com/items?itemName=appulate.filewatcher) for automatically syncing nickels
 
 ## license
 All code in this repository is dual-licensed under either:
