@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0; background-color: #2b2c2f;">
+
+<head>
+    <meta charset="utf-8" />
+    <title>haalka scroll_grid example</title>
+    
+    
+<script type="module" nonce="HOo4gXpIJaFmNgJL7ZrdUw==">
+import init, * as bindings from './haalka-3ebeb8c369b04925.js';
+const wasm = await init({ module_or_path: './haalka-3ebeb8c369b04925_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+<link rel="modulepreload" href="./haalka-3ebeb8c369b04925.js" crossorigin=anonymous integrity="sha384-BVKIck+4bbsvM++ZoIhS+Q70PRXboxhWOcJc7IyXpDbx0qx4M3Aadm9uiylIvVWM"><link rel="preload" href="./haalka-3ebeb8c369b04925_bg.wasm" crossorigin=anonymous integrity="sha384-aX1eoIxbS36ayb+lBKmf1chrvcGxVG6A7X60Z6xxvHtYgO3gUj7VEWuUvSARamAX" as="fetch" type="application/wasm"></head>
+
+<body style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
+    <div id="game" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0; display: flex;">
+        <canvas id="bevy">
+            js and canvas support is required
+        </canvas>
+    </div>
+</body>
+
+</html>
