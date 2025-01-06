@@ -19,10 +19,6 @@ jobs:
     - name: install bevy dependencies
       run: sudo apt-get update && sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
       shell: bash
-    - name: populated target directory from cache
-      uses: Leafwing-Studios/cargo-cache@v2
-      with:
-        sweep-cache: true
     - env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
