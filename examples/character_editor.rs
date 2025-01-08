@@ -83,7 +83,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
             })
             .map(BackgroundColor)
     };
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(BUTTON_WIDTH)
         .height(BUTTON_HEIGHT)
         .with_style(|mut style| style.border = UiRect::all(Val::Px(5.)))
@@ -93,7 +93,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
         .hovered_sync(hovered)
         .pressed_sync(pressed)
         .on_click(move || SELECTED_SHAPE.set_neq(shape))
-        .child(El::<TextBundle>::new().text(Text::from_section(
+        .child(El::<Text>::new().text(Text::from_section(
             shape.to_string(),
             TextStyle {
                 font_size: 40.0,
@@ -104,17 +104,17 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
 }
 
 fn ui_root() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .ui_root()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
-            Stack::<NodeBundle>::new()
+            Stack::<Node>::new()
                 .width(Val::Percent(100.))
                 .height(Val::Percent(100.))
                 .layer(
-                    Column::<NodeBundle>::new()
+                    Column::<Node>::new()
                         .align(Align::new().center_y().right())
                         .with_style(|mut style| {
                             style.padding.right = Val::Percent(20.);
@@ -138,7 +138,7 @@ fn ui_root() -> impl Element {
                                 .width(BUTTON_WIDTH)
                                 .height(Val::Px(40.))
                                 .mode(CosmicWrap::InfiniteLine)
-                                .scroll_disabled()
+                                .scroll_enabled()
                                 .cursor_color(CursorColor(Color::WHITE))
                                 .fill_color(CosmicBackgroundColor(NORMAL_BUTTON))
                                 .attrs(TextAttrs::new().color(Color::WHITE))
@@ -158,7 +158,7 @@ fn ui_root() -> impl Element {
                             let hovereds = MutableVec::new_with_values(
                                 (0..Shape::iter().count()).map(|_| Mutable::new(false)).collect(),
                             );
-                            Column::<NodeBundle>::new()
+                            Column::<Node>::new()
                                 .height(Val::Px(200.))
                                 .align(Align::new().center_x())
                                 .mutable_viewport(Overflow::clip_y(), LimitToBody::Vertical)

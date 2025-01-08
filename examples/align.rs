@@ -64,7 +64,7 @@ static RECTANGLE_CONTENT_ALIGNMENT: Lazy<Mutable<Option<RectangleAlignment>>> = 
 
 fn alignment_button(alignment: Alignment) -> impl Element {
     let hovered = Mutable::new(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .align(Align::center())
         .width(Val::Px(250.))
         .height(Val::Px(80.))
@@ -81,7 +81,7 @@ fn alignment_button(alignment: Alignment) -> impl Element {
         .hovered_sync(hovered)
         .align_content(Align::center())
         .on_click(move || ALIGNMENT.set(alignment))
-        .child(El::<TextBundle>::new().text(text(
+        .child(El::<Text>::new().text(text(
             match alignment {
                 Alignment::Self_ => "align self",
                 Alignment::Content => "align content",
@@ -91,41 +91,41 @@ fn alignment_button(alignment: Alignment) -> impl Element {
 }
 
 fn ui_root() -> impl Element {
-    Column::<NodeBundle>::new()
+    Column::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .with_style(|mut style| style.row_gap = Val::Px(15.))
         .align_content(Align::center())
         .align(Align::center())
         .item(
-            Row::<NodeBundle>::new()
+            Row::<Node>::new()
                 .with_style(|mut style| style.column_gap = Val::Px(15.))
-                .item(container("Column", Column::<NodeBundle>::new().items(rectangles())))
-                .item(container("El", El::<NodeBundle>::new().child(rectangle(1))))
+                .item(container("Column", Column::<Node>::new().items(rectangles())))
+                .item(container("El", El::<Node>::new().child(rectangle(1))))
                 // TODO: is this align content behavior buggy?
-                .item(container("Grid", Grid::<NodeBundle>::new().cells(rectangles()))),
+                .item(container("Grid", Grid::<Node>::new().cells(rectangles()))),
         )
         .item(
-            Row::<NodeBundle>::new()
+            Row::<Node>::new()
                 .with_style(|mut style| style.column_gap = Val::Px(15.))
                 .item(
-                    Column::<NodeBundle>::new()
+                    Column::<Node>::new()
                         .with_style(|mut style| style.row_gap = Val::Px(15.))
                         .item(alignment_button(Alignment::Self_))
                         .item(alignment_button(Alignment::Content)),
                 )
                 .item(
-                    Stack::<NodeBundle>::new()
+                    Stack::<Node>::new()
                         .layers(RectangleAlignment::iter().map(align_switcher))
                         .apply(container_style),
                 ),
         )
         .item(
-            Row::<NodeBundle>::new()
+            Row::<Node>::new()
                 .with_style(|mut style| style.column_gap = Val::Px(15.))
-                .item(container("Row", Row::<NodeBundle>::new().items(rectangles())))
+                .item(container("Row", Row::<Node>::new().items(rectangles())))
                 // TODO: is this align content behavior buggy?
-                .item(container("Stack", Stack::<NodeBundle>::new().layers(rectangles()))),
+                .item(container("Stack", Stack::<Node>::new().layers(rectangles()))),
         )
 }
 
@@ -144,12 +144,8 @@ fn text(text: &str, font_size: f32) -> Text {
 }
 
 fn container(name: &str, element: impl Element + Sizeable) -> impl Element {
-    Column::<NodeBundle>::new()
-        .item(
-            El::<TextBundle>::new()
-                .align(Align::new().center_x())
-                .text(text(name, 30.)),
-        )
+    Column::<Node>::new()
+        .item(El::<Text>::new().align(Align::new().center_x()).text(text(name, 30.)))
         .item(
             element
                 .align_content_signal(
@@ -168,7 +164,7 @@ fn container(name: &str, element: impl Element + Sizeable) -> impl Element {
 
 fn rectangle(index: i32) -> impl Element {
     let size = 40;
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(size as f32))
         .height(Val::Px(size as f32))
         .background_color(BackgroundColor(bevy::color::palettes::css::DARK_GREEN.into()))
@@ -182,7 +178,7 @@ fn rectangle(index: i32) -> impl Element {
                 .map(Option::flatten),
         )
         .child(
-            El::<TextBundle>::new()
+            El::<Text>::new()
                 .align(Align::center())
                 .text(text(&index.to_string(), 14.)),
         )
@@ -194,7 +190,7 @@ fn rectangles() -> Vec<impl Element> {
 
 fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
     let (hovered, hovered_signal) = Mutable::new_and_signal(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .align(rectangle_alignment.to_align())
         .background_color_signal(
             signal::or(
@@ -214,7 +210,7 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
             ),
         )
         .with_style(|mut style| style.padding = UiRect::all(Val::Px(5.)))
-        .child(El::<TextBundle>::new().text(text(&rectangle_alignment.to_string(), 14.)))
+        .child(El::<Text>::new().text(text(&rectangle_alignment.to_string(), 14.)))
         .hovered_sync(hovered)
         .on_click(move || {
             match ALIGNMENT.get() {

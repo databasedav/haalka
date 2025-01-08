@@ -59,7 +59,7 @@ fn button(font: Handle<Font>) -> impl Element {
             })
             .map(BackgroundColor)
     };
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(150.0))
         .height(Val::Px(65.))
         .with_style(|mut style| style.border = UiRect::all(Val::Px(5.0)))
@@ -70,7 +70,7 @@ fn button(font: Handle<Font>) -> impl Element {
         .hovered_sync(hovered)
         .pressed_sync(pressed)
         .child(
-            El::<TextBundle>::new().text_signal(
+            El::<Text>::new().text_signal(
                 pressed_hovered_broadcaster
                     .signal()
                     .map(|(pressed, hovered)| {
@@ -101,7 +101,7 @@ fn camera(mut commands: Commands) {
 }
 
 fn ui_root(font: Handle<Font>) -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())

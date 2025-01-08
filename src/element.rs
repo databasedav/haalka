@@ -8,7 +8,7 @@ use super::{
 };
 use bevy_core::prelude::*;
 use bevy_ecs::prelude::*;
-use bevy_mod_picking::prelude::Pickable;
+use bevy_picking::prelude::*;
 use futures_signals::signal::{Signal, SignalExt};
 
 /// [`Element`]s are [`RawElement`]s that wrap [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs)
@@ -38,9 +38,9 @@ impl<T: Element> IntoElement for T {
 }
 
 // impl IntoElement for &'static str {
-//     type EL = El<TextBundle>;
+//     type EL = El<Text>;
 //     fn into_element(self) -> Self::EL {
-//         El::<TextBundle>::new().text(Text::from_section(
+//         El::<Text>::new().text(Text::from_section(
 //             self.to_string(),
 //             TextStyle::default(),
 //         ))
@@ -91,12 +91,12 @@ impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
 /// use haalka::prelude::*;
 ///
 /// struct MyWidget {
-///     el: El<NodeBundle>,
+///     el: El<Node>,
 ///     data: Mutable<usize>,
 /// }
 ///
 /// impl ElementWrapper for MyWidget {
-///     type EL = El<NodeBundle>;
+///     type EL = El<Node>;
 ///     fn element_mut(&mut self) -> &mut Self::EL {
 ///         &mut self.el
 ///     }
@@ -141,7 +141,7 @@ impl<EW: ElementWrapper> RawElWrapper for EW {
 /// Enables mixing of different types of [`Element`]s.
 ///
 /// Since [`Element`]s or [`ElementWrapper::EL`]s can be of different concrete types (e.g.
-/// `El<NodeBundle>`, `El<ImageBundle>`, `Column<NodeBundle>`, etc.), one will run into unfortunate
+/// `El<Node>`, `El<ImageBundle>`, `Column<Node>`, etc.), one will run into unfortunate
 /// type issues when doing things like returning differnt [`ElementWrapper`]s (read: widgets) from
 /// diverging branches of logic, or creating a collection of [`ElementWrapper`]s of different types.
 /// Since we have an exhaustive list of the possible [`Aligner`]s, we can use a bit of type
@@ -177,7 +177,7 @@ pub trait UiRootable: RawElWrapper {
                 .on_spawn(|world, entity| {
                     world.insert_resource(UiRoot(entity));
                 })
-                .insert(Pickable::default())
+                .insert(PickingBehavior::default())
         })
     }
 }

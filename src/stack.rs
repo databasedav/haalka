@@ -1,5 +1,5 @@
 use bevy_ecs::prelude::*;
-use bevy_mod_picking::picking_core::Pickable;
+use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use futures_signals::{
     signal::{Signal, SignalExt},
@@ -30,14 +30,14 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Stack<NodeType> {
     fn from(value: RawHaalkaEl) -> Self {
         Self {
             raw_el: value
-                .with_component::<Style>(|mut style| {
-                    style.display = Display::Grid;
-                    style.grid_auto_columns =
+                .with_component::<Node>(|mut node| {
+                    node.display = Display::Grid;
+                    node.grid_auto_columns =
                         GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
-                    style.grid_auto_rows =
+                    node.grid_auto_rows =
                         GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
                 })
-                .insert(Pickable::IGNORE),
+                .insert(PickingBehavior::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
@@ -54,8 +54,7 @@ impl<NodeType: Bundle + Default> Stack<NodeType> {
     /// Construct a new [`Stack`] from a [`Bundle`] with a [`Default`] implementation.
     ///
     /// # Notes
-    /// [`Bundle`]s without the required bevy_ui node components (e.g. [`Node`], [`Style`], etc.)
-    /// will not behave as expected.
+    /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
         Self::from(NodeType::default())
     }
@@ -155,51 +154,51 @@ impl<NodeType: Bundle> Alignable for Stack<NodeType> {
         &mut self.align
     }
 
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
-        Row::<NodeType>::apply_content_alignment(style, alignment, action)
+    fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
+        Row::<NodeType>::apply_content_alignment(node, alignment, action)
     }
 }
 
 impl<NodeType: Bundle> ChildAlignable for Stack<NodeType> {
-    fn update_style(mut style: Mut<Style>) {
-        style.grid_column = GridPlacement::start_end(1, 1);
-        style.grid_row = GridPlacement::start_end(1, 1);
+    fn update_node(mut node: Mut<Node>) {
+        node.grid_column = GridPlacement::start_end(1, 1);
+        node.grid_row = GridPlacement::start_end(1, 1);
     }
 
-    fn apply_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+    fn apply_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
         match alignment {
             Alignment::Top => {
-                style.align_self = match action {
+                node.align_self = match action {
                     AddRemove::Add => AlignSelf::Start,
                     AddRemove::Remove => AlignSelf::DEFAULT,
                 }
             }
             Alignment::Bottom => {
-                style.align_self = match action {
+                node.align_self = match action {
                     AddRemove::Add => AlignSelf::End,
                     AddRemove::Remove => AlignSelf::DEFAULT,
                 }
             }
             Alignment::Left => {
-                style.justify_self = match action {
+                node.justify_self = match action {
                     AddRemove::Add => JustifySelf::Start,
                     AddRemove::Remove => JustifySelf::DEFAULT,
                 }
             }
             Alignment::Right => {
-                style.justify_self = match action {
+                node.justify_self = match action {
                     AddRemove::Add => JustifySelf::End,
                     AddRemove::Remove => JustifySelf::DEFAULT,
                 }
             }
             Alignment::CenterX => {
-                style.justify_self = match action {
+                node.justify_self = match action {
                     AddRemove::Add => JustifySelf::Center,
                     AddRemove::Remove => JustifySelf::DEFAULT,
                 }
             }
             Alignment::CenterY => {
-                style.align_self = match action {
+                node.align_self = match action {
                     AddRemove::Add => AlignSelf::Center,
                     AddRemove::Remove => AlignSelf::DEFAULT,
                 }

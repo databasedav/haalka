@@ -68,14 +68,14 @@ enum SubMenu {
 // core widget, pretty much every other widget uses the `Button`
 #[derive(Default)]
 struct Button {
-    el: El<NodeBundle>,
+    el: El<Node>,
     selected: Mutable<bool>,
     hovered: Mutable<bool>,
 }
 
 // implementing `ElementWrapper` allows the struct to be passed directly to .child methods
 impl ElementWrapper for Button {
-    type EL = El<NodeBundle>;
+    type EL = El<Node>;
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
@@ -120,7 +120,7 @@ impl Button {
         };
         Self {
             el: {
-                El::<NodeBundle>::new()
+                El::<Node>::new()
                     .height(Val::Px(DEFAULT_BUTTON_HEIGHT))
                     .with_style(|mut style| {
                         style.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH));
@@ -175,7 +175,7 @@ fn text_button(
 ) -> Button {
     Button::new()
         .width(Val::Px(200.))
-        .body(El::<TextBundle>::new().text_signal(text_signal.map(text)))
+        .body(El::<Text>::new().text_signal(text_signal.map(text)))
         .on_click(on_click)
 }
 
@@ -185,24 +185,20 @@ fn sub_menu_button(sub_menu: SubMenu) -> Button {
     })
 }
 
-fn menu_base(width: f32, height: f32, title: &str) -> Column<NodeBundle> {
-    Column::<NodeBundle>::new()
+fn menu_base(width: f32, height: f32, title: &str) -> Column<Node> {
+    Column::<Node>::new()
         .width(Val::Px(width))
         .height(Val::Px(height))
         .with_style(|mut style| style.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH)))
         .border_color(BorderColor(Color::BLACK))
         .background_color(BackgroundColor(NORMAL_BUTTON))
         .item(
-            El::<NodeBundle>::new()
+            El::<Node>::new()
                 .height(Val::Px(MENU_ITEM_HEIGHT))
                 .with_style(|mut style| {
                     style.padding = UiRect::all(Val::Px(BASE_PADDING * 2.));
                 })
-                .child(
-                    El::<TextBundle>::new()
-                        .align(Align::new().top().left())
-                        .text(text(title)),
-                ),
+                .child(El::<Text>::new().align(Align::new().top().left()).text(text(title))),
         )
 }
 
@@ -294,7 +290,7 @@ enum Quality {
 }
 
 struct RadioGroup {
-    el: Row<NodeBundle>,
+    el: Row<Node>,
     controlling: Mutable<bool>,
 }
 
@@ -306,7 +302,7 @@ impl RadioGroup {
         let (controlling, controlling_signal) = Mutable::new_and_signal(false);
         Self {
             el: {
-                Row::<NodeBundle>::new()
+                Row::<Node>::new()
                 .apply(|element| focus_on_signal(element, controlling.signal()))
                 .apply(|element| {
                     input_event_listener_controller(
@@ -368,7 +364,7 @@ impl RadioGroup {
 }
 
 impl ElementWrapper for RadioGroup {
-    type EL = Row<NodeBundle>;
+    type EL = Row<Node>;
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
@@ -385,8 +381,8 @@ enum LeftRight {
     Right,
 }
 
-fn centered_arrow_text(direction: LeftRight) -> El<TextBundle> {
-    El::<TextBundle>::new()
+fn centered_arrow_text(direction: LeftRight) -> El<Text> {
+    El::<Text>::new()
         .with_style(|mut style| {
             // manually centered
             style.bottom = Val::Px(2.);
@@ -402,7 +398,7 @@ fn centered_arrow_text(direction: LeftRight) -> El<TextBundle> {
 }
 
 struct IterableOptions {
-    el: Row<NodeBundle>,
+    el: Row<Node>,
     controlling: Mutable<bool>,
 }
 
@@ -418,7 +414,7 @@ impl IterableOptions {
         let right_pressed = Mutable::new(false);
         Self {
             el: {
-                Row::<NodeBundle>::new()
+                Row::<Node>::new()
                 .apply(|element| focus_on_signal(element, controlling.signal()))
                 .apply(|element| {
                     input_event_listener_controller(
@@ -476,7 +472,7 @@ impl IterableOptions {
                     .body(centered_arrow_text(LeftRight::Left))
                 })
                 .item(
-                    El::<TextBundle>::new()
+                    El::<Text>::new()
                     .text_signal(selected.signal_cloned().map(text))
                 )
                 .item({
@@ -497,7 +493,7 @@ impl IterableOptions {
 }
 
 impl ElementWrapper for IterableOptions {
-    type EL = Row<NodeBundle>;
+    type EL = Row<Node>;
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
@@ -510,7 +506,7 @@ impl Controllable for IterableOptions {
 }
 
 struct Slider {
-    el: Row<NodeBundle>,
+    el: Row<Node>,
     controlling: Mutable<bool>,
 }
 
@@ -526,7 +522,7 @@ impl Slider {
                 let value_setter = spawn(clone!((left, value) async move {
                     left.signal().for_each_sync(|left| value.set_neq(left / max * 100.)).await;
                 }));
-                Row::<NodeBundle>::new()
+                Row::<Node>::new()
                     .update_raw_el(|raw_el| raw_el.insert(SliderTag))
                     .apply(|element| focus_on_signal(element, controlling.signal()))
                     .apply(|element| {
@@ -548,11 +544,9 @@ impl Slider {
                     })
                     .update_raw_el(|raw_el| raw_el.hold_tasks([value_setter]))
                     .with_style(|mut style| style.column_gap = Val::Px(10.))
+                    .item(El::<Text>::new().text_signal(value.signal().map(|value| text(format!("{:.1}", value)))))
                     .item(
-                        El::<TextBundle>::new().text_signal(value.signal().map(|value| text(format!("{:.1}", value)))),
-                    )
-                    .item(
-                        Stack::<NodeBundle>::new()
+                        Stack::<Node>::new()
                             .width(Val::Px(slider_width))
                             .height(Val::Px(5.))
                             .with_style(move |mut style| style.padding = UiRect::horizontal(Val::Px(slider_padding)))
@@ -584,7 +578,7 @@ impl Slider {
 }
 
 impl ElementWrapper for Slider {
-    type EL = Row<NodeBundle>;
+    type EL = Row<Node>;
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
@@ -619,8 +613,8 @@ fn only_one_up_flipper(
 
 static MENU_ITEM_HOVERED_OPTION: Lazy<Mutable<Option<Mutable<bool>>>> = Lazy::new(default);
 
-fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<NodeBundle> {
-    Stack::<NodeBundle>::new()
+fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<Node> {
+    Stack::<Node>::new()
         .background_color_signal(
             hovered
                 .signal()
@@ -632,7 +626,7 @@ fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<N
         .height(Val::Px(MENU_ITEM_HEIGHT))
         .with_style(|mut style| style.padding = UiRect::axes(Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.)))
         .layer(
-            El::<TextBundle>::new()
+            El::<Text>::new()
                 .text(text(label))
                 .align(Align::new().left().center_y()),
         )
@@ -640,7 +634,7 @@ fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<N
 }
 
 struct Dropdown {
-    el: El<NodeBundle>,
+    el: El<Node>,
     controlling: Mutable<bool>,
 }
 
@@ -673,7 +667,7 @@ impl Dropdown {
         let options_hovered =
             MutableVec::new_with_values((0..options.lock_ref().len()).map(|_| Mutable::new(false)).collect());
         let el = {
-            El::<NodeBundle>::new()
+            El::<Node>::new()
             .apply(|element| focus_on_signal(element, controlling.signal()))
             .apply(|element| {
                 input_event_listener_controller(
@@ -747,11 +741,11 @@ impl Dropdown {
                 .width(Val::Px(300.))
                 .hovered_signal(hovered.signal())
                 .body(
-                    Stack::<NodeBundle>::new()
+                    Stack::<Node>::new()
                     .width(Val::Percent(100.))
                     .with_style(|mut style| style.padding = UiRect::horizontal(Val::Px(BASE_PADDING)))
                     .layer(
-                        El::<TextBundle>::new()
+                        El::<Text>::new()
                         .align(Align::new().left())
                         .text_signal(
                             selected.signal_cloned()
@@ -762,7 +756,7 @@ impl Dropdown {
                         )
                     )
                     .layer(
-                        Row::<NodeBundle>::new()
+                        Row::<Node>::new()
                         .with_style(|mut style| style.column_gap = Val::Px(BASE_PADDING))
                         .align(Align::new().right())
                         .item_signal(
@@ -780,7 +774,7 @@ impl Dropdown {
                             }
                         )
                         .item(
-                            El::<TextBundle>::new()
+                            El::<Text>::new()
                             // TODO: need to figure out to rotate in place (around center)
                             // .on_signal_with_transform(show_dropdown.signal(), |transform, showing| {
                             //     transform.rotate_around(Vec3::X, Quat::from_rotation_z((if showing { 180.0f32 } else { 0. }).to_radians()));
@@ -797,7 +791,7 @@ impl Dropdown {
             .child_signal(
                 show_dropdown.signal()
                 .map_true(clone!((options, show_dropdown, selected) move || {
-                    Column::<NodeBundle>::new()
+                    Column::<Node>::new()
                     .width(Val::Percent(100.))
                     .with_style(|mut style| {
                         style.position_type = PositionType::Absolute;
@@ -841,7 +835,7 @@ impl Dropdown {
 }
 
 impl ElementWrapper for Dropdown {
-    type EL = El<NodeBundle>;
+    type EL = El<Node>;
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
@@ -903,7 +897,7 @@ fn sub_menu_child_hover_manager<E: Element>(element: E, hovereds: MutableVec<Mut
     })
 }
 
-fn make_controlling_menu_item(label: &str, el: impl Controllable + Element) -> (Stack<NodeBundle>, Mutable<bool>) {
+fn make_controlling_menu_item(label: &str, el: impl Controllable + Element) -> (Stack<Node>, Mutable<bool>) {
     let hovered = Mutable::new(false);
     (
         menu_item(label, el.controlling_signal(hovered.signal()), hovered.clone()),
@@ -911,7 +905,7 @@ fn make_controlling_menu_item(label: &str, el: impl Controllable + Element) -> (
     )
 }
 
-fn audio_menu() -> Column<NodeBundle> {
+fn audio_menu() -> Column<Node> {
     let items_hovereds = [
         make_controlling_menu_item(
             "dropdown",
@@ -955,7 +949,7 @@ fn audio_menu() -> Column<NodeBundle> {
         )
 }
 
-fn graphics_menu() -> Column<NodeBundle> {
+fn graphics_menu() -> Column<Node> {
     let preset_quality = GRAPHICS_SETTINGS.preset_quality.clone();
     let texture_quality = GRAPHICS_SETTINGS.texture_quality.clone();
     let shadow_quality = GRAPHICS_SETTINGS.shadow_quality.clone();
@@ -1032,7 +1026,7 @@ fn graphics_menu() -> Column<NodeBundle> {
             // solely here to dehover dropdown menu items  // TODO: this can also be solved by
             // allowing setting Over/Out order at runtime or implementing .on_hovered_outside, i
             // should do both of these
-            El::<NodeBundle>::new()
+            El::<Node>::new()
                 .height(Val::Px(
                     SUB_MENU_HEIGHT - (l + 1) as f32 * MENU_ITEM_HEIGHT - BASE_PADDING * 2.,
                 ))
@@ -1048,14 +1042,14 @@ fn graphics_menu() -> Column<NodeBundle> {
 
 fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
     let hovered = Mutable::new(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .background_color(BackgroundColor(Color::NONE))
         .hovered_sync(hovered.clone())
         // stop propagation because otherwise clearing the dropdown will drop down the
         // options too; the x should eat the click
         .on_click_stop_propagation(on_click)
         .child(
-            El::<TextBundle>::new().text(text("x")).on_signal_with_text(
+            El::<Text>::new().text(text("x")).on_signal_with_text(
                 hovered
                     .signal()
                     .map_bool(|| bevy::color::palettes::basic::RED.into(), || TEXT_COLOR),
@@ -1089,7 +1083,7 @@ fn input_event_listener_controller<E: Element>(
 static SHOW_SUB_MENU: Lazy<Mutable<Option<SubMenu>>> = Lazy::new(default);
 
 fn menu() -> impl Element {
-    Stack::<NodeBundle>::new()
+    Stack::<Node>::new()
         .layer(
             menu_base(MAIN_MENU_SIDES, MAIN_MENU_SIDES, "main menu")
                 .apply(|element| focus_on_signal(element, SHOW_SUB_MENU.signal_ref(Option::is_none)))
@@ -1128,7 +1122,7 @@ fn menu() -> impl Element {
                 })
                 .with_style(|mut style| style.row_gap = Val::Px(BASE_PADDING * 2.))
                 .item(
-                    Column::<NodeBundle>::new()
+                    Column::<Node>::new()
                         .with_style(|mut style| style.row_gap = Val::Px(BASE_PADDING))
                         .align_content(Align::center())
                         .items(SubMenu::iter().map(|sub_menu| {
@@ -1143,7 +1137,7 @@ fn menu() -> impl Element {
                 SubMenu::Audio => audio_menu(),
                 SubMenu::Graphics => graphics_menu(),
             };
-            Stack::<NodeBundle>::new()
+            Stack::<Node>::new()
                 .width(Val::Px(SUB_MENU_WIDTH))
                 .height(Val::Px(SUB_MENU_HEIGHT))
                 .with_style(|mut style| {
@@ -1385,7 +1379,7 @@ const MENU_INPUT_RATE_LIMIT: f32 = 0.15;
 const SLIDER_RATE_LIMIT: f32 = 0.001;
 
 fn ui_root() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())

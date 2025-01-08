@@ -34,14 +34,14 @@ fn main() {
 }
 
 fn ui_root() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .ui_root()
         .cursor(CursorIcon::Default)
         .height(Val::Percent(100.))
         .width(Val::Percent(100.))
         .align_content(Align::center())
         .child(
-            Column::<NodeBundle>::new()
+            Column::<Node>::new()
                 .height(Val::Percent(80.))
                 .width(Val::Percent(60.))
                 .item({
@@ -57,7 +57,7 @@ fn ui_root() -> impl Element {
                                 .family(FamilyOwned::new(Family::Name("Fira Mono")))
                                 .weight(FontWeight::MEDIUM),
                         )
-                        .scroll_disabled()
+                        .scroll_enabled()
                         .cursor_color_signal(
                             focus
                                 .signal()
@@ -83,9 +83,9 @@ fn ui_root() -> impl Element {
                     // .on_change_sync(string)
                 })
                 .item(
-                    Row::<NodeBundle>::new()
+                    Row::<Node>::new()
                         .with_style(|mut style| style.column_gap = Val::Px(15.))
-                        .item(El::<TextBundle>::new().text(text_with_size("bug report", 50.)))
+                        .item(El::<Text>::new().text(text_with_size("bug report", 50.)))
                         .item(dropdown(["UI", "cosmetics", "gameplay"], Some("type"))),
                 ),
         )
@@ -97,7 +97,7 @@ const PRESSED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
 
 const BASE_PADDING: f32 = 5.;
 
-fn button() -> El<NodeBundle> {
+fn button() -> El<Node> {
     let (pressed, pressed_signal) = Mutable::new_and_signal(false);
     let (hovered, hovered_signal) = Mutable::new_and_signal(false);
     let pressed_hovered_broadcaster =
@@ -130,7 +130,7 @@ fn button() -> El<NodeBundle> {
             })
             .map(BackgroundColor)
     };
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(150.0))
         .height(Val::Px(65.))
         .with_style(|mut style| style.border = UiRect::all(Val::Px(5.0)))
@@ -144,13 +144,13 @@ fn button() -> El<NodeBundle> {
 
 fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
     let hovered = Mutable::new(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .background_color(BackgroundColor(Color::NONE))
         // stop propagation because otherwise clearing the dropdown will drop down the
         // options too; the x should eat the click
         .on_click_stop_propagation(on_click)
         .child(
-            El::<TextBundle>::new().text(text("x")).on_signal_with_text(
+            El::<Text>::new().text(text("x")).on_signal_with_text(
                 hovered
                     .signal()
                     .map_bool(|| bevy::color::palettes::basic::RED.into(), || Color::WHITE),
@@ -170,11 +170,11 @@ fn dropdown(options: impl IntoIterator<Item = &'static str>, placeholder: Option
     let options = MutableVec::from(options.into_iter().map(ToString::to_string).collect::<Vec<_>>());
     button()
         .child(
-            Stack::<NodeBundle>::new()
+            Stack::<Node>::new()
                 .width(Val::Percent(100.))
                 .with_style(|mut style| style.padding = UiRect::horizontal(Val::Px(BASE_PADDING)))
                 .layer(
-                    El::<TextBundle>::new().align(Align::new().left()).text_signal(
+                    El::<Text>::new().align(Align::new().left()).text_signal(
                         selected
                             .signal_cloned()
                             .map_option(identity, move || placeholder.unwrap_or_default().to_string())
@@ -182,7 +182,7 @@ fn dropdown(options: impl IntoIterator<Item = &'static str>, placeholder: Option
                     ),
                 )
                 .layer(
-                    Row::<NodeBundle>::new()
+                    Row::<Node>::new()
                         .with_style(|mut style| style.column_gap = Val::Px(BASE_PADDING))
                         .align(Align::new().right())
                         .item_signal({
@@ -191,7 +191,7 @@ fn dropdown(options: impl IntoIterator<Item = &'static str>, placeholder: Option
                             )
                         })
                         .item(
-                            El::<TextBundle>::new()
+                            El::<Text>::new()
                                 // TODO: need to figure out to rotate in place (around center)
                                 // .on_signal_with_transform(show_dropdown.signal(), |transform, showing| {
                                 //     transform.rotate_around(Vec3::X, Quat::from_rotation_z((if showing { 180.0f32 }
@@ -205,7 +205,7 @@ fn dropdown(options: impl IntoIterator<Item = &'static str>, placeholder: Option
             show_dropdown
                 .signal()
                 .map_true(clone!((options, show_dropdown, selected) move || {
-                    Column::<NodeBundle>::new()
+                    Column::<Node>::new()
                     .width(Val::Percent(100.))
                     .with_style(|mut style| {
                         style.position_type = PositionType::Absolute;
@@ -221,7 +221,7 @@ fn dropdown(options: impl IntoIterator<Item = &'static str>, placeholder: Option
                         }))
                         .map(clone!((selected, show_dropdown) move |option| {
                             button()
-                            .child(El::<TextBundle>::new().text(text(&option)))
+                            .child(El::<Text>::new().text(text(&option)))
                             .on_click(
                                 clone!((selected, show_dropdown, option) move || {
                                     selected.set_neq(Some(option.clone()));

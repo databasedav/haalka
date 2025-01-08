@@ -31,11 +31,11 @@ const BUTTON_SIZE: f32 = WIDTH / 5.;
 const GAP: f32 = BUTTON_SIZE / 5.;
 const HEIGHT: f32 = BUTTON_SIZE * 5. + GAP * 6.;
 
-fn textable_element(text_signal: impl Signal<Item = impl ToString> + Send + 'static) -> El<NodeBundle> {
-    El::<NodeBundle>::new()
+fn textable_element(text_signal: impl Signal<Item = impl ToString> + Send + 'static) -> El<Node> {
+    El::<Node>::new()
         .with_style(|mut style| style.border = UiRect::all(Val::Px(2.0)))
         .border_color(BorderColor(Color::WHITE))
-        .child(El::<TextBundle>::new().text_signal(text_signal.map(|text| {
+        .child(El::<Text>::new().text_signal(text_signal.map(|text| {
             Text::from_section(
                 text.to_string(),
                 TextStyle {
@@ -57,7 +57,7 @@ fn buttons() -> [&'static str; 16] {
     ]
 }
 
-fn button(symbol: &'static str) -> El<NodeBundle> {
+fn button(symbol: &'static str) -> El<Node> {
     textable_element(always(symbol))
         .width(Val::Px(BUTTON_SIZE))
         .height(Val::Px(BUTTON_SIZE))
@@ -135,14 +135,14 @@ fn clear_button() -> impl Element {
 
 fn ui_root() -> impl Element {
     let error_clearer = OUTPUT.signal_ref(|_| ERROR.set_neq(false)).to_future().apply(spawn);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .update_raw_el(|raw_el| raw_el.hold_tasks([error_clearer]))
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .cursor(CursorIcon::Default)
         .align_content(Align::center())
         .child(
-            Column::<NodeBundle>::new()
+            Column::<Node>::new()
                 .height(Val::Px(HEIGHT))
                 .width(Val::Px(WIDTH))
                 .background_color(BackgroundColor(PINK))
@@ -152,14 +152,14 @@ fn ui_root() -> impl Element {
                     style.padding = UiRect::all(Val::Px(GAP));
                 })
                 .item(
-                    Row::<NodeBundle>::new()
+                    Row::<Node>::new()
                         .align(Align::center())
                         .with_style(|mut style| style.column_gap = Val::Px(GAP))
                         .item(clear_button())
                         .item(display()),
                 )
                 .item(
-                    Row::<NodeBundle>::new()
+                    Row::<Node>::new()
                         .multiline()
                         .align_content(Align::center())
                         .with_style(|mut style| {

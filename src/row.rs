@@ -1,5 +1,5 @@
 use bevy_ecs::prelude::*;
-use bevy_mod_picking::picking_core::Pickable;
+use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use futures_signals::{
     signal::{Signal, SignalExt},
@@ -29,12 +29,12 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Row<NodeType> {
     fn from(value: RawHaalkaEl) -> Self {
         Self {
             raw_el: value
-                .with_component::<Style>(|mut style| {
-                    style.display = Display::Flex;
-                    style.flex_direction = FlexDirection::Row;
-                    style.align_items = AlignItems::Center;
+                .with_component::<Node>(|mut node| {
+                    node.display = Display::Flex;
+                    node.flex_direction = FlexDirection::Row;
+                    node.align_items = AlignItems::Center;
                 })
-                .insert(Pickable::IGNORE),
+                .insert(PickingBehavior::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
@@ -51,8 +51,7 @@ impl<NodeType: Bundle + Default> Row<NodeType> {
     /// Construct a new [`Row`] from a [`Bundle`] with a [`Default`] implementation.
     ///
     /// # Notes
-    /// [`Bundle`]s without the required bevy_ui node components (e.g. [`Node`], [`Style`], etc.)
-    /// will not behave as expected.
+    /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
         Self::from(NodeType::default())
     }
@@ -142,10 +141,10 @@ impl<NodeType: Bundle> Row<NodeType> {
     /// When the width of the row exceeds the width of its parent, wrap the row's children to the
     /// next line, recursively.
     pub fn multiline(mut self) -> Self {
-        self.raw_el = self.raw_el.with_component::<Style>(|mut style| {
-            style.flex_wrap = FlexWrap::Wrap;
-            style.flex_basis = Val::Px(0.);
-            style.flex_grow = 1.;
+        self.raw_el = self.raw_el.with_component::<Node>(|mut node| {
+            node.flex_wrap = FlexWrap::Wrap;
+            node.flex_basis = Val::Px(0.);
+            node.flex_grow = 1.;
         });
         self
     }
@@ -160,40 +159,40 @@ impl<NodeType: Bundle> Alignable for Row<NodeType> {
         &mut self.align
     }
 
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+    fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
         match alignment {
             Alignment::Top => {
-                style.align_items = match action {
+                node.align_items = match action {
                     AddRemove::Add => AlignItems::Start,
                     AddRemove::Remove => AlignItems::DEFAULT,
                 }
             }
             Alignment::Bottom => {
-                style.align_items = match action {
+                node.align_items = match action {
                     AddRemove::Add => AlignItems::End,
                     AddRemove::Remove => AlignItems::DEFAULT,
                 }
             }
             Alignment::Left => {
-                style.justify_content = match action {
+                node.justify_content = match action {
                     AddRemove::Add => JustifyContent::Start,
                     AddRemove::Remove => JustifyContent::DEFAULT,
                 }
             }
             Alignment::Right => {
-                style.justify_content = match action {
+                node.justify_content = match action {
                     AddRemove::Add => JustifyContent::End,
                     AddRemove::Remove => JustifyContent::DEFAULT,
                 }
             }
             Alignment::CenterX => {
-                style.justify_content = match action {
+                node.justify_content = match action {
                     AddRemove::Add => JustifyContent::Center,
                     AddRemove::Remove => JustifyContent::DEFAULT,
                 }
             }
             Alignment::CenterY => {
-                style.align_items = match action {
+                node.align_items = match action {
                     AddRemove::Add => AlignItems::Center,
                     AddRemove::Remove => AlignItems::DEFAULT,
                 }
@@ -203,40 +202,40 @@ impl<NodeType: Bundle> Alignable for Row<NodeType> {
 }
 
 impl<NodeType: Bundle> ChildAlignable for Row<NodeType> {
-    fn apply_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+    fn apply_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
         match alignment {
             Alignment::Top => {
-                style.align_self = match action {
+                node.align_self = match action {
                     AddRemove::Add => AlignSelf::Start,
                     AddRemove::Remove => AlignSelf::DEFAULT,
                 }
             }
             Alignment::Bottom => {
-                style.align_self = match action {
+                node.align_self = match action {
                     AddRemove::Add => AlignSelf::End,
                     AddRemove::Remove => AlignSelf::DEFAULT,
                 }
             }
             Alignment::Left => {
-                style.margin.right = match action {
+                node.margin.right = match action {
                     AddRemove::Add => Val::Auto,
                     AddRemove::Remove => Val::ZERO,
                 }
             }
             Alignment::Right => {
-                style.margin.left = match action {
+                node.margin.left = match action {
                     AddRemove::Add => Val::Auto,
                     AddRemove::Remove => Val::ZERO,
                 }
             }
             Alignment::CenterX => {
-                (style.margin.left, style.margin.right) = match action {
+                (node.margin.left, node.margin.right) = match action {
                     AddRemove::Add => (Val::Auto, Val::Auto),
                     AddRemove::Remove => (Val::ZERO, Val::ZERO),
                 }
             }
             Alignment::CenterY => {
-                style.align_self = match action {
+                node.align_self = match action {
                     AddRemove::Add => AlignSelf::Center,
                     AddRemove::Remove => AlignSelf::DEFAULT,
                 }
