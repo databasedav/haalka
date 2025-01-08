@@ -137,7 +137,7 @@ fn text_input(
         .height(Val::Px(INPUT_HEIGHT))
         .mode(CosmicWrap::InfiniteLine)
         .max_lines(MaxLines(1))
-        .scroll_disabled()
+        .scroll_enabled()
         .cursor_color_signal(
             focus
                 .signal()
@@ -177,7 +177,7 @@ fn clear_focus() {
 }
 
 fn sort_by_text_element() -> impl Element {
-    El::<TextBundle>::new().text(Text::from_section(
+    El::<Text>::new().text(Text::from_section(
         "sort by",
         TextStyle {
             font_size: 60.,
@@ -190,12 +190,12 @@ fn sort_by_text_element() -> impl Element {
 fn sort_button(sort_by: KeyValue) -> impl Element {
     let hovered = Mutable::new(false);
     let selected = SORT_BY.signal().map(move |cur| cur == sort_by).broadcast();
-    Row::<NodeBundle>::new()
+    Row::<Node>::new()
         .with_style(|mut style| style.column_gap = Val::Px(35.))
         .align(Align::new().right())
         .item_signal(selected.signal().map_true(sort_by_text_element))
         .item(
-            El::<NodeBundle>::new()
+            El::<Node>::new()
                 .width(Val::Px(200.))
                 .height(Val::Px(80.))
                 .background_color_signal(
@@ -231,7 +231,7 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
                         }
                     }
                 })
-                .child(El::<TextBundle>::new().text(Text::from_section(
+                .child(El::<Text>::new().text(Text::from_section(
                     match sort_by {
                         KeyValue::Key => "key",
                         KeyValue::Value => "value",
@@ -300,7 +300,7 @@ fn sort_one(mut maybe_changed_events: EventReader<MaybeChanged>) {
 static SCROLL_POSITION: Lazy<Mutable<f32>> = Lazy::new(default);
 
 fn key_values() -> impl Element + Sizeable {
-    Column::<NodeBundle>::new()
+    Column::<Node>::new()
         .with_style(|mut style| style.row_gap = Val::Px(10.))
         .height(Val::Percent(90.))
         .mutable_viewport(Overflow::clip_y(), LimitToBody::Vertical)
@@ -327,7 +327,7 @@ fn key_values() -> impl Element + Sizeable {
                         },
                 },
             )| {
-                Row::<NodeBundle>::new()
+                Row::<Node>::new()
                     .with_style(|mut style| style.column_gap = Val::Px(10.))
                     // without registering width up front, layout will take a frame or two to sync to size of children,
                     // making it look like the elements are expanding into place, try commenting out this line to see
@@ -346,7 +346,7 @@ fn key_values() -> impl Element + Sizeable {
 
 fn x_button() -> impl Element + PointerEventAware {
     let hovered = Mutable::new(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(INPUT_HEIGHT))
         .height(Val::Px(INPUT_HEIGHT))
         .background_color_signal(
@@ -357,7 +357,7 @@ fn x_button() -> impl Element + PointerEventAware {
         )
         .hovered_sync(hovered)
         .child(
-            El::<TextBundle>::new()
+            El::<Text>::new()
                 .with_style(|mut style| style.top = Val::Px(-3.))
                 .align(Align::center())
                 .text(Text::from_section(
@@ -371,23 +371,23 @@ fn x_button() -> impl Element + PointerEventAware {
 }
 
 fn ui_root() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .ui_root()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
-            Row::<NodeBundle>::new()
+            Row::<Node>::new()
                 .height(Val::Percent(100.))
                 .with_style(|mut style| style.column_gap = Val::Px(70.))
                 .item(
-                    Column::<NodeBundle>::new()
+                    Column::<Node>::new()
                         .with_style(|mut style| style.row_gap = Val::Px(20.))
                         .item(sort_button(KeyValue::Key))
                         .item(sort_button(KeyValue::Value)),
                 )
                 .item(
-                    Column::<NodeBundle>::new()
+                    Column::<Node>::new()
                         .with_style(|mut style| style.row_gap = Val::Px(10.))
                         .height(Val::Percent(90.))
                         .width(Val::Px(INPUT_WIDTH * 2. + INPUT_HEIGHT + 10. * 2.))
@@ -395,7 +395,7 @@ fn ui_root() -> impl Element {
                         .item(key_values().height(Val::Percent(90.)))
                         .item({
                             let hovered = Mutable::new(false);
-                            El::<NodeBundle>::new()
+                            El::<Node>::new()
                                 .width(Val::Px(INPUT_WIDTH))
                                 .height(Val::Px(INPUT_HEIGHT))
                                 .background_color_signal(
@@ -406,7 +406,7 @@ fn ui_root() -> impl Element {
                                 )
                                 .hovered_sync(hovered)
                                 .align_content(Align::center())
-                                .child(El::<TextBundle>::new().text(Text::from_section(
+                                .child(El::<Text>::new().text(Text::from_section(
                                     "+",
                                     TextStyle {
                                         font_size: 30.0,

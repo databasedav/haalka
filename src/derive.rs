@@ -105,13 +105,14 @@ cfg_if::cfg_if! {
                 $(
                     paste! {
                         impl_haalka_methods! {
-                            $el_type<NodeBundle> {
+                            $el_type<Node> {
                                 node: Node,
-                                style: Style,
+                                computed_node: ComputedNode,
                                 background_color: BackgroundColor,
                                 border_color: BorderColor,
                                 border_radius: BorderRadius,
                                 focus_policy: FocusPolicy,
+                                scroll_position: ScrollPosition,
                                 transform: Transform,
                                 global_transform: GlobalTransform,
                                 visibility: Visibility,
@@ -121,14 +122,17 @@ cfg_if::cfg_if! {
                             }
                         }
                         impl_haalka_methods! {
-                            $el_type<ImageBundle> {
+                            $el_type<ImageNode> {
+                                image_node: ImageNode,
+                                image_node_size: ImageNodeSize,
+                                content_size: ContentSize,
                                 node: Node,
-                                style: Style,
-                                calculated_size: ContentSize,
-                                image: UiImage,
+                                computed_node: ComputedNode,
                                 background_color: BackgroundColor,
-                                image_size: UiImageSize,
+                                border_color: BorderColor,
+                                border_radius: BorderRadius,
                                 focus_policy: FocusPolicy,
+                                scroll_position: ScrollPosition,
                                 transform: Transform,
                                 global_transform: GlobalTransform,
                                 visibility: Visibility,
@@ -138,34 +142,38 @@ cfg_if::cfg_if! {
                             }
                         }
                         impl_haalka_methods! {
-                            $el_type<TextBundle> {
-                                node: Node,
-                                style: Style,
+                            $el_type<Text> {
                                 text: Text,
-                                text_layout_info: TextLayoutInfo,
-                                text_flags: TextFlags,
-                                calculated_size: ContentSize,
+                                text_layout: TextLayout,
+                                text_font: TextFont,
+                                text_color: TextColor,
+                                text_node_flags: TextNodeFlags,
+                                content_size: ContentSize,
+                                node: Node,
+                                computed_node: ComputedNode,
+                                background_color: BackgroundColor,
+                                border_color: BorderColor,
+                                border_radius: BorderRadius,
                                 focus_policy: FocusPolicy,
+                                scroll_position: ScrollPosition,
                                 transform: Transform,
                                 global_transform: GlobalTransform,
                                 visibility: Visibility,
                                 inherited_visibility: InheritedVisibility,
                                 view_visibility: ViewVisibility,
                                 z_index: ZIndex,
-                                background_color: BackgroundColor,
                             }
                         }
                         impl_haalka_methods! {
-                            $el_type<ButtonBundle> {
-                                node: Node,
-                                button: Button,
-                                style: Style,
+                            $el_type<Button> {
                                 interaction: Interaction,
-                                focus_policy: FocusPolicy,
+                                node: Node,
+                                computed_node: ComputedNode,
+                                background_color: BackgroundColor,
                                 border_color: BorderColor,
                                 border_radius: BorderRadius,
-                                image: UiImage,
-                                background_color: BackgroundColor,
+                                focus_policy: FocusPolicy,
+                                scroll_position: ScrollPosition,
                                 transform: Transform,
                                 global_transform: GlobalTransform,
                                 visibility: Visibility,

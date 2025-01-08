@@ -108,12 +108,12 @@ fn nine_slice_button() -> impl Element {
 static WIDTH: Lazy<Mutable<f32>> = Lazy::new(default);
 
 fn horizontal() -> impl Element {
-    Row::<NodeBundle>::new()
+    Row::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .with_style(|mut style| style.column_gap = Val::Px(GAP))
         .item(
-            Column::<NodeBundle>::new()
+            Column::<Node>::new()
                 .width(Val::Percent(50.))
                 .height(Val::Percent(100.))
                 .with_style(|mut style| style.row_gap = Val::Px(GAP))
@@ -124,13 +124,13 @@ fn horizontal() -> impl Element {
 }
 
 fn vertical() -> impl Element {
-    Column::<NodeBundle>::new()
+    Column::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .with_style(|mut style| style.row_gap = Val::Px(GAP))
         .item(El::<ImageBundle>::new().image(UiImage::new(image().clone())))
         .item(
-            Row::<NodeBundle>::new()
+            Row::<Node>::new()
                 .multiline()
                 .align_content(Align::center())
                 .width(Val::Percent(100.))
@@ -158,24 +158,24 @@ fn menu() -> impl Element {
 }
 
 fn ui_root() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
-            Column::<NodeBundle>::new()
+            Column::<Node>::new()
                 .with_style(|mut style| style.row_gap = Val::Px(GAP))
                 .item(
-                    Row::<NodeBundle>::new()
+                    Row::<Node>::new()
                         .with_style(|mut style| style.padding.left = Val::Px(GAP))
-                        .item(El::<TextBundle>::new().text(Text::from_section(
+                        .item(El::<Text>::new().text(Text::from_section(
                             "width: ",
                             TextStyle {
                                 font_size: 40.,
                                 ..default()
                             },
                         )))
-                        .item(El::<TextBundle>::new().text_signal(WIDTH.signal().map(|width| {
+                        .item(El::<Text>::new().text_signal(WIDTH.signal().map(|width| {
                             Text::from_section(
                                 width.to_string(),
                                 TextStyle {

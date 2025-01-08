@@ -103,7 +103,7 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
         // TODO: see https://github.com/bevyengine/bevy/issues/12152 for why this slack is necessary
         .map(|size| (SIDE as f32 - GRID_TRACK_FLOAT_PRECISION_SLACK) / size as f32)
         .broadcast();
-    Grid::<NodeBundle>::new()
+    Grid::<Node>::new()
         .width(Val::Px(SIDE as f32))
         .height(Val::Px(SIDE as f32))
         .row_wrap_cell_width_signal(cell_size.signal())
@@ -112,7 +112,7 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
                 .entries_cloned()
                 .sort_by_cloned(|(left, _), (right, _)| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)))
                 .map(move |(_, cell)| {
-                    El::<NodeBundle>::new()
+                    El::<Node>::new()
                         .width_signal(cell_size.signal().map(Val::Px))
                         .height_signal(cell_size.signal().map(Val::Px))
                         .background_color_signal(cell.signal().dedupe().map(Into::into))
@@ -121,11 +121,11 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
 }
 
 fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> impl Element {
-    Column::<NodeBundle>::new()
+    Column::<Node>::new()
         .width(Val::Px((WIDTH - SIDE) as f32))
         .with_style(|mut style| style.row_gap = Val::Px(10.))
         .align_content(Align::center())
-        .item(El::<TextBundle>::new().text_signal(score.signal().map(|score| {
+        .item(El::<Text>::new().text_signal(score.signal().map(|score| {
             Text::from_section(
                 score.to_string(),
                 TextStyle {
@@ -135,10 +135,10 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
             )
         })))
         .item(
-            Row::<NodeBundle>::new()
+            Row::<Node>::new()
                 .with_style(|mut style| style.column_gap = Val::Px(10.))
-                .item(El::<TextBundle>::new().text(text("grid size:")))
-                .item(El::<TextBundle>::new().text_signal(size.signal().map(|size| text(&size.to_string()))))
+                .item(El::<Text>::new().text(text("grid size:")))
+                .item(El::<Text>::new().text_signal(size.signal().map(|size| text(&size.to_string()))))
                 .item(text_button("-").on_pressing_with_system_with_sleep_throttle(
                     |_: In<_>, mut grid_size_changes: EventWriter<GridSizeChange>| {
                         grid_size_changes.send(GridSizeChange::Decr);
@@ -153,10 +153,10 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
                 )),
         )
         .item(
-            Row::<NodeBundle>::new()
+            Row::<Node>::new()
                 .with_style(|mut style| style.column_gap = Val::Px(10.))
-                .item(El::<TextBundle>::new().text(text("tick rate:")))
-                .item(El::<TextBundle>::new().text_signal(tick_rate.signal().map(|size| text(&size.to_string()))))
+                .item(El::<Text>::new().text(text("tick rate:")))
+                .item(El::<Text>::new().text_signal(tick_rate.signal().map(|size| text(&size.to_string()))))
                 .item(text_button("-").on_pressing_with_system_with_sleep_throttle(
                     |_: In<_>, world: &mut World| {
                         let cur_rate = TICK_RATE.get();
@@ -179,11 +179,11 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
 }
 
 fn ui_root() -> impl Element {
-    Stack::<NodeBundle>::new()
+    Stack::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .layer(
-            Row::<NodeBundle>::new()
+            Row::<Node>::new()
                 .align(Align::center())
                 // .width(Val::Percent(100.))
                 // .height(Val::Percent(100.))
@@ -195,7 +195,7 @@ fn ui_root() -> impl Element {
 
 fn restart_button() -> impl Element {
     let hovered = Mutable::new(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .align(Align::center())
         .width(Val::Px(250.))
         .height(Val::Px(80.))
@@ -208,7 +208,7 @@ fn restart_button() -> impl Element {
         .hovered_sync(hovered)
         .align_content(Align::center())
         .on_click(|| async_world().send_event(Restart).apply(spawn).detach())
-        .child(El::<TextBundle>::new().text(Text::from_section(
+        .child(El::<Text>::new().text(Text::from_section(
             "restart",
             TextStyle {
                 font_size: 60.,
@@ -282,7 +282,7 @@ fn grid_size_changer(mut events: EventReader<GridSizeChange>, mut spawn_food: Ev
 
 fn text_button(text_: &str) -> impl Element + PointerEventAware {
     let hovered = Mutable::new(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(45.0))
         .align_content(Align::center())
         .background_color_signal(
@@ -292,7 +292,7 @@ fn text_button(text_: &str) -> impl Element + PointerEventAware {
                 .map(BackgroundColor),
         )
         .hovered_sync(hovered)
-        .child(El::<TextBundle>::new().text(text(text_)))
+        .child(El::<Text>::new().text(text(text_)))
 }
 
 // u could also just scan the cells every tick, but i'm just caching it

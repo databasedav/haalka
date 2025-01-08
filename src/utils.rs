@@ -28,22 +28,9 @@ pub async fn sleep(duration: Duration) {
     }
 }
 
-// TODO: 0.15 `Task` api is unified, can remove branching
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
-        use haalka_futures_signals_ext::futures_util::future::abortable;
-        /// Spawn a non-blocking future onto the [`IoTaskPool`].
-        pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> WasmTaskAdapter {
-            let (future, handle) = abortable(future);
-            IoTaskPool::get().spawn(future);
-            WasmTaskAdapter(handle)
-        }
-    } else {
-        /// Spawn a non-blocking future onto the [`IoTaskPool`].
-        pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> Task<T> {
-            IoTaskPool::get().spawn(future)
-        }
-    }
+/// Spawn a non-blocking future onto the [`IoTaskPool`].
+pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> Task<T> {
+    IoTaskPool::get().spawn(future)
 }
 
 /// Sync the [`Mutable`] with the [`Signal`].

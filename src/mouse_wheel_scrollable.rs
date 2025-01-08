@@ -33,7 +33,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
     /// handlers.
     fn on_scroll_with_system_disableable<Disabled: Component, Marker>(
         self,
-        handler: impl IntoSystem<(Entity, MouseWheel), (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
             let system_holder = Mutable::new(None);
@@ -54,7 +54,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
                     system_holder.set(Some(system));
                     observe(world, entity, move |mouse_wheel: Trigger<MouseWheel>, mut commands: Commands| {
                         commands.run_system_with_input(system, (mouse_wheel.entity(), *mouse_wheel.event()));
-                    })
+                    });
                 }))
                 .apply(remove_system_holder_on_remove(system_holder))
         })
@@ -65,7 +65,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
     /// be called repeatedly to register many such handlers.
     fn on_scroll_with_system<Marker>(
         self,
-        handler: impl IntoSystem<(Entity, MouseWheel), (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.on_scroll_with_system_disableable::<ScrollDisabled, Marker>(handler)
     }
@@ -76,7 +76,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
     /// called repeatedly to register many such handlers.
     fn on_scroll_with_system_disableable_signal<Marker>(
         self,
-        handler: impl IntoSystem<(Entity, MouseWheel), (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| raw_el.component_signal::<ScrollDisabled, _>(blocked.map_true(default)))
@@ -120,7 +120,7 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
     /// such handlers.
     fn on_scroll_with_system_on_hover<Marker>(
         self,
-        handler: impl IntoSystem<(Entity, MouseWheel), (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.on_hovered_change_with_system(
             |In((entity, hovered)), children: Query<&Children>, mut commands: Commands| {
@@ -242,7 +242,7 @@ impl BasicScrollHandler {
     pub fn into_system(
         self,
     ) -> Box<
-        dyn FnMut(In<(Entity, MouseWheel)>, Query<&Style>, Res<ButtonInput<KeyCode>>, Commands) + Send + Sync + 'static,
+        dyn FnMut(In<(Entity, MouseWheel)>, Query<&Node>, Res<ButtonInput<KeyCode>>, Commands) + Send + Sync + 'static,
     > {
         let BasicScrollHandler {
             direction: direction_signal_option,
@@ -267,17 +267,17 @@ impl BasicScrollHandler {
                 .detach()
         }
         let f = move |In((entity, mouse_wheel)): In<(Entity, MouseWheel)>,
-                      styles: Query<&Style>,
+                      nodes: Query<&Node>,
                       keys: Res<ButtonInput<KeyCode>>,
                       mut commands: Commands| {
             let dy = if mouse_wheel.y.is_sign_negative() { -1. } else { 1. } * magnitude.get();
-            if let Ok(style) = styles.get(entity) {
+            if let Ok(node) = nodes.get(entity) {
                 let direction = direction.get();
                 if matches!(direction, ScrollDirection::Vertical)
                     || matches!(direction, ScrollDirection::Both)
                         && !(keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight))
                 {
-                    let top = match style.top {
+                    let top = match node.top {
                         Val::Px(top) => top,
                         _ => 0.,
                     };
@@ -286,7 +286,7 @@ impl BasicScrollHandler {
                     || matches!(direction, ScrollDirection::Both)
                         && (keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight))
                 {
-                    let left = match style.left {
+                    let left = match node.left {
                         Val::Px(left) => left,
                         _ => 0.,
                     };

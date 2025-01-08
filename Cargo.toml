@@ -28,17 +28,19 @@ bevy_ecs = { version = "0.15", features = ["multi_threaded"] }
 bevy_hierarchy = "0.15"
 bevy_tasks = { version = "0.15", features = ["multi_threaded"] }
 bevy_utils = "0.15"
+bevy_log = "0.15"
 bevy_color = { version = "0.15", optional = true, default-features = false }
 bevy_core = { version = "0.15", optional = true, default-features = false }
 bevy_input = { version = "0.15", optional = true, default-features = false }
-bevy_log = { version = "0.15", optional = true, default-features = false }
 bevy_math = { version = "0.15", optional = true, default-features = false }
 bevy_reflect = { version = "0.15", optional = true, default-features = false }
 bevy_render = { version = "0.15", optional = true, default-features = false, features = ["webgl"] }
 bevy_text = { version = "0.15", optional = true, default-features = false }
 bevy_transform = { version = "0.15", optional = true, default-features = false }
 bevy_ui = { version = "0.15", optional = true, default-features = false }
+bevy_picking = { version = "0.15", optional = true, default-features = false }
 bevy_window = { version = "0.15", optional = true, default-features = false }
+bevy_winit = { version = "0.15", optional = true, default-features = false }
 bevy_derive = { version = "0.15", optional = true, default-features = false }
 bevy_dev_tools = { version = "0.15", optional = true, features = ["bevy_ui_debug"] }
 bevy_cosmic_edit = { version = "0.26", optional = true }
@@ -74,7 +76,21 @@ default = [
 ]
 
 ## High level UI abstractions integrated with signals.
-ui = ["bevy_core", "bevy_ui", "bevy_render", "bevy_text", "bevy_transform", "bevy_log", "bevy_window", "bevy_reflect", "bevy_derive", "bevy_input", "bevy_math", "derive"]
+ui = [
+    "derive",
+    "bevy_core",
+    "bevy_derive",
+    "bevy_input",
+    "bevy_math",
+    "bevy_picking",
+    "bevy_reflect",
+    "bevy_render",
+    "bevy_text",
+    "bevy_transform",
+    "bevy_ui",
+    "bevy_window",
+    "bevy_winit",
+]
 
 ## [bevy_cosmic_edit](https://github.com/Dimchikkk/bevy_cosmic_edit) text input widget integrated with signals.
 text_input = ["ui", "bevy_color", "bevy_cosmic_edit"]

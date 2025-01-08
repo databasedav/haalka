@@ -1,4 +1,4 @@
-//! Simple alignment semantics ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`align`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/style/align.rs) and [`align_content`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/style/align_content.rs).
+//! Simple alignment semantics ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`align`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/node/align.rs) and [`align_content`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/node/align_content.rs).
 //!
 //! An [`Element`](`super::element::Element`) can be aligned in nine different areas in relation to
 //! its parent: top left, top center, top right, center left, center, center right, bottom left,
@@ -127,29 +127,29 @@ pub enum AddRemove {
 fn register_align_signal<REW: RawElWrapper>(
     element: REW,
     align_signal: impl Signal<Item = Option<Vec<Alignment>>> + Send + 'static,
-    apply_alignment: fn(&mut Style, Alignment, AddRemove),
+    apply_alignment: fn(&mut Node, Alignment, AddRemove),
 ) -> REW {
     let mut last_alignments_option: Option<Vec<Alignment>> = None;
     element.update_raw_el(|raw_el| {
         raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-            raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Style>(
+            raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Node>(
                 align_signal,
-                move |mut style, aligns_option| {
+                move |mut node, aligns_option| {
                     if let Some(alignments) = aligns_option {
                         // TODO: confirm that this last alignment removal strategy is working as intended
                         if let Some(mut last_alignments) = last_alignments_option.take() {
                             last_alignments.retain(|align| !alignments.contains(align));
                             for alignment in last_alignments {
-                                apply_alignment(&mut style, alignment, AddRemove::Remove)
+                                apply_alignment(&mut node, alignment, AddRemove::Remove)
                             }
                         }
                         for alignment in &alignments {
-                            apply_alignment(&mut style, *alignment, AddRemove::Add)
+                            apply_alignment(&mut node, *alignment, AddRemove::Add)
                         }
                         last_alignments_option = alignments.is_empty().not().then_some(alignments);
                     } else if let Some(last_aligns) = last_alignments_option.take() {
                         for align in last_aligns {
-                            apply_alignment(&mut style, align, AddRemove::Remove)
+                            apply_alignment(&mut node, align, AddRemove::Remove)
                         }
                     }
                 },
@@ -197,13 +197,13 @@ pub trait Alignable: RawElWrapper {
     /// Allows implementor to override the content alignment processing function. The `&self` can
     /// be used to alter the alignment strategy based on data on the type itself. See
     /// [`AlignabilityFacade::apply_alignment_wrapper`] for an example.
-    fn apply_content_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {
+    fn apply_content_alignment_wrapper(&self) -> fn(&mut Node, Alignment, AddRemove) {
         Self::apply_content_alignment
     }
 
-    /// How to modify the style of this element given a content alignment and whether to add or
+    /// How to modify the node of this element given a content alignment and whether to add or
     /// remove it.
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove);
+    fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove);
 
     /// Statically align the children of this element. See [`Align`].
     ///
@@ -217,9 +217,9 @@ pub trait Alignable: RawElWrapper {
         if let Some(align) = align_option.into() {
             let apply_content_alignment = self.apply_content_alignment_wrapper();
             self = self.update_raw_el(move |raw_el| {
-                raw_el.with_component::<Style>(move |mut style| {
+                raw_el.with_component::<Node>(move |mut node| {
                     for alignment in align.alignments {
-                        apply_content_alignment(&mut style, alignment, AddRemove::Add);
+                        apply_content_alignment(&mut node, alignment, AddRemove::Add);
                     }
                 })
             });
@@ -257,28 +257,28 @@ pub trait ChildAlignable
 where
     Self: 'static,
 {
-    /// Static style modifications for children of this type.
-    fn update_style(_style: Mut<Style>) {} // only some require base updates
+    /// Static node modifications for children of this type.
+    fn update_node(_node: Mut<Node>) {} // only some require base updates
 
     /// Allows implementor to override the self alignment processing function. The `&self`
     /// can be used to alter the alignment strategy based on data on the type itself. See
     /// [`AlignabilityFacade::apply_alignment_wrapper`] for an example.
-    fn apply_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {
+    fn apply_alignment_wrapper(&self) -> fn(&mut Node, Alignment, AddRemove) {
         Self::apply_alignment
     }
 
-    /// How to modify the style of children of this element given a self alignment and whether to
+    /// How to modify the node of children of this element given a self alignment and whether to
     /// add or remove it.
-    fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove);
+    fn apply_alignment(node: &mut Node, align: Alignment, action: AddRemove);
 
     /// Align child based on its [`Align`] data and processing defined by the type of its parent.
     fn align_child<Child: RawElWrapper + Alignable>(
         mut child: Child,
-        apply_alignment: fn(&mut Style, Alignment, AddRemove),
+        apply_alignment: fn(&mut Node, Alignment, AddRemove),
     ) -> Child {
         child = child.update_raw_el(|raw_el| {
             raw_el.defer_update(DeferredUpdaterAppendDirection::Back, |raw_el| {
-                raw_el.with_component::<Style>(Self::update_style)
+                raw_el.with_component::<Node>(Self::update_node)
             })
         });
         // TODO: this .take means that child can't be passed around parents without losing align
@@ -288,9 +288,9 @@ where
                 AlignHolder::Align(align) => {
                     child = child.update_raw_el(|raw_el| {
                         raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-                            raw_el.with_component::<Style>(move |mut style| {
+                            raw_el.with_component::<Node>(move |mut node| {
                                 for align in align.alignments {
-                                    apply_alignment(&mut style, align, AddRemove::Add)
+                                    apply_alignment(&mut node, align, AddRemove::Add)
                                 }
                             })
                         })
@@ -321,18 +321,18 @@ impl<EW: ElementWrapper> Alignable for EW {
         self.element_mut().align_mut()
     }
 
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
-        EW::EL::apply_content_alignment(style, alignment, action);
+    fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
+        EW::EL::apply_content_alignment(node, alignment, action);
     }
 }
 
 impl<EW: ElementWrapper + 'static> ChildAlignable for EW {
-    fn update_style(style: Mut<Style>) {
-        EW::EL::update_style(style);
+    fn update_node(node: Mut<Node>) {
+        EW::EL::update_node(node);
     }
 
-    fn apply_alignment(style: &mut Style, align: Alignment, action: AddRemove) {
-        EW::EL::apply_alignment(style, align, action);
+    fn apply_alignment(node: &mut Node, align: Alignment, action: AddRemove) {
+        EW::EL::apply_alignment(node, align, action);
     }
 }
 
@@ -382,29 +382,29 @@ impl Alignable for AlignabilityFacade {
         &mut self.align
     }
 
-    fn apply_content_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {
+    fn apply_content_alignment_wrapper(&self) -> fn(&mut Node, Alignment, AddRemove) {
         match self.aligner {
-            Aligner::El => El::<NodeBundle>::apply_content_alignment,
-            Aligner::Column => Column::<NodeBundle>::apply_content_alignment,
-            Aligner::Row => Row::<NodeBundle>::apply_content_alignment,
-            Aligner::Stack => Stack::<NodeBundle>::apply_content_alignment,
-            Aligner::Grid => Grid::<NodeBundle>::apply_content_alignment,
+            Aligner::El => El::<Node>::apply_content_alignment,
+            Aligner::Column => Column::<Node>::apply_content_alignment,
+            Aligner::Row => Row::<Node>::apply_content_alignment,
+            Aligner::Stack => Stack::<Node>::apply_content_alignment,
+            Aligner::Grid => Grid::<Node>::apply_content_alignment,
         }
     }
 
-    fn apply_content_alignment(_style: &mut Style, _alignment: Alignment, _action: AddRemove) {}
+    fn apply_content_alignment(_node: &mut Node, _alignment: Alignment, _action: AddRemove) {}
 }
 
 impl ChildAlignable for AlignabilityFacade {
-    fn apply_alignment_wrapper(&self) -> fn(&mut Style, Alignment, AddRemove) {
+    fn apply_alignment_wrapper(&self) -> fn(&mut Node, Alignment, AddRemove) {
         match self.aligner {
-            Aligner::El => El::<NodeBundle>::apply_alignment,
-            Aligner::Column => Column::<NodeBundle>::apply_alignment,
-            Aligner::Row => Row::<NodeBundle>::apply_alignment,
-            Aligner::Stack => Stack::<NodeBundle>::apply_alignment,
-            Aligner::Grid => Grid::<NodeBundle>::apply_alignment,
+            Aligner::El => El::<Node>::apply_alignment,
+            Aligner::Column => Column::<Node>::apply_alignment,
+            Aligner::Row => Row::<Node>::apply_alignment,
+            Aligner::Stack => Stack::<Node>::apply_alignment,
+            Aligner::Grid => Grid::<Node>::apply_alignment,
         }
     }
 
-    fn apply_alignment(_style: &mut Style, _align: Alignment, _action: AddRemove) {}
+    fn apply_alignment(_node: &mut Node, _align: Alignment, _action: AddRemove) {}
 }

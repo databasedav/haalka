@@ -37,22 +37,12 @@ impl Plugin for FpsOverlayPlugin {
             app.add_plugins(FrameTimeDiagnosticsPlugin);
         }
 
-        fn text(text: impl ToString) -> Text {
-            Text::from_section(
-                text.to_string(),
-                TextStyle {
-                    font_size: FPS_FONT_SIZE,
-                    ..default()
-                },
-            )
-        }
-
         fn fps_element(fps: impl Signal<Item = f64> + Send + 'static) -> impl Element {
-            Row::<NodeBundle>::new()
+            Row::<Node>::new()
                 // TODO: good place to use the text section signal abstraction, since doing a .text(...).text(...) does
                 // not work as expected
-                .item(El::<TextBundle>::new().text(text("fps: ")))
-                .item(El::<TextBundle>::new().text_signal(fps.map(|fps| format!("{fps:.2}")).map(text)))
+                .item(El::<Text>::new().text_font(TextFont::from_font_size(FPS_FONT_SIZE)).text(Text::new("fps: ")))
+                .item(El::<Text>::new().text_font(TextFont::from_font_size(FPS_FONT_SIZE)).text_signal(fps.map(|fps| format!("{fps:.2}")).map(Text)))
         }
 
         static FPS: Lazy<Mutable<f64>> = Lazy::new(default);
@@ -68,13 +58,13 @@ impl Plugin for FpsOverlayPlugin {
         static SHOW: Lazy<Mutable<bool>> = Lazy::new(default);
 
         fn fps_ui_root() -> impl Element {
-            El::<NodeBundle>::new()
-                .with_style(|mut style| {
-                    style.position_type = PositionType::Absolute;
-                    style.padding.top = Val::Px(FPS_PADDING);
-                    style.padding.left = Val::Px(FPS_PADDING);
+            El::<Node>::new()
+                .with_node(|mut node| {
+                    node.position_type = PositionType::Absolute;
+                    node.padding.top = Val::Px(FPS_PADDING);
+                    node.padding.left = Val::Px(FPS_PADDING);
                 })
-                .update_raw_el(|raw_el| raw_el.insert(ZIndex::Global(FPS_OVERLAY_ZINDEX)))
+                .update_raw_el(|raw_el| raw_el.insert(GlobalZIndex(FPS_OVERLAY_ZINDEX)))
                 .child_signal(SHOW.signal().map_true(move || fps_element(FPS.signal())))
         }
 
@@ -145,28 +135,19 @@ pub(crate) fn examples_plugin(app: &mut App) {
                 .in_set(MarkDefaultUiCameraSet)
                 .run_if(not(any_with_component::<IsDefaultUiCamera>)),
             |world: &mut World| {
-                fn text(text: impl ToString) -> Text {
-                    Text::from_section(
-                        text.to_string(),
-                        TextStyle {
-                            font_size: FPS_FONT_SIZE,
-                            ..default()
-                        },
-                    )
-                }
-                let mut el = Column::<NodeBundle>::new()
+                let mut el = Column::<Node>::new()
                     .align(Align::new().bottom().left())
-                    .with_style(|mut style| style.row_gap = Val::Px(10.));
+                    .with_node(|mut node| node.row_gap = Val::Px(10.));
                 cfg_if::cfg_if! {
                     if #[cfg(feature = "debug")] {
-                        el = el.item(El::<TextBundle>::new().text(text("press f1 to toggle debug overlay")));
+                        el = el.item(El::<Text>::new().text(Text::new("press f1 to toggle debug overlay")));
                     }
                 }
-                el = el.item(El::<TextBundle>::new().text(text("press f2 to toggle fps counter")));
-                El::<NodeBundle>::new()
-                    .with_style(|mut style| {
-                        style.padding.bottom = Val::Px(FPS_PADDING);
-                        style.padding.left = Val::Px(FPS_PADDING);
+                el = el.item(El::<Text>::new().text(Text::new("press f2 to toggle fps counter")));
+                El::<Node>::new()
+                    .with_node(|mut node| {
+                        node.padding.bottom = Val::Px(FPS_PADDING);
+                        node.padding.left = Val::Px(FPS_PADDING);
                     })
                     .height(Val::Percent(100.))
                     .width(Val::Percent(100.))

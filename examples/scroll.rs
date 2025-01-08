@@ -27,7 +27,7 @@ const LETTER_SIZE: f32 = 65.;
 static SHIFTED: Lazy<Mutable<bool>> = Lazy::new(default);
 
 fn letter(letter: &str, color: Color) -> impl Element {
-    El::<TextBundle>::new().text(Text::from_section(
+    El::<Text>::new().text(Text::from_section(
         letter,
         TextStyle {
             font_size: LETTER_SIZE,
@@ -39,7 +39,7 @@ fn letter(letter: &str, color: Color) -> impl Element {
 
 fn letter_column(rotate: usize, color: Color) -> impl Element {
     let hovered = Mutable::new(false);
-    Column::<NodeBundle>::new()
+    Column::<Node>::new()
         .height(Val::Px(5. * LETTER_SIZE))
         .mutable_viewport(Overflow::clip_y(), LimitToBody::Vertical)
         .on_scroll_with_system_disableable_signal(
@@ -60,12 +60,12 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
 
 fn ui_root() -> impl Element {
     let hovered = Mutable::new(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
-            Row::<NodeBundle>::new()
+            Row::<Node>::new()
                 .with_style(|mut style: Mut<'_, Style>| {
                     style.column_gap = Val::Px(30.);
                     style.padding = UiRect::horizontal(Val::Px(7.5));

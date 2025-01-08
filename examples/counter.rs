@@ -27,15 +27,19 @@ struct Counter(Mutable<i32>);
 
 fn ui_root() -> impl Element {
     let counter = Mutable::new(0);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .height(Val::Percent(100.))
         .width(Val::Percent(100.))
         .align_content(Align::center())
         .child(
-            Row::<NodeBundle>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(15.0))
+            Row::<Node>::new()
+                .with_node(|mut node| node.column_gap = Val::Px(15.0))
                 .item(counter_button(counter.clone(), "-", -1))
-                .item(El::<TextBundle>::new().text_signal(counter.signal().map(text)))
+                .item(
+                    El::<Text>::new()
+                        .text_font(TextFont::from_font_size(30.))
+                        .text_signal(counter.signal_ref(ToString::to_string).map(Text)),
+                )
                 .item(counter_button(counter.clone(), "+", 1))
                 .update_raw_el(move |raw_el| raw_el.insert(Counter(counter))),
         )
@@ -43,7 +47,7 @@ fn ui_root() -> impl Element {
 
 fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element {
     let hovered = Mutable::new(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(45.0))
         .align_content(Align::center())
         .background_color_signal(
@@ -54,19 +58,9 @@ fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element
         )
         .hovered_sync(hovered)
         .on_click(move || *counter.lock_mut() += step)
-        .child(El::<TextBundle>::new().text(text(label)))
-}
-
-fn text(text: impl ToString) -> Text {
-    Text::from_section(
-        text.to_string(),
-        TextStyle {
-            font_size: 30.0,
-            ..default()
-        },
-    )
+        .child(El::<Text>::new().text(Text::new(label)))
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d::default());
 }

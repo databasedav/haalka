@@ -41,8 +41,8 @@ const BOX_SIZE: f32 = HEIGHT / 2.;
 const FONT_SIZE: f32 = 30.;
 
 #[allow(dead_code)]
-fn box_(category: ColorCategory) -> El<NodeBundle> {
-    El::<NodeBundle>::new()
+fn box_(category: ColorCategory) -> El<Node> {
+    El::<Node>::new()
         .width(Val::Px(BOX_SIZE))
         .height(Val::Px(BOX_SIZE))
         .background_color(BackgroundColor(match category {
@@ -52,7 +52,7 @@ fn box_(category: ColorCategory) -> El<NodeBundle> {
             ColorCategory::Yellow => YELLOW,
         }))
         .align(Align::center())
-    // .child(El::<TextBundle>::new().text(text(&category.to_string())))
+    // .child(El::<Text>::new().text(text(&category.to_string())))
 }
 
 fn text(string: &str) -> Text {
@@ -66,7 +66,7 @@ fn text(string: &str) -> Text {
 }
 
 fn labeled_element(label: impl Element, element: impl Element) -> impl Element {
-    Row::<NodeBundle>::new()
+    Row::<Node>::new()
         .with_style(|mut style| style.column_gap = Val::Px(10.))
         .item(label)
         .item(element)
@@ -74,24 +74,24 @@ fn labeled_element(label: impl Element, element: impl Element) -> impl Element {
 
 fn labeled_count(label: impl Element, count_signal: impl Signal<Item = u32> + Send + 'static) -> impl Element {
     labeled_element(label, {
-        El::<TextBundle>::new().text_signal(count_signal.map(|count| text(&count.to_string())))
+        El::<Text>::new().text_signal(count_signal.map(|count| text(&count.to_string())))
     })
 }
 
 fn text_labeled_element(label: &str, element: impl Element) -> impl Element {
-    labeled_element(El::<TextBundle>::new().text(text(&format!("{}: ", label))), element)
+    labeled_element(El::<Text>::new().text(text(&format!("{}: ", label))), element)
 }
 
 fn text_labeled_count(label: &str, count_signal: impl Signal<Item = u32> + Send + 'static) -> impl Element {
     text_labeled_element(label, {
-        El::<TextBundle>::new().text_signal(count_signal.map(|count| text(&count.to_string())))
+        El::<Text>::new().text_signal(count_signal.map(|count| text(&count.to_string())))
     })
 }
 
 fn category_count(category: ColorCategory, count: impl Signal<Item = u32> + Send + 'static) -> impl Element {
     labeled_count(
         {
-            El::<NodeBundle>::new()
+            El::<Node>::new()
                 .width(Val::Px(30.))
                 .height(Val::Px(30.))
                 .background_color(BackgroundColor(match category {
@@ -101,7 +101,7 @@ fn category_count(category: ColorCategory, count: impl Signal<Item = u32> + Send
                     ColorCategory::Yellow => YELLOW,
                 }))
                 .align(Align::center())
-            // .child(El::<TextBundle>::new().text(text(&category.to_string())))
+            // .child(El::<Text>::new().text(text(&category.to_string())))
         },
         count,
     )
@@ -114,7 +114,7 @@ fn incrde_button(value: Mutable<f32>, incr: f32) -> impl Element {
         let new = (*value.lock_ref() + incr).max(0.);
         *value.lock_mut() = new;
     };
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(45.0))
         .align_content(Align::center())
         .background_color_signal(
@@ -125,13 +125,13 @@ fn incrde_button(value: Mutable<f32>, incr: f32) -> impl Element {
         )
         .hovered_sync(hovered)
         .on_pressing_with_sleep_throttle(f, Duration::from_millis(50))
-        .child(El::<TextBundle>::new().text(text(if incr.is_sign_positive() { "+" } else { "-" })))
+        .child(El::<Text>::new().text(text(if incr.is_sign_positive() { "+" } else { "-" })))
 }
 
 fn rate_element(rate: Mutable<f32>) -> impl Element {
-    Row::<NodeBundle>::new()
+    Row::<Node>::new()
         .with_style(|mut style| style.column_gap = Val::Px(15.0))
-        .item(El::<TextBundle>::new().text_signal(rate.signal().map(|rate| text(&format!("{:.1}", rate)))))
+        .item(El::<Text>::new().text_signal(rate.signal().map(|rate| text(&format!("{:.1}", rate)))))
         .item(incrde_button(rate.clone(), 0.1))
         .item(incrde_button(rate, -0.1))
 }
@@ -196,30 +196,30 @@ fn ui_root() -> impl Element {
         COUNTS.red.clone(),
         COUNTS.yellow.clone(),
     ]);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
-            Row::<NodeBundle>::new()
+            Row::<Node>::new()
                 .with_style(|mut style| style.column_gap = Val::Px(50.))
                 .item(
-                    El::<NodeBundle>::new().width(Val::Px(HEIGHT)).height(Val::Px(HEIGHT)), // can't put non ui nodes on top of ui nodes; yes u can https://discord.com/channels/691052431525675048/743663673393938453/1192729978744352858
-                                                                                            // Column::<NodeBundle>::new()
+                    El::<Node>::new().width(Val::Px(HEIGHT)).height(Val::Px(HEIGHT)), // can't put non ui nodes on top of ui nodes; yes u can https://discord.com/channels/691052431525675048/743663673393938453/1192729978744352858
+                                                                                            // Column::<Node>::new()
                                                                                             // .with_z_index(|z_index| *z_index = ZIndex::Global(1))
-                                                                                            // .item(Row::<NodeBundle>::new().item(box_(Category::A)).item(box_(Category::B)))
-                                                                                            // .item(Row::<NodeBundle>::new().item(box_(Category::C)).item(box_(Category::D)))
+                                                                                            // .item(Row::<Node>::new().item(box_(Category::A)).item(box_(Category::B)))
+                                                                                            // .item(Row::<Node>::new().item(box_(Category::C)).item(box_(Category::D)))
                 )
                 .item(
-                    Column::<NodeBundle>::new()
+                    Column::<Node>::new()
                         .with_style(|mut style| {
                             style.row_gap = Val::Px(50.);
                             style.padding.left = Val::Px(50.);
                         })
                         .item(
-                            Row::<NodeBundle>::new()
+                            Row::<Node>::new()
                                 .item(
-                                    Column::<NodeBundle>::new()
+                                    Column::<Node>::new()
                                         .align_content(Align::new().left())
                                         .with_style(|mut style| style.row_gap = Val::Px(10.))
                                         .item(category_count(ColorCategory::Blue, COUNTS.blue.signal()))
@@ -242,7 +242,7 @@ fn ui_root() -> impl Element {
                                 ),
                         )
                         .item(
-                            Column::<NodeBundle>::new()
+                            Column::<Node>::new()
                                 .with_style(|mut style| style.row_gap = Val::Px(10.))
                                 .item(text_labeled_element("spawn rate", rate_element(SPAWN_RATE.clone())))
                                 .item(text_labeled_element("despawn rate", rate_element(DESPAWN_RATE.clone()))),

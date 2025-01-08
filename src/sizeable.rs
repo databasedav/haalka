@@ -10,7 +10,7 @@ use futures_signals::signal::{Signal, SignalExt};
 ///
 /// For example, [`Grid`](super::grid::Grid)s, [`Stack`](super::stack::Stack)s, and [mutable
 /// viewport](super::viewport_mutable::ViewportMutable)s use wrapper elements to manage the expected
-/// state of their body. Modifying the [`Style::height`] or [`Style::width`] of such elements
+/// state of their body. Modifying the [`Node::height`] or [`Node::width`] of such elements
 /// directly may not have the desired effect.
 pub trait Sizeable: RawElWrapper {
     /// Set the height of this element.
@@ -18,7 +18,7 @@ pub trait Sizeable: RawElWrapper {
         if let Some(height) = height_option.into() {
             self = self.update_raw_el(|raw_el| {
                 raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-                    raw_el.with_component::<Style>(move |mut style| style.height = height)
+                    raw_el.with_component::<Node>(move |mut node| node.height = height)
                 })
             });
         }
@@ -35,9 +35,9 @@ pub trait Sizeable: RawElWrapper {
             let height_option_signal = height_option_signal.map(|height_option| height_option.into());
             self = self.update_raw_el(|raw_el| {
                 raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-                    raw_el.on_signal_with_component::<Option<Val>, Style>(
+                    raw_el.on_signal_with_component::<Option<Val>, Node>(
                         height_option_signal,
-                        move |mut style, height_option| style.height = height_option.unwrap_or(Val::Auto),
+                        move |mut node, height_option| node.height = height_option.unwrap_or(Val::Auto),
                     )
                 })
             });
@@ -50,7 +50,7 @@ pub trait Sizeable: RawElWrapper {
         if let Some(width) = width_option.into() {
             self = self.update_raw_el(|raw_el| {
                 raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-                    raw_el.with_component::<Style>(move |mut style| style.width = width)
+                    raw_el.with_component::<Node>(move |mut node| node.width = width)
                 })
             });
         }
@@ -67,9 +67,9 @@ pub trait Sizeable: RawElWrapper {
             let width_option_signal = width_option_signal.map(|width_option| width_option.into());
             self = self.update_raw_el(|raw_el| {
                 raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-                    raw_el.on_signal_with_component::<Option<Val>, Style>(
+                    raw_el.on_signal_with_component::<Option<Val>, Node>(
                         width_option_signal,
-                        move |mut style, width_option| style.width = width_option.unwrap_or(Val::Auto),
+                        move |mut node, width_option| node.width = width_option.unwrap_or(Val::Auto),
                     )
                 })
             });

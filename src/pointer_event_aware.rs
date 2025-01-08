@@ -9,12 +9,17 @@ use bevy_derive::*;
 use bevy_ecs::{prelude::*, system::*};
 use bevy_hierarchy::prelude::*;
 use bevy_log::prelude::*;
-use bevy_mod_picking::{picking_core::backend::HitData, prelude::*};
+use bevy_picking::{
+    backend::prelude::*,
+    focus::{HoverMap, PickingInteraction},
+    pointer::PointerMap,
+    prelude::*,
+};
 use bevy_reflect::prelude::*;
 use bevy_utils::prelude::*;
 use bevy_window::{prelude::*, *};
+use bevy_winit::cursor::CursorIcon;
 use enclose::enclose as clone;
-use focus::HoverMap;
 use futures_signals::signal::{always, channel, Mutable, Signal, SignalExt};
 use haalka_futures_signals_ext::SignalExtBool;
 
@@ -31,13 +36,13 @@ pub trait PointerEventAware: RawElWrapper {
     /// can be called repeatedly to register many such handlers.
     fn on_hovered_change_with_system<Marker>(
         self,
-        handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
             raw_el.defer_update(super::raw::DeferredUpdaterAppendDirection::Back, |raw_el| {
                 let system_holder = Mutable::new(None);
                 raw_el
-                    .insert(Pickable::default())
+                    .insert(PickingBehavior::default())
                     .insert(Hovered(false))
                     .on_spawn(clone!((system_holder) move |world, entity| {
                         let system = register_system(world, handler);
@@ -64,11 +69,11 @@ pub trait PointerEventAware: RawElWrapper {
     /// Run a [`System`] when this element is clicked.
     fn on_click_with_system<Marker>(
         self,
-        handler: impl IntoSystem<(Entity, Pointer<Click>), (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
             raw_el
-                .insert(Pickable::default())
+                .insert(PickingBehavior::default())
                 .on_event_with_system::<Pointer<Click>, _>(handler)
         })
     }
@@ -91,7 +96,7 @@ pub trait PointerEventAware: RawElWrapper {
     ) -> Self {
         self.update_raw_el(|raw_el| {
             raw_el
-                .insert(Pickable::default())
+                .insert(PickingBehavior::default())
                 .on_event_propagation_stoppable_signal::<Pointer<Click>>(
                     move |click| {
                         if matches!(click.button, PointerButton::Primary) {
@@ -124,7 +129,7 @@ pub trait PointerEventAware: RawElWrapper {
     /// [`World`]. This method can be called repeatedly to register many such handlers.
     fn on_click_outside_with_system<Marker>(
         self,
-        handler: impl IntoSystem<(Entity, Pointer<Click>), (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
             let system_holder = Mutable::new(None);
@@ -154,12 +159,12 @@ pub trait PointerEventAware: RawElWrapper {
     /// many such handlers.
     fn on_pressed_with_system_blockable<Marker, Blocked: Component>(
         self,
-        handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
             let system_holder = Mutable::new(None);
             raw_el
-                .insert(Pickable::default())
+                .insert(PickingBehavior::default())
                 .on_spawn(clone!((system_holder) move |world, entity| {
                     let system = register_system(world, handler);
                     system_holder.set(Some(system));
@@ -173,7 +178,7 @@ pub trait PointerEventAware: RawElWrapper {
                 .on_event_with_system::<Pointer<Down>, _>(
                     move |In((entity, pointer_down)): In<(Entity, Pointer<Down>)>, world: &mut World| {
                         if matches!(pointer_down.button, PointerButton::Primary) {
-                            if let Some(mut entity) = world.get_entity_mut(entity) {
+                            if let Ok(mut entity) = world.get_entity_mut(entity) {
                                 entity.insert(Pressable);
                             }
                         }
@@ -188,8 +193,8 @@ pub trait PointerEventAware: RawElWrapper {
         // multiple event listeners per event type
         .on_hovered_change_with_system(|In((entity, hovered)): In<(_, bool)>, world: &mut World| {
             if !hovered {
-                if let Some(mut entity) = world.get_entity_mut(entity) {
-                    entity.remove::<Pressable>();
+                if let Ok(ref mut entity) = world.get_entity_mut(entity) {
+                    EntityWorldMut::remove::<Pressable>(entity);
                 }
             }
         })
@@ -200,7 +205,7 @@ pub trait PointerEventAware: RawElWrapper {
     /// can be called repeatedly to register many such handlers.
     fn on_pressed_change_with_system<Marker>(
         self,
-        handler: impl IntoSystem<(Entity, bool), (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + 'static,
     ) -> Self {
         let system_holder = Mutable::new(None);
         self.update_raw_el(clone!(
@@ -214,7 +219,7 @@ pub trait PointerEventAware: RawElWrapper {
         .on_pressed_with_system_blockable::<_, PressHandlingBlocked>(
             move |In((entity, cur)),
                   mut pressed: Local<bool>,
-                  mut system: Local<Option<SystemId<(Entity, bool)>>>,
+                  mut system: Local<Option<SystemId<In<(Entity, bool)>>>>,
                   mut commands: Commands| {
                 if cur != *pressed {
                     *pressed = cur;
@@ -236,7 +241,7 @@ pub trait PointerEventAware: RawElWrapper {
     /// [`Entity`]. This method can be called repeatedly to register many such handlers.
     fn on_pressing_with_system_blockable<Marker, Blocked: Component>(
         self,
-        handler: impl IntoSystem<Entity, (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<Entity>, (), Marker> + Send + 'static,
     ) -> Self {
         let system_holder = Mutable::new(None);
         self.update_raw_el(clone!(
@@ -249,7 +254,7 @@ pub trait PointerEventAware: RawElWrapper {
             }
         ))
         .on_pressed_with_system_blockable::<_, Blocked>(
-            move |In((entity, pressed)), mut system: Local<Option<SystemId<Entity>>>, mut commands: Commands| {
+            move |In((entity, pressed)), mut system: Local<Option<SystemId<In<Entity>>>>, mut commands: Commands| {
                 if pressed {
                     // only pay the read locking cost once
                     let &mut system = system.get_or_insert_with(|| system_holder.get().unwrap());
@@ -285,7 +290,7 @@ pub trait PointerEventAware: RawElWrapper {
     /// before running the `handler` again.
     fn on_pressing_with_system_throttled<Fut: Future<Output = ()> + Send + 'static, Marker>(
         self,
-        handler: impl IntoSystem<Entity, (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<Entity>, (), Marker> + Send + 'static,
         mut throttle: impl FnMut() -> Fut + Send + 'static,
     ) -> Self {
         let (sender, receiver) = channel(());
@@ -299,7 +304,7 @@ pub trait PointerEventAware: RawElWrapper {
                 )
         })
         .on_pressed_with_system_blockable::<_, PressHandlingBlocked>(
-            move |In((entity, pressed)), mut system: Local<Option<SystemId<Entity>>>, mut commands: Commands| {
+            move |In((entity, pressed)), mut system: Local<Option<SystemId<In<Entity>>>>, mut commands: Commands| {
                 if pressed {
                     // only pay the read locking cost once
                     let &mut system = system.get_or_insert_with(|| system_holder.get().unwrap());
@@ -316,7 +321,7 @@ pub trait PointerEventAware: RawElWrapper {
     /// element's [`Entity`], waiting for `duration` before running the `handler` again.
     fn on_pressing_with_system_with_sleep_throttle<Marker>(
         self,
-        handler: impl IntoSystem<Entity, (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<Entity>, (), Marker> + Send + 'static,
         duration: Duration,
     ) -> Self {
         self.on_pressing_with_system_throttled(handler, move || sleep(duration))
@@ -372,7 +377,7 @@ pub struct Leave {
 fn update_hover_states(
     pointer_map: Res<PointerMap>,
     pointers: Query<&PointerLocation>,
-    hover_map: Res<bevy_mod_picking::focus::HoverMap>,
+    hover_map: Res<HoverMap>,
     mut hovereds: Query<(Entity, &mut Hovered)>,
     parent_query: Query<&Parent>,
     mut commands: Commands,
@@ -403,7 +408,7 @@ fn update_hover_states(
                 continue;
             };
             if let Some(hit) = hit_data_option.cloned() {
-                commands.trigger_targets(Pointer::new(pointer_id, location, entity, Enter { hit }), entity);
+                commands.trigger_targets(Pointer::new(entity, pointer_id, location, Enter { hit }), entity);
             } else {
                 // TODO: children `Leave`s don't trigger with this condition, e.g. in an aalo inspector row
                 // if let Some(hit) = previous_hover_map
@@ -411,7 +416,7 @@ fn update_hover_states(
                 // .and_then(|map| map.get(&entity).cloned())
                 // {
                 // commands.trigger_targets(Pointer::new(pointer_id, location, entity, Leave { hit }), entity);
-                commands.trigger_targets(Pointer::new(pointer_id, location, entity, Leave {}), entity);
+                commands.trigger_targets(Pointer::new(entity, pointer_id, location, Leave {}), entity);
                 // }
             }
         }
@@ -470,11 +475,10 @@ fn is_inside_or_removed_from_dom(
     ui_root: Entity,
     children_query: &Query<&Children>,
 ) -> bool {
-    let target = event.target();
-    if contains(element, target, children_query) {
+    if contains(element, event.target, children_query) {
         return true;
     }
-    if !contains(ui_root, target, children_query) {
+    if !contains(ui_root, event.target, children_query) {
         return true;
     }
     false
@@ -500,7 +504,7 @@ pub struct CursorOnHoverDisabled;
 /// A [`Component`] which stores the [`Option<CursorIcon>`] to set the window's cursor to when an
 /// [`Element`](super::element::Element) receives a [`Pointer<Over>`] event; when [`None`], the
 /// cursor will be hidden.
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct CursorOnHover(Option<CursorIcon>);
 
 /// Enables managing the window's [`CursorIcon`] when an [`Element`](super::element::Element)
@@ -517,7 +521,7 @@ pub trait CursorOnHoverable: PointerEventAware {
         let cursor_option = cursor_option.into();
         self.update_raw_el(|raw_el| {
             raw_el
-                .insert((Pickable::default(), CursorOverPropagationStopped))
+                .insert((PickingBehavior::default(), CursorOverPropagationStopped))
                 .observe(
                     |event: Trigger<OnInsert, CursorOver>,
                      cursor_on_hovers: Query<&CursorOnHover>,
@@ -525,7 +529,7 @@ pub trait CursorOnHoverable: PointerEventAware {
                      cursor_over_disabled_option: Option<Res<CursorOnHoverDisabled>>,
                      mut commands: Commands| {
                         let entity = event.entity();
-                        if let Ok(&CursorOnHover(cursor_option)) = cursor_on_hovers.get(entity) {
+                        if let Ok(CursorOnHover(cursor_option)) = cursor_on_hovers.get(entity).cloned() {
                             if cursor_over_disabled_option.is_none() {
                                 if disabled.contains(entity).not() {
                                     commands.trigger(SetCursor(cursor_option));
@@ -575,9 +579,9 @@ pub trait CursorOnHoverable: PointerEventAware {
                             {
                                 if let Some(hit) = hover_map.get(&entity).cloned() {
                                     pointer_over.send(Pointer::new(
+                                        parent.get(),
                                         PointerId::Mouse,
                                         location,
-                                        parent.get(),
                                         Over { hit },
                                     ));
                                 }
@@ -695,32 +699,26 @@ struct QueuedCursor(Option<CursorIcon>);
 
 fn consume_queued_cursor(queued_cursor: Option<Res<QueuedCursor>>, mut commands: Commands) {
     if let Some(cursor) = queued_cursor {
-        commands.trigger(SetCursor(cursor.0));
+        commands.trigger(SetCursor(cursor.0.clone()));
         commands.remove_resource::<QueuedCursor>();
     }
 }
 
 // TODO: add support for multiple windows
-fn cursor_setter(event: Trigger<SetCursor>, mut windows: Query<&mut Window, With<PrimaryWindow>>) {
-    if let Ok(mut window) = windows.get_single_mut() {
+fn cursor_setter(event: Trigger<SetCursor>, mut windows: Query<(&mut Window, &mut CursorIcon), With<PrimaryWindow>>) {
+    if let Ok((mut window, mut cursor_icon)) = windows.get_single_mut() {
         let SetCursor(icon_option) = event.event();
-        if let &Some(icon) = icon_option {
-            window.cursor.icon = icon;
-            window.cursor.visible = true;
+        if let Some(icon) = icon_option.clone() {
+            *cursor_icon = icon;
+            window.cursor_options.visible = true;
         } else {
-            window.cursor.visible = false;
+            window.cursor_options.visible = false;
         }
     }
 }
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_plugins((
-        EventListenerPlugin::<Pointer<Enter>>::default(),
-        EventListenerPlugin::<Pointer<Leave>>::default(),
-    ))
-    .add_event::<SetCursor>()
-    .observe(cursor_setter)
-    .add_systems(
+    app.add_event::<SetCursor>().add_observer(cursor_setter).add_systems(
         Update,
         (
             pressable_system.run_if(any_with_component::<Pressable>),
@@ -728,13 +726,13 @@ pub(super) fn plugin(app: &mut App) {
                 any_with_component::<Hovered>
                     // TODO: apparently this updates every frame no matter what, if so, remove this condition
                     // TODO: remove when native `Enter` and `Leave` available
-                    .and_then(resource_exists_and_changed::<bevy_mod_picking::focus::HoverMap>),
+                    .and(resource_exists_and_changed::<HoverMap>),
             ),
-            consume_queued_cursor.run_if(resource_removed::<CursorOnHoverDisabled>()),
+            consume_queued_cursor.run_if(resource_removed::<CursorOnHoverDisabled>),
             on_click_outside.run_if(
                 resource_exists::<UiRoot>
-                    .and_then(any_with_component::<OnClickOutside>)
-                    .and_then(on_event::<Pointer<Click>>()),
+                    .and(any_with_component::<OnClickOutside>)
+                    .and(on_event::<Pointer<Click>>),
             ),
         ),
     );

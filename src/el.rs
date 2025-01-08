@@ -1,5 +1,5 @@
 use bevy_ecs::prelude::*;
-use bevy_mod_picking::picking_core::Pickable;
+use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use futures_signals::signal::{Signal, SignalExt};
 
@@ -33,11 +33,11 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for El<NodeType> {
     fn from(value: RawHaalkaEl) -> Self {
         Self {
             raw_el: value
-                .with_component::<Style>(|mut style| {
-                    style.display = Display::Flex;
-                    style.flex_direction = FlexDirection::Column;
+                .with_component::<Node>(|mut node| {
+                    node.display = Display::Flex;
+                    node.flex_direction = FlexDirection::Column;
                 })
-                .insert(Pickable::IGNORE),
+                .insert(PickingBehavior::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
@@ -54,8 +54,7 @@ impl<NodeType: Bundle + Default> El<NodeType> {
     /// Construct a new [`El`] from a [`Bundle`] with a [`Default`] implementation.
     ///
     /// # Notes
-    /// [`Bundle`]s without the required bevy_ui node components (e.g. [`Node`], [`Style`], etc.)
-    /// will not behave as expected.
+    /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
         Self::from(NodeType::default())
     }
@@ -114,40 +113,40 @@ impl<NodeType: Bundle> Alignable for El<NodeType> {
         &mut self.align
     }
 
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
+    fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
         match alignment {
             Alignment::Top => {
-                style.justify_content = match action {
+                node.justify_content = match action {
                     AddRemove::Add => JustifyContent::Start,
                     AddRemove::Remove => JustifyContent::DEFAULT,
                 }
             }
             Alignment::Bottom => {
-                style.justify_content = match action {
+                node.justify_content = match action {
                     AddRemove::Add => JustifyContent::End,
                     AddRemove::Remove => JustifyContent::DEFAULT,
                 }
             }
             Alignment::Left => {
-                style.align_items = match action {
+                node.align_items = match action {
                     AddRemove::Add => AlignItems::Start,
                     AddRemove::Remove => AlignItems::DEFAULT,
                 }
             }
             Alignment::Right => {
-                style.align_items = match action {
+                node.align_items = match action {
                     AddRemove::Add => AlignItems::End,
                     AddRemove::Remove => AlignItems::DEFAULT,
                 }
             }
             Alignment::CenterX => {
-                style.align_items = match action {
+                node.align_items = match action {
                     AddRemove::Add => AlignItems::Center,
                     AddRemove::Remove => AlignItems::DEFAULT,
                 }
             }
             Alignment::CenterY => {
-                style.justify_content = match action {
+                node.justify_content = match action {
                     AddRemove::Add => JustifyContent::Center,
                     AddRemove::Remove => JustifyContent::DEFAULT,
                 }
@@ -157,7 +156,7 @@ impl<NodeType: Bundle> Alignable for El<NodeType> {
 }
 
 impl<NodeType: Bundle> ChildAlignable for El<NodeType> {
-    fn apply_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
-        Column::<NodeType>::apply_alignment(style, alignment, action);
+    fn apply_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
+        Column::<NodeType>::apply_alignment(node, alignment, action);
     }
 }

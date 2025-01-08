@@ -214,7 +214,7 @@ struct RpgIconSheet {
 fn icon(
     index_signal: impl Signal<Item = usize> + Send + 'static,
     count_signal: impl Signal<Item = usize> + Send + 'static,
-) -> Stack<NodeBundle> {
+) -> Stack<Node> {
     Stack::new()
         .layer(
             El::<ImageBundle>::new()
@@ -228,7 +228,7 @@ fn icon(
                 }),
         )
         .layer(
-            El::<TextBundle>::new()
+            El::<Text>::new()
                 .with_style(|mut style| style.top = Val::Px(6.))
                 .align(Align::new().bottom().right())
                 .text_signal(count_signal.map(|count| {
@@ -258,7 +258,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
     //     signal::or(cell_data_option.signal_ref(Option::is_none), is_dragging()),
     //     stop_propagation_trigger.clone(),
     // ));
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .update_raw_el(clone!((cell_data_option, hovered, down/* , stop_propagation_trigger */) move |mut raw_el| {
             // raw_el = raw_el.hold_tasks([cursor_disabling_forwarder]);
             if insertable {
@@ -394,12 +394,12 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             cell_data_option
                 .signal_cloned()
                 .map_some(move |cell_data| {
-                    Stack::<NodeBundle>::new()
+                    Stack::<Node>::new()
                     .layer(icon(cell_data.index.signal(), cell_data.count.signal()))
                     .layer_signal(
                         signal::and(hovered.signal(), signal::not(is_dragging())).dedupe()
                         .map_true(clone!((original_position) move || {
-                            El::<NodeBundle>::new()
+                            El::<Node>::new()
                                 // TODO: global transform isn't populated on spawn
                                 // .with_global_transform(clone!((original_position) move |transform| original_position.set(Some(transform.compute_transform().translation.xy()))))
                                 .height(Val::Px(CELL_WIDTH))
@@ -433,7 +433,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                 .background_color(BackgroundColor(CELL_BACKGROUND_COLOR))
                                 .border_color(BorderColor(CELL_DARK_BORDER_COLOR))
                                 .child(
-                                    El::<TextBundle>::new()
+                                    El::<Text>::new()
                                     .align(Align::center())
                                     .text_signal(
                                         cell_data.index.signal()
@@ -478,7 +478,7 @@ fn grid<I: IntoIterator<Item = Mutable<Option<CellData>>>>(cell_data_options: I)
 where
     <I as IntoIterator>::IntoIter: std::marker::Send + 'static,
 {
-    Grid::<NodeBundle>::new()
+    Grid::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .with_style(|mut style| {
@@ -504,47 +504,47 @@ fn camera(mut commands: Commands) {
 }
 
 fn dot() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(CELL_BORDER_WIDTH * 2.))
         .height(Val::Px(CELL_BORDER_WIDTH * 2.))
         .background_color(BackgroundColor(CELL_BACKGROUND_COLOR))
 }
 
 fn dot_row(n: usize) -> impl Element {
-    Row::<NodeBundle>::new().items((0..n).map(|_| dot()))
+    Row::<Node>::new().items((0..n).map(|_| dot()))
 }
 
 fn arrow() -> impl Element {
-    Column::<NodeBundle>::new()
+    Column::<Node>::new()
         .align_content(Align::center())
         .items((0..=6).map(|i| dot_row(2 * i + 1)))
         .items((0..6).map(|_| dot_row(3)))
 }
 
 fn side_column() -> impl Element {
-    Column::<NodeBundle>::new()
+    Column::<Node>::new()
         .with_style(|mut style| style.row_gap = Val::Px(CELL_GAP))
         .items((0..4).map(|_| bern_cell(0.5, true)))
 }
 
 fn inventory() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .align(Align::center())
         .height(Val::Px(INVENTORY_SIZE))
         .width(Val::Px(INVENTORY_SIZE))
         .child(
-            Column::<NodeBundle>::new()
+            Column::<Node>::new()
             .height(Val::Percent(100.))
             .width(Val::Percent(100.))
                 .with_style(|mut style| style.row_gap = Val::Px(CELL_GAP * 4.))
                 .background_color(BackgroundColor(INVENTORY_BACKGROUND_COLOR))
                 .align_content(Align::center())
                 .item(
-                    Row::<NodeBundle>::new()
+                    Row::<Node>::new()
                     .width(Val::Percent(100.))
                         .with_style(|mut style| style.column_gap = Val::Px(CELL_GAP))
                         .item(
-                            Row::<NodeBundle>::new()
+                            Row::<Node>::new()
                                 .align_content(Align::center())
                                 .width(Val::Percent(60.))
                                 .with_style(|mut style| {
@@ -553,7 +553,7 @@ fn inventory() -> impl Element {
                                 })
                                 .item(side_column())
                                 .item(
-                                    El::<NodeBundle>::new()
+                                    El::<Node>::new()
                                         .height(Val::Px(CELL_WIDTH * 4. + CELL_GAP * 3.))
                                         .width(Val::Percent(100.))
                                         .background_color(BackgroundColor(Color::BLACK)),
@@ -561,7 +561,7 @@ fn inventory() -> impl Element {
                                 .item(side_column())
                         )
                         .item(
-                            El::<NodeBundle>::new()
+                            El::<Node>::new()
                             .width(Val::Percent(40.))
                             .height(Val::Percent(100.))
                                 .align_content(Align::center())
@@ -589,7 +589,7 @@ fn inventory() -> impl Element {
                                         })
                                         .await;
                                     }));
-                                    Column::<NodeBundle>::new()
+                                    Column::<Node>::new()
                                         .update_raw_el(|raw_el| raw_el.hold_tasks([outputter]))
                                         .with_style(|mut style| {
                                             style.row_gap = Val::Px(CELL_GAP * 2.);
@@ -597,7 +597,7 @@ fn inventory() -> impl Element {
                                         .item(
                                             // need to add another wrapping node here so the special output `Down`
                                             // handler doesn't overwrite the default `cell` `Down` handler
-                                            El::<NodeBundle>::new()
+                                            El::<Node>::new()
                                             .child(cell(output.clone(), false).align(Align::center()))
                                             .update_raw_el(clone!((inputs) move |raw_el| {
                                                 raw_el
@@ -616,7 +616,7 @@ fn inventory() -> impl Element {
                                         .item(arrow())
                                         .item({
                                             let cell_data_options = inputs.lock_ref().iter().cloned().collect::<Vec<_>>();
-                                            El::<NodeBundle>::new()
+                                            El::<Node>::new()
                                                 .width(Val::Px(CELL_WIDTH * 2. + CELL_GAP))
                                                 .child(grid(cell_data_options).align_content(Align::new().center_x()))
                                         })
@@ -624,7 +624,7 @@ fn inventory() -> impl Element {
                         ),
                 )
                 .item(
-                    El::<NodeBundle>::new()
+                    El::<Node>::new()
                         .width(Val::Percent(100.))
                         .child(
                             grid((0..27).map(|_| bern_cell_data_option(0.5)))
@@ -632,7 +632,7 @@ fn inventory() -> impl Element {
                         ),
                 )
                 .item(
-                    Row::<NodeBundle>::new()
+                    Row::<Node>::new()
                         .with_style(|mut style| {
                             style.column_gap = Val::Px(CELL_GAP);
                         })
@@ -650,7 +650,7 @@ fn is_dragging() -> impl Signal<Item = bool> {
 }
 
 fn ui_root() -> impl Element {
-    Stack::<NodeBundle>::new()
+    Stack::<Node>::new()
         .cursor_disableable_signal(CursorIcon::Default, is_dragging())
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))

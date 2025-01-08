@@ -151,17 +151,17 @@ fn healthbar(
     health: impl Signal<Item = u32> + Send + Sync + 'static,
     height: f32,
     color_gradient: Gradient,
-) -> Stack<NodeBundle> {
+) -> Stack<Node> {
     let health = health.broadcast();
     let percent_health = health.signal().map(move |h| h as f32 / max as f32).broadcast();
-    Stack::<NodeBundle>::new()
+    Stack::<Node>::new()
         .height(Val::Px(height))
         .with_style(move |mut style| {
             style.border = UiRect::all(Val::Px(height / 12.));
         })
         .border_color(BorderColor(Color::BLACK))
         .layer(
-            El::<NodeBundle>::new()
+            El::<Node>::new()
                 .height(Val::Percent(100.))
                 .width_signal(percent_health.signal().map(|ph| ph * 100.).map(Val::Percent))
                 .background_color_signal(percent_health.signal().map(move |percent_health| {
@@ -170,7 +170,7 @@ fn healthbar(
                 })),
         )
         .layer(
-            El::<TextBundle>::new()
+            El::<Text>::new()
                 .height(Val::Percent(100.))
                 .with_style(move |mut style| {
                     style.bottom = Val::Px(height / 8.);
@@ -217,7 +217,7 @@ fn spawn_player(
 
 fn respawn_button() -> impl Element {
     let hovered = Mutable::new(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .align(Align::center())
         .width(Val::Px(250.))
         .height(Val::Px(80.))
@@ -230,7 +230,7 @@ fn respawn_button() -> impl Element {
         .hovered_sync(hovered)
         .align_content(Align::center())
         .on_click(|| async_world().send_event(SpawnPlayer).apply(spawn).detach())
-        .child(El::<TextBundle>::new().text(Text::from_section(
+        .child(El::<Text>::new().text(Text::from_section(
             "respawn",
             TextStyle {
                 font_size: 60.,
@@ -247,7 +247,7 @@ fn set_dragging_position(mut style: Mut<Style>, StyleData { left, top, .. }: Sty
 
 fn ui_root() -> impl Element {
     // let starting_distance = CAMERA_POSITION.distance(PLAYER_POSITION);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .child_signal(
@@ -261,12 +261,12 @@ fn ui_root() -> impl Element {
                             .dedupe()
                             .map_bool(
                                 move || {
-                                    Stack::<NodeBundle>::new()
+                                    Stack::<Node>::new()
                                         .width(Val::Percent(100.))
                                         .height(Val::Percent(100.))
                                         .with_style(|mut style| style.padding.bottom = Val::Px(10.))
                                         .layer(
-                                            Column::<NodeBundle>::new()
+                                            Column::<Node>::new()
                                                 .on_signal_with_style(STYLE_DATA.signal(), set_dragging_position)
                                                 .with_style(|mut style| {
                                                     style.row_gap = Val::Px(MINI.1 / 4.);
@@ -277,7 +277,7 @@ fn ui_root() -> impl Element {
                                                 //     transform.scale = Vec3::splat(starting_distance / scale);
                                                 // })
                                                 .item(
-                                                    El::<TextBundle>::new()
+                                                    El::<Text>::new()
                                                         .with_style(|mut style| style.left = Val::Px(MINI.1 / 4.))
                                                         .text(Text::from_section(
                                                             NAME,

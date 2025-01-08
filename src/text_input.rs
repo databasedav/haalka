@@ -10,10 +10,7 @@ use bevy_color::prelude::*;
 use bevy_utils::prelude::*;
 use bevy_app::prelude::*;
 use bevy_derive::*;
-use bevy_mod_picking::{
-    events::{Down, Pointer},
-    picking_core::Pickable,
-};
+use bevy_picking::prelude::*;
 
 use super::{
     el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::{PointerEventAware, CursorOnHoverable}, raw::{RawElWrapper, register_system}, mouse_wheel_scrollable::MouseWheelScrollable,
@@ -221,7 +218,7 @@ impl TextInput {
     /// this input's [`Entity`] and its current focused state.
     pub fn on_focused_change_with_system<Marker>(
         self,
-        handler: impl IntoSystem<(Entity, bool,), (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, bool,)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
             let system_holder = Mutable::new(None);
@@ -497,21 +494,21 @@ impl TextInput {
     }
 
     /// Set whether the user is prevented from scrolling the text of this input.
-    pub fn scroll_disabled_option(self, scroll_disabled_option: impl Into<Option<bool>>) -> Self {
-        self.cosmic_edit_unit_component::<bevy_cosmic_edit::ScrollDisabled>(scroll_disabled_option)
+    pub fn scroll_enabled_option(self, scroll_enabled_option: impl Into<Option<bool>>) -> Self {
+        self.cosmic_edit_unit_component::<bevy_cosmic_edit::ScrollEnabled>(scroll_enabled_option)
     }
 
     /// Prevent the user from scrolling the text of this input.
-    pub fn scroll_disabled(self) -> Self {
-        self.scroll_disabled_option(true)
+    pub fn scroll_enabled(self) -> Self {
+        self.scroll_enabled_option(true)
     }
 
     /// Reactively set whether the user is prevented from scrolling the text of this input.
-    pub fn scroll_disabled_signal<S: Signal<Item = bool> + Send + 'static>(
+    pub fn scroll_enabled_signal<S: Signal<Item = bool> + Send + 'static>(
         self,
-        scroll_disabled_signal_option: impl Into<Option<S>>,
+        scroll_enabled_signal_option: impl Into<Option<S>>,
     ) -> Self {
-        self.cosmic_edit_unit_component_signal::<bevy_cosmic_edit::ScrollDisabled, _>(scroll_disabled_signal_option)
+        self.cosmic_edit_unit_component_signal::<bevy_cosmic_edit::ScrollEnabled, _>(scroll_enabled_signal_option)
     }
 
     /// Set whether the user is prevented from selecting the text of this input.
@@ -631,7 +628,7 @@ impl TextInput {
     }
 
     /// When the string in this input changes, run a `handler` [`System`] which takes [`In`](System::In) the [`Entity`] of this input's [`Entity`] and the new [`String`].
-    pub fn on_change_with_system<Marker>(self, handler: impl IntoSystem<(Entity, String,), (), Marker> + Send + 'static) -> Self {
+    pub fn on_change_with_system<Marker>(self, handler: impl IntoSystem<In<(Entity, String,)>, (), Marker> + Send + 'static) -> Self {
         self.update_raw_el(|raw_el| {
             let system_holder = Mutable::new(None);
             raw_el.on_spawn(clone!((system_holder) move |world, entity| {

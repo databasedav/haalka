@@ -57,18 +57,18 @@ impl Plugin for HaalkaPlugin {
         app.add_plugins(AsyncEcsPlugin);
         #[cfg(feature = "ui")]
         {
-            if !app.is_plugin_added::<bevy_mod_picking::picking_core::CorePlugin>() {
-                app.add_plugins(bevy_mod_picking::picking_core::CorePlugin);
-            }
-            if !app.is_plugin_added::<bevy_mod_picking::picking_core::InteractionPlugin>() {
-                app.add_plugins(bevy_mod_picking::picking_core::InteractionPlugin);
-            }
-            if !app.is_plugin_added::<bevy_mod_picking::input::InputPlugin>() {
-                app.add_plugins(bevy_mod_picking::input::InputPlugin);
-            }
-            if !app.is_plugin_added::<bevy_mod_picking::backends::bevy_ui::BevyUiBackend>() {
-                app.add_plugins(bevy_mod_picking::backends::bevy_ui::BevyUiBackend);
-            }
+            // if !app.is_plugin_added::<bevy_mod_picking::picking_core::CorePlugin>() {
+            //     app.add_plugins(bevy_mod_picking::picking_core::CorePlugin);
+            // }
+            // if !app.is_plugin_added::<bevy_mod_picking::picking_core::InteractionPlugin>() {
+            //     app.add_plugins(bevy_mod_picking::picking_core::InteractionPlugin);
+            // }
+            // if !app.is_plugin_added::<bevy_mod_picking::input::InputPlugin>() {
+            //     app.add_plugins(bevy_mod_picking::input::InputPlugin);
+            // }
+            // if !app.is_plugin_added::<bevy_mod_picking::backends::bevy_ui::BevyUiBackend>() {
+            //     app.add_plugins(bevy_mod_picking::backends::bevy_ui::BevyUiBackend);
+            // }
             app.add_plugins((
                 pointer_event_aware::plugin,
                 mouse_wheel_scrollable::plugin,
@@ -94,14 +94,10 @@ pub mod prelude {
     #[doc(no_inline)]
     pub use haalka_futures_signals_ext::*;
 
-    #[doc(no_inline)]
-    pub use bevy_eventlistener::prelude::*;
-
     cfg_if::cfg_if! {
         if #[cfg(feature = "ui")] {
             #[doc(no_inline)]
             pub use paste::paste;
-            pub use bevy_mod_picking;
 
             #[doc(inline)]
             pub use crate::{

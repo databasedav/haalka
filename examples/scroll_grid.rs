@@ -73,7 +73,7 @@ fn letter(
     y: usize,
     letter_color: impl Signal<Item = LetterColor> + Send + 'static,
 ) -> impl Element {
-    El::<TextBundle>::new()
+    El::<Text>::new()
     .on_hovered_change(move |is_hovered| {
         if is_hovered {
             async_world().insert_resource(HoveredCell(x, y)).apply(spawn).detach()
@@ -132,12 +132,12 @@ static CELLS: Lazy<Vec<Vec<Mutable<LetterColor>>>> = Lazy::new(|| {
 });
 
 fn ui_root() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
-            Grid::<NodeBundle>::new()
+            Grid::<Node>::new()
                 .with_style(|mut style| style.column_gap = Val::Px(15.))
                 .on_hovered_change(move |is_hovered| {
                     if !is_hovered {

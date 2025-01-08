@@ -142,17 +142,22 @@ pub trait ViewportMutable: RawElWrapper {
                 .insert(MutableViewport::new(limit_to_body))
                 .observe(
                     move |mutation: Trigger<ViewportMutation>,
-                          mut styles: Query<&mut Style>,
+                          mut nodes: Query<&mut Node>,
                           parents: Query<&Parent>,
-                          nodes: Query<&Node>,
+                          computed_nodes: Query<&ComputedNode>,
                           settings: Query<&MutableViewport>| {
                         let entity = mutation.entity();
-                        if let Some((((node, parent), settings), mut style)) = nodes
+                        if let Some((((computed_node, parent), settings), mut node)) = computed_nodes
                             .get(entity)
                             .ok()
-                            .zip(parents.get(entity).ok().and_then(|parent| nodes.get(parent.get()).ok()))
+                            .zip(
+                                parents
+                                    .get(entity)
+                                    .ok()
+                                    .and_then(|parent| computed_nodes.get(parent.get()).ok()),
+                            )
                             .zip(settings.get(entity).ok())
-                            .zip(styles.get_mut(entity).ok())
+                            .zip(nodes.get_mut(entity).ok())
                         {
                             let &ViewportMutation {
                                 x: x_option,
@@ -163,47 +168,47 @@ pub trait ViewportMutable: RawElWrapper {
                                     settings.limit_to_body,
                                     Some(LimitToBody::Horizontal) | Some(LimitToBody::Both)
                                 ) {
-                                    x = x.clamp(-(node.size().x - parent.size().x).max(0.), 0.)
+                                    x = x.clamp(-(computed_node.size().x - parent.size().x).max(0.), 0.)
                                 };
-                                style.left = Val::Px(x);
+                                node.left = Val::Px(x);
                             }
                             if let Some(mut y) = y_option {
                                 if matches!(
                                     settings.limit_to_body,
                                     Some(LimitToBody::Vertical) | Some(LimitToBody::Both)
                                 ) {
-                                    y = y.clamp(-(node.size().y - parent.size().y).max(0.), 0.);
+                                    y = y.clamp(-(computed_node.size().y - parent.size().y).max(0.), 0.);
                                 };
-                                style.top = Val::Px(y);
+                                node.top = Val::Px(y);
                             }
                         }
                     },
                 )
                 .defer_update(DeferredUpdaterAppendDirection::Front, move |raw_el| {
-                    RawHaalkaEl::from(NodeBundle::default())
-                        .insert(ViewportMarker)
-                        .with_component::<Style>(move |mut style| {
-                            style.display = Display::Flex;
-                            style.overflow = overflow;
-                        })
-                        .child(raw_el) // this is the [`Scene`]
-                        .on_spawn_with_system(
-                            |In(entity), children: Query<&Children>, mut styles: Query<&mut Style>| {
-                                // match the flex direction of `raw_el` above
-                                if let Ok(children) = children.get(entity) {
-                                    if let Some(&child) = children.first() {
-                                        if let Some((flex_direction, mut style)) = styles
-                                            .get(child)
-                                            .map(|style| style.flex_direction)
-                                            .ok()
-                                            .zip(styles.get_mut(entity).ok())
-                                        {
-                                            style.flex_direction = flex_direction;
-                                        }
+                    RawHaalkaEl::from(Node {
+                        display: Display::Flex,
+                        overflow,
+                        ..default()
+                    })
+                    .insert(ViewportMarker)
+                    .child(raw_el) // this is the [`Scene`]
+                    .on_spawn_with_system(
+                        |In(entity), children: Query<&Children>, mut nodes: Query<&mut Node>| {
+                            // match the flex direction of `raw_el` above
+                            if let Ok(children) = children.get(entity) {
+                                if let Some(&child) = children.first() {
+                                    if let Some((flex_direction, mut node)) = nodes
+                                        .get(child)
+                                        .map(|node| node.flex_direction)
+                                        .ok()
+                                        .zip(nodes.get_mut(entity).ok())
+                                    {
+                                        node.flex_direction = flex_direction;
                                     }
                                 }
-                            },
-                        )
+                            }
+                        },
+                    )
                 })
         })
     }
@@ -213,7 +218,7 @@ pub trait ViewportMutable: RawElWrapper {
     /// can be called repeatedly to register many such handlers.
     fn on_viewport_location_change_with_system<Marker>(
         self,
-        handler: impl IntoSystem<(Entity, (Scene, Viewport)), (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, (Scene, Viewport))>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
             let system_holder = Mutable::new(None);
@@ -282,17 +287,17 @@ struct ViewportLocationChange {
 
 #[allow(clippy::type_complexity)]
 fn scene_change_dispatcher(
-    mut data: Query<(Entity, &Node, &Style, &mut MutableViewport), Or<(Changed<Node>, Changed<Transform>)>>,
+    mut data: Query<(Entity, &ComputedNode, &Node, &mut MutableViewport), Or<(Changed<Node>, Changed<Transform>)>>,
     mut commands: Commands,
 ) {
-    for (entity, node, style, mut mutable_viewport) in data.iter_mut() {
-        let Vec2 { x, y } = node.size();
+    for (entity, computed_node, node, mut mutable_viewport) in data.iter_mut() {
+        let Vec2 { x, y } = computed_node.size();
         mutable_viewport.scene.width = x;
         mutable_viewport.scene.height = y;
-        if let Val::Px(x) = style.left {
+        if let Val::Px(x) = node.left {
             mutable_viewport.viewport.x = -x;
         }
-        if let Val::Px(y) = style.top {
+        if let Val::Px(y) = node.top {
             mutable_viewport.viewport.y = -y;
         }
         let MutableViewport { scene, viewport, .. } = *mutable_viewport;
@@ -302,13 +307,13 @@ fn scene_change_dispatcher(
 
 #[allow(clippy::type_complexity)]
 fn viewport_change_dispatcher(
-    data: Query<(Entity, &Node), (With<ViewportMarker>, Changed<Node>)>,
+    data: Query<(Entity, &ComputedNode), (With<ViewportMarker>, Changed<ComputedNode>)>,
     children: Query<&Children>,
     mut mutable_viewports: Query<&mut MutableViewport>,
     mut commands: Commands,
 ) {
-    for (entity, node) in data.iter() {
-        let Vec2 { x, y } = node.size();
+    for (entity, computed_node) in data.iter() {
+        let Vec2 { x, y } = computed_node.size();
         if let Ok(children) = children.get(entity) {
             // [`Scene`] is the [`Viewport`]'s only child
             if let Some(&child) = children.first() {

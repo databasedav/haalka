@@ -1,37 +1,19 @@
 //! Low level reactive entity management ported from [Dominator](https://github.com/Pauan/rust-dominator)'s [`DomBuilder`](https://docs.rs/dominator/latest/dominator/struct.DomBuilder.html).
 
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, OnceLock};
 
+use super::utils::{clone, spawn};
 use apply::Apply;
 use bevy_async_ecs::AsyncWorld;
 use bevy_ecs::prelude::*;
 use bevy_hierarchy::prelude::*;
+use bevy_tasks::Task;
 use bevy_utils::prelude::*;
 use futures_signals::{
     signal::{Mutable, Signal, SignalExt},
     signal_vec::{MutableVec, SignalVec, SignalVecExt, VecDiff},
 };
 use haalka_futures_signals_ext::{Future, MutableExt};
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
-        use haalka_futures_signals_ext::future::AbortHandle;
-    } else {
-        use bevy_tasks::Task;
-    }
-}
-
-// TODO: 0.15 `Task` api is unified, can remove
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
-        pub struct WasmTaskAdapter(pub AbortHandle);
-
-        impl WasmTaskAdapter {
-            pub fn detach(self) {}
-        }
-    }
-}
-
-use super::utils::{clone, spawn};
 
 static ASYNC_WORLD: OnceLock<AsyncWorld> = OnceLock::new();
 
@@ -54,11 +36,6 @@ pub(crate) fn init_async_world(world: &mut World) {
 pub struct NodeBuilder {
     #[allow(clippy::type_complexity)]
     on_spawns: Vec<Box<dyn FnOnce(&mut World, Entity) + Send>>,
-    // TODO: 0.15 `Task` api is unified, can remove branching
-    #[cfg(target_arch = "wasm32")]
-    #[allow(clippy::type_complexity)]
-    task_wrappers: Vec<Box<dyn FnOnce(Entity) -> WasmTaskAdapter + Send>>,
-    #[cfg(not(target_arch = "wasm32"))]
     task_wrappers: Vec<Box<dyn FnOnce(Entity) -> Task<()> + Send>>,
     child_block_populations: MutableVec<usize>,
 }
@@ -79,7 +56,7 @@ impl NodeBuilder {
     /// Run a function with this node's [`EntityWorldMut`].
     pub fn with_entity(self, f: impl FnOnce(EntityWorldMut) + Send + 'static) -> Self {
         self.on_spawn(move |world, entity| {
-            if let Some(entity) = world.get_entity_mut(entity) {
+            if let Ok(entity) = world.get_entity_mut(entity) {
                 f(entity);
             }
         })
@@ -114,12 +91,13 @@ impl NodeBuilder {
         let offset = offset(block, &self.child_block_populations.lock_ref());
         let on_spawn = move |world: &mut World, parent| {
             let child_entity = world.spawn_empty().id();
-            if let Some(mut parent) = world.get_entity_mut(parent) {
-                parent.insert_children(offset, &[child_entity]);
+            if let Ok(ref mut parent) = world.get_entity_mut(parent) {
+                // need to call like this to avoid type ambiguity
+                EntityWorldMut::insert_children(parent, offset, &[child_entity]);
                 child.spawn_on_entity(world, child_entity);
             } else {
                 // parent despawned during child spawning
-                if let Some(child) = world.get_entity_mut(child_entity) {
+                if let Ok(child) = world.get_entity_mut(child_entity) {
                     child.despawn_recursive();
                 }
             }
@@ -143,18 +121,19 @@ impl NodeBuilder {
                         if let Some(child) = child_option.into() {
                             async_world().apply(move |world: &mut World| {
                                 if let Some(existing_child) = existing_child_option.take() {
-                                    if let Some(entity) = world.get_entity_mut(existing_child) {
-                                        entity.despawn_recursive();  // removes from parent
+                                    if let Ok(entity) = world.get_entity_mut(existing_child) {
+                                        // need to call like this to avoid type ambiguity
+                                        EntityWorldMut::despawn_recursive(entity);  // removes from parent
                                     }
                                 }
                                 let child_entity = world.spawn_empty().id();
-                                if let Some(mut parent) = world.get_entity_mut(parent) {
+                                if let Ok(mut parent) = world.get_entity_mut(parent) {
                                     let offset = offset(block, &child_block_populations.lock_ref());
                                     parent.insert_children(offset, &[child_entity]);
                                     child.spawn_on_entity(world, child_entity);
                                     existing_child_option.set(Some(child_entity));
                                 } else {  // parent despawned during child spawning
-                                    if let Some(child) = world.get_entity_mut(child_entity) {
+                                    if let Ok(child) = world.get_entity_mut(child_entity) {
                                         child.despawn_recursive();
                                     }
                                 }
@@ -163,7 +142,7 @@ impl NodeBuilder {
                         } else {
                             async_world().apply(move |world: &mut World| {
                                 if let Some(existing_child) = existing_child_option.take() {
-                                    if let Some(entity) = world.get_entity_mut(existing_child) {
+                                    if let Ok(entity) = world.get_entity_mut(existing_child) {
                                         entity.despawn_recursive();
                                     }
                                 }
@@ -193,7 +172,7 @@ impl NodeBuilder {
             for _ in 0..children.len() {
                 children_entities.push(world.spawn_empty().id());
             }
-            if let Some(mut parent) = world.get_entity_mut(parent) {
+            if let Ok(mut parent) = world.get_entity_mut(parent) {
                 parent.insert_children(offset, &children_entities);
                 for (child, child_entity) in children.into_iter().zip(children_entities) {
                     child.spawn_on_entity(world, child_entity);
@@ -201,7 +180,7 @@ impl NodeBuilder {
             } else {
                 // parent despawned during child spawning
                 for child in children_entities {
-                    if let Some(child) = world.get_entity_mut(child) {
+                    if let Ok(child) = world.get_entity_mut(child) {
                         child.despawn_recursive();
                     }
                 }
@@ -230,14 +209,15 @@ impl NodeBuilder {
                                 async_world().apply(move |world: &mut World| {
                                     let mut children_lock = children_entities.lock_mut();
                                     for child in children_lock.drain(..) {
-                                        if let Some(child) = world.get_entity_mut(child) {
-                                            child.despawn_recursive();  // removes from parent
+                                        if let Ok(child) = world.get_entity_mut(child) {
+                                            // need to call like this to avoid type ambiguity
+                                            EntityWorldMut::despawn_recursive(child);  // removes from parent
                                         }
                                     }
                                     for _ in 0..children.len() {
                                         children_lock.push(world.spawn_empty().id());
                                     }
-                                    if let Some(mut parent) = world.get_entity_mut(parent) {
+                                    if let Ok(mut parent) = world.get_entity_mut(parent) {
                                         let offset = offset(block, &child_block_populations.lock_ref());
                                         parent.insert_children(offset, children_lock.as_slice());
                                         for (child, child_entity) in children.into_iter().zip(children_lock.iter().copied()) {
@@ -246,7 +226,7 @@ impl NodeBuilder {
                                         child_block_populations.lock_mut().set(block, children_lock.len());
                                     } else {  // parent despawned during child spawning
                                         for entity in children_lock.drain(..) {
-                                            if let Some(child) = world.get_entity_mut(entity) {
+                                            if let Ok(child) = world.get_entity_mut(entity) {
                                                 child.despawn_recursive();
                                             }
                                         }
@@ -257,7 +237,7 @@ impl NodeBuilder {
                             VecDiff::InsertAt { index, value: child } => {
                                 async_world().apply(move |world: &mut World| {
                                     let child_entity = world.spawn_empty().id();
-                                    if let Some(mut parent) = world.get_entity_mut(parent) {
+                                    if let Ok(mut parent) = world.get_entity_mut(parent) {
                                         let offset = offset(block, &child_block_populations.lock_ref());
                                         parent.insert_children(offset + index, &[child_entity]);
                                         child.spawn_on_entity(world, child_entity);
@@ -265,7 +245,7 @@ impl NodeBuilder {
                                         children_lock.insert(index, child_entity);
                                         child_block_populations.lock_mut().set(block, children_lock.len());
                                     } else {  // parent despawned during child spawning
-                                        if let Some(child) = world.get_entity_mut(child_entity) {
+                                        if let Ok(child) = world.get_entity_mut(child_entity) {
                                             child.despawn_recursive();
                                         }
                                     }
@@ -275,7 +255,7 @@ impl NodeBuilder {
                             VecDiff::Push { value: child } => {
                                 async_world().apply(move |world: &mut World| {
                                     let child_entity = world.spawn_empty().id();
-                                    if let Some(mut parent) = world.get_entity_mut(parent) {
+                                    if let Ok(mut parent) = world.get_entity_mut(parent) {
                                         let mut children_lock = children_entities.lock_mut();
                                         let offset = offset(block, &child_block_populations.lock_ref());
                                         parent.insert_children(offset + children_lock.len(), &[child_entity]);
@@ -283,7 +263,7 @@ impl NodeBuilder {
                                         children_lock.push(child_entity);
                                         child_block_populations.lock_mut().set(block, children_lock.len());
                                     } else {  // parent despawned during child spawning
-                                        if let Some(child) = world.get_entity_mut(child_entity) {
+                                        if let Ok(child) = world.get_entity_mut(child_entity) {
                                             child.despawn_recursive();
                                         }
                                     }
@@ -293,18 +273,18 @@ impl NodeBuilder {
                             VecDiff::UpdateAt { index, value: node } => {
                                 async_world().apply(move |world: &mut World| {
                                     if let Some(existing_child) = children_entities.lock_ref().get(index).copied() {
-                                        if let Some(child) = world.get_entity_mut(existing_child) {
+                                        if let Ok(child) = world.get_entity_mut(existing_child) {
                                             child.despawn_recursive();  // removes from parent
                                         }
                                     }
                                     let child_entity = world.spawn_empty().id();
-                                    if let Some(mut parent) = world.get_entity_mut(parent) {
+                                    if let Ok(mut parent) = world.get_entity_mut(parent) {
                                         children_entities.lock_mut().set(index, child_entity);
                                         let offset = offset(block, &child_block_populations.lock_ref());
                                         parent.insert_children(offset + index, &[child_entity]);
                                         node.spawn_on_entity(world, child_entity);
                                     } else {  // parent despawned during child spawning
-                                        if let Some(child) = world.get_entity_mut(child_entity) {
+                                        if let Ok(child) = world.get_entity_mut(child_entity) {
                                             child.despawn_recursive();
                                         }
                                     }
@@ -336,7 +316,7 @@ impl NodeBuilder {
                                             _ => {}
                                         }
                                     }
-                                    if let Some(mut parent) = world.get_entity_mut(parent) {
+                                    if let Ok(mut parent) = world.get_entity_mut(parent) {
                                         let offset = offset(block, &child_block_populations.lock_ref());
                                         swap(&mut parent, children_lock.as_slice(), offset + old_index, offset + new_index);
                                     }
@@ -347,7 +327,7 @@ impl NodeBuilder {
                                 async_world().apply(move |world: &mut World| {
                                     let mut children_lock = children_entities.lock_mut();
                                     if let Some(existing_child) = children_lock.get(index).copied() {
-                                        if let Some(child) = world.get_entity_mut(existing_child) {
+                                        if let Ok(child) = world.get_entity_mut(existing_child) {
                                             child.despawn_recursive();  // removes from parent
                                         }
                                         children_lock.remove(index);
@@ -360,7 +340,7 @@ impl NodeBuilder {
                                 async_world().apply(move |world: &mut World| {
                                     let mut children_lock = children_entities.lock_mut();
                                     if let Some(child_entity) = children_lock.pop() {
-                                        if let Some(child) = world.get_entity_mut(child_entity) {
+                                        if let Ok(child) = world.get_entity_mut(child_entity) {
                                             child.despawn_recursive();
                                         }
                                         child_block_populations.lock_mut().set(block, children_lock.len());
@@ -372,7 +352,7 @@ impl NodeBuilder {
                                 async_world().apply(move |world: &mut World| {
                                     let mut children_lock = children_entities.lock_mut();
                                     for child_entity in children_lock.drain(..) {
-                                        if let Some(child) = world.get_entity_mut(child_entity) {
+                                        if let Ok(child) = world.get_entity_mut(child_entity) {
                                             child.despawn_recursive();
                                         }
                                     }
@@ -392,15 +372,15 @@ impl NodeBuilder {
 
     /// Spawn a node on an existing [`Entity`].
     pub fn spawn_on_entity(self, world: &mut World, entity: Entity) {
-        if let Some(mut entity) = world.get_entity_mut(entity) {
+        if let Ok(mut entity) = world.get_entity_mut(entity) {
             let id = entity.id();
             entity.insert(TaskHolder::new());
             for on_spawn in self.on_spawns {
                 on_spawn(world, id);
             }
             if !self.task_wrappers.is_empty() {
-                if let Some(mut entity) = world.get_entity_mut(id) {
-                    if let Some(mut task_holder) = entity.get_mut::<TaskHolder>() {
+                if let Ok(mut entity) = world.get_entity_mut(id) {
+                    if let Some(task_holder) = entity.get_mut::<TaskHolder>() {
                         for task_wrapper in self.task_wrappers {
                             task_holder.hold(task_wrapper(id));
                         }
@@ -418,51 +398,41 @@ impl NodeBuilder {
     }
 }
 
-// TODO: tasks that resolve never get cleaned up (for the lifetime of the entity)
-// TODO: 0.15 `Task` api is unified, can remove branching
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
-        use bevy_ecs::component::*;
-
-        /// Used to tie async reactivity tasks to the lifetime of an [`Entity`].
-        pub struct TaskHolder(Vec<WasmTaskAdapter>);
-
-        impl Component for TaskHolder {
-            const STORAGE_TYPE: StorageType = StorageType::Table;
-
-            fn register_component_hooks(hooks: &mut ComponentHooks) {
-                hooks.on_remove(|mut world, entity, _| {
-                    for task in world.get_mut::<Self>(entity).unwrap().0.drain(..) {
-                        task.0.abort();
-                    }
-                });
-            }
-        }
-    } else {
-        /// Used to tie async reactivity tasks to the lifetime of an [`Entity`].
-        #[derive(Component)]
-        pub struct TaskHolder(Vec<Task<()>>);
-    }
+struct TaskWrapper {
+    i: usize,
+    #[allow(dead_code)]
+    task: Task<()>,
 }
+
+/// Used to tie async reactivity tasks to the lifetime of an [`Entity`].
+#[derive(Component, Default)]
+pub(crate) struct TaskHolder(Arc<Mutex<Vec<TaskWrapper>>>);
 
 impl TaskHolder {
     fn new() -> Self {
-        Self(Vec::new())
+        default()
     }
 
-    // TODO: 0.15 `Task` api is unified, can remove branching
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-            /// Drop the [`Task`] when the entity is despawned.
-            pub fn hold(&mut self, task: WasmTaskAdapter) {
-                self.0.push(task);
+    /// Drop the [`Task`] when it completes or the entity is despawned.
+    pub fn hold(&self, task: Task<()>) {
+        let tasks = self.0.clone();
+        let i = tasks
+            .lock()
+            .unwrap()
+            .last()
+            .map(|task_wrapper| task_wrapper.i + 1)
+            .unwrap_or(0);
+        self.0.lock().unwrap().push(TaskWrapper {
+            i,
+            task: async move {
+                task.await;
+                let mut lock = tasks.lock().unwrap();
+                if let Ok(i) = lock.binary_search_by_key(&i, |task_wrapper| task_wrapper.i) {
+                    lock.remove(i);
+                }
             }
-        } else {
-            /// Drop the [`Task`] when the entity is despawned.
-            pub fn hold(&mut self, task: Task<()>) {
-                self.0.push(task);
-            }
-        }
+            .apply(spawn),
+        });
     }
 }
 
