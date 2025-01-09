@@ -37,7 +37,7 @@ fn ui_root() -> impl Element {
                 .item(counter_button(counter.clone(), "-", -1))
                 .item(
                     El::<Text>::new()
-                        .text_font(TextFont::from_font_size(30.))
+                        .text_font(TextFont::from_font_size(25.))
                         .text_signal(counter.signal_ref(ToString::to_string).map(Text)),
                 )
                 .item(counter_button(counter.clone(), "+", 1))
@@ -56,9 +56,14 @@ fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element
                 .map_bool(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
                 .map(BackgroundColor),
         )
+        .border_radius(BorderRadius::MAX)
         .hovered_sync(hovered)
         .on_click(move || *counter.lock_mut() += step)
-        .child(El::<Text>::new().text(Text::new(label)))
+        .child(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(25.))
+                .text(Text::new(label)),
+        )
 }
 
 fn camera(mut commands: Commands) {

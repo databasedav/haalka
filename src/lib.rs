@@ -96,9 +96,6 @@ pub mod prelude {
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "ui")] {
-            #[doc(no_inline)]
-            pub use paste::paste;
-
             #[doc(inline)]
             pub use crate::{
                 align::{Align, Alignable},
@@ -124,6 +121,13 @@ pub mod prelude {
                     pub use bevy_cosmic_edit;
                 }
             }
+        }
+    }
+
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "derive")] {
+            #[doc(no_inline)]
+            pub use paste::paste;
         }
     }
 

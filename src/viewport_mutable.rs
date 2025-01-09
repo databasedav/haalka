@@ -332,7 +332,7 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Update,
         (scene_change_dispatcher, viewport_change_dispatcher)
-            .run_if(any_with_component::<MutableViewport>.and_then(any_with_component::<OnViewportLocationChange>)),
+            .run_if(any_with_component::<MutableViewport>.and(any_with_component::<OnViewportLocationChange>)),
     );
 }
 

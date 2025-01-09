@@ -22,6 +22,7 @@ use futures_signals::signal::Mutable;
 pub trait GlobalEventAware: RawElWrapper {
     /// When an `E` [`Event`] propagates to the [`UiRoot`] node, run a [`System`] which takes
     /// [`In`](`System::In`) this element's [`Entity`] (not the [`UiRoot`]'s) and the [`Event`].
+    #[allow(clippy::type_complexity)]
     fn on_global_event_with_system<E: Event + Clone, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
@@ -59,8 +60,4 @@ pub trait GlobalEventAware: RawElWrapper {
     fn on_global_event<E: Event + Clone>(self, mut handler: impl FnMut(E) + Send + Sync + 'static) -> Self {
         self.on_global_event_with_system::<E, _>(move |In((_, event))| handler(event))
     }
-}
-
-fn ui_root_forwarder(entity: &mut EntityWorldMut) -> Option<Entity> {
-    entity.world_scope(|world| world.get_resource::<UiRoot>().map(|&UiRoot(ui_root)| ui_root))
 }
