@@ -203,6 +203,7 @@ pub trait PointerEventAware: RawElWrapper {
     /// When this element's pressed state changes, run a [`System`] which takes
     /// [`In`](`System::In`) this element's [`Entity`] and its current pressed state. This method
     /// can be called repeatedly to register many such handlers.
+    #[allow(clippy::type_complexity)]
     fn on_pressed_change_with_system<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + 'static,
@@ -528,10 +529,10 @@ pub trait CursorOnHoverable: PointerEventAware {
                      disabled: Query<&Disabled>,
                      cursor_over_disabled_option: Option<Res<CursorOnHoverDisabled>>,
                      mut commands: Commands| {
-                        let entity = event.entity();
-                        if let Ok(CursorOnHover(cursor_option)) = cursor_on_hovers.get(entity).cloned() {
-                            if cursor_over_disabled_option.is_none() {
-                                if disabled.contains(entity).not() {
+                         let entity = event.entity();
+                         if let Ok(CursorOnHover(cursor_option)) = cursor_on_hovers.get(entity).cloned() {
+                             if cursor_over_disabled_option.is_none() {
+                                 if disabled.contains(entity).not() {
                                     commands.trigger(SetCursor(cursor_option));
                                 }
                             } else {
@@ -705,11 +706,13 @@ fn consume_queued_cursor(queued_cursor: Option<Res<QueuedCursor>>, mut commands:
 }
 
 // TODO: add support for multiple windows
-fn cursor_setter(event: Trigger<SetCursor>, mut windows: Query<(&mut Window, &mut CursorIcon), With<PrimaryWindow>>) {
-    if let Ok((mut window, mut cursor_icon)) = windows.get_single_mut() {
+fn cursor_setter(event: Trigger<SetCursor>, mut windows: Query<(Entity, &mut Window), With<PrimaryWindow>>, mut commands: Commands) {
+    if let Ok((entity, mut window)) = windows.get_single_mut() {
         let SetCursor(icon_option) = event.event();
         if let Some(icon) = icon_option.clone() {
-            *cursor_icon = icon;
+            if let Some(mut window) = commands.get_entity(entity) {
+                window.try_insert(icon);
+            }
             window.cursor_options.visible = true;
         } else {
             window.cursor_options.visible = false;

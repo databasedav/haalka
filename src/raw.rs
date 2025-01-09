@@ -432,11 +432,9 @@ impl RawHaalkaEl {
     pub fn on_signal_send_event<T, E: Event>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
-        mut event_f: impl FnMut(Entity, T) -> E + Send + 'static,
+        mut f: impl FnMut(Entity, T) -> E + Send + 'static,
     ) -> Self {
-        self.on_signal(signal, move |entity, value| {
-            async_world().send_event(event_f(entity, value))
-        })
+        self.on_signal(signal, move |entity, value| async_world().send_event(f(entity, value)))
     }
 
     /// When this element receives an `E` [`Event`] and does not have a `Disabled`

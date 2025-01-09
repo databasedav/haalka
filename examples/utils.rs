@@ -41,8 +41,16 @@ impl Plugin for FpsOverlayPlugin {
             Row::<Node>::new()
                 // TODO: good place to use the text section signal abstraction, since doing a .text(...).text(...) does
                 // not work as expected
-                .item(El::<Text>::new().text_font(TextFont::from_font_size(FPS_FONT_SIZE)).text(Text::new("fps: ")))
-                .item(El::<Text>::new().text_font(TextFont::from_font_size(FPS_FONT_SIZE)).text_signal(fps.map(|fps| format!("{fps:.2}")).map(Text)))
+                .item(
+                    El::<Text>::new()
+                        .text_font(TextFont::from_font_size(FPS_FONT_SIZE))
+                        .text(Text::new("fps: ")),
+                )
+                .item(
+                    El::<Text>::new()
+                        .text_font(TextFont::from_font_size(FPS_FONT_SIZE))
+                        .text_signal(fps.map(|fps| format!("{fps:.2}")).map(Text)),
+                )
         }
 
         static FPS: Lazy<Mutable<f64>> = Lazy::new(default);

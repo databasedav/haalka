@@ -81,25 +81,26 @@ fn alignment_button(alignment: Alignment) -> impl Element {
         .hovered_sync(hovered)
         .align_content(Align::center())
         .on_click(move || ALIGNMENT.set(alignment))
-        .child(El::<Text>::new().text(text(
-            match alignment {
-                Alignment::Self_ => "align self",
-                Alignment::Content => "align content",
-            },
-            30.,
-        )))
+        .child(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(25.))
+                .text(Text::new(match alignment {
+                    Alignment::Self_ => "align self",
+                    Alignment::Content => "align content",
+                })),
+        )
 }
 
 fn ui_root() -> impl Element {
     Column::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .with_style(|mut style| style.row_gap = Val::Px(15.))
+        .with_node(|mut node| node.row_gap = Val::Px(15.))
         .align_content(Align::center())
         .align(Align::center())
         .item(
             Row::<Node>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(15.))
+                .with_node(|mut node| node.column_gap = Val::Px(15.))
                 .item(container("Column", Column::<Node>::new().items(rectangles())))
                 .item(container("El", El::<Node>::new().child(rectangle(1))))
                 // TODO: is this align content behavior buggy?
@@ -107,45 +108,46 @@ fn ui_root() -> impl Element {
         )
         .item(
             Row::<Node>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(15.))
+                .with_node(|mut node| node.column_gap = Val::Px(15.))
                 .item(
                     Column::<Node>::new()
-                        .with_style(|mut style| style.row_gap = Val::Px(15.))
+                        .with_node(|mut node| node.row_gap = Val::Px(15.))
                         .item(alignment_button(Alignment::Self_))
                         .item(alignment_button(Alignment::Content)),
                 )
                 .item(
                     Stack::<Node>::new()
                         .layers(RectangleAlignment::iter().map(align_switcher))
-                        .apply(container_style),
+                        .apply(container_node),
                 ),
         )
         .item(
             Row::<Node>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(15.))
+                .with_node(|mut node| node.column_gap = Val::Px(15.))
                 .item(container("Row", Row::<Node>::new().items(rectangles())))
                 // TODO: is this align content behavior buggy?
                 .item(container("Stack", Stack::<Node>::new().layers(rectangles()))),
         )
 }
 
-fn container_style<E: RawElWrapper + Sizeable>(el: E) -> E {
+fn container_node<E: RawElWrapper + Sizeable>(el: E) -> E {
     el.width(Val::Px(278.)).height(Val::Px(200.)).update_raw_el(|raw_el| {
         raw_el
             .insert::<BorderColor>(bevy::color::palettes::basic::GRAY.into())
-            .with_component::<Style>(|mut style| {
-                style.border = UiRect::all(Val::Px(3.));
+            .with_component::<Node>(|mut node| {
+                node.border = UiRect::all(Val::Px(3.));
             })
     })
 }
 
-fn text(text: &str, font_size: f32) -> Text {
-    Text::from_section(text, TextStyle { font_size, ..default() })
-}
-
 fn container(name: &str, element: impl Element + Sizeable) -> impl Element {
     Column::<Node>::new()
-        .item(El::<Text>::new().align(Align::new().center_x()).text(text(name, 30.)))
+        .item(
+            El::<Text>::new()
+                .align(Align::new().center_x())
+                .text_font(TextFont::from_font_size(25.))
+                .text(Text::new(name)),
+        )
         .item(
             element
                 .align_content_signal(
@@ -158,7 +160,7 @@ fn container(name: &str, element: impl Element + Sizeable) -> impl Element {
                         })
                         .map(Option::flatten),
                 )
-                .apply(container_style),
+                .apply(container_node),
         )
 }
 
@@ -180,7 +182,8 @@ fn rectangle(index: i32) -> impl Element {
         .child(
             El::<Text>::new()
                 .align(Align::center())
-                .text(text(&index.to_string(), 14.)),
+                .text_font(TextFont::from_font_size(11.67))
+                .text(Text::new(index.to_string())),
         )
 }
 
@@ -209,8 +212,12 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
                 || bevy::color::palettes::css::MIDNIGHT_BLUE.into(),
             ),
         )
-        .with_style(|mut style| style.padding = UiRect::all(Val::Px(5.)))
-        .child(El::<Text>::new().text(text(&rectangle_alignment.to_string(), 14.)))
+        .with_node(|mut node| node.padding = UiRect::all(Val::Px(5.)))
+        .child(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(11.67))
+                .text(Text::new(rectangle_alignment.to_string())),
+        )
         .hovered_sync(hovered)
         .on_click(move || {
             match ALIGNMENT.get() {
@@ -222,5 +229,5 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d::default());
 }

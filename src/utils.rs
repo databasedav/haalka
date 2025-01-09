@@ -108,7 +108,7 @@ cfg_if::cfg_if! {
                                 app
                                 .insert_resource(bevy_cosmic_edit::CursorPluginDisabled)
                                 .add_systems(PostStartup, handle_cosmic_multicam.in_set(CosmicMulticamHandlerSet))
-                                .add_systems(Update, toggle_overlay.run_if(any_with_component::<IsDefaultUiCamera>.and_then(any_with_component::<bevy_cosmic_edit::CosmicPrimaryCamera>)));
+                                .add_systems(Update, toggle_overlay.run_if(any_with_component::<IsDefaultUiCamera>.and(any_with_component::<bevy_cosmic_edit::CosmicPrimaryCamera>)));
                             } else {
                                 app.add_systems(Update, toggle_overlay.run_if(any_with_component::<IsDefaultUiCamera>));
                             }
