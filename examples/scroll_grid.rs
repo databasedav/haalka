@@ -138,7 +138,7 @@ fn ui_root() -> impl Element {
         .align_content(Align::center())
         .child(
             Grid::<Node>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(15.))
+                .with_node(|mut node| node.column_gap = Val::Px(15.))
                 .on_hovered_change(move |is_hovered| {
                     if !is_hovered {
                         async_world().remove_resource::<HoveredCell>().apply(spawn).detach()

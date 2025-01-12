@@ -111,12 +111,12 @@ fn horizontal() -> impl Element {
     Row::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .with_style(|mut style| style.column_gap = Val::Px(GAP))
+        .with_node(|mut node| node.column_gap = Val::Px(GAP))
         .item(
             Column::<Node>::new()
                 .width(Val::Percent(50.))
                 .height(Val::Percent(100.))
-                .with_style(|mut style| style.row_gap = Val::Px(GAP))
+                .with_node(|mut node| node.row_gap = Val::Px(GAP))
                 .align_content(Align::center())
                 .items((0..8).map(|_| nine_slice_button())),
         )
@@ -127,7 +127,7 @@ fn vertical() -> impl Element {
     Column::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .with_style(|mut style| style.row_gap = Val::Px(GAP))
+        .with_node(|mut node| node.row_gap = Val::Px(GAP))
         .item(El::<ImageBundle>::new().image(UiImage::new(image().clone())))
         .item(
             Row::<Node>::new()
@@ -135,7 +135,7 @@ fn vertical() -> impl Element {
                 .align_content(Align::center())
                 .width(Val::Percent(100.))
                 .height(Val::Percent(50.))
-                .with_style(|mut style| style.column_gap = Val::Px(GAP))
+                .with_node(|mut node| node.column_gap = Val::Px(GAP))
                 .items((0..8).map(|_| nine_slice_button())),
         )
 }
@@ -143,8 +143,8 @@ fn vertical() -> impl Element {
 fn menu() -> impl Element {
     NineSliceEl::new(always(3))
         .height(Val::Px(BASE_SIZE))
-        .with_style(|mut style| {
-            style.padding = UiRect::all(Val::Px(GAP));
+        .with_node(|mut node| {
+            node.padding = UiRect::all(Val::Px(GAP));
         })
         .width_signal(WIDTH.signal().map(|width| BASE_SIZE.min(width)).dedupe().map(Val::Px))
         .0
@@ -164,10 +164,10 @@ fn ui_root() -> impl Element {
         .align_content(Align::center())
         .child(
             Column::<Node>::new()
-                .with_style(|mut style| style.row_gap = Val::Px(GAP))
+                .with_node(|mut node| node.row_gap = Val::Px(GAP))
                 .item(
                     Row::<Node>::new()
-                        .with_style(|mut style| style.padding.left = Val::Px(GAP))
+                        .with_node(|mut node| node.padding.left = Val::Px(GAP))
                         .item(El::<Text>::new().text(Text::from_section(
                             "width: ",
                             TextStyle {

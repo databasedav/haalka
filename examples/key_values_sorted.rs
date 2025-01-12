@@ -191,7 +191,7 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
     let hovered = Mutable::new(false);
     let selected = SORT_BY.signal().map(move |cur| cur == sort_by).broadcast();
     Row::<Node>::new()
-        .with_style(|mut style| style.column_gap = Val::Px(35.))
+        .with_node(|mut node| node.column_gap = Val::Px(35.))
         .align(Align::new().right())
         .item_signal(selected.signal().map_true(sort_by_text_element))
         .item(
@@ -301,7 +301,7 @@ static SCROLL_POSITION: Lazy<Mutable<f32>> = Lazy::new(default);
 
 fn key_values() -> impl Element + Sizeable {
     Column::<Node>::new()
-        .with_style(|mut style| style.row_gap = Val::Px(10.))
+        .with_node(|mut node| node.row_gap = Val::Px(10.))
         .height(Val::Percent(90.))
         .mutable_viewport(Overflow::clip_y(), LimitToBody::Vertical)
         .on_scroll_with_system_on_hover(
@@ -328,7 +328,7 @@ fn key_values() -> impl Element + Sizeable {
                 },
             )| {
                 Row::<Node>::new()
-                    .with_style(|mut style| style.column_gap = Val::Px(10.))
+                    .with_node(|mut node| node.column_gap = Val::Px(10.))
                     // without registering width up front, layout will take a frame or two to sync to size of children,
                     // making it look like the elements are expanding into place, try commenting out this line to see
                     // how it looks
@@ -358,7 +358,7 @@ fn x_button() -> impl Element + PointerEventAware {
         .hovered_sync(hovered)
         .child(
             El::<Text>::new()
-                .with_style(|mut style| style.top = Val::Px(-3.))
+                .with_node(|mut node| node.top = Val::Px(-3.))
                 .align(Align::center())
                 .text(Text::from_section(
                     "x",
@@ -379,16 +379,16 @@ fn ui_root() -> impl Element {
         .child(
             Row::<Node>::new()
                 .height(Val::Percent(100.))
-                .with_style(|mut style| style.column_gap = Val::Px(70.))
+                .with_node(|mut node| node.column_gap = Val::Px(70.))
                 .item(
                     Column::<Node>::new()
-                        .with_style(|mut style| style.row_gap = Val::Px(20.))
+                        .with_node(|mut node| node.row_gap = Val::Px(20.))
                         .item(sort_button(KeyValue::Key))
                         .item(sort_button(KeyValue::Value)),
                 )
                 .item(
                     Column::<Node>::new()
-                        .with_style(|mut style| style.row_gap = Val::Px(10.))
+                        .with_node(|mut node| node.row_gap = Val::Px(10.))
                         .height(Val::Percent(90.))
                         .width(Val::Px(INPUT_WIDTH * 2. + INPUT_HEIGHT + 10. * 2.))
                         .align_content(Align::center())
@@ -501,7 +501,7 @@ fn escaper(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
 // on focus change, check if the focused element is in view, if not, scroll to it
 fn focus_scroller(
     focused_text_input_option: Option<Res<FocusedTextInput>>,
-    data_query: Query<(&Node, &GlobalTransform, &mut Style)>,
+    data_query: Query<(&Node, &GlobalTransform, &mut node)>,
     parents: Query<&Parent>,
     mutable_viewports: Query<&MutableViewport>,
 ) {
@@ -518,7 +518,7 @@ fn focus_scroller(
                             let text_input_rect = text_input_node.logical_rect(text_input_transform);
                             let scene_rect = scene_node.logical_rect(scene_transform);
                             let viewport_rect = viewport_node.logical_rect(viewport_transform);
-                            let scrolled_option = match viewport_style.top {
+                            let scrolled_option = match viewport_node.top {
                                 Val::Px(top) => Some(top),
                                 Val::Auto => Some(0.0),
                                 _ => None,

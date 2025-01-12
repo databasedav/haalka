@@ -370,7 +370,7 @@ impl TextInput {
                 let style = style_signal.broadcast();
                 self = self
                     // .on_signal_with_default_attrs(
-                    //     style.signal(),
+                    //     node.signal(),
                     //     move |mut attrs, style| {
                     //         attrs.style = style;
                     //     },

@@ -43,14 +43,14 @@ fn button(i: usize, j: usize) -> RawHaalkaEl {
     let width = 90. / total;
     RawHaalkaEl::new()
         .insert(Node::default())
-        .with_component::<Style>(move |mut style| {
-            style.width = Val::Percent(width);
-            style.height = Val::Percent(width);
-            style.bottom = Val::Percent(100. / total * i as f32);
-            style.left = Val::Percent(100. / total * j as f32);
-            style.align_items = AlignItems::Center;
-            style.position_type = PositionType::Absolute;
-            style.border = UiRect::all(Val::Percent(10. / total));
+        .with_component::<Style>(move |mut node| {
+            node.width = Val::Percent(width);
+            node.height = Val::Percent(width);
+            node.bottom = Val::Percent(100. / total * i as f32);
+            node.left = Val::Percent(100. / total * j as f32);
+            node.align_items = AlignItems::Center;
+            node.position_type = PositionType::Absolute;
+            node.border = UiRect::all(Val::Percent(10. / total));
         })
         .component_signal(background_color_signal)
         .insert(BorderColor(as_rainbow(i % j.max(1))))
@@ -77,12 +77,12 @@ fn as_rainbow(i: usize) -> Color {
 fn spawn_ui_root(world: &mut World) {
     RawHaalkaEl::new()
         .insert(Node::default())
-        .with_component::<Style>(|mut style| {
-            style.flex_direction = FlexDirection::Column;
-            style.justify_content = JustifyContent::Center;
-            style.align_items = AlignItems::Center;
-            style.width = Val::Percent(100.);
-            style.height = Val::Percent(100.);
+        .with_component::<Style>(|mut node| {
+            node.flex_direction = FlexDirection::Column;
+            node.justify_content = JustifyContent::Center;
+            node.align_items = AlignItems::Center;
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
         })
         .children((0..SIZE).flat_map(|i| (0..SIZE).map(move |j| button(i, j))))
         .spawn(world);

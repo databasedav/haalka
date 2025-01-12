@@ -67,7 +67,7 @@ fn text(string: &str) -> Text {
 
 fn labeled_element(label: impl Element, element: impl Element) -> impl Element {
     Row::<Node>::new()
-        .with_style(|mut style| style.column_gap = Val::Px(10.))
+        .with_node(|mut node| node.column_gap = Val::Px(10.))
         .item(label)
         .item(element)
 }
@@ -130,7 +130,7 @@ fn incrde_button(value: Mutable<f32>, incr: f32) -> impl Element {
 
 fn rate_element(rate: Mutable<f32>) -> impl Element {
     Row::<Node>::new()
-        .with_style(|mut style| style.column_gap = Val::Px(15.0))
+        .with_node(|mut node| node.column_gap = Val::Px(15.0))
         .item(El::<Text>::new().text_signal(rate.signal().map(|rate| text(&format!("{:.1}", rate)))))
         .item(incrde_button(rate.clone(), 0.1))
         .item(incrde_button(rate, -0.1))
@@ -202,7 +202,7 @@ fn ui_root() -> impl Element {
         .align_content(Align::center())
         .child(
             Row::<Node>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(50.))
+                .with_node(|mut node| node.column_gap = Val::Px(50.))
                 .item(
                     El::<Node>::new().width(Val::Px(HEIGHT)).height(Val::Px(HEIGHT)), // can't put non ui nodes on top of ui nodes; yes u can https://discord.com/channels/691052431525675048/743663673393938453/1192729978744352858
                                                                                             // Column::<Node>::new()
@@ -212,16 +212,16 @@ fn ui_root() -> impl Element {
                 )
                 .item(
                     Column::<Node>::new()
-                        .with_style(|mut style| {
-                            style.row_gap = Val::Px(50.);
-                            style.padding.left = Val::Px(50.);
+                        .with_node(|mut node| {
+                            node.row_gap = Val::Px(50.);
+                            node.padding.left = Val::Px(50.);
                         })
                         .item(
                             Row::<Node>::new()
                                 .item(
                                     Column::<Node>::new()
                                         .align_content(Align::new().left())
-                                        .with_style(|mut style| style.row_gap = Val::Px(10.))
+                                        .with_node(|mut node| node.row_gap = Val::Px(10.))
                                         .item(category_count(ColorCategory::Blue, COUNTS.blue.signal()))
                                         .item(category_count(ColorCategory::Green, COUNTS.green.signal()))
                                         .item(category_count(ColorCategory::Red, COUNTS.red.signal()))
@@ -237,13 +237,13 @@ fn ui_root() -> impl Element {
                                     })
                                     .align(Align::new().right())
                                     .update_raw_el(|raw_el| {
-                                        raw_el.with_component::<Style>(|mut style| style.right = Val::Px(100.))
+                                        raw_el.with_component::<Style>(|mut node| node.right = Val::Px(100.))
                                     }),
                                 ),
                         )
                         .item(
                             Column::<Node>::new()
-                                .with_style(|mut style| style.row_gap = Val::Px(10.))
+                                .with_node(|mut node| node.row_gap = Val::Px(10.))
                                 .item(text_labeled_element("spawn rate", rate_element(SPAWN_RATE.clone())))
                                 .item(text_labeled_element("despawn rate", rate_element(DESPAWN_RATE.clone()))),
                         ),

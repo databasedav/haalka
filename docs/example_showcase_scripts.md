@@ -67,7 +67,7 @@ TODO: this should be able to be automated with a selenium type abstraction layer
 1. type "cuboid" into the text input
 1. type "torus" into the text input
 
-## `ecs_ui_sync`
+## `dot_counter`
 1. let the example run for a few seconds
 1. increase the spawn rate to 3.0 and let the example run for a few seconds
 1. increase the despawn rate to 4.0 and let the example run for a few seconds

@@ -529,10 +529,10 @@ pub trait CursorOnHoverable: PointerEventAware {
                      disabled: Query<&Disabled>,
                      cursor_over_disabled_option: Option<Res<CursorOnHoverDisabled>>,
                      mut commands: Commands| {
-                         let entity = event.entity();
-                         if let Ok(CursorOnHover(cursor_option)) = cursor_on_hovers.get(entity).cloned() {
-                             if cursor_over_disabled_option.is_none() {
-                                 if disabled.contains(entity).not() {
+                        let entity = event.entity();
+                        if let Ok(CursorOnHover(cursor_option)) = cursor_on_hovers.get(entity).cloned() {
+                            if cursor_over_disabled_option.is_none() {
+                                if disabled.contains(entity).not() {
                                     commands.trigger(SetCursor(cursor_option));
                                 }
                             } else {
@@ -706,7 +706,11 @@ fn consume_queued_cursor(queued_cursor: Option<Res<QueuedCursor>>, mut commands:
 }
 
 // TODO: add support for multiple windows
-fn cursor_setter(event: Trigger<SetCursor>, mut windows: Query<(Entity, &mut Window), With<PrimaryWindow>>, mut commands: Commands) {
+fn cursor_setter(
+    event: Trigger<SetCursor>,
+    mut windows: Query<(Entity, &mut Window), With<PrimaryWindow>>,
+    mut commands: Commands,
+) {
     if let Ok((entity, mut window)) = windows.get_single_mut() {
         let SetCursor(icon_option) = event.event();
         if let Some(icon) = icon_option.clone() {
