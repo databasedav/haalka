@@ -156,8 +156,8 @@ fn healthbar(
     let percent_health = health.signal().map(move |h| h as f32 / max as f32).broadcast();
     Stack::<Node>::new()
         .height(Val::Px(height))
-        .with_style(move |mut style| {
-            style.border = UiRect::all(Val::Px(height / 12.));
+        .with_node(move |mut node| {
+            node.border = UiRect::all(Val::Px(height / 12.));
         })
         .border_color(BorderColor(Color::BLACK))
         .layer(
@@ -172,9 +172,9 @@ fn healthbar(
         .layer(
             El::<Text>::new()
                 .height(Val::Percent(100.))
-                .with_style(move |mut style| {
-                    style.bottom = Val::Px(height / 8.);
-                    style.left = Val::Px(height / 6.); // TODO: padding doesn't work here?
+                .with_node(move |mut node| {
+                    node.bottom = Val::Px(height / 8.);
+                    node.left = Val::Px(height / 6.); // TODO: padding doesn't work here?
                 })
                 .align(Align::new().left())
                 .text_signal(health.signal().map(move |health| {
@@ -240,9 +240,9 @@ fn respawn_button() -> impl Element {
         )))
 }
 
-fn set_dragging_position(mut style: Mut<Style>, StyleData { left, top, .. }: StyleData) {
-    style.left = Val::Px(left - MINI.0 / 2.);
-    style.top = Val::Px(top - 30. * 2. - MINI.1 * 1.5);
+fn set_dragging_position(mut node: Mut<Style>, StyleData { left, top, .. }: StyleData) {
+    node.left = Val::Px(left - MINI.0 / 2.);
+    node.top = Val::Px(top - 30. * 2. - MINI.1 * 1.5);
 }
 
 fn ui_root() -> impl Element {
@@ -264,12 +264,12 @@ fn ui_root() -> impl Element {
                                     Stack::<Node>::new()
                                         .width(Val::Percent(100.))
                                         .height(Val::Percent(100.))
-                                        .with_style(|mut style| style.padding.bottom = Val::Px(10.))
+                                        .with_node(|mut node| node.padding.bottom = Val::Px(10.))
                                         .layer(
                                             Column::<Node>::new()
-                                                .on_signal_with_style(STYLE_DATA.signal(), set_dragging_position)
-                                                .with_style(|mut style| {
-                                                    style.row_gap = Val::Px(MINI.1 / 4.);
+                                                .on_signal_with_node(STYLE_DATA.signal(), set_dragging_position)
+                                                .with_node(|mut node| {
+                                                    node.row_gap = Val::Px(MINI.1 / 4.);
                                                     set_dragging_position(style, STYLE_DATA.get());
                                                 })
                                                 // .on_signal_with_transform(style_data.signal(), move |transform,
@@ -278,7 +278,7 @@ fn ui_root() -> impl Element {
                                                 // })
                                                 .item(
                                                     El::<Text>::new()
-                                                        .with_style(|mut style| style.left = Val::Px(MINI.1 / 4.))
+                                                        .with_node(|mut node| node.left = Val::Px(MINI.1 / 4.))
                                                         .text(Text::from_section(
                                                             NAME,
                                                             TextStyle {

@@ -122,8 +122,8 @@ impl Button {
             el: {
                 El::<Node>::new()
                     .height(Val::Px(DEFAULT_BUTTON_HEIGHT))
-                    .with_style(|mut style| {
-                        style.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH));
+                    .with_node(|mut node| {
+                        node.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH));
                     })
                     .pressed_sync(pressed)
                     .align_content(Align::center())
@@ -189,14 +189,14 @@ fn menu_base(width: f32, height: f32, title: &str) -> Column<Node> {
     Column::<Node>::new()
         .width(Val::Px(width))
         .height(Val::Px(height))
-        .with_style(|mut style| style.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH)))
+        .with_node(|mut node| node.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH)))
         .border_color(BorderColor(Color::BLACK))
         .background_color(BackgroundColor(NORMAL_BUTTON))
         .item(
             El::<Node>::new()
                 .height(Val::Px(MENU_ITEM_HEIGHT))
-                .with_style(|mut style| {
-                    style.padding = UiRect::all(Val::Px(BASE_PADDING * 2.));
+                .with_node(|mut node| {
+                    node.padding = UiRect::all(Val::Px(BASE_PADDING * 2.));
                 })
                 .child(El::<Text>::new().align(Align::new().top().left()).text(text(title))),
         )
@@ -383,10 +383,10 @@ enum LeftRight {
 
 fn centered_arrow_text(direction: LeftRight) -> El<Text> {
     El::<Text>::new()
-        .with_style(|mut style| {
+        .with_node(|mut node| {
             // manually centered
-            style.bottom = Val::Px(2.);
-            style.right = Val::Px(2.);
+            node.bottom = Val::Px(2.);
+            node.right = Val::Px(2.);
         })
         .text(
             match direction {
@@ -459,7 +459,7 @@ impl IterableOptions {
                         })
                     )
                 })
-                .with_style(|mut style| style.column_gap = Val::Px(BASE_PADDING * 2.))
+                .with_node(|mut node| node.column_gap = Val::Px(BASE_PADDING * 2.))
                 .item({
                     lil_baby_button()
                     .selected_signal(left_pressed.signal())
@@ -543,20 +543,20 @@ impl Slider {
                         )
                     })
                     .update_raw_el(|raw_el| raw_el.hold_tasks([value_setter]))
-                    .with_style(|mut style| style.column_gap = Val::Px(10.))
+                    .with_node(|mut node| node.column_gap = Val::Px(10.))
                     .item(El::<Text>::new().text_signal(value.signal().map(|value| text(format!("{:.1}", value)))))
                     .item(
                         Stack::<Node>::new()
                             .width(Val::Px(slider_width))
                             .height(Val::Px(5.))
-                            .with_style(move |mut style| style.padding = UiRect::horizontal(Val::Px(slider_padding)))
+                            .with_node(move |mut node| node.padding = UiRect::horizontal(Val::Px(slider_padding)))
                             .background_color(BackgroundColor(Color::BLACK))
                             .layer({
                                 let dragging = Mutable::new(false);
                                 lil_baby_button()
                                     .selected_signal(dragging.signal())
                                     .el // we need lower level access now
-                                    .on_signal_with_style(left.signal(), |mut style, left| style.left = Val::Px(left))
+                                    .on_signal_with_node(left.signal(), |mut node, left| node.left = Val::Px(left))
                                     .align(Align::new().center_y())
                                     .update_raw_el(|raw_el| {
                                         raw_el.insert((
@@ -624,7 +624,7 @@ fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<N
         .on_hovered_change(move |is_hovered| only_one_up_flipper(&hovered, &MENU_ITEM_HOVERED_OPTION, Some(is_hovered)))
         .width(Val::Percent(100.))
         .height(Val::Px(MENU_ITEM_HEIGHT))
-        .with_style(|mut style| style.padding = UiRect::axes(Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.)))
+        .with_node(|mut node| node.padding = UiRect::axes(Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.)))
         .layer(
             El::<Text>::new()
                 .text(text(label))
@@ -741,7 +741,7 @@ impl Dropdown {
                 .body(
                     Stack::<Node>::new()
                     .width(Val::Percent(100.))
-                    .with_style(|mut style| style.padding = UiRect::horizontal(Val::Px(BASE_PADDING)))
+                    .with_node(|mut node| node.padding = UiRect::horizontal(Val::Px(BASE_PADDING)))
                     .layer(
                         El::<Text>::new()
                         .align(Align::new().left())
@@ -755,7 +755,7 @@ impl Dropdown {
                     )
                     .layer(
                         Row::<Node>::new()
-                        .with_style(|mut style| style.column_gap = Val::Px(BASE_PADDING))
+                        .with_node(|mut node| node.column_gap = Val::Px(BASE_PADDING))
                         .align(Align::new().right())
                         .item_signal(
                             // TODO: this should just work, but compiler asks for type info
@@ -791,9 +791,9 @@ impl Dropdown {
                 .map_true(clone!((options, show_dropdown, selected) move || {
                     Column::<Node>::new()
                     .width(Val::Percent(100.))
-                    .with_style(|mut style| {
-                        style.position_type = PositionType::Absolute;
-                        style.top = Val::Percent(100.);
+                    .with_node(|mut node| {
+                        node.position_type = PositionType::Absolute;
+                        node.top = Val::Percent(100.);
                     })
                     .items_signal_vec(
                         options.signal_vec_cloned()
@@ -1053,7 +1053,7 @@ fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
                     .map_bool(|| bevy::color::palettes::basic::RED.into(), || TEXT_COLOR),
                 |mut text, color| {
                     if let Some(section) = text.sections.first_mut() {
-                        section.style.color = color;
+                        section.node.color = color;
                     }
                 },
             ),
@@ -1118,10 +1118,10 @@ fn menu() -> impl Element {
                         })
                     })
                 })
-                .with_style(|mut style| style.row_gap = Val::Px(BASE_PADDING * 2.))
+                .with_node(|mut node| node.row_gap = Val::Px(BASE_PADDING * 2.))
                 .item(
                     Column::<Node>::new()
-                        .with_style(|mut style| style.row_gap = Val::Px(BASE_PADDING))
+                        .with_node(|mut node| node.row_gap = Val::Px(BASE_PADDING))
                         .align_content(Align::center())
                         .items(SubMenu::iter().map(|sub_menu| {
                             sub_menu_button(sub_menu).hovered_signal(
@@ -1138,10 +1138,10 @@ fn menu() -> impl Element {
             Stack::<Node>::new()
                 .width(Val::Px(SUB_MENU_WIDTH))
                 .height(Val::Px(SUB_MENU_HEIGHT))
-                .with_style(|mut style| {
+                .with_node(|mut node| {
                     // TODO: without absolute there's some weird bouncing when switching between
                     // menus, perhaps due to the layout system having to figure stuff out ?
-                    style.position_type = PositionType::Absolute;
+                    node.position_type = PositionType::Absolute;
                 })
                 .align(Align::center())
                 .layer(menu.align(Align::center()))
@@ -1151,9 +1151,9 @@ fn menu() -> impl Element {
                     })
                     .align(Align::new().top().right())
                     .update_raw_el(|raw_el| {
-                        raw_el.with_component::<Style>(|mut style| {
-                            style.padding.right = Val::Px(BASE_PADDING);
-                            style.padding.top = Val::Px(BASE_PADDING / 2.);
+                        raw_el.with_component::<Style>(|mut node| {
+                            node.padding.right = Val::Px(BASE_PADDING);
+                            node.padding.top = Val::Px(BASE_PADDING / 2.);
                         })
                     }),
                 )

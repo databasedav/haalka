@@ -49,7 +49,7 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
                 .into_system(),
             signal::or(signal::not(hovered.signal()), SHIFTED.signal()),
         )
-        .with_style(move |mut style| style.top = Val::Px(-LETTER_SIZE * rotate as f32))
+        .with_node(move |mut node| node.top = Val::Px(-LETTER_SIZE * rotate as f32))
         .hovered_sync(hovered)
         .items(
             "abcdefghijklmnopqrstuvwxyz"
@@ -66,9 +66,9 @@ fn ui_root() -> impl Element {
         .align_content(Align::center())
         .child(
             Row::<Node>::new()
-                .with_style(|mut style: Mut<'_, Style>| {
-                    style.column_gap = Val::Px(30.);
-                    style.padding = UiRect::horizontal(Val::Px(7.5));
+                .with_node(|mut node: Mut<'_, Style>| {
+                    node.column_gap = Val::Px(30.);
+                    node.padding = UiRect::horizontal(Val::Px(7.5));
                 })
                 .width(Val::Px(300.))
                 .mutable_viewport(Overflow::clip_x(), LimitToBody::Horizontal)

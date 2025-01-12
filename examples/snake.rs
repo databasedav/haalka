@@ -123,7 +123,7 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
 fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> impl Element {
     Column::<Node>::new()
         .width(Val::Px((WIDTH - SIDE) as f32))
-        .with_style(|mut style| style.row_gap = Val::Px(10.))
+        .with_node(|mut node| node.row_gap = Val::Px(10.))
         .align_content(Align::center())
         .item(El::<Text>::new().text_signal(score.signal().map(|score| {
             Text::from_section(
@@ -136,7 +136,7 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
         })))
         .item(
             Row::<Node>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(10.))
+                .with_node(|mut node| node.column_gap = Val::Px(10.))
                 .item(El::<Text>::new().text(text("grid size:")))
                 .item(El::<Text>::new().text_signal(size.signal().map(|size| text(&size.to_string()))))
                 .item(text_button("-").on_pressing_with_system_with_sleep_throttle(
@@ -154,7 +154,7 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
         )
         .item(
             Row::<Node>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(10.))
+                .with_node(|mut node| node.column_gap = Val::Px(10.))
                 .item(El::<Text>::new().text(text("tick rate:")))
                 .item(El::<Text>::new().text_signal(tick_rate.signal().map(|size| text(&size.to_string()))))
                 .item(text_button("-").on_pressing_with_system_with_sleep_throttle(

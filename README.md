@@ -51,7 +51,7 @@ fn ui_root() -> impl Element {
         .align_content(Align::center())
         .child(
             Row::<Node>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(15.0))
+                .with_node(|mut node| node.column_gap = Val::Px(15.0))
                 .item(counter_button(counter.clone(), "-", -1))
                 .item(El::<Text>::new().text_signal(counter.signal().map(text)))
                 .item(counter_button(counter.clone(), "+", 1))
@@ -116,9 +116,9 @@ All examples are compiled to wasm for both webgl2 and webgpu (check [compatibili
 
     the classic, with adjustable grid size and tick rate
 
-- [**`ecs_ui_sync`**](https://github.com/databasedav/haalka/blob/main/examples/ecs_ui_sync.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/ecs_ui_sync/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/ecs_ui_sync/)
+- [**`dot_counter`**](https://github.com/databasedav/haalka/blob/main/examples/dot_counter.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/dot_counter/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/dot_counter/)
 
-    forward ecs changes to the ui
+    forward ecs changes to the ui, throttled button presses
 
 - [**`key_values_sorted`**](https://github.com/databasedav/haalka/blob/main/examples/key_values_sorted.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/key_values_sorted/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/key_values_sorted/)
 

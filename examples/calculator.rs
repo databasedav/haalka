@@ -39,9 +39,9 @@ fn textable_element(text_signal: impl Signal<Item = impl Into<String> + 'static>
         .border_color(BorderColor(Color::WHITE))
         .child(
             El::<Text>::new()
-            .text_font(TextFont::from_font_size(FONT_SIZE))
-            .text_color(TextColor(Color::WHITE))
-            .text_signal(text_signal.map(Text::new))
+                .text_font(TextFont::from_font_size(FONT_SIZE))
+                .text_color(TextColor(Color::WHITE))
+                .text_signal(text_signal.map(Text::new)),
         )
 }
 

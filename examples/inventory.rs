@@ -229,7 +229,7 @@ fn icon(
         )
         .layer(
             El::<Text>::new()
-                .with_style(|mut style| style.top = Val::Px(6.))
+                .with_node(|mut node| node.top = Val::Px(6.))
                 .align(Align::new().bottom().right())
                 .text_signal(count_signal.map(|count| {
                     Text::from_section(
@@ -384,7 +384,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
         .hovered_sync(hovered.clone())
         .width(Val::Px(CELL_WIDTH))
         .height(Val::Px(CELL_WIDTH))
-        .with_style(|mut style| style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH)))
+        .with_node(|mut node| node.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH)))
         .background_color_signal(
             hovered.signal()
                 .map_bool(|| CELL_HIGHLIGHT_COLOR, || CELL_BACKGROUND_COLOR).map(Into::into),
@@ -403,10 +403,10 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                 // TODO: global transform isn't populated on spawn
                                 // .with_global_transform(clone!((original_position) move |transform| original_position.set(Some(transform.compute_transform().translation.xy()))))
                                 .height(Val::Px(CELL_WIDTH))
-                                .with_style(|mut style| {
-                                    style.position_type = PositionType::Absolute;
-                                    style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
-                                    style.padding = UiRect::horizontal(Val::Px(10.));
+                                .with_node(|mut node| {
+                                    node.position_type = PositionType::Absolute;
+                                    node.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
+                                    node.padding = UiRect::horizontal(Val::Px(10.));
                                 })
                                 .visibility(Visibility::Hidden)
                                 .update_raw_el(clone!((original_position) move |raw_el| {
@@ -423,9 +423,9 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                             // this fixes grey flash when inserting into an empty cell, which is caused by the item tooltip flashing on top before the frame it is moved
                                             entity.insert(Visibility::Visible);
                                         }
-                                        if let Some(mut style) = entity.get_mut::<Style>() {
-                                            style.left = Val::Px(left);
-                                            style.top = Val::Px(top);
+                                        if let Some(mut node) = entity.get_mut::<Style>() {
+                                            node.left = Val::Px(left);
+                                            node.top = Val::Px(top);
                                         }
                                     })
                                 }))
@@ -481,9 +481,9 @@ where
     Grid::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .with_style(|mut style| {
-            style.column_gap = Val::Px(CELL_GAP);
-            style.row_gap = Val::Px(CELL_GAP);
+        .with_node(|mut node| {
+            node.column_gap = Val::Px(CELL_GAP);
+            node.row_gap = Val::Px(CELL_GAP);
         })
         .row_wrap_cell_width(CELL_WIDTH)
         .cells(
@@ -523,7 +523,7 @@ fn arrow() -> impl Element {
 
 fn side_column() -> impl Element {
     Column::<Node>::new()
-        .with_style(|mut style| style.row_gap = Val::Px(CELL_GAP))
+        .with_node(|mut node| node.row_gap = Val::Px(CELL_GAP))
         .items((0..4).map(|_| bern_cell(0.5, true)))
 }
 
@@ -536,20 +536,20 @@ fn inventory() -> impl Element {
             Column::<Node>::new()
             .height(Val::Percent(100.))
             .width(Val::Percent(100.))
-                .with_style(|mut style| style.row_gap = Val::Px(CELL_GAP * 4.))
+                .with_node(|mut node| node.row_gap = Val::Px(CELL_GAP * 4.))
                 .background_color(BackgroundColor(INVENTORY_BACKGROUND_COLOR))
                 .align_content(Align::center())
                 .item(
                     Row::<Node>::new()
                     .width(Val::Percent(100.))
-                        .with_style(|mut style| style.column_gap = Val::Px(CELL_GAP))
+                        .with_node(|mut node| node.column_gap = Val::Px(CELL_GAP))
                         .item(
                             Row::<Node>::new()
                                 .align_content(Align::center())
                                 .width(Val::Percent(60.))
-                                .with_style(|mut style| {
-                                    style.column_gap = Val::Px(CELL_GAP);
-                                    style.padding = UiRect::horizontal(Val::Px(CELL_GAP * 3.));
+                                .with_node(|mut node| {
+                                    node.column_gap = Val::Px(CELL_GAP);
+                                    node.padding = UiRect::horizontal(Val::Px(CELL_GAP * 3.));
                                 })
                                 .item(side_column())
                                 .item(
@@ -591,8 +591,8 @@ fn inventory() -> impl Element {
                                     }));
                                     Column::<Node>::new()
                                         .update_raw_el(|raw_el| raw_el.hold_tasks([outputter]))
-                                        .with_style(|mut style| {
-                                            style.row_gap = Val::Px(CELL_GAP * 2.);
+                                        .with_node(|mut node| {
+                                            node.row_gap = Val::Px(CELL_GAP * 2.);
                                         })
                                         .item(
                                             // need to add another wrapping node here so the special output `Down`
@@ -633,8 +633,8 @@ fn inventory() -> impl Element {
                 )
                 .item(
                     Row::<Node>::new()
-                        .with_style(|mut style| {
-                            style.column_gap = Val::Px(CELL_GAP);
+                        .with_node(|mut node| {
+                            node.column_gap = Val::Px(CELL_GAP);
                         })
                         .items((0..9).map(|_| bern_cell(0.5, true))),
                 ),
@@ -683,10 +683,10 @@ fn ui_root() -> impl Element {
                         .cursor(CursorIcon::Grabbing)
                         .width(Val::Px(CELL_WIDTH))
                         .height(Val::Px(CELL_WIDTH))
-                        .with_style(|mut style| {
-                            style.position_type = PositionType::Absolute;
+                        .with_node(|mut node| {
+                            node.position_type = PositionType::Absolute;
                             let pointer_position = POINTER_POSITION.get();
-                            // TODO: this is actually *extremely* cringe, because the `.on_signal_with_style`
+                            // TODO: this is actually *extremely* cringe, because the `.on_signal_with_node`
                             // will(might?) not tick before the first frame the icon is
                             // rendered, the icon will flash from the left middle of the screen (default absolute
                             // position?) to the pointer position, this means that the
@@ -698,14 +698,14 @@ fn ui_root() -> impl Element {
                             set_dragging_position(style, pointer_position);
                         })
                         .z_index(ZIndex::Global(1))
-                        .on_signal_with_style(POINTER_POSITION.signal(), set_dragging_position)
+                        .on_signal_with_node(POINTER_POSITION.signal(), set_dragging_position)
                 }),
         )
 }
 
-fn set_dragging_position(mut style: Mut<Style>, pointer_position: (f32, f32)) {
-    style.left = Val::Px(pointer_position.0 - CELL_WIDTH / 2.);
-    style.top = Val::Px(pointer_position.1 - CELL_WIDTH / 2.);
+fn set_dragging_position(mut node: Mut<Style>, pointer_position: (f32, f32)) {
+    node.left = Val::Px(pointer_position.0 - CELL_WIDTH / 2.);
+    node.top = Val::Px(pointer_position.1 - CELL_WIDTH / 2.);
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
