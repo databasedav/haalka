@@ -30,7 +30,23 @@ fn main() {
                 .chain()
                 .run_if(any_with_component::<Player>),
         )
-        .add_systems(Update, spawn_player.run_if(on_event::<SpawnPlayer>()))
+        .add_observer(|
+            _: Trigger<SpawnPlayer>,
+            mut meshes: ResMut<Assets<Mesh>>,
+            mut materials: ResMut<Assets<StandardMaterial>>,
+            mut commands: Commands,
+        | {
+            let health = Mutable::new(PLAYER_HEALTH);
+            commands.spawn((
+                Player,
+                Health(PLAYER_HEALTH),
+                HealthMutable(health.clone()),
+                Mesh3d(meshes.add(Mesh::from(Sphere { radius: RADIUS }))),
+                Transform::from_translation(PLAYER_POSITION),
+                MeshMaterial3d(materials.add(Color::srgb_u8(228, 147, 58))),
+            ));
+            HEALTH_OPTION_MUTABLE.set(Some(health));
+        })
         .insert_resource(HealthTickTimer(Timer::from_seconds(
             HEALTH_TICK_RATE,
             TimerMode::Repeating,
@@ -41,8 +57,8 @@ fn main() {
 
 const SPEED: f32 = 10.0;
 const RADIUS: f32 = 0.5;
-const MINI: (f32, f32) = (200., 30.);
-const MAXI: (f32, f32) = (500., 60.);
+const MINI: (f32, f32) = (200., 25.);
+const MAXI: (f32, f32) = (500., 50.);
 const NAME: &str = "avi";
 const CAMERA_POSITION: Vec3 = Vec3::new(8., 10.5, 8.);
 const PLAYER_POSITION: Vec3 = Vec3::new(0., RADIUS, 0.);
@@ -74,31 +90,28 @@ fn sync_health_mutable(health_query: Query<(&Health, &HealthMutable), Changed<He
 struct Player;
 
 fn setup(
-    mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut spawn_player: EventWriter<SpawnPlayer>,
+    mut commands: Commands,
 ) {
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Plane3d::default().mesh().size(50.0, 50.0)),
-        material: materials.add(Color::srgb_u8(87, 108, 50)),
-        ..default()
-    });
-    commands.spawn(PointLightBundle {
-        point_light: PointLight {
+    commands.spawn((
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(50.0, 50.0))),
+        MeshMaterial3d(materials.add(Color::srgb_u8(87, 108, 50))),
+    ));
+    commands.spawn((
+        PointLight {
             shadows_enabled: true,
             intensity: 1_500_000.,
             range: 100.,
             ..default()
         },
-        transform: Transform::from_xyz(0., 8., 0.),
-        ..default()
-    });
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_translation(CAMERA_POSITION).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
-    spawn_player.send_default();
+        Transform::from_xyz(0., 8., 0.),
+    ));
+    commands.spawn((
+        Camera3d::default(),
+        Transform::from_translation(CAMERA_POSITION).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
+    commands.trigger(SpawnPlayer);
 }
 
 fn movement(
@@ -122,7 +135,7 @@ fn movement(
     if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) {
         direction += Vec3::from(camera.right());
     }
-    let movement = direction.normalize_or_zero() * SPEED * time.delta_seconds();
+    let movement = direction.normalize_or_zero() * SPEED * time.delta_secs();
     player.translation.x += movement.x;
     player.translation.z += movement.z;
 }
@@ -136,7 +149,7 @@ fn sync_tracking_healthbar_position(
     let (camera, camera_transform) = camera.single();
     let player_transform = player.single();
     let scale = camera_transform.translation.distance(player_transform.translation);
-    if let Some((left, top)) = camera
+    if let Ok((left, top)) = camera
         .world_to_viewport(&GlobalTransform::from(*camera_transform), player_transform.translation)
         .map(|p| p.into())
     {
@@ -177,43 +190,16 @@ fn healthbar(
                     node.left = Val::Px(height / 6.); // TODO: padding doesn't work here?
                 })
                 .align(Align::new().left())
-                .text_signal(health.signal().map(move |health| {
-                    Text::from_section(
-                        health.to_string(),
-                        TextStyle {
-                            font_size: height,
-                            color: Color::BLACK,
-                            ..default()
-                        },
-                    )
-                })),
+                .text_font(TextFont::from_font_size(height))
+                .text_color(TextColor(Color::BLACK))
+                .text_signal(health.signal_ref(ToString::to_string).map(Text)),
         )
 }
 
 static HEALTH_OPTION_MUTABLE: Lazy<Mutable<Option<Mutable<u32>>>> = Lazy::new(default);
 
-#[derive(Event, Default)]
+#[derive(Event)]
 struct SpawnPlayer;
-
-fn spawn_player(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let health = Mutable::new(PLAYER_HEALTH);
-    commands.spawn((
-        Player,
-        Health(PLAYER_HEALTH),
-        HealthMutable(health.clone()),
-        PbrBundle {
-            mesh: meshes.add(Mesh::from(Sphere { radius: RADIUS })),
-            transform: Transform::from_translation(PLAYER_POSITION),
-            material: materials.add(Color::srgb_u8(228, 147, 58)),
-            ..default()
-        },
-    ));
-    HEALTH_OPTION_MUTABLE.set(Some(health));
-}
 
 fn respawn_button() -> impl Element {
     let hovered = Mutable::new(false);
@@ -229,18 +215,16 @@ fn respawn_button() -> impl Element {
         )
         .hovered_sync(hovered)
         .align_content(Align::center())
-        .on_click(|| async_world().send_event(SpawnPlayer).apply(spawn).detach())
-        .child(El::<Text>::new().text(Text::from_section(
-            "respawn",
-            TextStyle {
-                font_size: 60.,
-                color: Color::WHITE,
-                ..default()
-            },
-        )))
+        .on_click_with_system(|_: In<_>, mut commands: Commands| commands.trigger(SpawnPlayer))
+        .child(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(50.))
+                .text_color(TextColor(Color::WHITE))
+                .text(Text::new("respawn")),
+        )
 }
 
-fn set_dragging_position(mut node: Mut<Style>, StyleData { left, top, .. }: StyleData) {
+fn set_dragging_position(mut node: Mut<Node>, StyleData { left, top, .. }: StyleData) {
     node.left = Val::Px(left - MINI.0 / 2.);
     node.top = Val::Px(top - 30. * 2. - MINI.1 * 1.5);
 }
@@ -270,7 +254,7 @@ fn ui_root() -> impl Element {
                                                 .on_signal_with_node(STYLE_DATA.signal(), set_dragging_position)
                                                 .with_node(|mut node| {
                                                     node.row_gap = Val::Px(MINI.1 / 4.);
-                                                    set_dragging_position(style, STYLE_DATA.get());
+                                                    set_dragging_position(node, STYLE_DATA.get());
                                                 })
                                                 // .on_signal_with_transform(style_data.signal(), move |transform,
                                                 // StyleData { scale, .. }| {
@@ -279,14 +263,9 @@ fn ui_root() -> impl Element {
                                                 .item(
                                                     El::<Text>::new()
                                                         .with_node(|mut node| node.left = Val::Px(MINI.1 / 4.))
-                                                        .text(Text::from_section(
-                                                            NAME,
-                                                            TextStyle {
-                                                                font_size: MINI.1 * 3. / 4.,
-                                                                color: Color::WHITE,
-                                                                ..default()
-                                                            },
-                                                        )),
+                                                        .text_font(TextFont::from_font_size(MINI.1 * 3. / 4.))
+                                                        .text_color(TextColor(Color::WHITE))
+                                                        .text(Text::new(NAME)),
                                                 )
                                                 .item(
                                                     healthbar(

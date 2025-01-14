@@ -90,7 +90,11 @@ fn ui_root() -> impl Element {
                 .item(
                     Row::<Node>::new()
                         .with_node(|mut node| node.column_gap = Val::Px(15.))
-                        .item(El::<Text>::new().text_font(TextFont::from_font_size(50.)).text(Text::new("bug report")))
+                        .item(
+                            El::<Text>::new()
+                                .text_font(TextFont::from_font_size(50.))
+                                .text(Text::new("bug report")),
+                        )
                         .item(dropdown(["UI", "cosmetics", "gameplay"], Some("type"))),
                 ),
         )
@@ -158,12 +162,15 @@ fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
         // options too; the x should eat the click
         .on_click_stop_propagation(on_click)
         .child(
-            El::<Text>::new().text_font(TextFont::from_font_size(DEFAULT_FONT_SIZE)).text(Text::new("x")).text_color_signal(
-                hovered
-                    .signal()
-                    .map_bool(|| bevy::color::palettes::basic::RED.into(), || Color::WHITE)
-                    .map(TextColor),
-            ),
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(DEFAULT_FONT_SIZE))
+                .text(Text::new("x"))
+                .text_color_signal(
+                    hovered
+                        .signal()
+                        .map_bool(|| bevy::color::palettes::basic::RED.into(), || Color::WHITE)
+                        .map(TextColor),
+                ),
         )
         .hovered_sync(hovered)
 }

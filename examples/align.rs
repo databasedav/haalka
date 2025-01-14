@@ -183,7 +183,7 @@ fn rectangle(index: i32) -> impl Element {
             El::<Text>::new()
                 .align(Align::center())
                 .text_font(TextFont::from_font_size(11.67))
-                .text(Text::new(index.to_string())),
+                .text(Text(index.to_string())),
         )
 }
 
@@ -216,7 +216,7 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
         .child(
             El::<Text>::new()
                 .text_font(TextFont::from_font_size(11.67))
-                .text(Text::new(rectangle_alignment.to_string())),
+                .text(Text(rectangle_alignment.to_string())),
         )
         .hovered_sync(hovered)
         .on_click(move || {

@@ -321,12 +321,12 @@ impl TextInput {
             if let Some(color_signal) = attrs.color_opt {
                 let color = color_signal.broadcast();
                 self = self
-                    // .on_signal_with_default_attrs(
-                    //     color.signal(),
-                    //     move |mut attrs, color_option| {
-                    //         attrs.color_opt = color_option;
-                    //     },
-                    // )
+                    .on_signal_with_default_attrs(
+                        color.signal(),
+                        move |mut attrs, color_option| {
+                            attrs.color_opt = color_option;
+                        },
+                    )
                     .on_signal_with_cosmic_buffer(color.signal(), |mut cosmic_buffer, mut font_system, attrs, color_option| {
                         let mut attrs = attrs.0.clone();
                         attrs.color_opt = color_option;
@@ -336,12 +336,12 @@ impl TextInput {
             if let Some(family_signal) = attrs.family_owned {
                 let family = family_signal.broadcast();
                 self = self
-                    // .on_signal_with_default_attrs(
-                    //     family.signal_cloned(),
-                    //     move |mut attrs, family| {
-                    //         attrs.family_owned = family;
-                    //     },
-                    // )
+                    .on_signal_with_default_attrs(
+                        family.signal_cloned(),
+                        move |mut attrs, family| {
+                            attrs.family_owned = family;
+                        },
+                    )
                     .on_signal_with_cosmic_buffer(
                         family.signal_cloned(),
                         |mut cosmic_buffer, mut font_system, attrs, family| {
@@ -354,12 +354,12 @@ impl TextInput {
             if let Some(stretch_signal) = attrs.stretch {
                 let stretch = stretch_signal.broadcast();
                 self = self
-                    // .on_signal_with_default_attrs(
-                    //     stretch.signal(),
-                    //     move |mut attrs, stretch| {
-                    //         attrs.stretch = stretch;
-                    //     },
-                    // )
+                    .on_signal_with_default_attrs(
+                        stretch.signal(),
+                        move |mut attrs, stretch| {
+                            attrs.stretch = stretch;
+                        },
+                    )
                     .on_signal_with_cosmic_buffer(stretch.signal(), |mut cosmic_buffer, mut font_system, attrs, stretch| {
                         let mut attrs = attrs.0.clone();
                         attrs.stretch = stretch;
@@ -369,12 +369,12 @@ impl TextInput {
             if let Some(style_signal) = attrs.style {
                 let style = style_signal.broadcast();
                 self = self
-                    // .on_signal_with_default_attrs(
-                    //     node.signal(),
-                    //     move |mut attrs, style| {
-                    //         attrs.style = style;
-                    //     },
-                    // )
+                    .on_signal_with_default_attrs(
+                        style.signal(),
+                        move |mut attrs, style| {
+                            attrs.style = style;
+                        },
+                    )
                     .on_signal_with_cosmic_buffer(style.signal(), |mut cosmic_buffer, mut font_system, attrs, style| {
                         let mut attrs = attrs.0.clone();
                         attrs.style = style;
@@ -384,12 +384,12 @@ impl TextInput {
             if let Some(weight_signal) = attrs.weight {
                 let weight = weight_signal.broadcast();
                 self = self
-                    // .on_signal_with_default_attrs(
-                    //     weight.signal(),
-                    //     move |mut attrs, weight| {
-                    //         attrs.weight = weight;
-                    //     },
-                    // )
+                    .on_signal_with_default_attrs(
+                        weight.signal(),
+                        move |mut attrs, weight| {
+                            attrs.weight = weight;
+                        },
+                    )
                     .on_signal_with_cosmic_buffer(weight.signal(), |mut cosmic_buffer, mut font_system, attrs, weight| {
                         let mut attrs = attrs.0.clone();
                         attrs.weight = weight;
@@ -399,12 +399,12 @@ impl TextInput {
             if let Some(metadata_signal) = attrs.metadata {
                 let metadata = metadata_signal.broadcast();
                 self = self
-                    // .on_signal_with_default_attrs(
-                    //     metadata.signal(),
-                    //     move |mut attrs, metadata| {
-                    //         attrs.metadata = metadata;
-                    //     },
-                    // )
+                    .on_signal_with_default_attrs(
+                        metadata.signal(),
+                        move |mut attrs, metadata| {
+                            attrs.metadata = metadata;
+                        },
+                    )
                     .on_signal_with_cosmic_buffer(metadata.signal(), |mut cosmic_buffer, mut font_system, attrs, metadata| {
                         let mut attrs = attrs.0.clone();
                         attrs.metadata = metadata;
@@ -414,12 +414,12 @@ impl TextInput {
             if let Some(cache_key_flags_signal) = attrs.cache_key_flags {
                 let cache_key_flags = cache_key_flags_signal.broadcast();
                 self = self
-                    // .on_signal_with_default_attrs(
-                    //     cache_key_flags.signal(),
-                    //     move |mut attrs, cache_key_flags| {
-                    //         attrs.cache_key_flags = cache_key_flags;
-                    //     },
-                    // )
+                    .on_signal_with_default_attrs(
+                        cache_key_flags.signal(),
+                        move |mut attrs, cache_key_flags| {
+                            attrs.cache_key_flags = cache_key_flags;
+                        },
+                    )
                     .on_signal_with_cosmic_buffer(
                         cache_key_flags.signal(),
                         |mut cosmic_buffer, mut font_system, attrs, cache_key_flags| {
