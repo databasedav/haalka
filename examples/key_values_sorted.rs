@@ -32,7 +32,7 @@ fn main() {
             (
                 tabber,
                 escaper,
-                sort_one.run_if(on_event::<MaybeChanged>()),
+                sort_one.run_if(on_event::<MaybeChanged>),
                 focus_scroller.run_if(resource_changed_or_removed::<FocusedTextInput>()),
             ),
         )

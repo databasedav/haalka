@@ -140,14 +140,14 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
                 .item(El::<Text>::new().text(text("grid size:")))
                 .item(El::<Text>::new().text_signal(size.signal().map(|size| text(&size.to_string()))))
                 .item(text_button("-").on_pressing_with_system_with_sleep_throttle(
-                    |_: In<_>, mut grid_size_changes: EventWriter<GridSizeChange>| {
-                        grid_size_changes.send(GridSizeChange::Decr);
+                    |_: In<_>, mut commands: Commands| {
+                        commands.send_event(GridSizeChange::Decr);
                     },
                     Duration::from_millis(100),
                 ))
                 .item(text_button("+").on_pressing_with_system_with_sleep_throttle(
-                    |_: In<_>, mut grid_size_changes: EventWriter<GridSizeChange>| {
-                        grid_size_changes.send(GridSizeChange::Incr);
+                    |_: In<_>, mut commands: Commands| {
+                        commands.send_event(GridSizeChange::Incr);
                     },
                     Duration::from_millis(100),
                 )),

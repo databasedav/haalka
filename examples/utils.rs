@@ -117,11 +117,14 @@ fn mark_default_ui_camera(cameras: Query<Entity, Or<(With<Camera2d>, With<Camera
     }
 }
 
+pub(crate) const WINDOW_WIDTH: f32 = 1400.;
+pub(crate) const WINDOW_HEIGHT: f32 = 900.;
+
 pub(crate) fn examples_plugin(app: &mut App) {
     app.add_plugins((
         bevy::DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                resolution: WindowResolution::new(1400., 900.),
+                resolution: WindowResolution::new(WINDOW_WIDTH, WINDOW_HEIGHT),
                 position: WindowPosition::Centered(MonitorSelection::Primary),
                 #[cfg(feature = "deployed_wasm_example")]
                 canvas: Some("#bevy".to_string()),
@@ -172,4 +175,5 @@ pub(crate) fn examples_plugin(app: &mut App) {
     }
 }
 
+// TODO: this was needed otherwise clippy complains; how else to organize example specific utils?
 fn main() {}

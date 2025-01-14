@@ -38,12 +38,11 @@ fn main() {
         .add_event::<SetShape>()
         .add_observer(
             |event: Trigger<SetShape>,
-             materials: Single<Entity, With<MeshMaterial3d<StandardMaterial>>>,
+             character: Single<Entity, With<MeshMaterial3d<StandardMaterial>>>,
              mut meshes: ResMut<Assets<Mesh>>,
              mut commands: Commands| {
-                let entity = materials.into_inner();
                 let shape = **event;
-                if let Some(mut entity) = commands.get_entity(entity) {
+                if let Some(mut entity) = commands.get_entity(*character) {
                     entity.insert(Mesh3d(meshes.add(match shape {
                         Shape::Sphere => Sphere::default().mesh().ico(5).unwrap(),
                         Shape::Plane => Plane3d::default().mesh().size(1., 1.).into(),
@@ -128,9 +127,9 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
         })
         .child(
             El::<Text>::new()
-                .text_font(TextFont::from_font_size(40.))
+                .text_font(TextFont::from_font_size(33.33))
                 .text_color(TextColor(Color::srgb(0.9, 0.9, 0.9)))
-                .text(Text::new(shape.to_string())),
+                .text(Text(shape.to_string())),
         )
 }
 
