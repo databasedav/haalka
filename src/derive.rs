@@ -111,6 +111,7 @@ cfg_if::cfg_if! {
                                 background_color: BackgroundColor,
                                 border_color: BorderColor,
                                 border_radius: BorderRadius,
+                                box_shadow: BoxShadow,
                                 focus_policy: FocusPolicy,
                                 scroll_position: ScrollPosition,
                                 transform: Transform,
@@ -119,6 +120,7 @@ cfg_if::cfg_if! {
                                 inherited_visibility: InheritedVisibility,
                                 view_visibility: ViewVisibility,
                                 z_index: ZIndex,
+                                global_z_index: GlobalZIndex,
                             }
                         }
                         impl_haalka_methods! {
@@ -131,6 +133,7 @@ cfg_if::cfg_if! {
                                 background_color: BackgroundColor,
                                 border_color: BorderColor,
                                 border_radius: BorderRadius,
+                                box_shadow: BoxShadow,
                                 focus_policy: FocusPolicy,
                                 scroll_position: ScrollPosition,
                                 transform: Transform,
@@ -139,6 +142,7 @@ cfg_if::cfg_if! {
                                 inherited_visibility: InheritedVisibility,
                                 view_visibility: ViewVisibility,
                                 z_index: ZIndex,
+                                global_z_index: GlobalZIndex,
                             }
                         }
                         impl_haalka_methods! {
@@ -154,6 +158,7 @@ cfg_if::cfg_if! {
                                 background_color: BackgroundColor,
                                 border_color: BorderColor,
                                 border_radius: BorderRadius,
+                                box_shadow: BoxShadow,
                                 focus_policy: FocusPolicy,
                                 scroll_position: ScrollPosition,
                                 transform: Transform,
@@ -162,6 +167,7 @@ cfg_if::cfg_if! {
                                 inherited_visibility: InheritedVisibility,
                                 view_visibility: ViewVisibility,
                                 z_index: ZIndex,
+                                global_z_index: GlobalZIndex,
                             }
                         }
                         impl_haalka_methods! {
@@ -172,6 +178,7 @@ cfg_if::cfg_if! {
                                 background_color: BackgroundColor,
                                 border_color: BorderColor,
                                 border_radius: BorderRadius,
+                                box_shadow: BoxShadow,
                                 focus_policy: FocusPolicy,
                                 scroll_position: ScrollPosition,
                                 transform: Transform,
@@ -180,6 +187,7 @@ cfg_if::cfg_if! {
                                 inherited_visibility: InheritedVisibility,
                                 view_visibility: ViewVisibility,
                                 z_index: ZIndex,
+                                global_z_index: GlobalZIndex,
                             }
                         }
                     }
