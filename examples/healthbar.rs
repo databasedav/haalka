@@ -30,23 +30,23 @@ fn main() {
                 .chain()
                 .run_if(any_with_component::<Player>),
         )
-        .add_observer(|
-            _: Trigger<SpawnPlayer>,
-            mut meshes: ResMut<Assets<Mesh>>,
-            mut materials: ResMut<Assets<StandardMaterial>>,
-            mut commands: Commands,
-        | {
-            let health = Mutable::new(PLAYER_HEALTH);
-            commands.spawn((
-                Player,
-                Health(PLAYER_HEALTH),
-                HealthMutable(health.clone()),
-                Mesh3d(meshes.add(Mesh::from(Sphere { radius: RADIUS }))),
-                Transform::from_translation(PLAYER_POSITION),
-                MeshMaterial3d(materials.add(Color::srgb_u8(228, 147, 58))),
-            ));
-            HEALTH_OPTION_MUTABLE.set(Some(health));
-        })
+        .add_observer(
+            |_: Trigger<SpawnPlayer>,
+             mut meshes: ResMut<Assets<Mesh>>,
+             mut materials: ResMut<Assets<StandardMaterial>>,
+             mut commands: Commands| {
+                let health = Mutable::new(PLAYER_HEALTH);
+                commands.spawn((
+                    Player,
+                    Health(PLAYER_HEALTH),
+                    HealthMutable(health.clone()),
+                    Mesh3d(meshes.add(Mesh::from(Sphere { radius: RADIUS }))),
+                    Transform::from_translation(PLAYER_POSITION),
+                    MeshMaterial3d(materials.add(Color::srgb_u8(228, 147, 58))),
+                ));
+                HEALTH_OPTION_MUTABLE.set(Some(health));
+            },
+        )
         .insert_resource(HealthTickTimer(Timer::from_seconds(
             HEALTH_TICK_RATE,
             TimerMode::Repeating,
@@ -89,11 +89,7 @@ fn sync_health_mutable(health_query: Query<(&Health, &HealthMutable), Changed<He
 #[derive(Component)]
 struct Player;
 
-fn setup(
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut commands: Commands,
-) {
+fn setup(mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>, mut commands: Commands) {
     commands.spawn((
         Mesh3d(meshes.add(Plane3d::default().mesh().size(50.0, 50.0))),
         MeshMaterial3d(materials.add(Color::srgb_u8(87, 108, 50))),
@@ -183,16 +179,24 @@ fn healthbar(
                 })),
         )
         .layer(
-            El::<Text>::new()
+            // TODO: why is this wrapping node required? it wasn't required in 0.14
+            El::<Node>::new()
                 .height(Val::Percent(100.))
-                .with_node(move |mut node| {
-                    node.bottom = Val::Px(height / 8.);
-                    node.left = Val::Px(height / 6.); // TODO: padding doesn't work here?
-                })
-                .align(Align::new().left())
-                .text_font(TextFont::from_font_size(height))
-                .text_color(TextColor(Color::BLACK))
-                .text_signal(health.signal_ref(ToString::to_string).map(Text)),
+                .align_content(Align::new().center_y())
+                .child(
+                    El::<Text>::new()
+                        // TODO: text should be centerable vertically via flex; https://github.com/bevyengine/bevy/issues/14266
+                        // TODO: this align doesn't work
+                        // .align(Align::new().center_y())
+                        .with_node(move |mut node| {
+                            node.top = Val::Px(height / 32.);
+                            node.left = Val::Px(height / 6.); // TODO: padding doesn't work here?
+                        })
+                        .align(Align::new().left())
+                        .text_font(TextFont::from_font_size(height))
+                        .text_color(TextColor(Color::BLACK))
+                        .text_signal(health.signal_ref(ToString::to_string).map(Text)),
+                ),
         )
 }
 
