@@ -33,7 +33,7 @@ fn main() {
                 tabber,
                 escaper,
                 sort_one.run_if(on_event::<MaybeChanged>),
-                focus_scroller.run_if(resource_changed_or_removed::<FocusedTextInput>()),
+                focus_scroller.run_if(resource_changed_or_removed::<FocusedTextInput>),
             ),
         )
         .add_event::<MaybeChanged>()
@@ -137,7 +137,8 @@ fn text_input(
         .height(Val::Px(INPUT_HEIGHT))
         .mode(CosmicWrap::InfiniteLine)
         .max_lines(MaxLines(1))
-        .scroll_enabled()
+        .scroll_disabled()
+        .cursor(CursorIcon::System(SystemCursorIcon::Text))
         .cursor_color_signal(
             focus
                 .signal()
@@ -148,6 +149,7 @@ fn text_input(
         .fill_color_signal(
             focus
                 .signal()
+                // .map_bool(|| Color::WHITE, || *DARK_GRAY)
                 .map_bool(|| *DARK_GRAY, || Color::WHITE)
                 .map(CosmicBackgroundColor),
         )
@@ -177,14 +179,10 @@ fn clear_focus() {
 }
 
 fn sort_by_text_element() -> impl Element {
-    El::<Text>::new().text(Text::from_section(
-        "sort by",
-        TextStyle {
-            font_size: 60.,
-            color: Color::WHITE,
-            ..default()
-        },
-    ))
+    El::<Text>::new()
+        .text_font(TextFont::from_font_size(60.))
+        .text_color(TextColor(Color::WHITE))
+        .text(Text::new("sort by"))
 }
 
 fn sort_button(sort_by: KeyValue) -> impl Element {
@@ -201,7 +199,7 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
                 .background_color_signal(
                     signal::or(hovered.signal(), selected.signal())
                         .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
-                        .map(BackgroundColor),
+                        .map(Into::into),
                 )
                 .hovered_sync(hovered)
                 .align_content(Align::center())
@@ -231,17 +229,15 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
                         }
                     }
                 })
-                .child(El::<Text>::new().text(Text::from_section(
-                    match sort_by {
-                        KeyValue::Key => "key",
-                        KeyValue::Value => "value",
-                    },
-                    TextStyle {
-                        font_size: 60.,
-                        color: Color::WHITE,
-                        ..default()
-                    },
-                ))),
+                .child(
+                    El::<Text>::new()
+                        .text_font(TextFont::from_font_size(60.))
+                        .text_color(TextColor(Color::WHITE))
+                        .text(Text::new(match sort_by {
+                            KeyValue::Key => "key",
+                            KeyValue::Value => "value",
+                        })),
+                ),
         )
 }
 
@@ -353,20 +349,15 @@ fn x_button() -> impl Element + PointerEventAware {
             hovered
                 .signal()
                 .map_bool(|| bevy::color::palettes::basic::RED.into(), || *DARK_GRAY)
-                .map(BackgroundColor::from),
+                .map(Into::into),
         )
         .hovered_sync(hovered)
         .child(
             El::<Text>::new()
                 .with_node(|mut node| node.top = Val::Px(-3.))
                 .align(Align::center())
-                .text(Text::from_section(
-                    "x",
-                    TextStyle {
-                        font_size: 30.0,
-                        ..default()
-                    },
-                )),
+                .text_font(TextFont::from_font_size(30.))
+                .text(Text::new("x")),
         )
 }
 
@@ -402,17 +393,15 @@ fn ui_root() -> impl Element {
                                     hovered
                                         .signal()
                                         .map_bool(|| bevy::color::palettes::basic::GREEN.into(), || *DARK_GRAY)
-                                        .map(BackgroundColor::from),
+                                        .map(Into::into),
                                 )
                                 .hovered_sync(hovered)
                                 .align_content(Align::center())
-                                .child(El::<Text>::new().text(Text::from_section(
-                                    "+",
-                                    TextStyle {
-                                        font_size: 30.0,
-                                        ..default()
-                                    },
-                                )))
+                                .child(
+                                    El::<Text>::new()
+                                        .text_font(TextFont::from_font_size(30.))
+                                        .text(Text::new("+")),
+                                )
                                 .on_click_with_system(|_: In<_>, mut commands: Commands| {
                                     commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, can remove once https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
                                     clear_focus();
@@ -501,26 +490,33 @@ fn escaper(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
 // on focus change, check if the focused element is in view, if not, scroll to it
 fn focus_scroller(
     focused_text_input_option: Option<Res<FocusedTextInput>>,
-    data_query: Query<(&Node, &GlobalTransform, &mut node)>,
+    data_query: Query<(&ComputedNode, &GlobalTransform, &mut Node)>,
     parents: Query<&Parent>,
     mutable_viewports: Query<&MutableViewport>,
 ) {
     if let Some(focused_text_input) = focused_text_input_option.as_deref().map(Deref::deref).copied() {
-        if let Ok((text_input_node, text_input_transform, _)) = data_query.get(focused_text_input) {
+        if let Ok((text_input_computed_node, text_input_transform, _)) = data_query.get(focused_text_input) {
             for parent in parents.iter_ancestors(focused_text_input) {
                 if mutable_viewports.contains(parent) {
-                    if let Ok((scene_node, scene_transform, _scene_style)) = data_query.get(parent) {
-                        if let Some((viewport_node, viewport_transform, viewport_style)) = parents
+                    if let Ok((scene_computed_node, scene_transform, _scene_style)) = data_query.get(parent) {
+                        if let Some((viewport_computed_node, viewport_transform, viewport_node)) = parents
                             .get(parent)
                             .ok()
                             .and_then(|parent| data_query.get(parent.get()).ok())
                         {
-                            let text_input_rect = text_input_node.logical_rect(text_input_transform);
-                            let scene_rect = scene_node.logical_rect(scene_transform);
-                            let viewport_rect = viewport_node.logical_rect(viewport_transform);
+                            let text_input_rect = Rect::from_center_size(
+                                text_input_transform.translation().xy(),
+                                text_input_computed_node.size(),
+                            );
+                            let scene_rect =
+                                Rect::from_center_size(scene_transform.translation().xy(), scene_computed_node.size());
+                            let viewport_rect = Rect::from_center_size(
+                                viewport_transform.translation().xy(),
+                                viewport_computed_node.size(),
+                            );
                             let scrolled_option = match viewport_node.top {
                                 Val::Px(top) => Some(top),
-                                Val::Auto => Some(0.0),
+                                Val::Auto => Some(0.),
                                 _ => None,
                             };
                             if let Some(scrolled) = scrolled_option {
@@ -545,5 +541,5 @@ fn focus_scroller(
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d::default());
 }

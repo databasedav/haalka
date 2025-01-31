@@ -1,8 +1,6 @@
 //! Simple calculator. Spurred by <https://discord.com/channels/691052431525675048/885021580353237032/1263661461364932639>.
 
 mod utils;
-use bevy_window::SystemCursorIcon;
-use bevy_winit::cursor::CursorIcon;
 use utils::*;
 
 use bevy::prelude::*;
@@ -66,7 +64,7 @@ fn input_button(symbol: &'static str) -> impl Element {
     let hovered = Mutable::new(false);
     button(symbol)
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .background_color_signal(hovered.signal().map_bool(|| BLUE, || PINK).map(BackgroundColor))
+        .background_color_signal(hovered.signal().map_bool(|| BLUE, || PINK).map(Into::into))
         .hovered_sync(hovered)
         .on_click(move || {
             let mut output = OUTPUT.lock_mut();
@@ -124,7 +122,7 @@ fn clear_button() -> impl Element {
                 }
             }
             .dedupe()
-            .map(BackgroundColor),
+            .map(Into::into),
         )
         .cursor_disableable_signal(CursorIcon::System(SystemCursorIcon::Pointer), output_empty.signal())
         .hovered_sync(hovered)

@@ -76,7 +76,7 @@ fn alignment_button(alignment: Alignment) -> impl Element {
                     .map(move |other_alignment| alignment == other_alignment),
             )
             .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
-            .map(BackgroundColor),
+            .map(Into::into),
         )
         .hovered_sync(hovered)
         .align_content(Align::center())
@@ -133,7 +133,7 @@ fn ui_root() -> impl Element {
 fn container_node<E: RawElWrapper + Sizeable>(el: E) -> E {
     el.width(Val::Px(278.)).height(Val::Px(200.)).update_raw_el(|raw_el| {
         raw_el
-            .insert::<BorderColor>(bevy::color::palettes::basic::GRAY.into())
+            .insert(BorderColor(bevy::color::palettes::basic::GRAY.into()))
             .with_component::<Node>(|mut node| {
                 node.border = UiRect::all(Val::Px(3.));
             })

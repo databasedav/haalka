@@ -43,7 +43,7 @@ fn button(font: Handle<Font>) -> impl Element {
                     Color::BLACK
                 }
             })
-            .map(BorderColor)
+            .map(Into::into)
     };
     let background_color_signal = {
         pressed_hovered_broadcaster
@@ -57,7 +57,7 @@ fn button(font: Handle<Font>) -> impl Element {
                     NORMAL_BUTTON
                 }
             })
-            .map(BackgroundColor)
+            .map(Into::into)
     };
     El::<Node>::new()
         .width(Val::Px(150.0))

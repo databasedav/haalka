@@ -203,7 +203,7 @@ fn restart_button() -> impl Element {
             hovered
                 .signal()
                 .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
-                .map(BackgroundColor),
+                .map(Into::into),
         )
         .hovered_sync(hovered)
         .align_content(Align::center())
@@ -289,7 +289,7 @@ fn text_button(text_: &str) -> impl Element + PointerEventAware {
             hovered
                 .signal()
                 .map_bool(|| SNAKE_COLOR, || EMPTY_COLOR)
-                .map(BackgroundColor),
+                .map(Into::into),
         )
         .hovered_sync(hovered)
         .child(El::<Text>::new().text(text(text_)))
