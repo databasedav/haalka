@@ -97,7 +97,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
                     Color::BLACK
                 }
             })
-            .map(BorderColor)
+            .map(Into::into)
     };
     let background_color_signal = {
         selected_hovered_broadcaster
@@ -111,7 +111,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
                     NORMAL_BUTTON
                 }
             })
-            .map(BackgroundColor)
+            .map(Into::into)
     };
     El::<Node>::new()
         .width(BUTTON_WIDTH)
@@ -156,7 +156,7 @@ fn ui_root() -> impl Element {
                                 .width(BUTTON_WIDTH)
                                 .height(Val::Px(40.))
                                 .mode(CosmicWrap::InfiniteLine)
-                                .scroll_enabled()
+                                .scroll_disabled()
                                 .cursor_color(CursorColor(Color::WHITE))
                                 .fill_color(CosmicBackgroundColor(NORMAL_BUTTON))
                                 .attrs(TextAttrs::new().color(Color::WHITE))

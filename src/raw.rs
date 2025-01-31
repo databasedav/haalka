@@ -443,9 +443,9 @@ impl RawHaalkaEl {
     /// event will not bubble up the hierarchy.
     pub fn on_event_with_system_disableable_propagation_stoppable<
         E: Event + Clone,
-        Marker,
         Disabled: Component,
         PropagationStopped: Component,
+        Marker,
     >(
         self,
         handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
@@ -473,7 +473,7 @@ impl RawHaalkaEl {
         self,
         handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
     ) -> Self {
-        self.on_event_with_system_disableable_propagation_stoppable::<E, _, EventHandlingDisabled<E>, EventPropagationStopped<E>>(
+        self.on_event_with_system_disableable_propagation_stoppable::<E, EventHandlingDisabled<E>, EventPropagationStopped<E>, _>(
             handler,
         )
     }
@@ -481,11 +481,11 @@ impl RawHaalkaEl {
     /// When this element receives an `E` [`Event`] and does not have a `Disabled`
     /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's
     /// [`Entity`] and the [`Event`].
-    pub fn on_event_with_system_disableable<E: Event + Clone, Marker, Disabled: Component>(
+    pub fn on_event_with_system_disableable<E: Event + Clone, Disabled: Component, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
     ) -> Self {
-        self.on_event_with_system_disableable_propagation_stoppable::<E, _, Disabled, EventPropagationStopped<E>>(
+        self.on_event_with_system_disableable_propagation_stoppable::<E, Disabled, EventPropagationStopped<E>, _>(
             handler,
         )
     }
@@ -503,17 +503,17 @@ impl RawHaalkaEl {
         disabled: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
         self.component_signal::<EventHandlingDisabled<E>, _>(disabled.map_true(|| EventHandlingDisabled(PhantomData)))
-            .on_event_with_system_disableable::<E, _, EventHandlingDisabled<E>>(handler)
+            .on_event_with_system_disableable::<E, EventHandlingDisabled<E>, _>(handler)
     }
 
     /// When this element receives an `E` [`Event`], run a [`System`] which takes
     /// [`In`](`System::In`) this element's [`Entity`] and the [`Event`]; if the element has a
     /// `PropagationStopped` [`Component`], the event will not bubble up the hierarchy.
-    pub fn on_event_with_system_propagation_stoppable<E: Event + Clone, Marker, PropagationStopped: Component>(
+    pub fn on_event_with_system_propagation_stoppable<E: Event + Clone, PropagationStopped: Component, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
     ) -> Self {
-        self.on_event_with_system_disableable_propagation_stoppable::<E, _, EventHandlingDisabled<E>, PropagationStopped>(
+        self.on_event_with_system_disableable_propagation_stoppable::<E, EventHandlingDisabled<E>, PropagationStopped, _>(
             handler,
         )
     }
@@ -533,7 +533,7 @@ impl RawHaalkaEl {
         self.component_signal::<EventPropagationStopped<E>, _>(
             propagation_stopped.map_true(|| EventPropagationStopped(PhantomData)),
         )
-        .on_event_with_system_propagation_stoppable::<E, _, EventPropagationStopped<E>>(handler)
+        .on_event_with_system_propagation_stoppable::<E, EventPropagationStopped<E>, _>(handler)
     }
 
     /// When this element receives an `E` [`Event`], run a function with the [`Event`],
@@ -543,7 +543,7 @@ impl RawHaalkaEl {
         handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.insert(EventPropagationStopped::<E>(PhantomData))
-            .on_event_with_system_propagation_stoppable::<E, _, EventPropagationStopped<E>>(handler)
+            .on_event_with_system_propagation_stoppable::<E, EventPropagationStopped<E>, _>(handler)
     }
 
     /// When this element receives an `E` [`Event`], run a function with the [`Event`].
@@ -553,11 +553,11 @@ impl RawHaalkaEl {
 
     /// When this element receives an `E` [`Event`] and does not have a `Disabled`
     /// [`Component`], run a function with the [`Event`].
-    pub fn on_event_disableable<E: Event + Clone, Marker, Disabled: Component>(
+    pub fn on_event_disableable<E: Event + Clone, Disabled: Component>(
         self,
         mut handler: impl FnMut(E) + Send + Sync + 'static,
     ) -> Self {
-        self.on_event_with_system_disableable::<E, _, Disabled>(move |In((_, event))| handler(event))
+        self.on_event_with_system_disableable::<E, Disabled, _>(move |In((_, event))| handler(event))
     }
 
     /// When this element receives an `E` [`Event`], run a with the [`Event`],
@@ -581,7 +581,7 @@ impl RawHaalkaEl {
         self,
         mut handler: impl FnMut(E) + Send + Sync + 'static,
     ) -> Self {
-        self.on_event_with_system_propagation_stoppable::<E, _, PropagationStopped>(move |In((_, event))| {
+        self.on_event_with_system_propagation_stoppable::<E, PropagationStopped, _>(move |In((_, event))| {
             handler(event)
         })
     }
@@ -624,7 +624,7 @@ impl RawHaalkaEl {
         self
         .component_signal::<EventHandlingDisabled<E>, _>(disabled.map_true(|| EventHandlingDisabled(PhantomData)))
         .component_signal::<EventPropagationStopped<E>, _>(propagation_stopped.map_true(|| EventPropagationStopped(PhantomData)))
-        .on_event_with_system_disableable_propagation_stoppable::<E, _, EventHandlingDisabled<E>, EventPropagationStopped<E>>(
+        .on_event_with_system_disableable_propagation_stoppable::<E, EventHandlingDisabled<E>, EventPropagationStopped<E>, _>(
             move |In((_, event))| handler(event),
         )
     }

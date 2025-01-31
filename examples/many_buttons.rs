@@ -37,7 +37,7 @@ fn button(i: usize, j: usize) -> RawHaalkaEl {
                 color
             }
         })
-        .map(BackgroundColor)
+        .map(Into::into)
     };
     let total = SIZE as f32;
     let width = 90. / total;

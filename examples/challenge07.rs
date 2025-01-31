@@ -7,8 +7,6 @@
 //!   - Copy/paste/cut with the usual shortcuts.
 
 mod utils;
-use bevy_window::SystemCursorIcon;
-use bevy_winit::cursor::CursorIcon;
 use utils::*;
 
 use std::convert::identity;
@@ -62,7 +60,7 @@ fn ui_root() -> impl Element {
                                 .family(FamilyOwned::new(Family::Name("Fira Mono")))
                                 .weight(FontWeight::MEDIUM),
                         )
-                        .scroll_enabled()
+                        .scroll_disabled()
                         .cursor_color_signal(
                             focus
                                 .signal()
@@ -123,7 +121,7 @@ fn button() -> El<Node> {
                     Color::BLACK
                 }
             })
-            .map(BorderColor)
+            .map(Into::into)
     };
     let background_color_signal = {
         pressed_hovered_broadcaster
@@ -137,7 +135,7 @@ fn button() -> El<Node> {
                     NORMAL_BUTTON
                 }
             })
-            .map(BackgroundColor)
+            .map(Into::into)
     };
     El::<Node>::new()
         .width(Val::Px(150.0))

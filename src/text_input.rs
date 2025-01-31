@@ -76,52 +76,6 @@ impl TextInput {
         Self { el }
     }
 
-    // /// Run a function with this input's [`CosmicEditBundle`]'s [`EntityWorldMut`].
-    // pub fn with_cosmic_edit(self, f: impl FnOnce(EntityWorldMut) + Send + 'static) -> Self {
-    //     self.update_raw_el(|raw_el| raw_el.with_entity_forwarded(cosmic_edit_entity_forwarder, f))
-    // }
-
-    // /// Add a [`Bundle`] of components to this input's [`CosmicEditBundle`] entity.
-    // pub fn cosmic_edit_insert<B: Bundle>(self, bundle: B) -> Self {
-    //     self.update_raw_el(|raw_el| raw_el.insert_forwarded(cosmic_edit_entity_forwarder, bundle))
-    // }
-
-    // /// Run a function with mutable access (via [`Mut`]) to this input's [`CosmicEditBundle`]'s entity's `C` [`Component`] if it exists.
-    // pub fn with_cosmic_edit_component<C: Component>(self, f: impl FnOnce(Mut<C>) + Send + 'static) -> Self {
-    //     self.update_raw_el(|raw_el| raw_el.with_component_forwarded(cosmic_edit_entity_forwarder, f))
-    // }
-
-    // /// Reactively run a function with this input's [`CosmicEditBundle`]'s [`EntityWorldMut`] and the output of the [`Signal`].
-    // pub fn on_signal_with_cosmic_edit<T: Send + 'static>(
-    //     self,
-    //     signal: impl Signal<Item = T> + Send + 'static,
-    //     f: impl FnMut(EntityWorldMut, T) + Send + Sync + 'static,
-    // ) -> Self {
-    //     self.update_raw_el(|raw_el| raw_el.on_signal_with_entity(signal, f))
-    // }
-
-    // /// Reactively run a function with this input's [`CosmicEditBundle`]'s entity's `C` [`Component`] if it exists and the output of the [`Signal`].
-    // pub fn on_signal_with_cosmic_edit_component<T: Send + 'static, C: Component>(
-    //     self,
-    //     signal: impl Signal<Item = T> + Send + 'static,
-    //     f: impl FnMut(Mut<C>, T) + Send + Sync + 'static,
-    // ) -> Self {
-    //     self.update_raw_el(|raw_el| raw_el.on_signal_with_component(signal, f))
-    // }
-
-    // /// Reactively set this input's [`CosmicEditBundle`]'s entity's `C` [`Component`]. If the [`Signal`] outputs [`None`], the `C` [`Component`] is removed.
-    // pub fn cosmic_edit_component_signal<C: Component, S: Signal<Item = impl Into<Option<C>>> + Send + 'static>(
-    //     mut self,
-    //     component_option_signal_option: impl Into<Option<S>>,
-    // ) -> Self {
-    //     if let Some(component_option_signal) = component_option_signal_option.into() {
-    //         self = self.update_raw_el(|raw_el| {
-    //             raw_el.component_signal(component_option_signal)
-    //         });
-    //     }
-    //     self
-    // }
-
     /// Run a function with this input's [`CosmicBuffer`] with access to [`ResMut<CosmicFontSystem>`] and [`DefaultAttrs`].
     pub fn with_cosmic_buffer(
         self,
@@ -471,17 +425,21 @@ impl TextInput {
     }
 
     /// Set whether the user is prevented from scrolling the text of this input.
-    pub fn scroll_enabled_option(self, scroll_enabled_option: impl Into<Option<bool>>) -> Self {
-        self.unit_component::<bevy_cosmic_edit::ScrollEnabled>(scroll_enabled_option)
+    pub fn scroll_disabled_option(self, scroll_disabled_option: impl Into<Option<bool>>) -> Self {
+        self.update_raw_el(|raw_el| raw_el.insert(if scroll_disabled_option.into().unwrap_or(false) {
+            bevy_cosmic_edit::ScrollEnabled::Disabled
+        } else {
+            bevy_cosmic_edit::ScrollEnabled::Enabled
+        }))
     }
 
     /// Prevent the user from scrolling the text of this input.
-    pub fn scroll_enabled(self) -> Self {
-        self.scroll_enabled_option(true)
+    pub fn scroll_disabled(self) -> Self {
+        self.scroll_disabled_option(true)
     }
 
     /// Reactively set whether the user is prevented from scrolling the text of this input.
-    pub fn scroll_enabled_signal<S: Signal<Item = bool> + Send + 'static>(
+    pub fn scroll_disabled_signal<S: Signal<Item = bool> + Send + 'static>(
         self,
         scroll_enabled_signal_option: impl Into<Option<S>>,
     ) -> Self {

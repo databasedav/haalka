@@ -102,7 +102,7 @@ impl Button {
                         Color::BLACK
                     }
                 })
-                .map(BorderColor)
+                .map(Into::into)
         };
         let background_color_signal = {
             selected_hovered_broadcaster
@@ -116,7 +116,7 @@ impl Button {
                         NORMAL_BUTTON
                     }
                 })
-                .map(BackgroundColor)
+                .map(Into::into)
         };
         Self {
             el: {
@@ -619,7 +619,7 @@ fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<N
             hovered
                 .signal()
                 .map_bool(|| NORMAL_BUTTON.lighter(0.05), || NORMAL_BUTTON)
-                .map(BackgroundColor),
+                .map(Into::into),
         )
         .on_hovered_change(move |is_hovered| only_one_up_flipper(&hovered, &MENU_ITEM_HOVERED_OPTION, Some(is_hovered)))
         .width(Val::Percent(100.))

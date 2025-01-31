@@ -10,15 +10,13 @@
 // outside
 
 mod utils;
-use bevy_window::SystemCursorIcon;
-use bevy_winit::cursor::CursorIcon;
+// use bevy_render::view::RenderLayers;
 use utils::*;
 
 use std::{collections::HashMap, convert::identity, sync::OnceLock};
 
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
-use bevy_picking::prelude::*;
 use haalka::{prelude::*, raw::DeferredUpdaterAppendDirection};
 use rand::{
     distributions::{Bernoulli, Distribution},
@@ -34,11 +32,29 @@ fn main() {
                 .continue_to_state(AssetState::Loaded)
                 .load_collection::<RpgIconSheet>(),
         )
-        .add_systems(Startup, camera)
+        // .add_systems(Startup, character_camera)
+        // .add_systems(Startup, setup_3d)
+        // .add_systems(Update, rotate_prism)
+        .add_systems(Startup, |mut commands: Commands| {
+            commands.spawn((Camera2d::default(), IsDefaultUiCamera));
+        })
         .add_systems(
             OnEnter(AssetState::Loaded),
             (set_icon_texture_atlas, |world: &mut World| {
-                ui_root().spawn(world);
+                ui_root()
+                    .update_raw_el(|raw_el| {
+                        raw_el.on_spawn_with_system(
+                            move |In(entity): In<_>,
+                                  camera: Single<Entity, With<IsDefaultUiCamera>>,
+                                  mut commands: Commands| {
+                                // https://github.com/bevyengine/bevy/discussions/11223
+                                if let Some(mut commands) = commands.get_entity(entity) {
+                                    commands.try_insert(TargetCamera(*camera));
+                                }
+                            },
+                        )
+                    })
+                    .spawn(world);
             })
                 .chain(),
         )
@@ -242,24 +258,20 @@ struct CellData {
     count: Mutable<usize>,
 }
 
+#[derive(Component)]
+struct BlockClick;
+
 fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl Element {
     let hovered = Mutable::new(false);
     let original_position: Mutable<Option<Vec2>> = Mutable::new(None);
     let down = Mutable::new(false);
     El::<Node>::new()
-        .update_raw_el(clone!((cell_data_option, hovered, down) move |mut raw_el| {
+        .update_raw_el(clone!((cell_data_option, down) move |mut raw_el| {
             if insertable {
                 raw_el = raw_el
                 .insert(PickingBehavior::default())
-                .on_event::<Pointer<Up>>(clone!((hovered) move |_| hovered.set_neq(true)))
-                // `.component_signal` conveniently allows us to reactively add/remove components,
-                // if the provided signal returns `None`, then the component is removed; but the
-                // signal below doesn't look like it returns an `Option`? actually it does thanks to
-                // `.map_true` which is syntactic sugar for `.map(|bool| if bool { Some(...) } else { None }))`
-                .on_event_disableable_signal::<Pointer<Click>>(
+                .on_event_disableable::<Pointer<Click>, BlockClick>(
                     clone!((cell_data_option => self_cell_data_option) move |click| {
-                        // we don't want the click listener to trigger if we've just grabbed some of
-                        // the stack as it would immediately drop one down, so we track the `Down` state
                         let mut consume = false;
                         if let Some(dragging_cell_data_option) = &*DRAGGING_OPTION.lock_ref() {
                             if self_cell_data_option.lock_ref().is_none() {
@@ -298,10 +310,13 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                             }
                         }
                     }),
-                    signal::not(signal::and(signal::not(down.signal()), hovered.signal())).dedupe()
                 );
             }
             raw_el
+            // we don't want the click listener to trigger if we've just grabbed some of
+            // the stack as it would immediately drop one down, so we track the `Down` state
+            .on_event_with_system::<Pointer<Down>, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).insert(BlockClick); })
+            .on_event_with_system::<Pointer<Up>, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).remove::<BlockClick>(); })
             .on_event_disableable_signal::<Pointer<Down>>(
                 clone!((cell_data_option, down) move |pointer_down| {
                     let to_drag_option = {
@@ -327,10 +342,10 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                     POINTER_POSITION.set(pointer_down.pointer_location.position.into());
                     down.set_neq(true);
                 }),
-                signal::not(signal::and(signal::not(is_dragging()), cell_data_option.signal_ref(Option::is_some))).dedupe()
+                signal::or(is_dragging(), cell_data_option.signal_ref(Option::is_none)).dedupe()
             )
         }))
-        // alternative to the stop propagation trigger pattern, which is kinda/pretty cringe
+        // alternative to disabling this element's cursor like what's commented out below, which may seem more intuitive, but is harder to manage due to the eventual consistency of signals
         .cursor_signal(
             map_ref! {
                 let &populated = cell_data_option.signal_ref(Option::is_some),
@@ -345,9 +360,8 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                 }
             }
         )
-        // .cursor_disableable_signal(CursorIcon::Grab, stop_propagation_trigger.signal())
-        // TODO: this is more idiomatic and should work, but it doesn't due to various shenanigans, see stop_propagation_trigger strat attempt for some exploration
-        // .cursor_disableable_signal(CursorIcon::Grab, signal::or(cell_data_option.signal_ref(Option::is_none), is_dragging()))
+        // TODO: this is more idiomatic and should work, but it doesn't due to various eventual consistency shenanigans, not going to address anytime soon, use the above alternative, or manually manage components/resources to achieve the required strong consistency
+        // .cursor_disableable_signal(CursorIcon::System(SystemCursorIcon::Grab), signal::or(cell_data_option.signal_ref(Option::is_none), is_dragging()))
         .hovered_sync(hovered.clone())
         .width(Val::Px(CELL_WIDTH))
         .height(Val::Px(CELL_WIDTH))
@@ -462,9 +476,47 @@ fn set_icon_texture_atlas(rpg_icon_sheet: Res<RpgIconSheet>) {
         .expect("failed to initialize ICON_TEXTURE_ATLAS");
 }
 
-fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
-}
+// fn character_camera(mut commands: Commands) {
+//     // https://github.com/bevyengine/bevy/discussions/11223
+//     commands.spawn((
+//         Camera3d::default(),
+//         Transform::from_xyz(0.0, 0.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y),
+//         Camera {
+//             order: 1,
+//             clear_color: ClearColorConfig::None,
+//             ..default()
+//         },
+//         RenderLayers::layer(1),
+//     ));
+// }
+
+// fn setup_3d(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials:
+// ResMut<Assets<StandardMaterial>>) {     // Add a light source
+//     commands.spawn(PointLight {
+//         intensity: 1500.0,
+//         shadows_enabled: true,
+//         ..default()
+//     })
+//     .insert(Transform::from_xyz(4.0, 8.0, 4.0));
+
+//     // Spawn the rotating rectangular prism
+//     commands.spawn((
+//         Mesh3d(meshes.add(Cuboid::default())),
+//         MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
+//         Transform::from_scale(Vec3::new(1.0, 1.5, 0.5)),
+//         RotatingPrism,
+//         RenderLayers::layer(1),
+//     ));
+// }
+
+// fn rotate_prism(time: Res<Time>, mut query: Query<&mut Transform, With<RotatingPrism>>) {
+//     for mut transform in query.iter_mut() {
+//         transform.rotation *= Quat::from_rotation_y(1.0 * time.delta_secs());
+//     }
+// }
+
+// #[derive(Component)]
+// struct RotatingPrism;
 
 fn dot() -> impl Element {
     El::<Node>::new()

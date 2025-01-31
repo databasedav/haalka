@@ -215,7 +215,7 @@ fn respawn_button() -> impl Element {
             hovered
                 .signal()
                 .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
-                .map(BackgroundColor),
+                .map(Into::into),
         )
         .hovered_sync(hovered)
         .align_content(Align::center())

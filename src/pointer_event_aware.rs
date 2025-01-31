@@ -603,7 +603,7 @@ pub trait CursorOnHoverable: PointerEventAware {
                         }
                     },
                 )
-                .on_event_with_system_propagation_stoppable::<Pointer<Over>, _, CursorOverPropagationStopped>(
+                .on_event_with_system_propagation_stoppable::<Pointer<Over>, CursorOverPropagationStopped, _>(
                     |In((entity, _)), mut commands: Commands| {
                         if let Some(mut entity) = commands.get_entity(entity) {
                             entity.try_insert(CursorOver);

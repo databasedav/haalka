@@ -114,6 +114,9 @@ pub mod prelude {
                 viewport_mutable::{LimitToBody, ViewportMutable},
             };
 
+            pub use bevy_window::SystemCursorIcon;
+            pub use bevy_winit::cursor::CursorIcon;
+
             cfg_if::cfg_if! {
                 if #[cfg(feature = "text_input")] {
                     #[doc(inline)]

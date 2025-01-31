@@ -54,7 +54,7 @@ fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element
             hovered
                 .signal()
                 .map_bool(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
-                .map(BackgroundColor),
+                .map(Into::into),
         )
         .border_radius(BorderRadius::MAX)
         .hovered_sync(hovered)
