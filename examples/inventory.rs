@@ -12,7 +12,7 @@
 mod utils;
 use utils::*;
 
-use std::{collections::HashMap, convert::identity, sync::OnceLock};
+use std::{collections::HashMap, sync::OnceLock};
 
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
@@ -583,7 +583,7 @@ fn inventory() -> impl Element {
                                             })
                                             .switch(signal::option)
                                         )
-                                        .to_signal_map(|filleds| filleds.iter().map(Option::is_some).all(identity))
+                                        .to_signal_map(|filleds| filleds.iter().all(Option::is_some))
                                         .for_each_sync(move |all_filled| {
                                             output.set(all_filled.then(|| random_cell_data(&mut rand::thread_rng())));
                                         })
