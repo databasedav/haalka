@@ -140,7 +140,6 @@ pub trait ViewportMutable: RawElWrapper {
         self.update_raw_el(move |raw_el| {
             raw_el
                 .insert(MutableViewport::new(limit_to_body))
-                // .observe(observer)
                 .observe(
                     move |mutation: Trigger<ViewportMutation>,
                           mut styles: Query<&mut Style>,
@@ -330,4 +329,8 @@ pub(super) fn plugin(app: &mut App) {
         (scene_change_dispatcher, viewport_change_dispatcher)
             .run_if(any_with_component::<MutableViewport>.and_then(any_with_component::<OnViewportLocationChange>)),
     );
+}
+
+pub(crate) fn firstborn<'a>(entity: Entity, children: &'a Query<&Children>) -> Option<&'a Entity> {
+    children.get(entity).ok().and_then(|children| children.first())
 }

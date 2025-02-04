@@ -13,15 +13,10 @@ let CARGO_CACHE_VERSION = "2" in
 let SETUP_JUST_VERSION = "2" in
 let INSTALL_NIX_ACTION_VERSION = "30" in
 let CACHIX_ACTION_VERSION = "15" in
-let build_and_deploy_base_args = {
-  api = "${{ matrix.api }}",
-  example = "${{ matrix.example }}",
-}
-in
 {
   REPO = "https://github.com/databasedav/haalka",
   GITHUB_PAGES_DEPLOY_ACTION_VERSION = "4.7.2",
-  GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT = 1000,
+  GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT = 100,
   checkout = {
     name = "checkout repo",
     uses = "actions/checkout@%{ CHECKOUT_VERSION }",
@@ -115,7 +110,7 @@ in
       ]
     }
     |> run_on_ubuntu_latest,
-  build_and_deploy_examples = fun pr_ =>
+  build_examples =
     {
       strategy = {
         matrix = {
@@ -126,7 +121,53 @@ in
       permissions = {
         contents = "write",
       },
-      uses = "./.github/workflows/build_and_deploy_example.yaml",
-      with = if pr_ == "" then build_and_deploy_base_args else { pr = pr_ } & build_and_deploy_base_args,
-    }
+      uses = "./.github/workflows/build_example.yaml",
+      with = {
+        api = "${{ matrix.api }}",
+        example = "${{ matrix.example }}",
+      },
+    },
+  deploy_examples = fun pr => {
+    permissions = {
+      contents = "write",
+    },
+    steps = [
+      checkout,
+      {
+        name = "remove gitignore",
+        run = "rm .gitignore"
+      },
+      {
+        name = "download artifacts",
+        uses = "actions/download-artifact@v4",
+        with = {
+          path = "artifacts",
+          github-token = "${{ secrets.GITHUB_TOKEN }}",
+        }
+      },
+      {
+        name = "organize artifacts",
+        run = m%"
+          for artifact in artifacts/*; do
+            dirname=$(basename "$artifact")
+            api=${dirname%%_*}
+            example=${dirname#*_}
+            mkdir -p "pages/$api/$example"
+            mv "$artifact"/* "pages/$api/$example"
+          done
+        "%,
+      },
+      {
+        name = "deploy",
+        uses = "JamesIves/github-pages-deploy-action@v%{ GITHUB_PAGES_DEPLOY_ACTION_VERSION }",
+        with = {
+          folder = "pages",
+          force = false,
+          attempt-limit = GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT,
+          target-folder = if pr != "" then "pr_previews/%{ pr }" else "examples",
+          commit-message = if pr != "" then "${{ format('%{ REPO }/pull/%{ pr }/commits/{0}', github.sha) }}" else "${{ format('%{ REPO }/commit/{0}', github.sha) }}",
+        }
+      },
+    ]
+  } |> run_on_ubuntu_latest,
 }

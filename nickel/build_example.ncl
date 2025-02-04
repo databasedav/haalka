@@ -1,15 +1,11 @@
 let { REPO, GITHUB_PAGES_DEPLOY_ACTION_VERSION, GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT, checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 {
-  name = "build_and_deploy_example",
+  name = "build_example",
 
   on = {
     workflow_call = {
       inputs = {
-        pr = {
-          required = false,
-          type = "number"
-        },
         api = {
           required = true,
           type = "string"
@@ -61,36 +57,6 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
             with = {
               path = "dist",
               name = "${{ inputs.api }}_${{ inputs.example }}",
-            }
-          },
-        ]
-      },
-      deploy = {
-        needs = "build",
-        steps = [
-          checkout,
-          {
-            name = "remove gitignore",
-            run = "rm .gitignore"
-          },
-          {
-            name = "download dist",
-            uses = "actions/download-artifact@v4",
-            with = {
-              name = "${{ inputs.api }}_${{ inputs.example }}",
-              path = "dist",
-              github-token = "${{ secrets.GITHUB_TOKEN }}",
-            }
-          },
-          {
-            name = "deploy",
-            uses = "JamesIves/github-pages-deploy-action@v%{ GITHUB_PAGES_DEPLOY_ACTION_VERSION }",
-            with = {
-              folder = "dist",
-              force = false,
-              attempt-limit = GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT,
-              target-folder = "${{ inputs.pr && format('pr_previews/{0}/{1}/{2}', inputs.pr, inputs.api, inputs.example) || format('examples/{0}/{1}', inputs.api, inputs.example) }}",
-              commit-message = "${{ inputs.api }} ${{ inputs.example }} ${{ inputs.pr && format('%{ REPO }/pull/{0}/commits/{1}', inputs.pr, github.sha) || format('%{ REPO }/commit/{0}', github.sha) }}"
             }
           },
         ]

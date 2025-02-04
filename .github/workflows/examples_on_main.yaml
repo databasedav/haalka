@@ -25,8 +25,8 @@ jobs:
       run: |-
         just format_nickels sync_nickels
         [[ -n $(git status --porcelain) ]] && echo 'nickels are not synced; run `just format_nickels sync_nickels`' && exit 1 || exit 0
-  build_and_deploy_examples_:
-    name: build_and_deploy_examples_
+  build_examples_:
+    name: build_examples_
     needs: get_examples_
     permissions:
       contents: write
@@ -36,10 +36,45 @@ jobs:
         - webgl2
         - webgpu
         example: ${{ fromJson(needs.get_examples_.outputs.examples) }}
-    uses: ./.github/workflows/build_and_deploy_example.yaml
+    uses: ./.github/workflows/build_example.yaml
     with:
       api: ${{ matrix.api }}
       example: ${{ matrix.example }}
+  deploy_examples_:
+    name: deploy_examples_
+    needs: build_examples_
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout repo
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+    - name: remove gitignore
+      run: rm .gitignore
+    - name: download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        path: artifacts
+    - name: organize artifacts
+      run: |-
+        for artifact in artifacts/*; do
+          dirname=$(basename "$artifact")
+          api=${dirname%%_*}
+          example=${dirname#*_}
+          mkdir -p "pages/$api/$example"
+          mv "$artifact"/* "pages/$api/$example"
+        done
+    - name: deploy
+      uses: JamesIves/github-pages-deploy-action@v4.7.2
+      with:
+        attempt-limit: 100
+        commit-message: ${{ format('https://github.com/databasedav/haalka/commit/{0}', github.sha) }}
+        folder: pages
+        force: false
+        target-folder: examples
   get_examples_:
     name: get_examples_
     needs: assert_nickels_synced_
