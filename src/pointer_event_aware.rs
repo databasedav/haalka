@@ -25,7 +25,9 @@ use haalka_futures_signals_ext::SignalExtBool;
 
 use super::{
     element::UiRoot,
-    raw::{observe, register_system, utils::remove_system_holder_on_remove, RawElWrapper},
+    raw::{
+        observe, register_system, utils::remove_system_holder_on_remove, DeferredUpdaterAppendDirection, RawElWrapper,
+    },
     utils::sleep,
 };
 
@@ -39,7 +41,7 @@ pub trait PointerEventAware: RawElWrapper {
         handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
-            raw_el.defer_update(super::raw::DeferredUpdaterAppendDirection::Back, |raw_el| {
+            raw_el.defer_update(DeferredUpdaterAppendDirection::Back, |raw_el| {
                 let system_holder = Mutable::new(None);
                 raw_el
                     .insert(PickingBehavior::default())
@@ -47,8 +49,14 @@ pub trait PointerEventAware: RawElWrapper {
                     .on_spawn(clone!((system_holder) move |world, entity| {
                         let system = register_system(world, handler);
                         system_holder.set(Some(system));
-                        observe(world, entity, move |enter: Trigger<Pointer<Enter>>, mut commands: Commands| commands.run_system_with_input(system, (enter.entity(), true)));
-                        observe(world, entity, move |leave: Trigger<Pointer<Leave>>, mut commands: Commands| commands.run_system_with_input(system, (leave.entity(), false)));
+                        observe(world, entity, move |mut enter: Trigger<Pointer<Enter>>, mut commands: Commands| {
+                            enter.propagate(false);
+                            commands.run_system_with_input(system, (enter.entity(), true));
+                        });
+                        observe(world, entity, move |mut leave: Trigger<Pointer<Leave>>, mut commands: Commands| {
+                            leave.propagate(false);
+                            commands.run_system_with_input(system, (leave.entity(), false));
+                        });
                     }))
                     .apply(remove_system_holder_on_remove(system_holder))
             })
