@@ -115,9 +115,9 @@ pub trait MouseWheelScrollable: ViewportMutable {
 /// Convenience trait for enabling scrollability when hovering over an element.
 pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware {
     /// When this element receives a [`MouseWheel`] event while it is hovered, if it does not have a
-    /// [`ScrollDisabled`] component, run a [`System`] which takes [`In`](`System::In`) this element's
-    /// [`Entity`] and the [`MouseWheel`]. This method can be called repeatedly to register many
-    /// such handlers.
+    /// [`ScrollDisabled`] component, run a [`System`] which takes [`In`](`System::In`) this
+    /// element's [`Entity`] and the [`MouseWheel`]. This method can be called repeatedly to
+    /// register many such handlers.
     fn on_scroll_with_system_on_hover<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + 'static,
@@ -165,7 +165,6 @@ fn scroll_system(
 ) {
     let listeners = scroll_listeners.iter().collect::<Vec<_>>();
     for &event in mouse_wheel_events.read() {
-        // TODO: after 0.15 use &listeners
         commands.trigger_targets(event, listeners.clone());
     }
 }

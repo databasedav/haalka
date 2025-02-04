@@ -195,16 +195,14 @@ pub trait ViewportMutable: RawElWrapper {
                     .on_spawn_with_system(
                         |In(entity), children: Query<&Children>, mut nodes: Query<&mut Node>| {
                             // match the flex direction of `raw_el` above
-                            if let Ok(children) = children.get(entity) {
-                                if let Some(&child) = children.first() {
-                                    if let Some((flex_direction, mut node)) = nodes
-                                        .get(child)
-                                        .map(|node| node.flex_direction)
-                                        .ok()
-                                        .zip(nodes.get_mut(entity).ok())
-                                    {
-                                        node.flex_direction = flex_direction;
-                                    }
+                            if let Some(&child) = firstborn(entity, &children) {
+                                if let Some((flex_direction, mut node)) = nodes
+                                    .get(child)
+                                    .map(|node| node.flex_direction)
+                                    .ok()
+                                    .zip(nodes.get_mut(entity).ok())
+                                {
+                                    node.flex_direction = flex_direction;
                                 }
                             }
                         },
@@ -314,15 +312,13 @@ fn viewport_change_dispatcher(
 ) {
     for (entity, computed_node) in data.iter() {
         let Vec2 { x, y } = computed_node.size();
-        if let Ok(children) = children.get(entity) {
-            // [`Scene`] is the [`Viewport`]'s only child
-            if let Some(&child) = children.first() {
-                if let Ok(mut mutable_viewport) = mutable_viewports.get_mut(child) {
-                    mutable_viewport.viewport.width = x;
-                    mutable_viewport.viewport.height = y;
-                    let MutableViewport { scene, viewport, .. } = *mutable_viewport;
-                    commands.trigger_targets(ViewportLocationChange { scene, viewport }, child);
-                }
+        // [`Scene`] is the [`Viewport`]'s only child
+        if let Some(&child) = firstborn(entity, &children) {
+            if let Ok(mut mutable_viewport) = mutable_viewports.get_mut(child) {
+                mutable_viewport.viewport.width = x;
+                mutable_viewport.viewport.height = y;
+                let MutableViewport { scene, viewport, .. } = *mutable_viewport;
+                commands.trigger_targets(ViewportLocationChange { scene, viewport }, child);
             }
         }
     }

@@ -157,6 +157,7 @@ fn ui_root() -> impl Element {
                                 .height(Val::Px(40.))
                                 .mode(CosmicWrap::InfiniteLine)
                                 .scroll_disabled()
+                                .cursor(CursorIcon::System(SystemCursorIcon::Text))
                                 .cursor_color(CursorColor(Color::WHITE))
                                 .fill_color(CosmicBackgroundColor(NORMAL_BUTTON))
                                 .attrs(TextAttrs::new().color(Color::WHITE))
