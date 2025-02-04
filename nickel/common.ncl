@@ -110,44 +110,44 @@ let CACHIX_ACTION_VERSION = "15" in
       ]
     }
     |> run_on_ubuntu_latest,
-  build_examples =
-    {
-      strategy = {
-        matrix = {
-          example = "${{ fromJson(needs.get_examples_.outputs.examples) }}",
-          api = ["webgl2", "webgpu"],
-        }
-      },
-      permissions = {
-        contents = "write",
-      },
-      uses = "./.github/workflows/build_example.yaml",
-      with = {
-        api = "${{ matrix.api }}",
-        example = "${{ matrix.example }}",
-      },
+  build_examples = {
+    strategy = {
+      matrix = {
+        example = "${{ fromJson(needs.get_examples_.outputs.examples) }}",
+        api = ["webgl2", "webgpu"],
+      }
     },
-  deploy_examples = fun pr => {
     permissions = {
       contents = "write",
     },
-    steps = [
-      checkout,
-      {
-        name = "remove gitignore",
-        run = "rm .gitignore"
+    uses = "./.github/workflows/build_example.yaml",
+    with = {
+      api = "${{ matrix.api }}",
+      example = "${{ matrix.example }}",
+    },
+  },
+  deploy_examples = fun pr =>
+    {
+      permissions = {
+        contents = "write",
       },
-      {
-        name = "download artifacts",
-        uses = "actions/download-artifact@v4",
-        with = {
-          path = "artifacts",
-          github-token = "${{ secrets.GITHUB_TOKEN }}",
-        }
-      },
-      {
-        name = "organize artifacts",
-        run = m%"
+      steps = [
+        checkout,
+        {
+          name = "remove gitignore",
+          run = "rm .gitignore"
+        },
+        {
+          name = "download artifacts",
+          uses = "actions/download-artifact@v4",
+          with = {
+            path = "artifacts",
+            github-token = "${{ secrets.GITHUB_TOKEN }}",
+          }
+        },
+        {
+          name = "organize artifacts",
+          run = m%"
           for artifact in artifacts/*; do
             dirname=$(basename "$artifact")
             api=${dirname%%_*}
@@ -156,18 +156,19 @@ let CACHIX_ACTION_VERSION = "15" in
             mv "$artifact"/* "pages/$api/$example"
           done
         "%,
-      },
-      {
-        name = "deploy",
-        uses = "JamesIves/github-pages-deploy-action@v%{ GITHUB_PAGES_DEPLOY_ACTION_VERSION }",
-        with = {
-          folder = "pages",
-          force = false,
-          attempt-limit = GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT,
-          target-folder = if pr != "" then "pr_previews/%{ pr }" else "examples",
-          commit-message = if pr != "" then "${{ format('%{ REPO }/pull/%{ pr }/commits/{0}', github.sha) }}" else "${{ format('%{ REPO }/commit/{0}', github.sha) }}",
-        }
-      },
-    ]
-  } |> run_on_ubuntu_latest,
+        },
+        {
+          name = "deploy",
+          uses = "JamesIves/github-pages-deploy-action@v%{ GITHUB_PAGES_DEPLOY_ACTION_VERSION }",
+          with = {
+            folder = "pages",
+            force = false,
+            attempt-limit = GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT,
+            target-folder = if pr != "" then "pr_previews/%{ pr }" else "examples",
+            commit-message = if pr != "" then "${{ format('%{ REPO }/pull/%{ pr }/commits/{0}', github.sha) }}" else "${{ format('%{ REPO }/commit/{0}', github.sha) }}",
+          }
+        },
+      ]
+    }
+    |> run_on_ubuntu_latest,
 }
