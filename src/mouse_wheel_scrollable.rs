@@ -5,7 +5,7 @@ use super::{
     pointer_event_aware::PointerEventAware,
     raw::{observe, register_system, utils::remove_system_holder_on_remove},
     utils::{clone, spawn},
-    viewport_mutable::{ViewportMutable, ViewportMutation, firstborn},
+    viewport_mutable::{firstborn, ViewportMutable, ViewportMutation},
 };
 use apply::Apply;
 use bevy_app::prelude::*;
@@ -124,7 +124,8 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
     ) -> Self {
         self.on_hovered_change_with_system(
             |In((entity, hovered)), children: Query<&Children>, mut commands: Commands| {
-                // the [`Scene`], the child of the [`Viewport`], operates the scrolling, see [`MouseWheelScrollable::on_scroll_with_system_disableable`]
+                // the [`Scene`], the child of the [`Viewport`], operates the scrolling, see
+                // [`MouseWheelScrollable::on_scroll_with_system_disableable`]
                 if let Some(&child) = firstborn(entity, &children) {
                     if let Some(mut entity) = commands.get_entity(child) {
                         if hovered {
@@ -136,13 +137,15 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
                 }
             },
         )
-        .update_raw_el(|raw_el| raw_el.on_spawn_with_system(|In(entity), children: Query<&Children>, mut commands: Commands| {
-            if let Some(&child) = firstborn(entity, &children) {
-                if let Some(mut entity) = commands.get_entity(child) {
-                    entity.try_insert(ScrollDisabled);
+        .update_raw_el(|raw_el| {
+            raw_el.on_spawn_with_system(|In(entity), children: Query<&Children>, mut commands: Commands| {
+                if let Some(&child) = firstborn(entity, &children) {
+                    if let Some(mut entity) = commands.get_entity(child) {
+                        entity.try_insert(ScrollDisabled);
+                    }
                 }
-            }
-        }))
+            })
+        })
         .on_scroll_with_system_disableable::<ScrollDisabled, _>(handler)
     }
 
