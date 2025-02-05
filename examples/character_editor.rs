@@ -8,6 +8,10 @@
 //! - On the top of the UI is a text field for the character name.
 
 mod utils;
+use bevy_text::{
+    cosmic_text::{Family, FamilyOwned},
+    FontWeight,
+};
 use utils::*;
 
 use bevy::prelude::*;
@@ -157,6 +161,11 @@ fn ui_root() -> impl Element {
                                 .height(Val::Px(40.))
                                 .mode(CosmicWrap::InfiniteLine)
                                 .scroll_disabled()
+                                .attrs(
+                                    TextAttrs::new()
+                                        .family(FamilyOwned::new(Family::Name("Fira Mono")))
+                                        .weight(FontWeight::MEDIUM),
+                                )
                                 .cursor(CursorIcon::System(SystemCursorIcon::Text))
                                 .cursor_color(CursorColor(Color::WHITE))
                                 .fill_color(CosmicBackgroundColor(NORMAL_BUTTON))

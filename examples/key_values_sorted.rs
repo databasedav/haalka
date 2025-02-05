@@ -4,6 +4,10 @@
 //! (yes i take requests)
 
 mod utils;
+use bevy_text::{
+    cosmic_text::{Family, FamilyOwned},
+    FontWeight,
+};
 use utils::*;
 
 use std::{
@@ -138,6 +142,11 @@ fn text_input(
         .mode(CosmicWrap::InfiniteLine)
         .max_lines(MaxLines(1))
         .scroll_disabled()
+        .attrs(
+            TextAttrs::new()
+                .family(FamilyOwned::new(Family::Name("Fira Mono")))
+                .weight(FontWeight::MEDIUM),
+        )
         .cursor(CursorIcon::System(SystemCursorIcon::Text))
         .cursor_color_signal(
             focus

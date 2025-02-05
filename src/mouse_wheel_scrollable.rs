@@ -124,12 +124,8 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
     ) -> Self {
         self.on_hovered_change_with_system(
             |In((entity, hovered)), children: Query<&Children>, mut commands: Commands| {
-<<<<<<< HEAD
                 // the [`Scene`], the child of the [`Viewport`], operates the scrolling, see
                 // [`MouseWheelScrollable::on_scroll_with_system_disableable`]
-=======
-                // the [`Scene`], the child of the [`Viewport`], operates the scrolling, see [`MouseWheelScrollable::on_scroll_with_system_disableable`]
->>>>>>> 9289b313e4079b7bc8c5d708d888de0292d40c55
                 if let Some(&child) = firstborn(entity, &children) {
                     if let Some(mut entity) = commands.get_entity(child) {
                         if hovered {

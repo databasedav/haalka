@@ -12,7 +12,7 @@ use utils::*;
 use std::{convert::identity, fmt::Display, hash::Hash, time::Duration};
 
 use bevy::prelude::*;
-use bevy_mod_picking::events::{Drag, DragEnd, DragStart, Pointer};
+use bevy_picking::prelude::*;
 use haalka::prelude::*;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
@@ -159,23 +159,13 @@ impl Button {
     }
 }
 
-fn text(text: impl ToString) -> Text {
-    Text::from_section(
-        text.to_string(),
-        TextStyle {
-            font_size: FONT_SIZE,
-            ..default()
-        },
-    )
-}
-
 fn text_button(
     text_signal: impl Signal<Item = String> + Send + 'static,
     on_click: impl FnMut() + Send + Sync + 'static,
 ) -> Button {
     Button::new()
         .width(Val::Px(200.))
-        .body(El::<Text>::new().text_signal(text_signal.map(text)))
+        .body(El::<Text>::new().text_font(TextFont::from_font_size(FONT_SIZE)).text_signal(text_signal.map(Text)))
         .on_click(on_click)
 }
 
@@ -198,7 +188,7 @@ fn menu_base(width: f32, height: f32, title: &str) -> Column<Node> {
                 .with_node(|mut node| {
                     node.padding = UiRect::all(Val::Px(BASE_PADDING * 2.));
                 })
-                .child(El::<Text>::new().align(Align::new().top().left()).text(text(title))),
+                .child(El::<Text>::new().align(Align::new().top().left()).text_font(TextFont::from_font_size(FONT_SIZE)).text(Text::new(title))),
         )
 }
 

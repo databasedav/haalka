@@ -884,8 +884,7 @@ impl_haalka_methods! {
 }
 
 pub(super) fn plugin(app: &mut App) {
-    // TODO: this requires including the assets in the crate but we want to avoid that
-    let font_bytes: &[u8] = include_bytes!("../assets/fonts/FiraMono-subset.ttf");
+    let font_bytes: &[u8] = include_bytes!("fonts/FiraMono-subset.ttf");
     let font_config = bevy_cosmic_edit::CosmicFontConfig {
         fonts_dir_path: None,
         font_bytes: Some(vec![font_bytes]),
