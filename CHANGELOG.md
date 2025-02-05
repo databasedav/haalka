@@ -4,9 +4,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## unreleased
 
+# 0.2.4 (2025-02-04)
+
 ### fixed
 
-- `OnHoverMouseWheelScrollable` only scrolls when the element is hovered
+- `OnHoverMouseWheelScrollable` methods only scroll when the element is hovered
 
 # 0.2.3 (2025-01-05)
 
