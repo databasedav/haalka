@@ -28,18 +28,9 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
           cached_target_populate,
           just,
           binstall,
-          # TODO: just add to binstall once https://github.com/trunk-rs/trunk/pull/915 released
-          {
-            name = "install trunk",
-            run = m%"
-              wget https://github.com/databasedav/trunk/releases/download/v0.0.1/trunk
-              chmod +x trunk
-              mv trunk /usr/local/bin
-            "%
-          },
           {
             name = "install build dependencies",
-            run = "cargo binstall --no-confirm wasm-bindgen-cli wasm-opt nickel-lang-cli",
+            run = "cargo binstall --no-confirm wasm-bindgen-cli wasm-opt nickel-lang-cli trunk",
           },
           {
             name = "build example",
