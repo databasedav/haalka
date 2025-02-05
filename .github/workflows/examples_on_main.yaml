@@ -69,7 +69,7 @@ jobs:
       uses: JamesIves/github-pages-deploy-action@v4.7.2
       with:
         attempt-limit: 100
-        commit-message: ${{ format('https://github.com/databasedav/haalka/commit/{0}', github.sha) }}
+        commit-message: https://github.com/databasedav/haalka/commit/${{ github.sha }}
         folder: pages
         force: false
         target-folder: examples

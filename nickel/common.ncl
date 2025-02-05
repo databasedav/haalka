@@ -162,7 +162,7 @@ let CACHIX_ACTION_VERSION = "15" in
             force = false,
             attempt-limit = GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT,
             target-folder = if pr != "" then "pr_previews/%{ pr }" else "examples",
-            commit-message = if pr != "" then "${{ format('%{ REPO }/pull/{0}/commits/{1}', %{ pr }, github.event.pull_request.head.sha) }}" else "${{ format('%{ REPO }/commit/{0}', github.sha) }}",
+            commit-message = if pr != "" then "%{ REPO }/pull/%{ pr }/commits/${{ github.event.pull_request.head.sha }}" else "%{ REPO }/commit/${{ github.sha }}",
           }
         },
       ]

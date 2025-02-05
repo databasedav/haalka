@@ -69,10 +69,10 @@ jobs:
       uses: JamesIves/github-pages-deploy-action@v4.7.2
       with:
         attempt-limit: 100
-        commit-message: ${{ format('https://github.com/databasedav/haalka/pull/{0}/commits/{1}', github.event.number, github.event.pull_request.head.sha) }}
+        commit-message: https://github.com/databasedav/haalka/pull/${{ github.event.number }}/commits/${{ github.event.pull_request.head.sha }}
         folder: pages
         force: false
-        target-folder: pr_previews/github.event.number
+        target-folder: pr_previews/${{ github.event.number }}
   deployment_comment:
     name: deployment_comment
     needs:
