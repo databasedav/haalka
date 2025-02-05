@@ -117,9 +117,6 @@ let CACHIX_ACTION_VERSION = "15" in
         api = ["webgl2", "webgpu"],
       }
     },
-    permissions = {
-      contents = "write",
-    },
     uses = "./.github/workflows/build_example.yaml",
     with = {
       api = "${{ matrix.api }}",

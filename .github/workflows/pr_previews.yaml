@@ -28,8 +28,6 @@ jobs:
   build_examples_:
     name: build_examples_
     needs: get_examples_
-    permissions:
-      contents: write
     strategy:
       matrix:
         api:
