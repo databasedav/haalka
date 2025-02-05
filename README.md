@@ -156,7 +156,7 @@ cargo run --example align
 cargo run --example scroll
 cargo run --example scroll_grid
 cargo run --example snake
-cargo run --example ecs_ui_sync
+cargo run --example dot_counter
 cargo run --example key_values_sorted
 cargo run --example calculator
 

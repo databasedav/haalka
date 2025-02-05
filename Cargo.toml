@@ -176,8 +176,8 @@ path = "examples/counter.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "ecs_ui_sync"
-path = "examples/ecs_ui_sync.rs"
+name = "dot_counter"
+path = "examples/dot_counter.rs"
 doc-scrape-examples = true
 
 [[example]]

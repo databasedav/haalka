@@ -651,11 +651,9 @@ fn focus_on_signal<E: Element>(element: E, signal: impl Signal<Item = bool> + Se
                 // at first, i was using a `static_ref` global `Mutable<Option<Entity>>` for this
                 // and wrapping it in a resource for accessing it in the menu input event systems, but this is an
                 // anti pattern; the ecs should not be polling reactive ui state for syncing its own
-                // state/systems (there's an example of this anti pattern in the ecs world ui world sync example https://github.com/databasedav/haalka/blob/main/examples/ecs_ui_sync/src/main.rs#L154);
-                // instead, like we do here, simply use the `async_world` to update the ecs state *exactly and only*
-                // when it needs to be
+                // state/systems; instead, like we do here, simply use the `async_world` to update the ecs state
+                // *exactly and only* when it needs to be
                 async_world().insert_resource(FocusedEntity(entity)).await;
-                // TODO: remove reference to ecs world ui world sync example once fixed
             }
         })
     })

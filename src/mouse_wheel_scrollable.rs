@@ -5,11 +5,12 @@ use super::{
     pointer_event_aware::PointerEventAware,
     raw::{observe, register_system, utils::remove_system_holder_on_remove},
     utils::{clone, spawn},
-    viewport_mutable::{ViewportMutable, ViewportMutation},
+    viewport_mutable::{firstborn, ViewportMutable, ViewportMutation},
 };
 use apply::Apply;
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
+use bevy_hierarchy::Children;
 use bevy_input::{mouse::*, prelude::*};
 use bevy_ui::prelude::*;
 use bevy_utils::prelude::*;
@@ -121,16 +122,31 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
         self,
         handler: impl IntoSystem<(Entity, MouseWheel), (), Marker> + Send + 'static,
     ) -> Self {
-        self.on_scroll_with_system_disableable::<ScrollDisabled, Marker>(handler)
-            .on_hovered_change_with_system(|In((entity, hovered)), mut commands: Commands| {
-                if let Some(mut entity) = commands.get_entity(entity) {
-                    if hovered {
-                        entity.remove::<ScrollDisabled>();
-                    } else {
+        self.on_hovered_change_with_system(
+            |In((entity, hovered)), children: Query<&Children>, mut commands: Commands| {
+                // the [`Scene`], the child of the [`Viewport`], operates the scrolling, see
+                // [`MouseWheelScrollable::on_scroll_with_system_disableable`]
+                if let Some(&child) = firstborn(entity, &children) {
+                    if let Some(mut entity) = commands.get_entity(child) {
+                        if hovered {
+                            entity.remove::<ScrollDisabled>();
+                        } else {
+                            entity.try_insert(ScrollDisabled);
+                        }
+                    }
+                }
+            },
+        )
+        .update_raw_el(|raw_el| {
+            raw_el.on_spawn_with_system(|In(entity), children: Query<&Children>, mut commands: Commands| {
+                if let Some(&child) = firstborn(entity, &children) {
+                    if let Some(mut entity) = commands.get_entity(child) {
                         entity.try_insert(ScrollDisabled);
                     }
                 }
             })
+        })
+        .on_scroll_with_system_disableable::<ScrollDisabled, _>(handler)
     }
 
     /// When this element receives a [`MouseWheel`] event while it is hovered, run a function with

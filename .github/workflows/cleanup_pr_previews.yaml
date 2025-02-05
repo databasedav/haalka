@@ -15,7 +15,7 @@ jobs:
     - name: cleanup
       uses: JamesIves/github-pages-deploy-action@v4.7.2
       with:
-        attempt-limit: 1000
+        attempt-limit: 100
         commit-message: cleaning up pr preview for https://github.com/databasedav/haalka/pull/${{ env.PR }}
         folder: empty_dir
         force: false
