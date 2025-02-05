@@ -116,7 +116,7 @@ All examples are compiled to wasm for both webgl2 and webgpu (check [compatibili
 
     the classic, with adjustable grid size and tick rate
 
-- [**`ecs_ui_sync`**](https://github.com/databasedav/haalka/blob/main/examples/ecs_ui_sync.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/ecs_ui_sync/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/ecs_ui_sync/)
+- [**`dot_counter`**](https://github.com/databasedav/haalka/blob/main/examples/dot_counter.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/dot_counter/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/dot_counter/)
 
     forward ecs changes to the ui
 
