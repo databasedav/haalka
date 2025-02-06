@@ -29,18 +29,14 @@ fn main() {
                 },
             ),
         )
-        .add_systems(Update, (direction, restart.run_if(on_event::<Restart>())))
+        .add_systems(Update, (direction, restart.run_if(on_event::<Restart>)))
         .add_systems(
             FixedUpdate,
             (
-                (
-                    spawn_food.run_if(on_event::<SpawnFood>()),
-                    consume_queued_direction,
-                    tick,
-                )
+                (spawn_food.run_if(on_event::<SpawnFood>), consume_queued_direction, tick)
                     .chain()
                     .run_if(not(resource_exists::<Paused>)),
-                grid_size_changer.run_if(on_event::<GridSizeChange>()),
+                grid_size_changer.run_if(on_event::<GridSizeChange>),
             )
                 .chain(),
         )
@@ -60,6 +56,7 @@ const EMPTY_COLOR: Color = Color::srgb(91. / 255., 206. / 255., 250. / 255.);
 const SNAKE_COLOR: Color = Color::srgb(245. / 255., 169. / 255., 184. / 255.);
 const FOOD_COLOR: Color = Color::srgb(1., 1., 1.);
 const STARTING_TICKS_PER_SECOND: u32 = 10;
+const FONT_SIZE: f32 = 25.;
 
 #[derive(Resource)]
 struct Paused;
@@ -125,20 +122,24 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
         .width(Val::Px((WIDTH - SIDE) as f32))
         .with_node(|mut node| node.row_gap = Val::Px(10.))
         .align_content(Align::center())
-        .item(El::<Text>::new().text_signal(score.signal().map(|score| {
-            Text::from_section(
-                score.to_string(),
-                TextStyle {
-                    font_size: 300.,
-                    ..default()
-                },
-            )
-        })))
+        .item(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(250.))
+                .text_signal(score.signal_ref(ToString::to_string).map(Text)),
+        )
         .item(
             Row::<Node>::new()
                 .with_node(|mut node| node.column_gap = Val::Px(10.))
-                .item(El::<Text>::new().text(text("grid size:")))
-                .item(El::<Text>::new().text_signal(size.signal().map(|size| text(&size.to_string()))))
+                .item(
+                    El::<Text>::new()
+                        .text_font(TextFont::from_font_size(FONT_SIZE))
+                        .text(Text::new("grid size:")),
+                )
+                .item(
+                    El::<Text>::new()
+                        .text_font(TextFont::from_font_size(FONT_SIZE))
+                        .text_signal(size.signal_ref(ToString::to_string).map(Text)),
+                )
                 .item(text_button("-").on_pressing_with_system_with_sleep_throttle(
                     |_: In<_>, mut commands: Commands| {
                         commands.send_event(GridSizeChange::Decr);
@@ -155,8 +156,16 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
         .item(
             Row::<Node>::new()
                 .with_node(|mut node| node.column_gap = Val::Px(10.))
-                .item(El::<Text>::new().text(text("tick rate:")))
-                .item(El::<Text>::new().text_signal(tick_rate.signal().map(|size| text(&size.to_string()))))
+                .item(
+                    El::<Text>::new()
+                        .text_font(TextFont::from_font_size(FONT_SIZE))
+                        .text(Text::new("tick rate:")),
+                )
+                .item(
+                    El::<Text>::new()
+                        .text_font(TextFont::from_font_size(FONT_SIZE))
+                        .text_signal(tick_rate.signal_ref(ToString::to_string).map(Text)),
+                )
                 .item(text_button("-").on_pressing_with_system_with_sleep_throttle(
                     |_: In<_>, world: &mut World| {
                         let cur_rate = TICK_RATE.get();
@@ -208,24 +217,12 @@ fn restart_button() -> impl Element {
         .hovered_sync(hovered)
         .align_content(Align::center())
         .on_click(|| async_world().send_event(Restart).apply(spawn).detach())
-        .child(El::<Text>::new().text(Text::from_section(
-            "restart",
-            TextStyle {
-                font_size: 60.,
-                color: Color::WHITE,
-                ..default()
-            },
-        )))
-}
-
-fn text(string: &str) -> Text {
-    Text::from_section(
-        string,
-        TextStyle {
-            font_size: 30.,
-            ..default()
-        },
-    )
+        .child(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(50.))
+                .text_color(TextColor(Color::WHITE))
+                .text(Text::new("restart")),
+        )
 }
 
 #[derive(Event)]
@@ -292,7 +289,11 @@ fn text_button(text_: &str) -> impl Element + PointerEventAware {
                 .map(Into::into),
         )
         .hovered_sync(hovered)
-        .child(El::<Text>::new().text(text(text_)))
+        .child(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(FONT_SIZE))
+                .text(Text::new(text_)),
+        )
 }
 
 // u could also just scan the cells every tick, but i'm just caching it
@@ -368,13 +369,13 @@ fn tick(
 #[derive(Event, Default)]
 struct SpawnFood;
 
-fn spawn_food(mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>) {
+fn spawn_food(mut rng: GlobalEntropy<ChaCha8Rng>) {
     let cells_lock = CELLS.lock_ref();
     let empty_cells = cells_lock
         .iter()
         .filter_map(|(position, cell)| matches!(cell.get(), Cell::Empty).then_some(position));
     cells_lock
-        .get(empty_cells.choose(&mut *rng).unwrap())
+        .get(empty_cells.choose(rng.as_mut()).unwrap())
         .unwrap()
         .set(Cell::Food);
 }
@@ -443,5 +444,5 @@ fn consume_queued_direction(
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d::default());
 }

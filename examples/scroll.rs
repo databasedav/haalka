@@ -22,34 +22,31 @@ fn main() {
         .run();
 }
 
-const LETTER_SIZE: f32 = 65.;
+const LETTER_SIZE: f32 = 54.167; // 65 / 1.2
+const COMPUTED_SIZE: f32 = 66.; // TODO: how tho ?
 
 static SHIFTED: Lazy<Mutable<bool>> = Lazy::new(default);
 
 fn letter(letter: &str, color: Color) -> impl Element {
-    El::<Text>::new().text(Text::from_section(
-        letter,
-        TextStyle {
-            font_size: LETTER_SIZE,
-            color,
-            ..default()
-        },
-    ))
+    El::<Text>::new()
+        .text_font(TextFont::from_font_size(LETTER_SIZE))
+        .text_color(TextColor(color))
+        .text(Text::new(letter))
 }
 
 fn letter_column(rotate: usize, color: Color) -> impl Element {
     let hovered = Mutable::new(false);
     Column::<Node>::new()
-        .height(Val::Px(5. * LETTER_SIZE))
+        .height(Val::Px(5. * COMPUTED_SIZE))
         .mutable_viewport(Overflow::clip_y(), LimitToBody::Vertical)
         .on_scroll_with_system_disableable_signal(
             BasicScrollHandler::new()
                 .direction(ScrollDirection::Vertical)
-                .pixels(LETTER_SIZE)
+                .pixels(COMPUTED_SIZE)
                 .into_system(),
             signal::or(signal::not(hovered.signal()), SHIFTED.signal()),
         )
-        .with_node(move |mut node| node.top = Val::Px(-LETTER_SIZE * rotate as f32))
+        .with_node(move |mut node| node.top = Val::Px(-COMPUTED_SIZE * rotate as f32))
         .hovered_sync(hovered)
         .items(
             "abcdefghijklmnopqrstuvwxyz"
@@ -66,7 +63,7 @@ fn ui_root() -> impl Element {
         .align_content(Align::center())
         .child(
             Row::<Node>::new()
-                .with_node(|mut node: Mut<'_, Style>| {
+                .with_node(|mut node| {
                     node.column_gap = Val::Px(30.);
                     node.padding = UiRect::horizontal(Val::Px(7.5));
                 })
@@ -107,5 +104,5 @@ fn shifter(keys: Res<ButtonInput<KeyCode>>) {
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d::default());
 }
