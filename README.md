@@ -13,9 +13,9 @@ While haalka is primarily targeted at UI and provides high level UI abstractions
 
 ## considerations
 
-Reactive updates done by haalka are **eventually consistent**, that is, once some world state has been updated, any downstream reactions should not be expected to run in the same frame. For purely informational state, e.g. the 
+- Reactive updates done by haalka are [**eventually consistent**](https://en.wikipedia.org/wiki/Eventual_consistency), that is, once some ECS world state has been updated, any downstream reactions should not be expected to run in the same frame. This is due to the indirection involved with using an async signals library, which dispatches Bevy commands after polling by the async runtime. This resulting "lag" should not be noticeable in most popular cases, e.g. reacting to hover/click state or synchronizing UI (one can run the examples to evaluate this themselves), but in cases where frame perfect responsiveness is critical, one should simply use Bevy-native systems directly.
 
-If one is using the `text_input` feature (enabled by default) and using multiple cameras in the same world, they must enable the `multicam` feature AND add the `bevy_cosmic_edit::CosmicPrimaryCamera` marker component to the primary camera.
+- If one is using the `text_input` feature (enabled by default) and using multiple cameras in the same world, they must enable the `multicam` feature AND add the `bevy_cosmic_edit::CosmicPrimaryCamera` marker component to the primary camera.
 
 ## [feature flags](https://docs.rs/haalka/latest/haalka/#feature-flags-1)
 
@@ -56,7 +56,11 @@ fn ui_root() -> impl Element {
             Row::<Node>::new()
                 .with_node(|mut node| node.column_gap = Val::Px(15.0))
                 .item(counter_button(counter.clone(), "-", -1))
-                .item(El::<Text>::new().text_signal(counter.signal().map(text)))
+                .item(
+                    El::<Text>::new()
+                        .text_font(TextFont::from_font_size(25.))
+                        .text_signal(counter.signal_ref(ToString::to_string).map(Text)),
+                )
                 .item(counter_button(counter.clone(), "+", 1))
                 .update_raw_el(move |raw_el| raw_el.insert(Counter(counter))),
         )
@@ -71,25 +75,20 @@ fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element
             hovered
                 .signal()
                 .map_bool(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
-                .map(BackgroundColor),
+                .map(Into::into),
         )
+        .border_radius(BorderRadius::MAX)
         .hovered_sync(hovered)
         .on_click(move || *counter.lock_mut() += step)
-        .child(El::<Text>::new().text(text(label)))
-}
-
-fn text(text: impl ToString) -> Text {
-    Text::from_section(
-        text.to_string(),
-        TextStyle {
-            font_size: 30.0,
-            ..default()
-        },
-    )
+        .child(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(25.))
+                .text(Text::new(label)),
+        )
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 }
 ```
 
