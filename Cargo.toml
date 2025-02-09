@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "haalka"
-version = "0.2.4"
+version = "0.3.0"
 edition = "2021"
 categories = ["asynchronous", "gui", "game-development"]
 description = "ergonomic reactive Bevy UI library powered by FRP signals"
