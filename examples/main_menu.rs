@@ -1122,7 +1122,7 @@ fn menu() -> impl Element {
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2d::default());
+    commands.spawn(Camera2d);
 }
 
 #[derive(Resource, Clone)]

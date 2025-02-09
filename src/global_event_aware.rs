@@ -9,16 +9,10 @@ use apply::Apply;
 use bevy_ecs::{prelude::*, system::SystemId};
 use futures_signals::signal::Mutable;
 
-// TODO: there should be a way to pass the entity into the system
 // TODO: 0.15
 /// Enables registering "global" event listeners on the [`UiRoot`] node. The [`UiRoot`] must be
 /// manually registered with [`UiRootable::ui_root`](super::element::UiRootable::ui_root) for this
 /// to work as expected.
-///
-/// # Notes
-/// Since multiple [`bevy_eventlistener::On`](bevy_eventlistener::event_listener::On)s can't be
-/// registered on the same entity, this trait can't *yet* be used to do things like registering "on
-/// click outside" listeners.
 pub trait GlobalEventAware: RawElWrapper {
     /// When an `E` [`Event`] propagates to the [`UiRoot`] node, run a [`System`] which takes
     /// [`In`](`System::In`) this element's [`Entity`] (not the [`UiRoot`]'s) and the [`Event`].
@@ -55,8 +49,7 @@ pub trait GlobalEventAware: RawElWrapper {
         })
     }
 
-    /// When an `E` [`Event`] propagates to the [`UiRoot`] node, run a function with access to
-    /// the event's data.
+    /// When an `E` [`Event`] propagates to the [`UiRoot`] node, run a function with the [`Event`].
     fn on_global_event<E: Event + Clone>(self, mut handler: impl FnMut(E) + Send + Sync + 'static) -> Self {
         self.on_global_event_with_system::<E, _>(move |In((_, event))| handler(event))
     }

@@ -1,19 +1,12 @@
 use std::time::Duration;
 
-use bevy_tasks::prelude::*;
+use bevy_tasks::{prelude::*, *};
 #[doc(no_inline)]
 pub use enclose::enclose as clone;
 use futures_signals::{
     map_ref,
     signal::{Mutable, Signal, SignalExt},
 };
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
-        use super::node_builder::WasmTaskAdapter;
-    } else {
-        use bevy_tasks::*;
-    }
-}
 use haalka_futures_signals_ext::SignalExtExt;
 use std::{future::Future, ops::Not};
 

@@ -95,7 +95,7 @@ fn button(font: Handle<Font>) -> impl Element {
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn((Camera2d::default(),));
+    commands.spawn((Camera2d,));
 }
 
 fn ui_root(font: Handle<Font>) -> impl Element {

@@ -18,7 +18,7 @@ fn main() {
             Startup,
             (
                 |world: &mut World| {
-                    let camera = world.spawn((Camera2d::default(), IsDefaultUiCamera)).id();
+                    let camera = world.spawn((Camera2d, IsDefaultUiCamera)).id();
                     ui_root()
                         .update_raw_el(|raw_el| {
                             raw_el.with_entity(move |mut entity| {
@@ -320,7 +320,7 @@ const YELLOW: Color = Color::srgb(0.75, 0.75, 0.25);
 fn dot_camera(mut commands: Commands) {
     // https://github.com/bevyengine/bevy/discussions/11223
     commands.spawn((
-        Camera2d::default(),
+        Camera2d,
         Camera {
             order: 1,
             clear_color: ClearColorConfig::None,

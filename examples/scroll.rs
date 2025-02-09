@@ -104,5 +104,5 @@ fn shifter(keys: Res<ButtonInput<KeyCode>>) {
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2d::default());
+    commands.spawn(Camera2d);
 }

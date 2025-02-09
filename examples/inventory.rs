@@ -36,7 +36,7 @@ fn main() {
         // .add_systems(Startup, setup_3d)
         // .add_systems(Update, rotate_prism)
         .add_systems(Startup, |mut commands: Commands| {
-            commands.spawn((Camera2d::default(), IsDefaultUiCamera));
+            commands.spawn((Camera2d, IsDefaultUiCamera));
         })
         .add_systems(
             OnEnter(AssetState::Loaded),

@@ -64,7 +64,7 @@ fn button(i: usize, j: usize) -> RawHaalkaEl {
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera2d::default());
+    commands.spawn(Camera2d);
 }
 
 fn as_rainbow(i: usize) -> Color {

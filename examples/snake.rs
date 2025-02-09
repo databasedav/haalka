@@ -444,5 +444,5 @@ fn consume_queued_direction(
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2d::default());
+    commands.spawn(Camera2d);
 }

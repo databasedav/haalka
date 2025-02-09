@@ -247,5 +247,5 @@ fn dropdown(options: impl IntoIterator<Item = &'static str>, placeholder: Option
 const DEFAULT_FONT_SIZE: f32 = 20.;
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2d::default());
+    commands.spawn(Camera2d);
 }

@@ -76,7 +76,7 @@ impl TextInput {
         Self { el }
     }
 
-    /// Run a function with this input's [`CosmicBuffer`] with access to [`ResMut<CosmicFontSystem>`] and [`DefaultAttrs`].
+    /// Run a function with this input's [`CosmicEditBuffer`] with access to [`ResMut<CosmicFontSystem>`] and [`DefaultAttrs`].
     pub fn with_cosmic_buffer(
         self,
         f: impl FnOnce(Mut<CosmicEditBuffer>, ResMut<CosmicFontSystem>, &DefaultAttrs) + Send + 'static,
@@ -99,7 +99,7 @@ impl TextInput {
         }))
     }
 
-    /// Reactively run a function with this input's [`CosmicBuffer`] and the output of the [`Signal`] with access to [`ResMut<CosmicFontSystem>`] and [`DefaultAttrs`].
+    /// Reactively run a function with this input's [`CosmicEditBuffer`] and the output of the [`Signal`] with access to [`ResMut<CosmicFontSystem>`] and [`DefaultAttrs`].
     pub fn on_signal_with_cosmic_buffer<T: Send + 'static>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,

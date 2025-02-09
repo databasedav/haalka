@@ -67,5 +67,5 @@ fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2d::default());
+    commands.spawn(Camera2d);
 }

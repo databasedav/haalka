@@ -12,6 +12,9 @@ in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "
 While haalka is primarily targeted at UI and provides high level UI abstractions as such, its [core abstraction](https://docs.rs/haalka/latest/haalka/struct.RawHaalkaEl.html) can be used to manage signals-powered reactivity for any entity, not just [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs).
 
 ## considerations
+
+Reactive updates done by haalka are **eventually consistent**, that is, once some world state has been updated, any downstream reactions should not be expected to run in the same frame. For purely informational state, e.g. the 
+
 If one is using the `text_input` feature (enabled by default) and using multiple cameras in the same world, they must enable the `multicam` feature AND add the `bevy_cosmic_edit::CosmicPrimaryCamera` marker component to the primary camera.
 
 ## [feature flags](https://docs.rs/haalka/latest/haalka/#feature-flags-1)
@@ -89,6 +92,8 @@ fn camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 }
 ```
+
+### on the web
 
 All examples are compiled to wasm for both webgl2 and webgpu (check [compatibility](<https://github.com/gpuweb/gpuweb/wiki/Implementation-Status#implementation-status>)) and deployed to github pages.
 

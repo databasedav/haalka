@@ -229,5 +229,5 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2d::default());
+    commands.spawn(Camera2d);
 }

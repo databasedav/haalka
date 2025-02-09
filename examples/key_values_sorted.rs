@@ -550,5 +550,5 @@ fn focus_scroller(
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2d::default());
+    commands.spawn(Camera2d);
 }

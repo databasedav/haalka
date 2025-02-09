@@ -1,7 +1,7 @@
 //! [haalka](crate)'s core abstraction, allowing one to rig any [`Entity`] with ergonomic
 //! [`futures_signals::Signal`](https://docs.rs/futures-signals/latest/futures_signals/signal/trait.Signal.html) driven reactivity, including
-//! methods for registering children, [`Component`]s, [event listeners](On), and [`System`]s all
-//! using a declarative builder pattern/[fluent interface](https://en.wikipedia.org/wiki/Fluent_interface).
+//! methods for registering children, [`Component`]s, event listeners (via observers), and
+//! [`System`]s all using a declarative builder pattern/[fluent interface](https://en.wikipedia.org/wiki/Fluent_interface).
 //! Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`raw_el`](https://github.com/MoonZoon/MoonZoon/tree/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/raw_el).
 
 use std::{future::Future, marker::PhantomData, mem};
