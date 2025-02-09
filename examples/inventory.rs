@@ -10,16 +10,13 @@
 // outside
 
 mod utils;
+// use bevy_render::view::RenderLayers;
 use utils::*;
 
 use std::{collections::HashMap, sync::OnceLock};
 
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
-use bevy_mod_picking::{
-    events::{Click, Down, Move, Pointer, Up},
-    prelude::{Pickable, PointerButton},
-};
 use haalka::{prelude::*, raw::DeferredUpdaterAppendDirection};
 use rand::{
     distributions::{Bernoulli, Distribution},
@@ -35,11 +32,29 @@ fn main() {
                 .continue_to_state(AssetState::Loaded)
                 .load_collection::<RpgIconSheet>(),
         )
-        .add_systems(Startup, camera)
+        // .add_systems(Startup, character_camera)
+        // .add_systems(Startup, setup_3d)
+        // .add_systems(Update, rotate_prism)
+        .add_systems(Startup, |mut commands: Commands| {
+            commands.spawn((Camera2d, IsDefaultUiCamera));
+        })
         .add_systems(
             OnEnter(AssetState::Loaded),
             (set_icon_texture_atlas, |world: &mut World| {
-                ui_root().spawn(world);
+                ui_root()
+                    .update_raw_el(|raw_el| {
+                        raw_el.on_spawn_with_system(
+                            move |In(entity): In<_>,
+                                  camera: Single<Entity, With<IsDefaultUiCamera>>,
+                                  mut commands: Commands| {
+                                // https://github.com/bevyengine/bevy/discussions/11223
+                                if let Some(mut commands) = commands.get_entity(entity) {
+                                    commands.try_insert(TargetCamera(*camera));
+                                }
+                            },
+                        )
+                    })
+                    .spawn(world);
             })
                 .chain(),
         )
@@ -206,7 +221,6 @@ fn icon_sheet() -> &'static RpgIconSheet {
 struct RpgIconSheet {
     #[asset(texture_atlas(tile_size_x = 48, tile_size_y = 48, columns = 10, rows = 27))]
     layout: Handle<TextureAtlasLayout>,
-    #[asset(image(sampler = nearest))]
     #[asset(path = "rpg_icon_sheet.png")]
     image: Handle<Image>,
 }
@@ -214,32 +228,27 @@ struct RpgIconSheet {
 fn icon(
     index_signal: impl Signal<Item = usize> + Send + 'static,
     count_signal: impl Signal<Item = usize> + Send + 'static,
-) -> Stack<NodeBundle> {
+) -> Stack<Node> {
     Stack::new()
         .layer(
-            El::<ImageBundle>::new()
-                .image(UiImage::from(icon_sheet().image.clone()))
-                .update_raw_el(|raw_el| {
-                    raw_el
-                        .insert(TextureAtlas::from(icon_sheet().layout.clone()))
-                        .on_signal_with_component(index_signal, |mut texture_atlas: Mut<TextureAtlas>, index| {
-                            texture_atlas.index = index;
-                        })
+            El::<ImageNode>::new()
+                .image_node(ImageNode {
+                    image: icon_sheet().image.clone(),
+                    texture_atlas: Some(TextureAtlas::from(icon_sheet().layout.clone())),
+                    ..default()
+                })
+                .on_signal_with_image_node(index_signal, |mut image_node: Mut<ImageNode>, index| {
+                    if let Some(ref mut texture_atlas) = image_node.texture_atlas {
+                        texture_atlas.index = index;
+                    }
                 }),
         )
         .layer(
-            El::<TextBundle>::new()
-                .with_style(|mut style| style.top = Val::Px(6.))
+            El::<Text>::new()
+                .with_node(|mut node| node.top = Val::Px(6.))
                 .align(Align::new().bottom().right())
-                .text_signal(count_signal.map(|count| {
-                    Text::from_section(
-                        count.to_string(),
-                        TextStyle {
-                            font_size: 40.,
-                            ..default()
-                        },
-                    )
-                })),
+                .text_font(TextFont::from_font_size(33.33))
+                .text_signal(count_signal.map(|count| Text(count.to_string()))),
         )
 }
 
@@ -249,142 +258,114 @@ struct CellData {
     count: Mutable<usize>,
 }
 
+#[derive(Component)]
+struct BlockClick;
+
 fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl Element {
     let hovered = Mutable::new(false);
     let original_position: Mutable<Option<Vec2>> = Mutable::new(None);
     let down = Mutable::new(false);
-    // let stop_propagation_trigger = Mutable::new(false);
-    // let cursor_disabling_forwarder = spawn(sync_neq(
-    //     signal::or(cell_data_option.signal_ref(Option::is_none), is_dragging()),
-    //     stop_propagation_trigger.clone(),
-    // ));
-    El::<NodeBundle>::new()
-        .update_raw_el(clone!((cell_data_option, hovered, down/* , stop_propagation_trigger */) move |mut raw_el| {
-            // raw_el = raw_el.hold_tasks([cursor_disabling_forwarder]);
+    El::<Node>::new()
+        .update_raw_el(clone!((cell_data_option, down) move |mut raw_el| {
             if insertable {
                 raw_el = raw_el
-                .insert((
-                    Pickable::default(),
-                    On::<Pointer<Up>>::run(clone!((down) move || down.set_neq(false))),
-                ))
-                // `.component_signal` conveniently allows us to reactively add/remove components,
-                // if the provided signal returns `None`, then the component is removed; but the
-                // signal below doesn't look like it returns an `Option`? actually it does thanks to
-                // `.map_true` which is syntactic sugar for `.map(|bool| if bool { Some(...) } else { None }))`
-                .component_signal::<On::<Pointer<Click>>, _>(
-                    // we don't want the click listener to trigger if we've just grabbed some of
-                    // the stack as it would immediately drop one down, so we track the `Down` state
-                    signal::and(signal::not(down.signal()), hovered.signal()).dedupe()
-                    .map_true(clone!((cell_data_option) move || {
-                        On::<Pointer<Click>>::run(clone!((cell_data_option => self_cell_data_option/* , stop_propagation_trigger */) move |click: Listener<Pointer<Click>>/* , mut commands: Commands */| {
-                            let mut consume = false;
-                            if let Some(dragging_cell_data_option) = &*DRAGGING_OPTION.lock_ref() {
-                                if self_cell_data_option.lock_ref().is_none() {
-                                    if let Some(dragging_cell_data) = &*dragging_cell_data_option.lock_ref() {
-                                        self_cell_data_option.set(Some(CellData {
-                                            index: Mutable::new(dragging_cell_data.index.get()),
-                                            count: Mutable::new(0),
-                                        }));
-                                    }
+                .insert(PickingBehavior::default())
+                .on_event_disableable::<Pointer<Click>, BlockClick>(
+                    clone!((cell_data_option => self_cell_data_option) move |click| {
+                        let mut consume = false;
+                        if let Some(dragging_cell_data_option) = &*DRAGGING_OPTION.lock_ref() {
+                            if self_cell_data_option.lock_ref().is_none() {
+                                if let Some(dragging_cell_data) = &*dragging_cell_data_option.lock_ref() {
+                                    self_cell_data_option.set(Some(CellData {
+                                        index: Mutable::new(dragging_cell_data.index.get()),
+                                        count: Mutable::new(0),
+                                    }));
                                 }
-                                if let Some((dragging_cell_data, self_cell_data)) = dragging_cell_data_option.lock_ref().as_ref().zip(self_cell_data_option.lock_ref().as_ref()) {
-                                    if self_cell_data.index.get() == dragging_cell_data.index.get() {
-                                        let to_add = {
-                                            if matches!(click.button, PointerButton::Secondary) {
-                                                *dragging_cell_data.count.lock_mut() -= 1;
-                                                if dragging_cell_data.count.get() == 0 {
-                                                    consume = true;
-                                                }
-                                                1
-                                            } else {
-                                                let count = dragging_cell_data.count.take();
+                            }
+                            if let Some((dragging_cell_data, self_cell_data)) = dragging_cell_data_option.lock_ref().as_ref().zip(self_cell_data_option.lock_ref().as_ref()) {
+                                if self_cell_data.index.get() == dragging_cell_data.index.get() {
+                                    let to_add = {
+                                        if matches!(click.button, PointerButton::Secondary) {
+                                            *dragging_cell_data.count.lock_mut() -= 1;
+                                            if dragging_cell_data.count.get() == 0 {
                                                 consume = true;
-                                                count
                                             }
-                                        };
-                                        self_cell_data.count.update(|count| count + to_add);
-                                    } else {
-                                        self_cell_data.index.swap(&dragging_cell_data.index);
-                                        self_cell_data.count.swap(&dragging_cell_data.count);
-                                    }
+                                            1
+                                        } else {
+                                            let count = dragging_cell_data.count.take();
+                                            consume = true;
+                                            count
+                                        }
+                                    };
+                                    self_cell_data.count.update(|count| count + to_add);
+                                } else {
+                                    self_cell_data.index.swap(&dragging_cell_data.index);
+                                    self_cell_data.count.swap(&dragging_cell_data.count);
                                 }
                             }
-                            if consume {
-                                // because propagation stoppage may not synchronize before the `Over` event is fired,
-                                // the `Over` event may leak through to the root, racing the root and cell's cursors;
-                                // to avoid this we first notify the cell to stop propagation, and wait for that to
-                                // propagate, before clearing the dragging cell data, which fires the `Over` event
-                                //
-                                // TODO: how can i address this more ergonomically? do bubbling observers help?
-                                // let waiter = stop_propagation_trigger.signal().wait_for(true);
-                                // async {
-                                //     waiter.await;
-                                    if let Some(cell_data_option) = DRAGGING_OPTION.take() {
-                                        cell_data_option.take();
-                                        // commands.entity(click.listener()).remove::<CursorDisabled>();
-                                    }
-                                // }
-                                // .apply(spawn)
-                                // .detach();
-                                // stop_propagation_trigger.set_neq(true);
+                        }
+                        if consume {
+                            if let Some(cell_data_option) = DRAGGING_OPTION.take() {
+                                cell_data_option.take();
                             }
-                        }))
-                    }))
+                        }
+                    }),
                 );
             }
             raw_el
-            .component_signal::<On::<Pointer<Down>>, _>(
-                signal::and(signal::not(is_dragging()), cell_data_option.signal_ref(Option::is_some)).dedupe()
-                .map_true(clone!((cell_data_option, down) move ||
-                    On::<Pointer<Down>>::run(clone!((cell_data_option, down) move |pointer_down: Listener<Pointer<Down>>| {
-                        let to_drag_option = {
-                            if pointer_down.button == PointerButton::Secondary {
-                                if let Some(cell_data) = &*cell_data_option.lock_ref() {
-                                    let to_take = (cell_data.count.get() / 2).max(1);
-                                    cell_data.count.update(|count| count - to_take);
-                                    Some(CellData {
-                                        index: Mutable::new(cell_data.index.get()),
-                                        count: Mutable::new(to_take),
-                                    })
-                                } else {
-                                    None
-                                }
+            // we don't want the click listener to trigger if we've just grabbed some of
+            // the stack as it would immediately drop one down, so we track the `Down` state
+            .on_event_with_system::<Pointer<Down>, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).insert(BlockClick); })
+            .on_event_with_system::<Pointer<Up>, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).remove::<BlockClick>(); })
+            .on_event_disableable_signal::<Pointer<Down>>(
+                clone!((cell_data_option, down) move |pointer_down| {
+                    let to_drag_option = {
+                        if pointer_down.button == PointerButton::Secondary {
+                            if let Some(cell_data) = &*cell_data_option.lock_ref() {
+                                let to_take = (cell_data.count.get() / 2).max(1);
+                                cell_data.count.update(|count| count - to_take);
+                                Some(CellData {
+                                    index: Mutable::new(cell_data.index.get()),
+                                    count: Mutable::new(to_take),
+                                })
                             } else {
-                                cell_data_option.take()
+                                None
                             }
-                        };
-                        if cell_data_option.lock_ref().as_ref().map(|cell_data| cell_data.count.get() == 0).unwrap_or(false) {
-                            cell_data_option.take();
+                        } else {
+                            cell_data_option.take()
                         }
-                        DRAGGING_OPTION.set(Some(Mutable::new(to_drag_option)));
-                        POINTER_POSITION.set(pointer_down.pointer_location.position.into());
-                        down.set_neq(true);
-                    }))
-                ))
+                    };
+                    if cell_data_option.lock_ref().as_ref().map(|cell_data| cell_data.count.get() == 0).unwrap_or(false) {
+                        cell_data_option.take();
+                    }
+                    DRAGGING_OPTION.set(Some(Mutable::new(to_drag_option)));
+                    POINTER_POSITION.set(pointer_down.pointer_location.position.into());
+                    down.set_neq(true);
+                }),
+                signal::or(is_dragging(), cell_data_option.signal_ref(Option::is_none)).dedupe()
             )
         }))
-        // alternative to the stop propagation trigger pattern, which is kinda/pretty cringe
+        // alternative to disabling this element's cursor like what's commented out below, which may seem more intuitive, but is harder to manage due to the eventual consistency of signals
         .cursor_signal(
             map_ref! {
                 let &populated = cell_data_option.signal_ref(Option::is_some),
                 let &is_dragging = is_dragging() => {
                     if is_dragging {
-                        CursorIcon::Grabbing
+                        CursorIcon::System(SystemCursorIcon::Grabbing)
                     } else if populated {
-                        CursorIcon::Grab
+                        CursorIcon::System(SystemCursorIcon::Grab)
                     } else {
-                        CursorIcon::Default
+                        CursorIcon::System(SystemCursorIcon::Default)
                     }
                 }
             }
         )
-        // .cursor_disableable_signal(CursorIcon::Grab, stop_propagation_trigger.signal())
-        // TODO: this is more idiomatic and should work, but it doesn't due to various shenanigans, see stop_propagation_trigger strat attempt for some exploration
-        // .cursor_disableable_signal(CursorIcon::Grab, signal::or(cell_data_option.signal_ref(Option::is_none), is_dragging()))
+        // TODO: this is more idiomatic and should work, but it doesn't due to various eventual consistency shenanigans, not going to address anytime soon, use the above alternative, or manually manage components/resources to achieve the required strong consistency
+        // .cursor_disableable_signal(CursorIcon::System(SystemCursorIcon::Grab), signal::or(cell_data_option.signal_ref(Option::is_none), is_dragging()))
         .hovered_sync(hovered.clone())
         .width(Val::Px(CELL_WIDTH))
         .height(Val::Px(CELL_WIDTH))
-        .with_style(|mut style| style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH)))
+        .with_node(|mut node| node.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH)))
         .background_color_signal(
             hovered.signal()
                 .map_bool(|| CELL_HIGHLIGHT_COLOR, || CELL_BACKGROUND_COLOR).map(Into::into),
@@ -394,19 +375,19 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             cell_data_option
                 .signal_cloned()
                 .map_some(move |cell_data| {
-                    Stack::<NodeBundle>::new()
+                    Stack::<Node>::new()
                     .layer(icon(cell_data.index.signal(), cell_data.count.signal()))
                     .layer_signal(
                         signal::and(hovered.signal(), signal::not(is_dragging())).dedupe()
                         .map_true(clone!((original_position) move || {
-                            El::<NodeBundle>::new()
+                            El::<Node>::new()
                                 // TODO: global transform isn't populated on spawn
                                 // .with_global_transform(clone!((original_position) move |transform| original_position.set(Some(transform.compute_transform().translation.xy()))))
                                 .height(Val::Px(CELL_WIDTH))
-                                .with_style(|mut style| {
-                                    style.position_type = PositionType::Absolute;
-                                    style.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
-                                    style.padding = UiRect::horizontal(Val::Px(10.));
+                                .with_node(|mut node| {
+                                    node.position_type = PositionType::Absolute;
+                                    node.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
+                                    node.padding = UiRect::horizontal(Val::Px(10.));
                                 })
                                 .visibility(Visibility::Hidden)
                                 .update_raw_el(clone!((original_position) move |raw_el| {
@@ -423,27 +404,23 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                             // this fixes grey flash when inserting into an empty cell, which is caused by the item tooltip flashing on top before the frame it is moved
                                             entity.insert(Visibility::Visible);
                                         }
-                                        if let Some(mut style) = entity.get_mut::<Style>() {
-                                            style.left = Val::Px(left);
-                                            style.top = Val::Px(top);
+                                        if let Some(mut node) = entity.get_mut::<Node>() {
+                                            node.left = Val::Px(left);
+                                            node.top = Val::Px(top);
                                         }
                                     })
                                 }))
-                                .z_index(ZIndex::Global(1))
+                                .global_z_index(GlobalZIndex(1))
                                 .background_color(BackgroundColor(CELL_BACKGROUND_COLOR))
                                 .border_color(BorderColor(CELL_DARK_BORDER_COLOR))
                                 .child(
-                                    El::<TextBundle>::new()
+                                    El::<Text>::new()
                                     .align(Align::center())
+                                    .text_font(TextFont::from_font_size(41.67))
+                                    .text_layout(TextLayout::new_with_no_wrap())
                                     .text_signal(
                                         cell_data.index.signal()
-                                        .map(|i|
-                                            Text::from_section(
-                                                ITEM_NAMES.get(&i).unwrap().to_string(),
-                                                TextStyle { font_size: 50., ..default() }
-                                            )
-                                            .with_no_wrap()
-                                        )
+                                        .map(|i| Text(ITEM_NAMES.get(&i).unwrap().to_string()))
                                     )
                                 )
                         }))
@@ -478,12 +455,12 @@ fn grid<I: IntoIterator<Item = Mutable<Option<CellData>>>>(cell_data_options: I)
 where
     <I as IntoIterator>::IntoIter: std::marker::Send + 'static,
 {
-    Grid::<NodeBundle>::new()
+    Grid::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .with_style(|mut style| {
-            style.column_gap = Val::Px(CELL_GAP);
-            style.row_gap = Val::Px(CELL_GAP);
+        .with_node(|mut node| {
+            node.column_gap = Val::Px(CELL_GAP);
+            node.row_gap = Val::Px(CELL_GAP);
         })
         .row_wrap_cell_width(CELL_WIDTH)
         .cells(
@@ -499,61 +476,99 @@ fn set_icon_texture_atlas(rpg_icon_sheet: Res<RpgIconSheet>) {
         .expect("failed to initialize ICON_TEXTURE_ATLAS");
 }
 
-fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
-}
+// fn character_camera(mut commands: Commands) {
+//     // https://github.com/bevyengine/bevy/discussions/11223
+//     commands.spawn((
+//         Camera3d::default(),
+//         Transform::from_xyz(0.0, 0.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y),
+//         Camera {
+//             order: 1,
+//             clear_color: ClearColorConfig::None,
+//             ..default()
+//         },
+//         RenderLayers::layer(1),
+//     ));
+// }
+
+// fn setup_3d(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials:
+// ResMut<Assets<StandardMaterial>>) {     // Add a light source
+//     commands.spawn(PointLight {
+//         intensity: 1500.0,
+//         shadows_enabled: true,
+//         ..default()
+//     })
+//     .insert(Transform::from_xyz(4.0, 8.0, 4.0));
+
+//     // Spawn the rotating rectangular prism
+//     commands.spawn((
+//         Mesh3d(meshes.add(Cuboid::default())),
+//         MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
+//         Transform::from_scale(Vec3::new(1.0, 1.5, 0.5)),
+//         RotatingPrism,
+//         RenderLayers::layer(1),
+//     ));
+// }
+
+// fn rotate_prism(time: Res<Time>, mut query: Query<&mut Transform, With<RotatingPrism>>) {
+//     for mut transform in query.iter_mut() {
+//         transform.rotation *= Quat::from_rotation_y(1.0 * time.delta_secs());
+//     }
+// }
+
+// #[derive(Component)]
+// struct RotatingPrism;
 
 fn dot() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(CELL_BORDER_WIDTH * 2.))
         .height(Val::Px(CELL_BORDER_WIDTH * 2.))
         .background_color(BackgroundColor(CELL_BACKGROUND_COLOR))
 }
 
 fn dot_row(n: usize) -> impl Element {
-    Row::<NodeBundle>::new().items((0..n).map(|_| dot()))
+    Row::<Node>::new().items((0..n).map(|_| dot()))
 }
 
 fn arrow() -> impl Element {
-    Column::<NodeBundle>::new()
+    Column::<Node>::new()
         .align_content(Align::center())
         .items((0..=6).map(|i| dot_row(2 * i + 1)))
         .items((0..6).map(|_| dot_row(3)))
 }
 
 fn side_column() -> impl Element {
-    Column::<NodeBundle>::new()
-        .with_style(|mut style| style.row_gap = Val::Px(CELL_GAP))
+    Column::<Node>::new()
+        .with_node(|mut node| node.row_gap = Val::Px(CELL_GAP))
         .items((0..4).map(|_| bern_cell(0.5, true)))
 }
 
 fn inventory() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .align(Align::center())
         .height(Val::Px(INVENTORY_SIZE))
         .width(Val::Px(INVENTORY_SIZE))
         .child(
-            Column::<NodeBundle>::new()
+            Column::<Node>::new()
             .height(Val::Percent(100.))
             .width(Val::Percent(100.))
-                .with_style(|mut style| style.row_gap = Val::Px(CELL_GAP * 4.))
+                .with_node(|mut node| node.row_gap = Val::Px(CELL_GAP * 4.))
                 .background_color(BackgroundColor(INVENTORY_BACKGROUND_COLOR))
                 .align_content(Align::center())
                 .item(
-                    Row::<NodeBundle>::new()
+                    Row::<Node>::new()
                     .width(Val::Percent(100.))
-                        .with_style(|mut style| style.column_gap = Val::Px(CELL_GAP))
+                        .with_node(|mut node| node.column_gap = Val::Px(CELL_GAP))
                         .item(
-                            Row::<NodeBundle>::new()
+                            Row::<Node>::new()
                                 .align_content(Align::center())
                                 .width(Val::Percent(60.))
-                                .with_style(|mut style| {
-                                    style.column_gap = Val::Px(CELL_GAP);
-                                    style.padding = UiRect::horizontal(Val::Px(CELL_GAP * 3.));
+                                .with_node(|mut node| {
+                                    node.column_gap = Val::Px(CELL_GAP);
+                                    node.padding = UiRect::horizontal(Val::Px(CELL_GAP * 3.));
                                 })
                                 .item(side_column())
                                 .item(
-                                    El::<NodeBundle>::new()
+                                    El::<Node>::new()
                                         .height(Val::Px(CELL_WIDTH * 4. + CELL_GAP * 3.))
                                         .width(Val::Percent(100.))
                                         .background_color(BackgroundColor(Color::BLACK)),
@@ -561,7 +576,7 @@ fn inventory() -> impl Element {
                                 .item(side_column())
                         )
                         .item(
-                            El::<NodeBundle>::new()
+                            El::<Node>::new()
                             .width(Val::Percent(40.))
                             .height(Val::Percent(100.))
                                 .align_content(Align::center())
@@ -589,34 +604,32 @@ fn inventory() -> impl Element {
                                         })
                                         .await;
                                     }));
-                                    Column::<NodeBundle>::new()
+                                    Column::<Node>::new()
                                         .update_raw_el(|raw_el| raw_el.hold_tasks([outputter]))
-                                        .with_style(|mut style| {
-                                            style.row_gap = Val::Px(CELL_GAP * 2.);
+                                        .with_node(|mut node| {
+                                            node.row_gap = Val::Px(CELL_GAP * 2.);
                                         })
                                         .item(
                                             // need to add another wrapping node here so the special output `Down`
                                             // handler doesn't overwrite the default `cell` `Down` handler
-                                            El::<NodeBundle>::new()
+                                            El::<Node>::new()
                                             .child(cell(output.clone(), false).align(Align::center()))
                                             .update_raw_el(clone!((inputs) move |raw_el| {
                                                 raw_el
-                                                .component_signal::<On::<Pointer<Down>>, _>(
-                                                    signal::and(DRAGGING_OPTION.signal_ref(Option::is_none), output.signal_ref(Option::is_some)).dedupe()
-                                                    .map_true(move || {
-                                                        On::<Pointer<Down>>::run(clone!((inputs) move || {
-                                                            for input in inputs.lock_ref().iter() {
-                                                                input.take();
-                                                            }
-                                                        }))
-                                                    })
+                                                .on_event_disableable_signal::<Pointer<Down>>(
+                                                    clone!((inputs) move |_| {
+                                                        for input in inputs.lock_ref().iter() {
+                                                            input.take();
+                                                        }
+                                                    }),
+                                                    signal::not(signal::and(DRAGGING_OPTION.signal_ref(Option::is_none), output.signal_ref(Option::is_some))).dedupe()
                                                 )
                                             }))
                                         )
                                         .item(arrow())
                                         .item({
                                             let cell_data_options = inputs.lock_ref().iter().cloned().collect::<Vec<_>>();
-                                            El::<NodeBundle>::new()
+                                            El::<Node>::new()
                                                 .width(Val::Px(CELL_WIDTH * 2. + CELL_GAP))
                                                 .child(grid(cell_data_options).align_content(Align::new().center_x()))
                                         })
@@ -624,7 +637,7 @@ fn inventory() -> impl Element {
                         ),
                 )
                 .item(
-                    El::<NodeBundle>::new()
+                    El::<Node>::new()
                         .width(Val::Percent(100.))
                         .child(
                             grid((0..27).map(|_| bern_cell_data_option(0.5)))
@@ -632,9 +645,9 @@ fn inventory() -> impl Element {
                         ),
                 )
                 .item(
-                    Row::<NodeBundle>::new()
-                        .with_style(|mut style| {
-                            style.column_gap = Val::Px(CELL_GAP);
+                    Row::<Node>::new()
+                        .with_node(|mut node| {
+                            node.column_gap = Val::Px(CELL_GAP);
                         })
                         .items((0..9).map(|_| bern_cell(0.5, true))),
                 ),
@@ -650,16 +663,16 @@ fn is_dragging() -> impl Signal<Item = bool> {
 }
 
 fn ui_root() -> impl Element {
-    Stack::<NodeBundle>::new()
-        .cursor_disableable_signal(CursorIcon::Default, is_dragging())
+    Stack::<Node>::new()
+        .cursor_disableable_signal(CursorIcon::System(SystemCursorIcon::Default), is_dragging())
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .update_raw_el(|raw_el| {
             raw_el
-                .insert(On::<Pointer<Move>>::run(|move_: Listener<Pointer<Move>>| {
+                .on_event_with_system::<Pointer<Move>, _>(|In((_, move_)): In<(_, Pointer<Move>)>| {
                     POINTER_POSITION.set(move_.pointer_location.position.into());
-                }))
-                .component_signal::<Pickable, _>(is_dragging().map_true(default))
+                })
+                .component_signal::<PickingBehavior, _>(is_dragging().map_true(default))
         })
         .align_content(Align::center())
         .layer(inventory())
@@ -673,20 +686,20 @@ fn ui_root() -> impl Element {
                     icon(cell_data.index.signal(), cell_data.count.signal())
                         .update_raw_el(|raw_el| {
                             raw_el.defer_update(DeferredUpdaterAppendDirection::Front, |raw_el| {
-                                raw_el.insert(Pickable {
+                                raw_el.insert(PickingBehavior {
                                     // required to allow cell hover to leak through a dragging icon
                                     should_block_lower: false,
                                     is_hoverable: true,
                                 })
                             })
                         })
-                        .cursor(CursorIcon::Grabbing)
+                        .cursor(CursorIcon::System(SystemCursorIcon::Grabbing))
                         .width(Val::Px(CELL_WIDTH))
                         .height(Val::Px(CELL_WIDTH))
-                        .with_style(|mut style| {
-                            style.position_type = PositionType::Absolute;
+                        .with_node(|mut node| {
+                            node.position_type = PositionType::Absolute;
                             let pointer_position = POINTER_POSITION.get();
-                            // TODO: this is actually *extremely* cringe, because the `.on_signal_with_style`
+                            // TODO: this is actually *extremely* cringe, because the `.on_signal_with_node`
                             // will(might?) not tick before the first frame the icon is
                             // rendered, the icon will flash from the left middle of the screen (default absolute
                             // position?) to the pointer position, this means that the
@@ -695,17 +708,17 @@ fn ui_root() -> impl Element {
                             // for a tick before making the the element visible, but
                             // *ideally* we would force all signals to tick before the first frame, but not
                             // sure if that's possible
-                            set_dragging_position(style, pointer_position);
+                            set_dragging_position(node, pointer_position);
                         })
-                        .z_index(ZIndex::Global(1))
-                        .on_signal_with_style(POINTER_POSITION.signal(), set_dragging_position)
+                        .global_z_index(GlobalZIndex(1))
+                        .on_signal_with_node(POINTER_POSITION.signal(), set_dragging_position)
                 }),
         )
 }
 
-fn set_dragging_position(mut style: Mut<Style>, pointer_position: (f32, f32)) {
-    style.left = Val::Px(pointer_position.0 - CELL_WIDTH / 2.);
-    style.top = Val::Px(pointer_position.1 - CELL_WIDTH / 2.);
+fn set_dragging_position(mut node: Mut<Node>, pointer_position: (f32, f32)) {
+    node.left = Val::Px(pointer_position.0 - CELL_WIDTH / 2.);
+    node.top = Val::Px(pointer_position.1 - CELL_WIDTH / 2.);
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]

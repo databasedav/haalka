@@ -64,7 +64,7 @@ static RECTANGLE_CONTENT_ALIGNMENT: Lazy<Mutable<Option<RectangleAlignment>>> = 
 
 fn alignment_button(alignment: Alignment) -> impl Element {
     let hovered = Mutable::new(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .align(Align::center())
         .width(Val::Px(250.))
         .height(Val::Px(80.))
@@ -76,79 +76,77 @@ fn alignment_button(alignment: Alignment) -> impl Element {
                     .map(move |other_alignment| alignment == other_alignment),
             )
             .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
-            .map(BackgroundColor),
+            .map(Into::into),
         )
         .hovered_sync(hovered)
         .align_content(Align::center())
         .on_click(move || ALIGNMENT.set(alignment))
-        .child(El::<TextBundle>::new().text(text(
-            match alignment {
-                Alignment::Self_ => "align self",
-                Alignment::Content => "align content",
-            },
-            30.,
-        )))
+        .child(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(25.))
+                .text(Text::new(match alignment {
+                    Alignment::Self_ => "align self",
+                    Alignment::Content => "align content",
+                })),
+        )
 }
 
 fn ui_root() -> impl Element {
-    Column::<NodeBundle>::new()
+    Column::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .with_style(|mut style| style.row_gap = Val::Px(15.))
+        .with_node(|mut node| node.row_gap = Val::Px(15.))
         .align_content(Align::center())
         .align(Align::center())
         .item(
-            Row::<NodeBundle>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(15.))
-                .item(container("Column", Column::<NodeBundle>::new().items(rectangles())))
-                .item(container("El", El::<NodeBundle>::new().child(rectangle(1))))
+            Row::<Node>::new()
+                .with_node(|mut node| node.column_gap = Val::Px(15.))
+                .item(container("Column", Column::<Node>::new().items(rectangles())))
+                .item(container("El", El::<Node>::new().child(rectangle(1))))
                 // TODO: is this align content behavior buggy?
-                .item(container("Grid", Grid::<NodeBundle>::new().cells(rectangles()))),
+                .item(container("Grid", Grid::<Node>::new().cells(rectangles()))),
         )
         .item(
-            Row::<NodeBundle>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(15.))
+            Row::<Node>::new()
+                .with_node(|mut node| node.column_gap = Val::Px(15.))
                 .item(
-                    Column::<NodeBundle>::new()
-                        .with_style(|mut style| style.row_gap = Val::Px(15.))
+                    Column::<Node>::new()
+                        .with_node(|mut node| node.row_gap = Val::Px(15.))
                         .item(alignment_button(Alignment::Self_))
                         .item(alignment_button(Alignment::Content)),
                 )
                 .item(
-                    Stack::<NodeBundle>::new()
+                    Stack::<Node>::new()
                         .layers(RectangleAlignment::iter().map(align_switcher))
-                        .apply(container_style),
+                        .apply(container_node),
                 ),
         )
         .item(
-            Row::<NodeBundle>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(15.))
-                .item(container("Row", Row::<NodeBundle>::new().items(rectangles())))
+            Row::<Node>::new()
+                .with_node(|mut node| node.column_gap = Val::Px(15.))
+                .item(container("Row", Row::<Node>::new().items(rectangles())))
                 // TODO: is this align content behavior buggy?
-                .item(container("Stack", Stack::<NodeBundle>::new().layers(rectangles()))),
+                .item(container("Stack", Stack::<Node>::new().layers(rectangles()))),
         )
 }
 
-fn container_style<E: RawElWrapper + Sizeable>(el: E) -> E {
+fn container_node<E: RawElWrapper + Sizeable>(el: E) -> E {
     el.width(Val::Px(278.)).height(Val::Px(200.)).update_raw_el(|raw_el| {
         raw_el
-            .insert::<BorderColor>(bevy::color::palettes::basic::GRAY.into())
-            .with_component::<Style>(|mut style| {
-                style.border = UiRect::all(Val::Px(3.));
+            .insert(BorderColor(bevy::color::palettes::basic::GRAY.into()))
+            .with_component::<Node>(|mut node| {
+                node.border = UiRect::all(Val::Px(3.));
             })
     })
 }
 
-fn text(text: &str, font_size: f32) -> Text {
-    Text::from_section(text, TextStyle { font_size, ..default() })
-}
-
 fn container(name: &str, element: impl Element + Sizeable) -> impl Element {
-    Column::<NodeBundle>::new()
+    Column::<Node>::new()
         .item(
-            El::<TextBundle>::new()
+            El::<Text>::new()
                 .align(Align::new().center_x())
-                .text(text(name, 30.)),
+                .text_font(TextFont::from_font_size(25.))
+                .text(Text::new(name)),
         )
         .item(
             element
@@ -162,13 +160,13 @@ fn container(name: &str, element: impl Element + Sizeable) -> impl Element {
                         })
                         .map(Option::flatten),
                 )
-                .apply(container_style),
+                .apply(container_node),
         )
 }
 
 fn rectangle(index: i32) -> impl Element {
     let size = 40;
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(size as f32))
         .height(Val::Px(size as f32))
         .background_color(BackgroundColor(bevy::color::palettes::css::DARK_GREEN.into()))
@@ -182,9 +180,10 @@ fn rectangle(index: i32) -> impl Element {
                 .map(Option::flatten),
         )
         .child(
-            El::<TextBundle>::new()
+            El::<Text>::new()
                 .align(Align::center())
-                .text(text(&index.to_string(), 14.)),
+                .text_font(TextFont::from_font_size(11.67))
+                .text(Text(index.to_string())),
         )
 }
 
@@ -194,7 +193,7 @@ fn rectangles() -> Vec<impl Element> {
 
 fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
     let (hovered, hovered_signal) = Mutable::new_and_signal(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .align(rectangle_alignment.to_align())
         .background_color_signal(
             signal::or(
@@ -213,8 +212,12 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
                 || bevy::color::palettes::css::MIDNIGHT_BLUE.into(),
             ),
         )
-        .with_style(|mut style| style.padding = UiRect::all(Val::Px(5.)))
-        .child(El::<TextBundle>::new().text(text(&rectangle_alignment.to_string(), 14.)))
+        .with_node(|mut node| node.padding = UiRect::all(Val::Px(5.)))
+        .child(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(11.67))
+                .text(Text(rectangle_alignment.to_string())),
+        )
         .hovered_sync(hovered)
         .on_click(move || {
             match ALIGNMENT.get() {
@@ -226,5 +229,5 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 }

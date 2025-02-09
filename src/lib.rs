@@ -43,13 +43,6 @@ mod derive;
 pub mod utils;
 
 /// Includes the plugins and systems required for [haalka](crate) to function.
-///
-/// If one is using [`bevy_mod_picking`] directly in their own project or through another, they
-/// should add the [`HaalkaPlugin`] *after* any [`bevy_mod_picking`] plugins are added elsewhere as
-/// the [`HaalkaPlugin`] checks if its required [`bevy_mod_picking`] plugins are already added
-/// before adding them; otherwise, one's app might panic attempting to add duplicate
-/// [`bevy_mod_picking`] plugins after the [`HaalkaPlugin`] already has. Additionally, one should
-/// ensure the [`bevy_mod_picking`] versions are the same to avoid a similar panic.
 pub struct HaalkaPlugin;
 
 impl Plugin for HaalkaPlugin {
@@ -57,18 +50,6 @@ impl Plugin for HaalkaPlugin {
         app.add_plugins(AsyncEcsPlugin);
         #[cfg(feature = "ui")]
         {
-            if !app.is_plugin_added::<bevy_mod_picking::picking_core::CorePlugin>() {
-                app.add_plugins(bevy_mod_picking::picking_core::CorePlugin);
-            }
-            if !app.is_plugin_added::<bevy_mod_picking::picking_core::InteractionPlugin>() {
-                app.add_plugins(bevy_mod_picking::picking_core::InteractionPlugin);
-            }
-            if !app.is_plugin_added::<bevy_mod_picking::input::InputPlugin>() {
-                app.add_plugins(bevy_mod_picking::input::InputPlugin);
-            }
-            if !app.is_plugin_added::<bevy_mod_picking::backends::bevy_ui::BevyUiBackend>() {
-                app.add_plugins(bevy_mod_picking::backends::bevy_ui::BevyUiBackend);
-            }
             app.add_plugins((
                 pointer_event_aware::plugin,
                 mouse_wheel_scrollable::plugin,
@@ -94,15 +75,8 @@ pub mod prelude {
     #[doc(no_inline)]
     pub use haalka_futures_signals_ext::*;
 
-    #[doc(no_inline)]
-    pub use bevy_eventlistener::prelude::*;
-
     cfg_if::cfg_if! {
         if #[cfg(feature = "ui")] {
-            #[doc(no_inline)]
-            pub use paste::paste;
-            pub use bevy_mod_picking;
-
             #[doc(inline)]
             pub use crate::{
                 align::{Align, Alignable},
@@ -121,6 +95,9 @@ pub mod prelude {
                 viewport_mutable::{LimitToBody, ViewportMutable},
             };
 
+            pub use bevy_window::SystemCursorIcon;
+            pub use bevy_winit::cursor::CursorIcon;
+
             cfg_if::cfg_if! {
                 if #[cfg(feature = "text_input")] {
                     #[doc(inline)]
@@ -128,6 +105,13 @@ pub mod prelude {
                     pub use bevy_cosmic_edit;
                 }
             }
+        }
+    }
+
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "derive")] {
+            #[doc(no_inline)]
+            pub use paste::paste;
         }
     }
 

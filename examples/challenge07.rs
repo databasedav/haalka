@@ -11,11 +11,14 @@ use utils::*;
 
 use std::convert::identity;
 
-use bevy::prelude::*;
-use bevy_cosmic_edit::{
-    cosmic_text::{Family, FamilyOwned},
-    CosmicBackgroundColor, CosmicWrap, CursorColor, FontWeight, MaxLines,
+use bevy::{
+    prelude::*,
+    text::{
+        cosmic_text::{Family, FamilyOwned},
+        *,
+    },
 };
+use bevy_cosmic_edit::*;
 use haalka::prelude::*;
 
 fn main() {
@@ -34,14 +37,14 @@ fn main() {
 }
 
 fn ui_root() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .ui_root()
-        .cursor(CursorIcon::Default)
+        .cursor(CursorIcon::System(SystemCursorIcon::Default))
         .height(Val::Percent(100.))
         .width(Val::Percent(100.))
         .align_content(Align::center())
         .child(
-            Column::<NodeBundle>::new()
+            Column::<Node>::new()
                 .height(Val::Percent(80.))
                 .width(Val::Percent(60.))
                 .item({
@@ -83,9 +86,13 @@ fn ui_root() -> impl Element {
                     // .on_change_sync(string)
                 })
                 .item(
-                    Row::<NodeBundle>::new()
-                        .with_style(|mut style| style.column_gap = Val::Px(15.))
-                        .item(El::<TextBundle>::new().text(text_with_size("bug report", 50.)))
+                    Row::<Node>::new()
+                        .with_node(|mut node| node.column_gap = Val::Px(15.))
+                        .item(
+                            El::<Text>::new()
+                                .text_font(TextFont::from_font_size(50.))
+                                .text(Text::new("bug report")),
+                        )
                         .item(dropdown(["UI", "cosmetics", "gameplay"], Some("type"))),
                 ),
         )
@@ -97,7 +104,7 @@ const PRESSED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
 
 const BASE_PADDING: f32 = 5.;
 
-fn button() -> El<NodeBundle> {
+fn button() -> El<Node> {
     let (pressed, pressed_signal) = Mutable::new_and_signal(false);
     let (hovered, hovered_signal) = Mutable::new_and_signal(false);
     let pressed_hovered_broadcaster =
@@ -114,7 +121,7 @@ fn button() -> El<NodeBundle> {
                     Color::BLACK
                 }
             })
-            .map(BorderColor)
+            .map(Into::into)
     };
     let background_color_signal = {
         pressed_hovered_broadcaster
@@ -128,38 +135,40 @@ fn button() -> El<NodeBundle> {
                     NORMAL_BUTTON
                 }
             })
-            .map(BackgroundColor)
+            .map(Into::into)
     };
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(150.0))
         .height(Val::Px(65.))
-        .with_style(|mut style| style.border = UiRect::all(Val::Px(5.0)))
+        .with_node(|mut node| node.border = UiRect::all(Val::Px(5.0)))
         .align_content(Align::center())
         .border_color_signal(border_color_signal)
         .background_color_signal(background_color_signal)
         .hovered_sync(hovered)
-        .cursor_disableable_signal(CursorIcon::Grabbing, pressed.signal().dedupe())
+        .cursor_disableable_signal(
+            CursorIcon::System(SystemCursorIcon::Grabbing),
+            pressed.signal().dedupe(),
+        )
         .pressed_sync(pressed)
 }
 
 fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
     let hovered = Mutable::new(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .background_color(BackgroundColor(Color::NONE))
         // stop propagation because otherwise clearing the dropdown will drop down the
         // options too; the x should eat the click
         .on_click_stop_propagation(on_click)
         .child(
-            El::<TextBundle>::new().text(text("x")).on_signal_with_text(
-                hovered
-                    .signal()
-                    .map_bool(|| bevy::color::palettes::basic::RED.into(), || Color::WHITE),
-                |mut text, color| {
-                    if let Some(section) = text.sections.first_mut() {
-                        section.style.color = color;
-                    }
-                },
-            ),
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(DEFAULT_FONT_SIZE))
+                .text(Text::new("x"))
+                .text_color_signal(
+                    hovered
+                        .signal()
+                        .map_bool(|| bevy::color::palettes::basic::RED.into(), || Color::WHITE)
+                        .map(TextColor),
+                ),
         )
         .hovered_sync(hovered)
 }
@@ -170,20 +179,20 @@ fn dropdown(options: impl IntoIterator<Item = &'static str>, placeholder: Option
     let options = MutableVec::from(options.into_iter().map(ToString::to_string).collect::<Vec<_>>());
     button()
         .child(
-            Stack::<NodeBundle>::new()
+            Stack::<Node>::new()
                 .width(Val::Percent(100.))
-                .with_style(|mut style| style.padding = UiRect::horizontal(Val::Px(BASE_PADDING)))
+                .with_node(|mut node| node.padding = UiRect::horizontal(Val::Px(BASE_PADDING)))
                 .layer(
-                    El::<TextBundle>::new().align(Align::new().left()).text_signal(
+                    El::<Text>::new().align(Align::new().left()).text_font(TextFont::from_font_size(DEFAULT_FONT_SIZE)).text_signal(
                         selected
                             .signal_cloned()
                             .map_option(identity, move || placeholder.unwrap_or_default().to_string())
-                            .map(text),
+                            .map(Text),
                     ),
                 )
                 .layer(
-                    Row::<NodeBundle>::new()
-                        .with_style(|mut style| style.column_gap = Val::Px(BASE_PADDING))
+                    Row::<Node>::new()
+                        .with_node(|mut node| node.column_gap = Val::Px(BASE_PADDING))
                         .align(Align::new().right())
                         .item_signal({
                             selected.signal_ref(Option::is_some).dedupe().map_true(
@@ -191,12 +200,13 @@ fn dropdown(options: impl IntoIterator<Item = &'static str>, placeholder: Option
                             )
                         })
                         .item(
-                            El::<TextBundle>::new()
+                            El::<Text>::new()
                                 // TODO: need to figure out to rotate in place (around center)
                                 // .on_signal_with_transform(show_dropdown.signal(), |transform, showing| {
                                 //     transform.rotate_around(Vec3::X, Quat::from_rotation_z((if showing { 180.0f32 }
                                 // else { 0. }).to_radians())); })
-                                .text(text("v")),
+                                .text_font(TextFont::from_font_size(DEFAULT_FONT_SIZE))
+                                .text(Text::new("v")),
                         ),
                 ),
         )
@@ -205,11 +215,11 @@ fn dropdown(options: impl IntoIterator<Item = &'static str>, placeholder: Option
             show_dropdown
                 .signal()
                 .map_true(clone!((options, show_dropdown, selected) move || {
-                    Column::<NodeBundle>::new()
+                    Column::<Node>::new()
                     .width(Val::Percent(100.))
-                    .with_style(|mut style| {
-                        style.position_type = PositionType::Absolute;
-                        style.top = Val::Percent(100.);
+                    .with_node(|mut node| {
+                        node.position_type = PositionType::Absolute;
+                        node.top = Val::Percent(100.);
                     })
                     .items_signal_vec(
                         options.signal_vec_cloned()
@@ -221,7 +231,7 @@ fn dropdown(options: impl IntoIterator<Item = &'static str>, placeholder: Option
                         }))
                         .map(clone!((selected, show_dropdown) move |option| {
                             button()
-                            .child(El::<TextBundle>::new().text(text(&option)))
+                            .child(El::<Text>::new().text_font(TextFont::from_font_size(DEFAULT_FONT_SIZE)).text(Text::new(&option)))
                             .on_click(
                                 clone!((selected, show_dropdown, option) move || {
                                     selected.set_neq(Some(option.clone()));
@@ -234,22 +244,8 @@ fn dropdown(options: impl IntoIterator<Item = &'static str>, placeholder: Option
         )
 }
 
-fn text_with_size(text: impl ToString, size: f32) -> Text {
-    Text::from_section(
-        text.to_string(),
-        TextStyle {
-            font_size: size,
-            ..default()
-        },
-    )
-}
-
 const DEFAULT_FONT_SIZE: f32 = 20.;
 
-fn text(text: impl ToString) -> Text {
-    text_with_size(text, DEFAULT_FONT_SIZE)
-}
-
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 }

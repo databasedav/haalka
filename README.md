@@ -12,7 +12,10 @@ in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "
 While haalka is primarily targeted at UI and provides high level UI abstractions as such, its [core abstraction](https://docs.rs/haalka/latest/haalka/struct.RawHaalkaEl.html) can be used to manage signals-powered reactivity for any entity, not just [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs).
 
 ## considerations
-If one is using the `text_input` feature (enabled by default) and using multiple cameras in the same world, they must enable the `multicam` feature AND add the `bevy_cosmic_edit::CosmicPrimaryCamera` marker component to the primary camera.
+
+- Reactive updates done by haalka are [**eventually consistent**](https://en.wikipedia.org/wiki/Eventual_consistency), that is, once some ECS world state has been updated, any downstream reactions should not be expected to run in the same frame. This is due to the indirection involved with using an async signals library, which dispatches Bevy commands after polling by the async runtime. The resulting "lag" should not be noticeable in most popular cases, e.g. reacting to hover/click state or synchronizing UI (one can run the examples to evaluate this themselves), but in cases where frame perfect responsiveness is critical, one should simply use Bevy-native systems directly.
+
+- If one is using the `text_input` feature (enabled by default) and using multiple cameras in the same world, they must enable the `multicam` feature AND add the `bevy_cosmic_edit::CosmicPrimaryCamera` marker component to the primary camera.
 
 ## [feature flags](https://docs.rs/haalka/latest/haalka/#feature-flags-1)
 
@@ -45,15 +48,19 @@ struct Counter(Mutable<i32>);
 
 fn ui_root() -> impl Element {
     let counter = Mutable::new(0);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .height(Val::Percent(100.))
         .width(Val::Percent(100.))
         .align_content(Align::center())
         .child(
-            Row::<NodeBundle>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(15.0))
+            Row::<Node>::new()
+                .with_node(|mut node| node.column_gap = Val::Px(15.0))
                 .item(counter_button(counter.clone(), "-", -1))
-                .item(El::<TextBundle>::new().text_signal(counter.signal().map(text)))
+                .item(
+                    El::<Text>::new()
+                        .text_font(TextFont::from_font_size(25.))
+                        .text_signal(counter.signal_ref(ToString::to_string).map(Text)),
+                )
                 .item(counter_button(counter.clone(), "+", 1))
                 .update_raw_el(move |raw_el| raw_el.insert(Counter(counter))),
         )
@@ -61,34 +68,31 @@ fn ui_root() -> impl Element {
 
 fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element {
     let hovered = Mutable::new(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(45.0))
         .align_content(Align::center())
         .background_color_signal(
             hovered
                 .signal()
                 .map_bool(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
-                .map(BackgroundColor),
+                .map(Into::into),
         )
+        .border_radius(BorderRadius::MAX)
         .hovered_sync(hovered)
         .on_click(move || *counter.lock_mut() += step)
-        .child(El::<TextBundle>::new().text(text(label)))
-}
-
-fn text(text: impl ToString) -> Text {
-    Text::from_section(
-        text.to_string(),
-        TextStyle {
-            font_size: 30.0,
-            ..default()
-        },
-    )
+        .child(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(25.))
+                .text(Text::new(label)),
+        )
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 }
 ```
+
+### on the web
 
 All examples are compiled to wasm for both webgl2 and webgpu (check [compatibility](<https://github.com/gpuweb/gpuweb/wiki/Implementation-Status#implementation-status>)) and deployed to github pages.
 
@@ -118,7 +122,7 @@ All examples are compiled to wasm for both webgl2 and webgpu (check [compatibili
 
 - [**`dot_counter`**](https://github.com/databasedav/haalka/blob/main/examples/dot_counter.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/dot_counter/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/dot_counter/)
 
-    forward ecs changes to the ui
+    forward ecs changes to the ui, throttled button presses
 
 - [**`key_values_sorted`**](https://github.com/databasedav/haalka/blob/main/examples/key_values_sorted.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/key_values_sorted/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/key_values_sorted/)
 
@@ -169,7 +173,6 @@ cargo run --example character_editor
 ```
 Or with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 
-
 ## Bevy compatibility
 |bevy|haalka|
 |-|-|
@@ -177,13 +180,13 @@ Or with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 |`0.13`|`0.1`|
 
 ## development
-1. include submodules when fetching the repo
+- include submodules when fetching the repo
     ```bash
     git clone --recurse-submodules https://github.com/databasedav/haalka.git
     ```
-1. install [just](https://github.com/casey/just?tab=readme-ov-file#installation)
-1. install [nickel](https://github.com/tweag/nickel?tab=readme-ov-file#run) for modifying CI configuration (`nickel` must be in your PATH)
-1. install [File Watcher](https://marketplace.visualstudio.com/items?itemName=appulate.filewatcher) for automatically syncing nickels
+- install [just](https://github.com/casey/just?tab=readme-ov-file#installation)
+- install [nickel](https://github.com/tweag/nickel?tab=readme-ov-file#run) for modifying CI configuration (`nickel` must be in your PATH)
+- install [File Watcher](https://marketplace.visualstudio.com/items?itemName=appulate.filewatcher) for automatically syncing nickels
 
 ## license
 All code in this repository is dual-licensed under either:

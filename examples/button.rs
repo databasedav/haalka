@@ -43,7 +43,7 @@ fn button(font: Handle<Font>) -> impl Element {
                     Color::BLACK
                 }
             })
-            .map(BorderColor)
+            .map(Into::into)
     };
     let background_color_signal = {
         pressed_hovered_broadcaster
@@ -57,12 +57,12 @@ fn button(font: Handle<Font>) -> impl Element {
                     NORMAL_BUTTON
                 }
             })
-            .map(BackgroundColor)
+            .map(Into::into)
     };
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(150.0))
         .height(Val::Px(65.))
-        .with_style(|mut style| style.border = UiRect::all(Val::Px(5.0)))
+        .with_node(|mut node| node.border = UiRect::all(Val::Px(5.0)))
         .align_content(Align::center())
         .border_color_signal(border_color_signal)
         .background_color_signal(background_color_signal)
@@ -70,38 +70,36 @@ fn button(font: Handle<Font>) -> impl Element {
         .hovered_sync(hovered)
         .pressed_sync(pressed)
         .child(
-            El::<TextBundle>::new().text_signal(
-                pressed_hovered_broadcaster
-                    .signal()
-                    .map(|(pressed, hovered)| {
-                        if pressed {
-                            "Press"
-                        } else if hovered {
-                            "Hover"
-                        } else {
-                            "Button"
-                        }
-                    })
-                    .map(move |string| {
-                        Text::from_section(
-                            string,
-                            TextStyle {
-                                font: font.clone(),
-                                font_size: 40.0,
-                                color: Color::srgb(0.9, 0.9, 0.9),
-                            },
-                        )
-                    }),
-            ),
+            El::<Text>::new()
+                .text_font(TextFont {
+                    font,
+                    font_size: 33.0,
+                    ..default()
+                })
+                .text_color(TextColor(Color::srgb(0.9, 0.9, 0.9)))
+                .text_signal(
+                    pressed_hovered_broadcaster
+                        .signal()
+                        .map(|(pressed, hovered)| {
+                            if pressed {
+                                "Press"
+                            } else if hovered {
+                                "Hover"
+                            } else {
+                                "Button"
+                            }
+                        })
+                        .map(Text::new),
+                ),
         )
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn((Camera2dBundle::default(),));
+    commands.spawn(Camera2d);
 }
 
 fn ui_root(font: Handle<Font>) -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())

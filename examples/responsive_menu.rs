@@ -5,14 +5,14 @@
 //!   buttons.
 
 mod utils;
+use bevy_ui::widget::NodeImageMode;
 use utils::*;
 
 use std::sync::OnceLock;
 
 use bevy::{prelude::*, window::WindowResized};
-use bevy_nine_slice_ui::{prelude::*, NineSliceUiMaterialBundle};
 use futures_signals::signal::Mutable;
-use haalka::{impl_haalka_methods, prelude::*};
+use haalka::prelude::*;
 
 fn main() {
     App::new()
@@ -30,13 +30,22 @@ fn main() {
 
 const BASE_SIZE: f32 = 600.;
 const GAP: f32 = 10.;
+const FONT_SIZE: f32 = 33.33;
 
-static NINE_SLICE_TEXTURE_ATLAS: OnceLock<Handle<Image>> = OnceLock::new();
+static NINE_SLICE_TEXTURE: OnceLock<Handle<Image>> = OnceLock::new();
 
-fn nine_slice_texture_atlas() -> &'static Handle<Image> {
-    NINE_SLICE_TEXTURE_ATLAS
+fn nine_slice_texture() -> &'static Handle<Image> {
+    NINE_SLICE_TEXTURE
         .get()
         .expect("expected NINE_SLICE_TEXTURE_ATLAS to be initialized")
+}
+
+static NINE_SLICE_TEXTURE_ATLAS_LAYOUT: OnceLock<Handle<TextureAtlasLayout>> = OnceLock::new();
+
+fn nine_slice_texture_atlas_layout() -> &'static Handle<TextureAtlasLayout> {
+    NINE_SLICE_TEXTURE_ATLAS_LAYOUT
+        .get()
+        .expect("expected NINE_SLICE_TEXTURE_ATLAS_LAYOUT to be initialized")
 }
 
 static IMAGE: OnceLock<Handle<Image>> = OnceLock::new();
@@ -45,49 +54,34 @@ fn image() -> &'static Handle<Image> {
     IMAGE.get().expect("expected IMAGE to be initialized")
 }
 
-struct NineSliceEl(El<NineSliceUiMaterialBundle>);
-
-impl_haalka_methods! {
-    NineSliceEl {
-        style: Style,
-        nine_slice_texture: NineSliceUiTexture,
-    }
-}
-
-// struct<T: Bundle> Test<T>;
-
-impl NineSliceEl {
-    pub fn new(frame_signal: impl Signal<Item = usize> + Send + 'static) -> Self {
-        Self(El::from(NineSliceUiMaterialBundle {
-            nine_slice_texture: NineSliceUiTexture::from_slice(
-                nine_slice_texture_atlas().clone(),
-                Rect::new(0., 0., 32., 32.),
-            ),
-            ..default()
-        }))
-        .on_signal_with_nine_slice_texture(frame_signal, |mut nine_slice, frame| {
-            if let Some(bounds) = &mut nine_slice.bounds {
-                bounds.min.x = frame as f32 * 32.;
-                bounds.max.x = 32. + frame as f32 * 32.;
+fn nine_slice_el(frame_signal: impl Signal<Item = usize> + Send + 'static) -> El<ImageNode> {
+    El::<ImageNode>::new()
+        .image_node(
+            ImageNode::from_atlas_image(
+                nine_slice_texture().clone(),
+                TextureAtlas {
+                    layout: nine_slice_texture_atlas_layout().clone(),
+                    index: 0,
+                },
+            )
+            .with_mode(NodeImageMode::Sliced(TextureSlicer {
+                border: BorderRect::square(24.0),
+                center_scale_mode: SliceScaleMode::Stretch,
+                sides_scale_mode: SliceScaleMode::Stretch,
+                max_corner_scale: 1.0,
+            })),
+        )
+        .on_signal_with_image_node(frame_signal, move |mut image, frame| {
+            if let Some(atlas) = &mut image.texture_atlas {
+                atlas.index = frame;
             }
         })
-    }
 }
-
-impl ElementWrapper for NineSliceEl {
-    type EL = El<NineSliceUiMaterialBundle>;
-    fn element_mut(&mut self) -> &mut Self::EL {
-        &mut self.0
-    }
-}
-
-impl PointerEventAware for NineSliceEl {}
-impl Sizeable for NineSliceEl {}
 
 fn nine_slice_button() -> impl Element {
     let hovered = Mutable::new(false);
     let pressed = Mutable::new(false);
-    NineSliceEl::new(map_ref! {
+    nine_slice_el(map_ref! {
         let hovered = hovered.signal(),
         let pressed = pressed.signal() => {
             if *pressed {
@@ -108,46 +102,45 @@ fn nine_slice_button() -> impl Element {
 static WIDTH: Lazy<Mutable<f32>> = Lazy::new(default);
 
 fn horizontal() -> impl Element {
-    Row::<NodeBundle>::new()
+    Row::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .with_style(|mut style| style.column_gap = Val::Px(GAP))
+        .with_node(|mut node| node.column_gap = Val::Px(GAP))
         .item(
-            Column::<NodeBundle>::new()
+            Column::<Node>::new()
                 .width(Val::Percent(50.))
                 .height(Val::Percent(100.))
-                .with_style(|mut style| style.row_gap = Val::Px(GAP))
+                .with_node(|mut node| node.row_gap = Val::Px(GAP))
                 .align_content(Align::center())
                 .items((0..8).map(|_| nine_slice_button())),
         )
-        .item(El::<ImageBundle>::new().image(UiImage::new(image().clone())))
+        .item(El::<ImageNode>::new().image_node(ImageNode::new(image().clone())))
 }
 
 fn vertical() -> impl Element {
-    Column::<NodeBundle>::new()
+    Column::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .with_style(|mut style| style.row_gap = Val::Px(GAP))
-        .item(El::<ImageBundle>::new().image(UiImage::new(image().clone())))
+        .with_node(|mut node| node.row_gap = Val::Px(GAP))
+        .item(El::<ImageNode>::new().image_node(ImageNode::new(image().clone())))
         .item(
-            Row::<NodeBundle>::new()
+            Row::<Node>::new()
                 .multiline()
                 .align_content(Align::center())
                 .width(Val::Percent(100.))
                 .height(Val::Percent(50.))
-                .with_style(|mut style| style.column_gap = Val::Px(GAP))
+                .with_node(|mut node| node.column_gap = Val::Px(GAP))
                 .items((0..8).map(|_| nine_slice_button())),
         )
 }
 
 fn menu() -> impl Element {
-    NineSliceEl::new(always(3))
+    nine_slice_el(always(3))
         .height(Val::Px(BASE_SIZE))
-        .with_style(|mut style| {
-            style.padding = UiRect::all(Val::Px(GAP));
+        .with_node(|mut node| {
+            node.padding = UiRect::all(Val::Px(GAP));
         })
         .width_signal(WIDTH.signal().map(|width| BASE_SIZE.min(width)).dedupe().map(Val::Px))
-        .0
         .child_signal(
             WIDTH
                 .signal()
@@ -158,45 +151,46 @@ fn menu() -> impl Element {
 }
 
 fn ui_root() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
-            Column::<NodeBundle>::new()
-                .with_style(|mut style| style.row_gap = Val::Px(GAP))
+            Column::<Node>::new()
+                .with_node(|mut node| node.row_gap = Val::Px(GAP))
                 .item(
-                    Row::<NodeBundle>::new()
-                        .with_style(|mut style| style.padding.left = Val::Px(GAP))
-                        .item(El::<TextBundle>::new().text(Text::from_section(
-                            "width: ",
-                            TextStyle {
-                                font_size: 40.,
-                                ..default()
-                            },
-                        )))
-                        .item(El::<TextBundle>::new().text_signal(WIDTH.signal().map(|width| {
-                            Text::from_section(
-                                width.to_string(),
-                                TextStyle {
-                                    font_size: 40.,
-                                    ..default()
-                                },
-                            )
-                        }))),
+                    Row::<Node>::new()
+                        .with_node(|mut node| node.padding.left = Val::Px(GAP))
+                        .item(
+                            El::<Text>::new()
+                                .text_font(TextFont::from_font_size(FONT_SIZE))
+                                .text(Text::new("width: ")),
+                        )
+                        .item(
+                            El::<Text>::new()
+                                .text_font(TextFont::from_font_size(FONT_SIZE))
+                                .text_signal(WIDTH.signal_ref(ToString::to_string).map(Text)),
+                        ),
                 )
                 .item(menu()),
         )
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    NINE_SLICE_TEXTURE_ATLAS
+fn setup(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut texture_atlases: ResMut<Assets<TextureAtlasLayout>>,
+) {
+    NINE_SLICE_TEXTURE
         .set(asset_server.load("panels.png"))
-        .expect("failed to initialize NINE_SLICE_TEXTURE_ATLAS");
+        .expect("failed to initialize NINE_SLICE_TEXTURE");
+    NINE_SLICE_TEXTURE_ATLAS_LAYOUT
+        .set(texture_atlases.add(TextureAtlasLayout::from_grid(UVec2::new(32, 32), 4, 1, None, None)))
+        .expect("failed to initialize NINE_SLICE_TEXTURE_ATLAS_LAYOUT");
     IMAGE
         .set(asset_server.load("icon.png"))
         .expect("failed to initialize IMAGE");
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 }
 
 fn on_resize(mut resize_events: EventReader<WindowResized>) {

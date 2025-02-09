@@ -56,7 +56,7 @@ fn main() {
         .run();
 }
 
-const LETTER_SIZE: f32 = 65.;
+const LETTER_SIZE: f32 = 54.167; // 65 / 1.2
 
 #[derive(Clone, Copy)]
 enum Scroll {
@@ -71,26 +71,20 @@ struct HoveredCell(usize, usize);
 fn letter(
     x: usize,
     y: usize,
-    letter_color: impl Signal<Item = LetterColor> + Send + 'static,
+    letter_color: impl Signal<Item = LetterColor> + Send + Sync + 'static,
 ) -> impl Element {
-    El::<TextBundle>::new()
+    let letter_color = letter_color.broadcast();
+    let letter = letter_color.signal_ref(|LetterColor { letter, .. }| letter.clone());
+    let color = letter_color.signal_ref(|LetterColor { color, .. }| *color);
+    El::<Text>::new()
     .on_hovered_change(move |is_hovered| {
         if is_hovered {
             async_world().insert_resource(HoveredCell(x, y)).apply(spawn).detach()
         }
     })
-    .text_signal(
-        letter_color.map(|LetterColor { letter, color }|
-            Text::from_section(
-                letter,
-                TextStyle {
-                    font_size: LETTER_SIZE,
-                    color,
-                    ..default()
-                },
-            )
-        )
-    )
+    .text_font(TextFont::from_font_size(LETTER_SIZE))
+    .text_color_signal(color.map(Into::into))
+    .text_signal(letter.map(Text))
 }
 
 #[derive(Clone, Default)]
@@ -132,13 +126,13 @@ static CELLS: Lazy<Vec<Vec<Mutable<LetterColor>>>> = Lazy::new(|| {
 });
 
 fn ui_root() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
-            Grid::<NodeBundle>::new()
-                .with_style(|mut style| style.column_gap = Val::Px(15.))
+            Grid::<Node>::new()
+                .with_node(|mut node| node.column_gap = Val::Px(15.))
                 .on_hovered_change(move |is_hovered| {
                     if !is_hovered {
                         async_world().remove_resource::<HoveredCell>().apply(spawn).detach()
@@ -226,5 +220,5 @@ fn shifter(keys: Res<ButtonInput<KeyCode>>, mut shifted: ResMut<Shifted>) {
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 }

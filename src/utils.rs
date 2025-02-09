@@ -1,19 +1,12 @@
 use std::time::Duration;
 
-use bevy_tasks::prelude::*;
+use bevy_tasks::{prelude::*, *};
 #[doc(no_inline)]
 pub use enclose::enclose as clone;
 use futures_signals::{
     map_ref,
     signal::{Mutable, Signal, SignalExt},
 };
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
-        use super::node_builder::WasmTaskAdapter;
-    } else {
-        use bevy_tasks::*;
-    }
-}
 use haalka_futures_signals_ext::SignalExtExt;
 use std::{future::Future, ops::Not};
 
@@ -28,22 +21,9 @@ pub async fn sleep(duration: Duration) {
     }
 }
 
-// TODO: 0.15 `Task` api is unified, can remove branching
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
-        use haalka_futures_signals_ext::futures_util::future::abortable;
-        /// Spawn a non-blocking future onto the [`IoTaskPool`].
-        pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> WasmTaskAdapter {
-            let (future, handle) = abortable(future);
-            IoTaskPool::get().spawn(future);
-            WasmTaskAdapter(handle)
-        }
-    } else {
-        /// Spawn a non-blocking future onto the [`IoTaskPool`].
-        pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> Task<T> {
-            IoTaskPool::get().spawn(future)
-        }
-    }
+/// Spawn a non-blocking future onto the [`IoTaskPool`].
+pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> Task<T> {
+    IoTaskPool::get().spawn(future)
 }
 
 /// Sync the [`Mutable`] with the [`Signal`].
@@ -121,7 +101,7 @@ cfg_if::cfg_if! {
                                 app
                                 .insert_resource(bevy_cosmic_edit::CursorPluginDisabled)
                                 .add_systems(PostStartup, handle_cosmic_multicam.in_set(CosmicMulticamHandlerSet))
-                                .add_systems(Update, toggle_overlay.run_if(any_with_component::<IsDefaultUiCamera>.and_then(any_with_component::<bevy_cosmic_edit::CosmicPrimaryCamera>)));
+                                .add_systems(Update, toggle_overlay.run_if(any_with_component::<IsDefaultUiCamera>.and(any_with_component::<bevy_cosmic_edit::CosmicPrimaryCamera>)));
                             } else {
                                 app.add_systems(Update, toggle_overlay.run_if(any_with_component::<IsDefaultUiCamera>));
                             }

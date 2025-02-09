@@ -4,6 +4,10 @@
 //! (yes i take requests)
 
 mod utils;
+use bevy_text::{
+    cosmic_text::{Family, FamilyOwned},
+    FontWeight,
+};
 use utils::*;
 
 use std::{
@@ -32,11 +36,11 @@ fn main() {
             (
                 tabber,
                 escaper,
-                sort_one.run_if(on_event::<MaybeChanged>()),
-                focus_scroller.run_if(resource_changed_or_removed::<FocusedTextInput>()),
+                focus_scroller.run_if(resource_changed_or_removed::<FocusedTextInput>),
             ),
         )
         .add_event::<MaybeChanged>()
+        .add_observer(sort_one)
         .run();
 }
 
@@ -138,6 +142,12 @@ fn text_input(
         .mode(CosmicWrap::InfiniteLine)
         .max_lines(MaxLines(1))
         .scroll_disabled()
+        .attrs(
+            TextAttrs::new()
+                .family(FamilyOwned::new(Family::Name("Fira Mono")))
+                .weight(FontWeight::MEDIUM),
+        )
+        .cursor(CursorIcon::System(SystemCursorIcon::Text))
         .cursor_color_signal(
             focus
                 .signal()
@@ -148,20 +158,22 @@ fn text_input(
         .fill_color_signal(
             focus
                 .signal()
+                // .map_bool(|| Color::WHITE, || *DARK_GRAY)
                 .map_bool(|| *DARK_GRAY, || Color::WHITE)
                 .map(CosmicBackgroundColor),
         )
         .attrs(TextAttrs::new().color_signal(focus.signal().map_bool(|| Color::WHITE, || Color::BLACK).map(Some)))
         .focus_signal(focus.signal())
-        .on_focused_change(clone!((focus) move |is_focused| {
-            if !is_focused {
-                if let Some(index) = index_option.get() {
-                    // TODO: use an observer for this
-                    async_world().send_event(MaybeChanged(index)).apply(spawn).detach()
+        .on_focused_change_with_system(
+            clone!((focus) move |In((_, is_focused)): In<(Entity, bool)>, mut commands: Commands| {
+                if !is_focused {
+                    if let Some(index) = index_option.get() {
+                        commands.trigger(MaybeChanged(index));
+                    }
                 }
-            }
-            focus.set_neq(is_focused);
-        }))
+                focus.set_neq(is_focused);
+            }),
+        )
         .text_signal(string.signal_cloned())
         .on_change_sync(string)
     // TODO: this unfocuses on click for some reason ...
@@ -177,31 +189,27 @@ fn clear_focus() {
 }
 
 fn sort_by_text_element() -> impl Element {
-    El::<TextBundle>::new().text(Text::from_section(
-        "sort by",
-        TextStyle {
-            font_size: 60.,
-            color: Color::WHITE,
-            ..default()
-        },
-    ))
+    El::<Text>::new()
+        .text_font(TextFont::from_font_size(60.))
+        .text_color(TextColor(Color::WHITE))
+        .text(Text::new("sort by"))
 }
 
 fn sort_button(sort_by: KeyValue) -> impl Element {
     let hovered = Mutable::new(false);
     let selected = SORT_BY.signal().map(move |cur| cur == sort_by).broadcast();
-    Row::<NodeBundle>::new()
-        .with_style(|mut style| style.column_gap = Val::Px(35.))
+    Row::<Node>::new()
+        .with_node(|mut node| node.column_gap = Val::Px(35.))
         .align(Align::new().right())
         .item_signal(selected.signal().map_true(sort_by_text_element))
         .item(
-            El::<NodeBundle>::new()
+            El::<Node>::new()
                 .width(Val::Px(200.))
                 .height(Val::Px(80.))
                 .background_color_signal(
                     signal::or(hovered.signal(), selected.signal())
                         .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
-                        .map(BackgroundColor),
+                        .map(Into::into),
                 )
                 .hovered_sync(hovered)
                 .align_content(Align::center())
@@ -231,17 +239,15 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
                         }
                     }
                 })
-                .child(El::<TextBundle>::new().text(Text::from_section(
-                    match sort_by {
-                        KeyValue::Key => "key",
-                        KeyValue::Value => "value",
-                    },
-                    TextStyle {
-                        font_size: 60.,
-                        color: Color::WHITE,
-                        ..default()
-                    },
-                ))),
+                .child(
+                    El::<Text>::new()
+                        .text_font(TextFont::from_font_size(60.))
+                        .text_color(TextColor(Color::WHITE))
+                        .text(Text::new(match sort_by {
+                            KeyValue::Key => "key",
+                            KeyValue::Value => "value",
+                        })),
+                ),
         )
 }
 
@@ -249,48 +255,46 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
 struct MaybeChanged(usize);
 
 // O(log n)
-fn sort_one(mut maybe_changed_events: EventReader<MaybeChanged>) {
-    for MaybeChanged(i) in maybe_changed_events.read().copied() {
-        let mut pairs = PAIRS.lock_mut();
-        let Some(RowData { key, value }) = pairs.get(i) else {
-            return;
-        };
-        match SORT_BY.get() {
-            // TODO: dry
-            KeyValue::Key => {
-                let keys = pairs
-                    .iter()
-                    .enumerate()
-                    .filter(|&(j, value)| i != j && value.key.string.lock_ref().is_empty().not())
-                    .map(|(_, RowData { key, .. })| key.string.lock_ref())
-                    .collect::<Vec<_>>();
-                let key_lock = key.string.lock_ref();
-                if key_lock.is_empty().not() {
-                    let (Ok(sorted_i) | Err(sorted_i)) =
-                        keys.binary_search_by_key(&key_lock.as_str(), |key| key.as_str());
-                    if i != sorted_i && key_lock.as_str() != keys[sorted_i].as_str() {
-                        drop((keys, key_lock));
-                        let pair = pairs.remove(i);
-                        pairs.insert_cloned(sorted_i, pair);
-                    }
+fn sort_one(maybe_changed: Trigger<MaybeChanged>) {
+    let MaybeChanged(i) = *maybe_changed;
+    let mut pairs = PAIRS.lock_mut();
+    let Some(RowData { key, value }) = pairs.get(i) else {
+        return;
+    };
+    match SORT_BY.get() {
+        // TODO: dry
+        KeyValue::Key => {
+            let keys = pairs
+                .iter()
+                .enumerate()
+                .filter(|&(j, value)| i != j && value.key.string.lock_ref().is_empty().not())
+                .map(|(_, RowData { key, .. })| key.string.lock_ref())
+                .collect::<Vec<_>>();
+            let key_lock = key.string.lock_ref();
+            if key_lock.is_empty().not() {
+                let (Ok(sorted_i) | Err(sorted_i)) = keys.binary_search_by_key(&key_lock.as_str(), |key| key.as_str());
+                if i != sorted_i && key_lock.as_str() != keys[sorted_i].as_str() {
+                    drop((keys, key_lock));
+                    let pair = pairs.remove(i);
+                    pairs.insert_cloned(sorted_i, pair);
                 }
             }
-            KeyValue::Value => {
-                let values = pairs
-                    .iter()
-                    .enumerate()
-                    .filter(|&(j, value)| i != j && value.value.string.lock_ref().is_empty().not())
-                    .map(|(_, RowData { value, .. })| value.string.lock_ref())
-                    .collect::<Vec<_>>();
-                let value_lock = value.string.lock_ref();
-                if value_lock.is_empty().not() {
-                    let (Ok(sorted_i) | Err(sorted_i)) =
-                        values.binary_search_by_key(&value_lock.as_str(), |value| value.as_str());
-                    if i != sorted_i && value_lock.as_str() != values[sorted_i].as_str() {
-                        drop((values, value_lock));
-                        let pair = pairs.remove(i);
-                        pairs.insert_cloned(sorted_i, pair);
-                    }
+        }
+        KeyValue::Value => {
+            let values = pairs
+                .iter()
+                .enumerate()
+                .filter(|&(j, value)| i != j && value.value.string.lock_ref().is_empty().not())
+                .map(|(_, RowData { value, .. })| value.string.lock_ref())
+                .collect::<Vec<_>>();
+            let value_lock = value.string.lock_ref();
+            if value_lock.is_empty().not() {
+                let (Ok(sorted_i) | Err(sorted_i)) =
+                    values.binary_search_by_key(&value_lock.as_str(), |value| value.as_str());
+                if i != sorted_i && value_lock.as_str() != values[sorted_i].as_str() {
+                    drop((values, value_lock));
+                    let pair = pairs.remove(i);
+                    pairs.insert_cloned(sorted_i, pair);
                 }
             }
         }
@@ -300,8 +304,8 @@ fn sort_one(mut maybe_changed_events: EventReader<MaybeChanged>) {
 static SCROLL_POSITION: Lazy<Mutable<f32>> = Lazy::new(default);
 
 fn key_values() -> impl Element + Sizeable {
-    Column::<NodeBundle>::new()
-        .with_style(|mut style| style.row_gap = Val::Px(10.))
+    Column::<Node>::new()
+        .with_node(|mut node| node.row_gap = Val::Px(10.))
         .height(Val::Percent(90.))
         .mutable_viewport(Overflow::clip_y(), LimitToBody::Vertical)
         .on_scroll_with_system_on_hover(
@@ -327,8 +331,8 @@ fn key_values() -> impl Element + Sizeable {
                         },
                 },
             )| {
-                Row::<NodeBundle>::new()
-                    .with_style(|mut style| style.column_gap = Val::Px(10.))
+                Row::<Node>::new()
+                    .with_node(|mut node| node.column_gap = Val::Px(10.))
                     // without registering width up front, layout will take a frame or two to sync to size of children,
                     // making it look like the elements are expanding into place, try commenting out this line to see
                     // how it looks
@@ -346,73 +350,66 @@ fn key_values() -> impl Element + Sizeable {
 
 fn x_button() -> impl Element + PointerEventAware {
     let hovered = Mutable::new(false);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .width(Val::Px(INPUT_HEIGHT))
         .height(Val::Px(INPUT_HEIGHT))
         .background_color_signal(
             hovered
                 .signal()
                 .map_bool(|| bevy::color::palettes::basic::RED.into(), || *DARK_GRAY)
-                .map(BackgroundColor::from),
+                .map(Into::into),
         )
         .hovered_sync(hovered)
         .child(
-            El::<TextBundle>::new()
-                .with_style(|mut style| style.top = Val::Px(-3.))
+            El::<Text>::new()
+                .with_node(|mut node| node.top = Val::Px(-3.))
                 .align(Align::center())
-                .text(Text::from_section(
-                    "x",
-                    TextStyle {
-                        font_size: 30.0,
-                        ..default()
-                    },
-                )),
+                .text_font(TextFont::from_font_size(30.))
+                .text(Text::new("x")),
         )
 }
 
 fn ui_root() -> impl Element {
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .ui_root()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
         .child(
-            Row::<NodeBundle>::new()
+            Row::<Node>::new()
                 .height(Val::Percent(100.))
-                .with_style(|mut style| style.column_gap = Val::Px(70.))
+                .with_node(|mut node| node.column_gap = Val::Px(70.))
                 .item(
-                    Column::<NodeBundle>::new()
-                        .with_style(|mut style| style.row_gap = Val::Px(20.))
+                    Column::<Node>::new()
+                        .with_node(|mut node| node.row_gap = Val::Px(20.))
                         .item(sort_button(KeyValue::Key))
                         .item(sort_button(KeyValue::Value)),
                 )
                 .item(
-                    Column::<NodeBundle>::new()
-                        .with_style(|mut style| style.row_gap = Val::Px(10.))
+                    Column::<Node>::new()
+                        .with_node(|mut node| node.row_gap = Val::Px(10.))
                         .height(Val::Percent(90.))
                         .width(Val::Px(INPUT_WIDTH * 2. + INPUT_HEIGHT + 10. * 2.))
                         .align_content(Align::center())
                         .item(key_values().height(Val::Percent(90.)))
                         .item({
                             let hovered = Mutable::new(false);
-                            El::<NodeBundle>::new()
+                            El::<Node>::new()
                                 .width(Val::Px(INPUT_WIDTH))
                                 .height(Val::Px(INPUT_HEIGHT))
                                 .background_color_signal(
                                     hovered
                                         .signal()
                                         .map_bool(|| bevy::color::palettes::basic::GREEN.into(), || *DARK_GRAY)
-                                        .map(BackgroundColor::from),
+                                        .map(Into::into),
                                 )
                                 .hovered_sync(hovered)
                                 .align_content(Align::center())
-                                .child(El::<TextBundle>::new().text(Text::from_section(
-                                    "+",
-                                    TextStyle {
-                                        font_size: 30.0,
-                                        ..default()
-                                    },
-                                )))
+                                .child(
+                                    El::<Text>::new()
+                                        .text_font(TextFont::from_font_size(30.))
+                                        .text(Text::new("+")),
+                                )
                                 .on_click_with_system(|_: In<_>, mut commands: Commands| {
                                     commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, can remove once https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
                                     clear_focus();
@@ -501,26 +498,33 @@ fn escaper(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
 // on focus change, check if the focused element is in view, if not, scroll to it
 fn focus_scroller(
     focused_text_input_option: Option<Res<FocusedTextInput>>,
-    data_query: Query<(&Node, &GlobalTransform, &mut Style)>,
+    data_query: Query<(&ComputedNode, &GlobalTransform, &mut Node)>,
     parents: Query<&Parent>,
     mutable_viewports: Query<&MutableViewport>,
 ) {
     if let Some(focused_text_input) = focused_text_input_option.as_deref().map(Deref::deref).copied() {
-        if let Ok((text_input_node, text_input_transform, _)) = data_query.get(focused_text_input) {
+        if let Ok((text_input_computed_node, text_input_transform, _)) = data_query.get(focused_text_input) {
             for parent in parents.iter_ancestors(focused_text_input) {
                 if mutable_viewports.contains(parent) {
-                    if let Ok((scene_node, scene_transform, _scene_style)) = data_query.get(parent) {
-                        if let Some((viewport_node, viewport_transform, viewport_style)) = parents
+                    if let Ok((scene_computed_node, scene_transform, _scene_style)) = data_query.get(parent) {
+                        if let Some((viewport_computed_node, viewport_transform, viewport_node)) = parents
                             .get(parent)
                             .ok()
                             .and_then(|parent| data_query.get(parent.get()).ok())
                         {
-                            let text_input_rect = text_input_node.logical_rect(text_input_transform);
-                            let scene_rect = scene_node.logical_rect(scene_transform);
-                            let viewport_rect = viewport_node.logical_rect(viewport_transform);
-                            let scrolled_option = match viewport_style.top {
+                            let text_input_rect = Rect::from_center_size(
+                                text_input_transform.translation().xy(),
+                                text_input_computed_node.size(),
+                            );
+                            let scene_rect =
+                                Rect::from_center_size(scene_transform.translation().xy(), scene_computed_node.size());
+                            let viewport_rect = Rect::from_center_size(
+                                viewport_transform.translation().xy(),
+                                viewport_computed_node.size(),
+                            );
+                            let scrolled_option = match viewport_node.top {
                                 Val::Px(top) => Some(top),
-                                Val::Auto => Some(0.0),
+                                Val::Auto => Some(0.),
                                 _ => None,
                             };
                             if let Some(scrolled) = scrolled_option {
@@ -545,5 +549,5 @@ fn focus_scroller(
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 }

@@ -1,8 +1,9 @@
 //! Simple grid layout model ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Grid`](https://github.com/MoonZoon/MoonZoon/blob/f8fc31065f65bdb3ab7b94faf5e3916bc5550dd9/crates/zoon/src/element/grid.rs).
 
 use bevy_ecs::prelude::*;
-use bevy_mod_picking::picking_core::Pickable;
+use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
+use bevy_utils::default;
 use futures_signals::{
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
@@ -32,10 +33,10 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Grid<NodeType> {
     fn from(value: RawHaalkaEl) -> Self {
         Self {
             raw_el: value
-                .with_component::<Style>(|mut style| {
-                    style.display = Display::Grid;
+                .with_component::<Node>(|mut node| {
+                    node.display = Display::Grid;
                 })
-                .insert(Pickable::IGNORE),
+                .insert(PickingBehavior::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
@@ -52,8 +53,7 @@ impl<NodeType: Bundle + Default> Grid<NodeType> {
     /// Construct a new [`Grid`] from a [`Bundle`] with a [`Default`] implementation.
     ///
     /// # Notes
-    /// [`Bundle`]s without the required bevy_ui node components (e.g. [`Node`], [`Style`], etc.)
-    /// will not behave as expected.
+    /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
         Self::from(NodeType::default())
     }
@@ -66,9 +66,11 @@ impl<NodeType: Bundle> RawElWrapper for Grid<NodeType> {
 
     fn into_raw_el(self) -> RawHaalkaEl {
         // TODO: why won't grid_template_columns work without a grid wrapper ?
-        RawHaalkaEl::from(NodeBundle::default())
-            .with_component::<Style>(|mut style| style.display = Display::Grid)
-            .child(self.raw_el)
+        RawHaalkaEl::from(Node {
+            display: Display::Grid,
+            ..default()
+        })
+        .child(self.raw_el)
     }
 }
 
@@ -117,11 +119,11 @@ impl<NodeType: Bundle> Grid<NodeType> {
     ///
     /// While this grid layout definition is not nearly as rich as the [CSS grid layout](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout),
     /// it may suffice for one's needs. If not, one can always use bevy_ui's CSS grid API directly
-    /// by modifiying the appropriate fields on any UI node's [`Style`] [`Component`].
+    /// by modifiying the appropriate fields on any UI node's [`Node`] [`Component`].
     pub fn row_wrap_cell_width(mut self, cell_width_option: impl Into<Option<f32>>) -> Self {
         if let Some(cell_width) = cell_width_option.into() {
-            self.raw_el = self.raw_el.with_component::<Style>(move |mut style| {
-                style.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width);
+            self.raw_el = self.raw_el.with_component::<Node>(move |mut node| {
+                node.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width);
             });
         }
         self
@@ -135,8 +137,8 @@ impl<NodeType: Bundle> Grid<NodeType> {
         if let Some(cell_width_signal) = cell_width_signal_option.into() {
             self.raw_el =
                 self.raw_el
-                    .on_signal_with_component::<f32, Style>(cell_width_signal, |mut style, cell_width| {
-                        style.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width)
+                    .on_signal_with_component::<f32, Node>(cell_width_signal, |mut node, cell_width| {
+                        node.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width)
                     });
         }
         self
@@ -217,17 +219,17 @@ impl<NodeType: Bundle> Alignable for Grid<NodeType> {
         &mut self.align
     }
 
-    fn apply_content_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
-        Stack::<NodeType>::apply_content_alignment(style, alignment, action);
+    fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
+        Stack::<NodeType>::apply_content_alignment(node, alignment, action);
     }
 }
 
 impl<NodeType: Bundle> ChildAlignable for Grid<NodeType> {
-    fn update_style(mut style: Mut<Style>) {
-        style.display = Display::Grid;
+    fn update_node(mut node: Mut<Node>) {
+        node.display = Display::Grid;
     }
 
-    fn apply_alignment(style: &mut Style, alignment: Alignment, action: AddRemove) {
-        Stack::<NodeType>::apply_alignment(style, alignment, action);
+    fn apply_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
+        Stack::<NodeType>::apply_alignment(node, alignment, action);
     }
 }

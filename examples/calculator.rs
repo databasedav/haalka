@@ -25,26 +25,22 @@ fn main() {
 
 const BLUE: Color = Color::srgb(91. / 255., 206. / 255., 250. / 255.);
 const PINK: Color = Color::srgb(245. / 255., 169. / 255., 184. / 255.);
-const FONT_SIZE: f32 = 60.0;
+const FONT_SIZE: f32 = 50.0;
 const WIDTH: f32 = 500.;
 const BUTTON_SIZE: f32 = WIDTH / 5.;
 const GAP: f32 = BUTTON_SIZE / 5.;
 const HEIGHT: f32 = BUTTON_SIZE * 5. + GAP * 6.;
 
-fn textable_element(text_signal: impl Signal<Item = impl ToString> + Send + 'static) -> El<NodeBundle> {
-    El::<NodeBundle>::new()
-        .with_style(|mut style| style.border = UiRect::all(Val::Px(2.0)))
+fn textable_element(text_signal: impl Signal<Item = impl Into<String> + 'static> + Send + 'static) -> El<Node> {
+    El::<Node>::new()
+        .with_node(|mut node| node.border = UiRect::all(Val::Px(2.0)))
         .border_color(BorderColor(Color::WHITE))
-        .child(El::<TextBundle>::new().text_signal(text_signal.map(|text| {
-            Text::from_section(
-                text.to_string(),
-                TextStyle {
-                    font_size: FONT_SIZE,
-                    color: Color::WHITE,
-                    ..default()
-                },
-            )
-        })))
+        .child(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(FONT_SIZE))
+                .text_color(TextColor(Color::WHITE))
+                .text_signal(text_signal.map(Text::new)),
+        )
 }
 
 #[rustfmt::skip]
@@ -57,7 +53,7 @@ fn buttons() -> [&'static str; 16] {
     ]
 }
 
-fn button(symbol: &'static str) -> El<NodeBundle> {
+fn button(symbol: &'static str) -> El<Node> {
     textable_element(always(symbol))
         .width(Val::Px(BUTTON_SIZE))
         .height(Val::Px(BUTTON_SIZE))
@@ -67,8 +63,8 @@ fn button(symbol: &'static str) -> El<NodeBundle> {
 fn input_button(symbol: &'static str) -> impl Element {
     let hovered = Mutable::new(false);
     button(symbol)
-        .cursor(CursorIcon::Pointer)
-        .background_color_signal(hovered.signal().map_bool(|| BLUE, || PINK).map(BackgroundColor))
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
+        .background_color_signal(hovered.signal().map_bool(|| BLUE, || PINK).map(Into::into))
         .hovered_sync(hovered)
         .on_click(move || {
             let mut output = OUTPUT.lock_mut();
@@ -91,9 +87,9 @@ static ERROR: Lazy<Mutable<bool>> = Lazy::new(default);
 
 fn display() -> impl Element {
     textable_element(OUTPUT.signal_cloned())
-        .with_style(|mut style| {
-            style.padding = UiRect::all(Val::Px(GAP));
-            style.overflow = Overflow::clip();
+        .with_node(|mut node| {
+            node.padding = UiRect::all(Val::Px(GAP));
+            node.overflow = Overflow::clip();
         })
         .update_raw_el(|raw_el| {
             raw_el.component_signal::<Outline, _>(
@@ -126,45 +122,45 @@ fn clear_button() -> impl Element {
                 }
             }
             .dedupe()
-            .map(BackgroundColor),
+            .map(Into::into),
         )
-        .cursor_disableable_signal(CursorIcon::Pointer, output_empty.signal())
+        .cursor_disableable_signal(CursorIcon::System(SystemCursorIcon::Pointer), output_empty.signal())
         .hovered_sync(hovered)
         .on_click(|| OUTPUT.lock_mut().clear())
 }
 
 fn ui_root() -> impl Element {
     let error_clearer = OUTPUT.signal_ref(|_| ERROR.set_neq(false)).to_future().apply(spawn);
-    El::<NodeBundle>::new()
+    El::<Node>::new()
         .update_raw_el(|raw_el| raw_el.hold_tasks([error_clearer]))
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .cursor(CursorIcon::Default)
+        .cursor(CursorIcon::System(SystemCursorIcon::Default))
         .align_content(Align::center())
         .child(
-            Column::<NodeBundle>::new()
+            Column::<Node>::new()
                 .height(Val::Px(HEIGHT))
                 .width(Val::Px(WIDTH))
                 .background_color(BackgroundColor(PINK))
                 .align(Align::center())
-                .with_style(|mut style| {
-                    style.row_gap = Val::Px(GAP);
-                    style.padding = UiRect::all(Val::Px(GAP));
+                .with_node(|mut node| {
+                    node.row_gap = Val::Px(GAP);
+                    node.padding = UiRect::all(Val::Px(GAP));
                 })
                 .item(
-                    Row::<NodeBundle>::new()
+                    Row::<Node>::new()
                         .align(Align::center())
-                        .with_style(|mut style| style.column_gap = Val::Px(GAP))
+                        .with_node(|mut node| node.column_gap = Val::Px(GAP))
                         .item(clear_button())
                         .item(display()),
                 )
                 .item(
-                    Row::<NodeBundle>::new()
+                    Row::<Node>::new()
                         .multiline()
                         .align_content(Align::center())
-                        .with_style(|mut style| {
-                            style.row_gap = Val::Px(GAP);
-                            style.column_gap = Val::Px(GAP);
+                        .with_node(|mut node| {
+                            node.row_gap = Val::Px(GAP);
+                            node.column_gap = Val::Px(GAP);
                         })
                         .items(buttons().into_iter().map(input_button)),
                 ),
@@ -172,5 +168,5 @@ fn ui_root() -> impl Element {
 }
 
 fn camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 }
