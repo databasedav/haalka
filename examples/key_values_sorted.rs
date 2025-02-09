@@ -36,11 +36,11 @@ fn main() {
             (
                 tabber,
                 escaper,
-                sort_one.run_if(on_event::<MaybeChanged>),
                 focus_scroller.run_if(resource_changed_or_removed::<FocusedTextInput>),
             ),
         )
         .add_event::<MaybeChanged>()
+        .add_observer(sort_one)
         .run();
 }
 
@@ -164,15 +164,16 @@ fn text_input(
         )
         .attrs(TextAttrs::new().color_signal(focus.signal().map_bool(|| Color::WHITE, || Color::BLACK).map(Some)))
         .focus_signal(focus.signal())
-        .on_focused_change(clone!((focus) move |is_focused| {
-            if !is_focused {
-                if let Some(index) = index_option.get() {
-                    // TODO: use an observer for this
-                    async_world().send_event(MaybeChanged(index)).apply(spawn).detach()
+        .on_focused_change_with_system(
+            clone!((focus) move |In((_, is_focused)): In<(Entity, bool)>, mut commands: Commands| {
+                if !is_focused {
+                    if let Some(index) = index_option.get() {
+                        commands.trigger(MaybeChanged(index));
+                    }
                 }
-            }
-            focus.set_neq(is_focused);
-        }))
+                focus.set_neq(is_focused);
+            }),
+        )
         .text_signal(string.signal_cloned())
         .on_change_sync(string)
     // TODO: this unfocuses on click for some reason ...
@@ -254,48 +255,46 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
 struct MaybeChanged(usize);
 
 // O(log n)
-fn sort_one(mut maybe_changed_events: EventReader<MaybeChanged>) {
-    for MaybeChanged(i) in maybe_changed_events.read().copied() {
-        let mut pairs = PAIRS.lock_mut();
-        let Some(RowData { key, value }) = pairs.get(i) else {
-            return;
-        };
-        match SORT_BY.get() {
-            // TODO: dry
-            KeyValue::Key => {
-                let keys = pairs
-                    .iter()
-                    .enumerate()
-                    .filter(|&(j, value)| i != j && value.key.string.lock_ref().is_empty().not())
-                    .map(|(_, RowData { key, .. })| key.string.lock_ref())
-                    .collect::<Vec<_>>();
-                let key_lock = key.string.lock_ref();
-                if key_lock.is_empty().not() {
-                    let (Ok(sorted_i) | Err(sorted_i)) =
-                        keys.binary_search_by_key(&key_lock.as_str(), |key| key.as_str());
-                    if i != sorted_i && key_lock.as_str() != keys[sorted_i].as_str() {
-                        drop((keys, key_lock));
-                        let pair = pairs.remove(i);
-                        pairs.insert_cloned(sorted_i, pair);
-                    }
+fn sort_one(maybe_changed: Trigger<MaybeChanged>) {
+    let MaybeChanged(i) = *maybe_changed;
+    let mut pairs = PAIRS.lock_mut();
+    let Some(RowData { key, value }) = pairs.get(i) else {
+        return;
+    };
+    match SORT_BY.get() {
+        // TODO: dry
+        KeyValue::Key => {
+            let keys = pairs
+                .iter()
+                .enumerate()
+                .filter(|&(j, value)| i != j && value.key.string.lock_ref().is_empty().not())
+                .map(|(_, RowData { key, .. })| key.string.lock_ref())
+                .collect::<Vec<_>>();
+            let key_lock = key.string.lock_ref();
+            if key_lock.is_empty().not() {
+                let (Ok(sorted_i) | Err(sorted_i)) = keys.binary_search_by_key(&key_lock.as_str(), |key| key.as_str());
+                if i != sorted_i && key_lock.as_str() != keys[sorted_i].as_str() {
+                    drop((keys, key_lock));
+                    let pair = pairs.remove(i);
+                    pairs.insert_cloned(sorted_i, pair);
                 }
             }
-            KeyValue::Value => {
-                let values = pairs
-                    .iter()
-                    .enumerate()
-                    .filter(|&(j, value)| i != j && value.value.string.lock_ref().is_empty().not())
-                    .map(|(_, RowData { value, .. })| value.string.lock_ref())
-                    .collect::<Vec<_>>();
-                let value_lock = value.string.lock_ref();
-                if value_lock.is_empty().not() {
-                    let (Ok(sorted_i) | Err(sorted_i)) =
-                        values.binary_search_by_key(&value_lock.as_str(), |value| value.as_str());
-                    if i != sorted_i && value_lock.as_str() != values[sorted_i].as_str() {
-                        drop((values, value_lock));
-                        let pair = pairs.remove(i);
-                        pairs.insert_cloned(sorted_i, pair);
-                    }
+        }
+        KeyValue::Value => {
+            let values = pairs
+                .iter()
+                .enumerate()
+                .filter(|&(j, value)| i != j && value.value.string.lock_ref().is_empty().not())
+                .map(|(_, RowData { value, .. })| value.string.lock_ref())
+                .collect::<Vec<_>>();
+            let value_lock = value.string.lock_ref();
+            if value_lock.is_empty().not() {
+                let (Ok(sorted_i) | Err(sorted_i)) =
+                    values.binary_search_by_key(&value_lock.as_str(), |value| value.as_str());
+                if i != sorted_i && value_lock.as_str() != values[sorted_i].as_str() {
+                    drop((values, value_lock));
+                    let pair = pairs.remove(i);
+                    pairs.insert_cloned(sorted_i, pair);
                 }
             }
         }

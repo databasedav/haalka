@@ -897,7 +897,7 @@ pub(super) fn plugin(app: &mut App) {
         (
             on_change.run_if(any_with_component::<ListeningToChanges>.and(on_event::<CosmicTextChanged>)),
             (
-                sync_cosmic_focus.run_if(resource_changed::<CosmicFocusedWidget>),
+                sync_cosmic_focus.run_if(resource_changed::<CosmicFocusedWidget>.and(not(resource_changed_or_removed::<FocusedTextInput>))),
                 on_focus_changed.run_if(resource_changed_or_removed::<FocusedTextInput>)
             ).chain(),
         )
