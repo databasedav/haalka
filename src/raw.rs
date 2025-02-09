@@ -213,7 +213,7 @@ impl RawHaalkaEl {
         })
     }
 
-    /// Drop the [`Task`]s when the element is despawned.
+    /// Drop the [`Task`] when it completes or the entity is despawned.
     pub fn hold_tasks(self, tasks: impl IntoIterator<Item = Task<()>> + Send + 'static) -> Self {
         self.with_component::<TaskHolder>(|task_holder| {
             for task in tasks.into_iter() {
@@ -440,7 +440,9 @@ impl RawHaalkaEl {
     /// When this element receives an `E` [`Event`] and does not have a `Disabled`
     /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`]
     /// and the [`Event`]; if the element has a `PropagationStopped` [`Component`], the
-    /// event will not bubble up the hierarchy.
+    /// event will not bubble up the hierarchy. If propagation is conditional on logic within the
+    /// body of the `handler`, use [.observe](`Self::observe`) instead to access the mutable
+    /// [`Trigger<E>`] directly.
     pub fn on_event_with_system_disableable_propagation_stoppable<
         E: Event + Clone,
         Disabled: Component,
@@ -508,7 +510,9 @@ impl RawHaalkaEl {
 
     /// When this element receives an `E` [`Event`], run a [`System`] which takes
     /// [`In`](`System::In`) this element's [`Entity`] and the [`Event`]; if the element has a
-    /// `PropagationStopped` [`Component`], the event will not bubble up the hierarchy.
+    /// `PropagationStopped` [`Component`], the event will not bubble up the hierarchy. If
+    /// propagation is conditional on logic within the body of the `handler`, use
+    /// [.observe](`Self::observe`) instead to access the mutable [`Trigger<E>`] directly.
     pub fn on_event_with_system_propagation_stoppable<E: Event + Clone, PropagationStopped: Component, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
@@ -525,6 +529,8 @@ impl RawHaalkaEl {
     /// handler to stop propagation the same frame that the [`Signal`] outputs `true`. If one
     /// needs frame perfect propagation stopping, use
     /// [`.on_event_with_system_propagation_stoppable`](Self::on_event_with_system_propagation_stoppable).
+    /// If propagation is conditional on logic within the body of the `handler`, use
+    /// [.observe](`Self::observe`) instead to access the mutable [`Trigger<E>`] directly.
     pub fn on_event_with_system_propagation_stoppable_signal<E: Event + Clone, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
@@ -576,7 +582,8 @@ impl RawHaalkaEl {
 
     /// When this element receives an `E` [`Event`], run a function with the [`Event`];
     /// if the element has a `PropagationStopped` [`Component`], the event will not bubble up
-    /// the hierarchy.
+    /// the hierarchy. If propagation is conditional on logic within the body of the `handler`,
+    /// use [.observe](`Self::observe`) instead to access the mutable [`Trigger<E>`] directly.
     pub fn on_event_propagation_stoppable<E: Event + Clone, Marker, PropagationStopped: Component>(
         self,
         mut handler: impl FnMut(E) + Send + Sync + 'static,
@@ -588,6 +595,8 @@ impl RawHaalkaEl {
 
     /// When this element receives an `E` [`Event`], run a function with the [`Event`],
     /// reactively controlling whether the event bubbles up the hierarchy with a [`Signal`].
+    /// If propagation is conditional on logic within the  body of the `handler`, use
+    /// [.observe](`Self::observe`) instead to access the mutable [`Trigger<E>`] directly.
     pub fn on_event_propagation_stoppable_signal<E: Event + Clone>(
         self,
         mut handler: impl FnMut(E) + Send + Sync + 'static,
@@ -615,6 +624,8 @@ impl RawHaalkaEl {
     /// stop propagation the same frame that the respective [`Signal`] outputs `true`. If one needs
     /// frame perfect disabling and propagation stopping, use
     /// [`.on_event_with_system_disableable_propagation_stoppable`](Self::on_event_with_system_disableable_propagation_stoppable).
+    /// If propagation is conditional on logic within the body of the `handler`, use
+    /// [.observe](`Self::observe`) instead to access the mutable [`Trigger<E>`] directly.
     pub fn on_event_disableable_propagation_stoppable_signal<E: Event + Clone>(
         self,
         mut handler: impl FnMut(E) + Send + Sync + 'static,

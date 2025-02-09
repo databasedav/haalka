@@ -4,9 +4,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## unreleased
 
+### added
+
+- `BoxShadow`, `ScrollPosition`, and `GlobalZIndex` convenience methods for base elements
+
 ### changed
 
 - Upgraded Bevy to `0.15.2`
+- `GlobalEventAware` can register multiple handlers for the same event type, and the registering entity and event data is passed into the handler
+- `.on_click_outside` methods use `GlobalEventAware` rather than bespoke handling
+- Completed tasks are cleaned up on completion rather than waiting until entity despawn
 - Updated examples to use latest Bevy and haalka idioms
 
 # 0.2.4 (2025-02-04)

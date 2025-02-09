@@ -1,10 +1,11 @@
 //! Semantics for managing elements whose contents can be partially visible, see
 //! [`ViewportMutable`].
 
-use crate::raw::{observe, register_system};
-
 use super::{
-    raw::{utils::remove_system_holder_on_remove, DeferredUpdaterAppendDirection, RawElWrapper, RawHaalkaEl},
+    raw::{
+        observe, register_system, utils::remove_system_holder_on_remove, DeferredUpdaterAppendDirection, RawElWrapper,
+        RawHaalkaEl,
+    },
     utils::clone,
 };
 use apply::Apply;

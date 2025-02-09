@@ -25,14 +25,13 @@ use haalka_futures_signals_ext::SignalExtBool;
 
 use super::{
     element::UiRoot,
-    raw::{
-        observe, register_system, utils::remove_system_holder_on_remove, DeferredUpdaterAppendDirection, RawElWrapper,
-    },
+    global_event_aware::GlobalEventAware,
+    raw::{observe, register_system, utils::remove_system_holder_on_remove, DeferredUpdaterAppendDirection},
     utils::sleep,
 };
 
 /// Enables reacting to pointer events like hover, click, and press. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`PointerEventAware`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/ability/pointer_event_aware.rs).
-pub trait PointerEventAware: RawElWrapper {
+pub trait PointerEventAware: GlobalEventAware {
     /// When this element's hovered state changes, run a [`System`] which takes
     /// [`In`](`System::In`) this element's [`Entity`] and its current hovered state. This method
     /// can be called repeatedly to register many such handlers.
@@ -134,24 +133,35 @@ pub trait PointerEventAware: RawElWrapper {
     /// When a [`Pointer<Click>`] is received outside this [`Element`](super::element::Element)
     /// or its descendents, run a [`System`] that takes [`In`](`System::In`) this element's
     /// [`Entity`] and the [`Pointer<Click>`]. Requires the [`UiRoot`] [`Resource`] to exist in the
-    /// [`World`]. This method can be called repeatedly to register many such handlers.
+    /// [`World`] and will panic otherwise. This method can be called repeatedly to register many
+    /// such handlers.
+    #[allow(clippy::type_complexity)]
     fn on_click_outside_with_system<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + 'static,
     ) -> Self {
+        let system_holder = Mutable::new(None);
         self.update_raw_el(|raw_el| {
-            let system_holder = Mutable::new(None);
             raw_el
-                .insert(OnClickOutside)
-                .on_spawn(clone!((system_holder) move |world, entity| {
+                .on_spawn(clone!((system_holder) move |world, _| {
                     let system = register_system(world, handler);
                     system_holder.set(Some(system));
-                    observe(world, entity, move |click_outside: Trigger<ClickOutside>, mut commands: Commands| {
-                        commands.run_system_with_input(system, (entity, click_outside.event().0.clone()));
-                    });
                 }))
-                .apply(remove_system_holder_on_remove(system_holder))
+                .apply(remove_system_holder_on_remove(system_holder.clone()))
         })
+        .on_global_event_with_system::<Pointer<Click>, _>(
+            move |In((entity, click)): In<(Entity, Pointer<Click>)>,
+                  children: Query<&Children>,
+                  ui_root: Res<UiRoot>,
+                  mut system: Local<Option<SystemId<In<(Entity, Pointer<Click>)>>>>,
+                  mut commands: Commands| {
+                if !is_inside_or_removed_from_dom(entity, &click, ui_root.0, &children) {
+                    // only pay the read locking cost once
+                    let &mut system = system.get_or_insert_with(|| system_holder.get().unwrap());
+                    commands.run_system_with_input(system, (entity, click));
+                }
+            },
+        )
     }
 
     /// When a [`Pointer<Click>`] is received outside this [`Element`](super::element::Element)
@@ -448,30 +458,6 @@ fn pressable_system(
     }
 }
 
-#[derive(Component)]
-struct OnClickOutside;
-
-#[derive(Event)]
-struct ClickOutside(Pointer<Click>);
-
-// TODO: use global events like moonzoon instead? requires being able to register multiple event
-// listeners per event type (0.15)
-fn on_click_outside(
-    mut clicks: EventReader<Pointer<Click>>,
-    on_click_outside_listeners: Query<Entity, With<OnClickOutside>>,
-    children_query: Query<&Children>,
-    ui_root: Res<UiRoot>,
-    mut commands: Commands,
-) {
-    for click in clicks.read() {
-        let entities = on_click_outside_listeners
-            .iter()
-            .filter(|&entity| !is_inside_or_removed_from_dom(entity, click, ui_root.0, &children_query));
-        // TODO: avoid allocating entity vector
-        commands.trigger_targets(ClickOutside(click.clone()), entities.collect::<Vec<_>>());
-    }
-}
-
 fn contains(left: Entity, right: Entity, children_query: &Query<&Children>) -> bool {
     left == right || children_query.iter_descendants(left).any(|e| e == right)
 }
@@ -744,11 +730,6 @@ pub(super) fn plugin(app: &mut App) {
                     .and(resource_exists_and_changed::<HoverMap>),
             ),
             consume_queued_cursor.run_if(resource_removed::<CursorOnHoverDisabled>),
-            on_click_outside.run_if(
-                resource_exists::<UiRoot>
-                    .and(any_with_component::<OnClickOutside>)
-                    .and(on_event::<Pointer<Click>>),
-            ),
         ),
     );
 }

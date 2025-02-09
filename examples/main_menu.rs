@@ -81,6 +81,7 @@ impl ElementWrapper for Button {
 }
 
 impl Sizeable for Button {}
+impl GlobalEventAware for Button {}
 impl PointerEventAware for Button {}
 
 impl Button {

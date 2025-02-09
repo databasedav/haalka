@@ -102,6 +102,7 @@ impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
 ///     }
 /// }
 ///
+/// impl GlobalEventAware for MyWidget {}
 /// impl PointerEventAware for MyWidget {}
 /// impl ViewportMutable for MyWidget {}
 /// impl MouseWheelScrollable for MyWidget {}

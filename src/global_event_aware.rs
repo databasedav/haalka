@@ -9,7 +9,6 @@ use apply::Apply;
 use bevy_ecs::{prelude::*, system::SystemId};
 use futures_signals::signal::Mutable;
 
-// TODO: 0.15
 /// Enables registering "global" event listeners on the [`UiRoot`] node. The [`UiRoot`] must be
 /// manually registered with [`UiRootable::ui_root`](super::element::UiRootable::ui_root) for this
 /// to work as expected.
