@@ -38,7 +38,7 @@ impl Plugin for FpsOverlayPlugin {
         }
 
         fn fps_element(fps: impl Signal<Item = f64> + Send + 'static) -> impl Element {
-            Row::<Node>::new()
+            Row::<Text>::new()
                 // TODO: good place to use the text section signal abstraction, since doing a .text(...).text(...) does
                 // not work as expected
                 .item(

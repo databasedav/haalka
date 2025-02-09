@@ -1,5 +1,5 @@
-let { REPO, checkout, cargo_build_env, just, get_examples, build_examples, deploy_examples, assert_nickels_synced, .. } = import "common.ncl" in
-let { sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" in
+let { get_examples, build_examples, deploy_examples, assert_nickels_synced, .. } = import "common.ncl" in
+let { sync_name_field, .. } = import "utils.ncl" in
 {
   name = "examples_on_main",
 

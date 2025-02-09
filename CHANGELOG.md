@@ -4,6 +4,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## unreleased
 
+### changed
+
+- Upgraded Bevy to `0.15.2`
+- Updated examples to use latest Bevy and haalka idioms
+
 # 0.2.4 (2025-02-04)
 
 ### fixed
@@ -14,17 +19,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### fixed
 
-- removed and ignored development `trunk` artifact which was inflating crate size
+- Removed and ignored development `trunk` artifact which was inflating crate size
 
 # 0.2.2 (2025-01-05)
 
 ### added
 
 - wasm support
-- serve wasm examples via github pages, including pr previews
+- Serve wasm examples via github pages, including pr previews
 - `.on_viewport_location_change` methods for reacting to viewport changes
 - `DebugUiPlugin`, thin helper wrapper over bevy's debug ui overlay
-- ci
+- CI
 
 ### fixed
 
@@ -34,8 +39,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `MutableViewportSettings` renamed to `MutableViewport`
 - `PointerEventAware::on_hovered_change_with_system` is a deferred update
-- don't `.gitignore` `Cargo.lock`
-- use granular `bevy_...` dependencies
+- Don't `.gitignore` `Cargo.lock`
+- Use granular `bevy_...` dependencies
 
 # 0.2.1 (2024-10-19)
 
@@ -58,7 +63,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `text_input::FocusedTextInput` resource for exposing control of `bevy_cosmic_edit` focus
 - `BasicScrollHandler` correctly handles `ScrollDirection::Both`, holding shift to scroll horizontally
 - `BorderRadius` convenience methods for base elements
-- release CI powered by [release-plz](https://github.com/MarcoIeni/release-plz)
+- Release CI powered by [release-plz](https://github.com/MarcoIeni/release-plz)
 - `impl From<RawHaalkaEl>` for all built-in element types
 - `Signal` utility `signal_eq`
 - `raw::utils` module containing utilities for managing `RawHaalkaEl`s

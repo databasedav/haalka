@@ -231,8 +231,8 @@ struct Counts {
     yellow: Mutable<i32>,
 }
 
-const STARTING_SPAWN_RATE: f32 = 20.;
-const STARTING_DESPAWN_RATE: f32 = 9.9;
+const STARTING_SPAWN_RATE: f32 = 1.5;
+const STARTING_DESPAWN_RATE: f32 = 1.;
 
 static SPAWN_RATE: Lazy<Mutable<f32>> = Lazy::new(|| Mutable::new(STARTING_SPAWN_RATE));
 static DESPAWN_RATE: Lazy<Mutable<f32>> = Lazy::new(|| Mutable::new(STARTING_DESPAWN_RATE));

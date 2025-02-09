@@ -23,7 +23,7 @@ fn main() {
 }
 
 const LETTER_SIZE: f32 = 54.167; // 65 / 1.2
-const COMPUTED_SIZE: f32 = 66.; // TODO: how tho ?
+const COMPUTED_SIZE: f32 = 66.; // TODO: how/y tho ?
 
 static SHIFTED: Lazy<Mutable<bool>> = Lazy::new(default);
 

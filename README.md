@@ -13,7 +13,7 @@ While haalka is primarily targeted at UI and provides high level UI abstractions
 
 ## considerations
 
-- Reactive updates done by haalka are [**eventually consistent**](https://en.wikipedia.org/wiki/Eventual_consistency), that is, once some ECS world state has been updated, any downstream reactions should not be expected to run in the same frame. This is due to the indirection involved with using an async signals library, which dispatches Bevy commands after polling by the async runtime. This resulting "lag" should not be noticeable in most popular cases, e.g. reacting to hover/click state or synchronizing UI (one can run the examples to evaluate this themselves), but in cases where frame perfect responsiveness is critical, one should simply use Bevy-native systems directly.
+- Reactive updates done by haalka are [**eventually consistent**](https://en.wikipedia.org/wiki/Eventual_consistency), that is, once some ECS world state has been updated, any downstream reactions should not be expected to run in the same frame. This is due to the indirection involved with using an async signals library, which dispatches Bevy commands after polling by the async runtime. The resulting "lag" should not be noticeable in most popular cases, e.g. reacting to hover/click state or synchronizing UI (one can run the examples to evaluate this themselves), but in cases where frame perfect responsiveness is critical, one should simply use Bevy-native systems directly.
 
 - If one is using the `text_input` feature (enabled by default) and using multiple cameras in the same world, they must enable the `multicam` feature AND add the `bevy_cosmic_edit::CosmicPrimaryCamera` marker component to the primary camera.
 
@@ -176,7 +176,6 @@ Or with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 ## Bevy compatibility
 |bevy|haalka|
 |-|-|
-|`0.15`|`0.3`|
 |`0.14`|`0.2`|
 |`0.13`|`0.1`|
 
