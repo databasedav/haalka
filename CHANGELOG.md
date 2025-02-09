@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Completed tasks are cleaned up on completion rather than waiting until entity despawn
 - Updated examples to use latest Bevy and haalka idioms
 
+### fixed
+
+- Text input focus desyncing
+
 # 0.2.4 (2025-02-04)
 
 ### fixed
