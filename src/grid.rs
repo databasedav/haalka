@@ -3,7 +3,7 @@
 use bevy_ecs::prelude::*;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
-use bevy_utils::default;
+use bevy_utils::prelude::*;
 use futures_signals::{
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
@@ -84,7 +84,7 @@ impl<NodeType: Bundle> UiRootable for Grid<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Grid<NodeType> {}
 
 /// Must substract this from the total row width of a [`Grid`] due to [float precision shenanigans](https://github.com/bevyengine/bevy/issues/12152). See an example usage in the [snake example](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/snake.rs#L112).
-pub const GRID_TRACK_FLOAT_PRECISION_SLACK: f32 = 0.0001;
+pub const GRID_TRACK_FLOAT_PRECISION_SLACK: f32 = 0.001;
 
 impl<NodeType: Bundle> Grid<NodeType> {
     /// Simple grid layout model [ported from MoonZoon](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/grid.rs#L95).

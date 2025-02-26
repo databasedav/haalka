@@ -18,7 +18,6 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 fn main() {
     App::new()
         .add_plugins(examples_plugin)
-        .add_event::<MenuInput>()
         .add_systems(
             Startup,
             (
@@ -102,7 +101,7 @@ impl Button {
                         Color::BLACK
                     }
                 })
-                .map(Into::into)
+                .map(BorderColor)
         };
         let background_color_signal = {
             selected_hovered_broadcaster
@@ -116,7 +115,7 @@ impl Button {
                         NORMAL_BUTTON
                     }
                 })
-                .map(Into::into)
+                .map(BackgroundColor)
         };
         Self {
             el: {
@@ -601,7 +600,7 @@ fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<N
             hovered
                 .signal()
                 .map_bool(|| NORMAL_BUTTON.lighter(0.05), || NORMAL_BUTTON)
-                .map(Into::into),
+                .map(BackgroundColor),
         )
         .on_hovered_change(move |is_hovered| only_one_up_flipper(&hovered, &MENU_ITEM_HOVERED_OPTION, Some(is_hovered)))
         .width(Val::Percent(100.))
@@ -1032,7 +1031,7 @@ fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
                     hovered
                         .signal()
                         .map_bool(|| bevy::color::palettes::basic::RED.into(), || TEXT_COLOR)
-                        .map(Into::into),
+                        .map(TextColor),
                 ),
         )
 }

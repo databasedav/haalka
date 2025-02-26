@@ -5,7 +5,7 @@ use super::{
     pointer_event_aware::PointerEventAware,
     raw::{observe, register_system, utils::remove_system_holder_on_remove},
     utils::{clone, spawn},
-    viewport_mutable::{firstborn, ViewportMutable, ViewportMutation},
+    viewport_mutable::{firstborn, ViewportMutable},
 };
 use apply::Apply;
 use bevy_app::prelude::*;
@@ -123,16 +123,12 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.on_hovered_change_with_system(
-            |In((entity, hovered)), children: Query<&Children>, mut commands: Commands| {
-                // the [`Scene`], the child of the [`Viewport`], operates the scrolling, see
-                // [`MouseWheelScrollable::on_scroll_with_system_disableable`]
-                if let Some(&child) = firstborn(entity, &children) {
-                    if let Some(mut entity) = commands.get_entity(child) {
-                        if hovered {
-                            entity.remove::<ScrollDisabled>();
-                        } else {
-                            entity.try_insert(ScrollDisabled);
-                        }
+            |In((entity, hovered)), mut commands: Commands| {
+                if let Some(mut entity) = commands.get_entity(entity) {
+                    if hovered {
+                        entity.remove::<ScrollDisabled>();
+                    } else {
+                        entity.try_insert(ScrollDisabled);
                     }
                 }
             },
@@ -241,7 +237,7 @@ impl BasicScrollHandler {
     pub fn into_system(
         self,
     ) -> Box<
-        dyn FnMut(In<(Entity, MouseWheel)>, Query<&Node>, Res<ButtonInput<KeyCode>>, Commands) + Send + Sync + 'static,
+        dyn FnMut(In<(Entity, MouseWheel)>, Res<ButtonInput<KeyCode>>, Query<&mut ScrollPosition>) + Send + Sync + 'static,
     > {
         let BasicScrollHandler {
             direction: direction_signal_option,
@@ -266,30 +262,24 @@ impl BasicScrollHandler {
                 .detach()
         }
         let f = move |In((entity, mouse_wheel)): In<(Entity, MouseWheel)>,
-                      nodes: Query<&Node>,
                       keys: Res<ButtonInput<KeyCode>>,
-                      mut commands: Commands| {
-            let dy = if mouse_wheel.y.is_sign_negative() { -1. } else { 1. } * magnitude.get();
-            if let Ok(node) = nodes.get(entity) {
-                let direction = direction.get();
+                      mut scroll_positions: Query<&mut ScrollPosition>| {
+            let mut dy = mouse_wheel.y;
+            if matches!(mouse_wheel.unit, MouseScrollUnit::Line) {
+                dy *= magnitude.get();
+            };
+            let direction = direction.get();
+            if let Ok(mut scroll_position) = scroll_positions.get_mut(entity) {
                 if matches!(direction, ScrollDirection::Vertical)
                     || matches!(direction, ScrollDirection::Both)
                         && !(keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight))
                 {
-                    let top = match node.top {
-                        Val::Px(top) => top,
-                        _ => 0.,
-                    };
-                    commands.trigger_targets(ViewportMutation::y(top + dy), entity);
+                    scroll_position.offset_y -= dy;
                 } else if matches!(direction, ScrollDirection::Horizontal)
                     || matches!(direction, ScrollDirection::Both)
                         && (keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight))
                 {
-                    let left = match node.left {
-                        Val::Px(left) => left,
-                        _ => 0.,
-                    };
-                    commands.trigger_targets(ViewportMutation::x(left + dy), entity);
+                    scroll_position.offset_x -= dy;
                 }
             }
         };

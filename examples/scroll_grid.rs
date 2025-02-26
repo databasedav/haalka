@@ -83,7 +83,7 @@ fn letter(
         }
     })
     .text_font(TextFont::from_font_size(LETTER_SIZE))
-    .text_color_signal(color.map(Into::into))
+    .text_color_signal(color.map(TextColor))
     .text_signal(letter.map(Text))
 }
 

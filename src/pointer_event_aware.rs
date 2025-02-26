@@ -26,7 +26,7 @@ use haalka_futures_signals_ext::SignalExtBool;
 use super::{
     element::UiRoot,
     global_event_aware::GlobalEventAware,
-    raw::{observe, register_system, utils::remove_system_holder_on_remove, DeferredUpdaterAppendDirection},
+    raw::{observe, register_system, utils::remove_system_holder_on_remove},
     utils::sleep,
 };
 
@@ -40,25 +40,23 @@ pub trait PointerEventAware: GlobalEventAware {
         handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
-            raw_el.defer_update(DeferredUpdaterAppendDirection::Back, |raw_el| {
-                let system_holder = Mutable::new(None);
-                raw_el
-                    .insert(PickingBehavior::default())
-                    .insert(Hovered(false))
-                    .on_spawn(clone!((system_holder) move |world, entity| {
-                        let system = register_system(world, handler);
-                        system_holder.set(Some(system));
-                        observe(world, entity, move |mut enter: Trigger<Pointer<Enter>>, mut commands: Commands| {
-                            enter.propagate(false);
-                            commands.run_system_with_input(system, (enter.entity(), true));
-                        });
-                        observe(world, entity, move |mut leave: Trigger<Pointer<Leave>>, mut commands: Commands| {
-                            leave.propagate(false);
-                            commands.run_system_with_input(system, (leave.entity(), false));
-                        });
-                    }))
-                    .apply(remove_system_holder_on_remove(system_holder))
-            })
+            let system_holder = Mutable::new(None);
+            raw_el
+                .insert(PickingBehavior::default())
+                .insert(Hovered(false))
+                .on_spawn(clone!((system_holder) move |world, entity| {
+                    let system = register_system(world, handler);
+                    system_holder.set(Some(system));
+                    observe(world, entity, move |mut enter: Trigger<Pointer<Enter>>, mut commands: Commands| {
+                        enter.propagate(false);
+                        commands.run_system_with_input(system, (enter.entity(), true));
+                    });
+                    observe(world, entity, move |mut leave: Trigger<Pointer<Leave>>, mut commands: Commands| {
+                        leave.propagate(false);
+                        commands.run_system_with_input(system, (leave.entity(), false));
+                    });
+                }))
+                .apply(remove_system_holder_on_remove(system_holder))
         })
     }
 
@@ -700,7 +698,7 @@ fn consume_queued_cursor(queued_cursor: Option<Res<QueuedCursor>>, mut commands:
 }
 
 // TODO: add support for multiple windows
-fn cursor_setter(
+fn on_set_cursor(
     event: Trigger<SetCursor>,
     mut windows: Query<(Entity, &mut Window), With<PrimaryWindow>>,
     mut commands: Commands,
@@ -718,8 +716,13 @@ fn cursor_setter(
     }
 }
 
+/// When this [`Resource`] exists in the [`World`], [`Enter`] and [`Leave`] events will not be
+/// fired.
+#[derive(Resource)]
+pub struct UpdateHoverStatesDisabled;
+
 pub(super) fn plugin(app: &mut App) {
-    app.add_event::<SetCursor>().add_observer(cursor_setter).add_systems(
+    app.add_observer(on_set_cursor).add_systems(
         Update,
         (
             pressable_system.run_if(any_with_component::<Pressable>),
@@ -727,7 +730,8 @@ pub(super) fn plugin(app: &mut App) {
                 any_with_component::<Hovered>
                     // TODO: apparently this updates every frame no matter what, if so, remove this condition
                     // TODO: remove when native `Enter` and `Leave` available
-                    .and(resource_exists_and_changed::<HoverMap>),
+                    .and(resource_exists_and_changed::<HoverMap>)
+                    .and(not(resource_exists::<UpdateHoverStatesDisabled>)),
             ),
             consume_queued_cursor.run_if(resource_removed::<CursorOnHoverDisabled>),
         ),

@@ -24,28 +24,23 @@ fn main() {
                     ui_root().spawn(world);
                 },
                 camera,
-                |mut restart: EventWriter<Restart>| {
-                    restart.send_default();
-                },
+                |mut commands: Commands| commands.trigger(Restart),
             ),
         )
-        .add_systems(Update, (direction, restart.run_if(on_event::<Restart>)))
+        .add_systems(Update, direction)
         .add_systems(
             FixedUpdate,
-            (
-                (spawn_food.run_if(on_event::<SpawnFood>), consume_queued_direction, tick)
-                    .chain()
-                    .run_if(not(resource_exists::<Paused>)),
-                grid_size_changer.run_if(on_event::<GridSizeChange>),
-            )
+            ((consume_queued_direction, tick)
+                .chain()
+                .run_if(not(resource_exists::<Paused>)),)
                 .chain(),
         )
         .insert_resource(DirectionResource(Direction::Right))
         .insert_resource(Time::<Fixed>::from_seconds(1. / STARTING_TICKS_PER_SECOND as f64))
         .insert_resource(QueuedDirectionOption(None))
-        .add_event::<SpawnFood>()
-        .add_event::<GridSizeChange>()
-        .add_event::<Restart>()
+        .add_observer(on_restart)
+        .add_observer(on_spawn_food)
+        .add_observer(on_grid_size_change)
         .run();
 }
 
@@ -112,7 +107,7 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
                     El::<Node>::new()
                         .width_signal(cell_size.signal().map(Val::Px))
                         .height_signal(cell_size.signal().map(Val::Px))
-                        .background_color_signal(cell.signal().dedupe().map(Into::into))
+                        .background_color_signal(cell.signal().dedupe().map(Into::<BackgroundColor>::into))
                 }),
         )
 }
@@ -142,13 +137,13 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
                 )
                 .item(text_button("-").on_pressing_with_system_with_sleep_throttle(
                     |_: In<_>, mut commands: Commands| {
-                        commands.send_event(GridSizeChange::Decr);
+                        commands.trigger(GridSizeChange::Decr);
                     },
                     Duration::from_millis(100),
                 ))
                 .item(text_button("+").on_pressing_with_system_with_sleep_throttle(
                     |_: In<_>, mut commands: Commands| {
-                        commands.send_event(GridSizeChange::Incr);
+                        commands.trigger(GridSizeChange::Incr);
                     },
                     Duration::from_millis(100),
                 )),
@@ -212,11 +207,11 @@ fn restart_button() -> impl Element {
             hovered
                 .signal()
                 .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
-                .map(Into::into),
+                .map(BackgroundColor),
         )
         .hovered_sync(hovered)
         .align_content(Align::center())
-        .on_click(|| async_world().send_event(Restart).apply(spawn).detach())
+        .on_click_with_system(|_: In<_>, mut commands: Commands| commands.trigger(Restart))
         .child(
             El::<Text>::new()
                 .text_font(TextFont::from_font_size(50.))
@@ -225,52 +220,49 @@ fn restart_button() -> impl Element {
         )
 }
 
-#[derive(Event)]
+#[derive(Event, Clone, Copy)]
 enum GridSizeChange {
     Incr,
     Decr,
 }
 
-// TODO: move this back inside the on_click ? (initial motivation for moving to event was
-// potentially addressing the grid float precision shenanigans)
-fn grid_size_changer(mut events: EventReader<GridSizeChange>, mut spawn_food: EventWriter<SpawnFood>) {
-    for event in events.read() {
-        let cur_size = GRID_SIZE.get();
-        match event {
-            GridSizeChange::Incr => {
-                let mut cells_lock = CELLS.lock_mut();
-                for i in 0..cur_size + 1 {
-                    cells_lock.insert_cloned((i, cur_size), Mutable::new(Cell::Empty));
-                    cells_lock.insert_cloned((cur_size, i), Mutable::new(Cell::Empty));
-                }
-                GRID_SIZE.update(|size| size + 1);
+fn on_grid_size_change(event: Trigger<GridSizeChange>, mut commands: Commands) {
+    let event = *event;
+    let cur_size = GRID_SIZE.get();
+    match event {
+        GridSizeChange::Incr => {
+            let mut cells_lock = CELLS.lock_mut();
+            for i in 0..cur_size + 1 {
+                cells_lock.insert_cloned((i, cur_size), Mutable::new(Cell::Empty));
+                cells_lock.insert_cloned((cur_size, i), Mutable::new(Cell::Empty));
             }
-            GridSizeChange::Decr => {
-                if cur_size > 2 {
-                    let mut cells_lock = CELLS.lock_mut();
-                    let indices = (0..cur_size)
-                        .map(|i| (i, cur_size - 1))
-                        .chain((0..cur_size).map(|i| (cur_size - 1, i)))
-                        .collect::<Vec<_>>();
-                    if indices.iter().all(|index| {
-                        cells_lock
-                            .get(index)
-                            .map(|cell| !matches!(cell.get(), Cell::Snake))
-                            .unwrap_or(false)
-                    }) {
-                        let mut removed = vec![];
-                        for index in indices {
-                            removed.push(cells_lock.remove(&index));
-                        }
-                        if removed
-                            .into_iter()
-                            .flatten()
-                            .any(|removed| matches!(removed.get(), Cell::Food))
-                        {
-                            spawn_food.send_default();
-                        }
-                        GRID_SIZE.update(|size| size - 1);
+            GRID_SIZE.update(|size| size + 1);
+        }
+        GridSizeChange::Decr => {
+            if cur_size > 2 {
+                let mut cells_lock = CELLS.lock_mut();
+                let indices = (0..cur_size)
+                    .map(|i| (i, cur_size - 1))
+                    .chain((0..cur_size).map(|i| (cur_size - 1, i)))
+                    .collect::<Vec<_>>();
+                if indices.iter().all(|index| {
+                    cells_lock
+                        .get(index)
+                        .map(|cell| !matches!(cell.get(), Cell::Snake))
+                        .unwrap_or(false)
+                }) {
+                    let mut removed = vec![];
+                    for index in indices {
+                        removed.push(cells_lock.remove(&index));
                     }
+                    if removed
+                        .into_iter()
+                        .flatten()
+                        .any(|removed| matches!(removed.get(), Cell::Food))
+                    {
+                        commands.trigger(SpawnFood);
+                    }
+                    GRID_SIZE.update(|size| size - 1);
                 }
             }
         }
@@ -286,7 +278,7 @@ fn text_button(text_: &str) -> impl Element + PointerEventAware {
             hovered
                 .signal()
                 .map_bool(|| SNAKE_COLOR, || EMPTY_COLOR)
-                .map(Into::into),
+                .map(BackgroundColor),
         )
         .hovered_sync(hovered)
         .child(
@@ -324,12 +316,7 @@ impl Direction {
 #[derive(Resource)]
 struct DirectionResource(Direction);
 
-fn tick(
-    mut commands: Commands,
-    mut snake: ResMut<Snake>,
-    direction: Res<DirectionResource>,
-    mut spawn_food: EventWriter<SpawnFood>,
-) {
+fn tick(mut snake: ResMut<Snake>, direction: Res<DirectionResource>, mut commands: Commands) {
     let (mut x, mut y) = snake.0.front().copied().unwrap();
     (x, y) = match direction.0 {
         Direction::Up => (x, if y == GRID_SIZE.get() - 1 { 0 } else { y + 1 }),
@@ -350,7 +337,7 @@ fn tick(
                 match cell {
                     Cell::Food => {
                         SCORE.update(|score| score + 1);
-                        spawn_food.send_default();
+                        commands.trigger(SpawnFood);
                     }
                     Cell::Empty => {
                         if let Some((x, y)) = snake.0.pop_back() {
@@ -369,7 +356,7 @@ fn tick(
 #[derive(Event, Default)]
 struct SpawnFood;
 
-fn spawn_food(mut rng: GlobalEntropy<ChaCha8Rng>) {
+fn on_spawn_food(_: Trigger<SpawnFood>, mut rng: GlobalEntropy<ChaCha8Rng>) {
     let cells_lock = CELLS.lock_ref();
     let empty_cells = cells_lock
         .iter()
@@ -383,28 +370,23 @@ fn spawn_food(mut rng: GlobalEntropy<ChaCha8Rng>) {
 #[derive(Event, Default)]
 struct Restart;
 
-fn restart(
-    mut commands: Commands,
-    mut spawn_food: EventWriter<SpawnFood>,
-    mut queued_direction_option: ResMut<QueuedDirectionOption>,
-    mut direction: ResMut<DirectionResource>,
-) {
+fn on_restart(_: Trigger<Restart>, mut commands: Commands) {
     for (_, cell) in CELLS.lock_ref().iter() {
         cell.set(Cell::Empty);
     }
     let size = GRID_SIZE.get();
     let init_snake = vec![(size / 2, size / 2 - 1), (size / 2 - 1, size / 2 - 1)];
     let cells_lock = CELLS.lock_ref();
-    for (x, y) in init_snake.iter() {
-        cells_lock.get(&(*x, *y)).unwrap().set_neq(Cell::Snake);
+    for &(x, y) in init_snake.iter() {
+        cells_lock.get(&(x, y)).unwrap().set_neq(Cell::Snake);
     }
     commands.insert_resource(Snake(VecDeque::from(init_snake)));
-    queued_direction_option.0 = None;
-    direction.0 = Direction::Right;
-    spawn_food.send_default();
+    commands.insert_resource(QueuedDirectionOption(None));
+    commands.insert_resource(DirectionResource(Direction::Right));
+    commands.trigger(SpawnFood);
+    commands.remove_resource::<Paused>();
     SCORE.set_neq(0);
     GAME_OVER.set_neq(false);
-    commands.remove_resource::<Paused>();
 }
 
 #[derive(Resource)]

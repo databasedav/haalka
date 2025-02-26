@@ -4,7 +4,7 @@ use std::{ops::{Deref, Not}, pin::Pin};
 
 use bevy_ecs::system::*;
 use bevy_ecs::prelude::*;
-use bevy_ui::prelude::*;
+use bevy_ui::{prelude::*, widget::NodeImageMode};
 use bevy_color::prelude::*;
 use bevy_utils::prelude::*;
 use bevy_app::prelude::*;
@@ -59,6 +59,8 @@ impl TextInput {
         let el = El::<Node>::new().update_raw_el(|raw_el| {
             raw_el
                 .insert((TextEdit, PickingBehavior::default()))
+                // TODO: remove 0.16 https://github.com/bevyengine/bevy/issues/16643#issuecomment-2518163688
+                .insert(ImageNode::default().with_mode(NodeImageMode::Stretch))
                 .on_event_with_system::<Pointer<Down>, _>(
                     move |In((_, pointer_down)): In<(_, Pointer<Down>)>,
                             mut focusable_query: Query<(Entity, &mut Focusable), Without<TextInputFocusOnDownDisabled>>,
@@ -81,6 +83,7 @@ impl TextInput {
         self,
         f: impl FnOnce(Mut<CosmicEditBuffer>, ResMut<CosmicFontSystem>, &DefaultAttrs) + Send + 'static,
     ) -> Self {
+        // TODO: replace with on_spawn_with_system
         self.update_raw_el(|raw_el| raw_el.with_entity(move |mut entity| {
             let id = entity.id();
             entity.world_scope(|world| {

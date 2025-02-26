@@ -131,30 +131,28 @@ fn register_align_signal<REW: RawElWrapper>(
 ) -> REW {
     let mut last_alignments_option: Option<Vec<Alignment>> = None;
     element.update_raw_el(|raw_el| {
-        raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-            raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Node>(
-                align_signal,
-                move |mut node, aligns_option| {
-                    if let Some(alignments) = aligns_option {
-                        // TODO: confirm that this last alignment removal strategy is working as intended
-                        if let Some(mut last_alignments) = last_alignments_option.take() {
-                            last_alignments.retain(|align| !alignments.contains(align));
-                            for alignment in last_alignments {
-                                apply_alignment(&mut node, alignment, AddRemove::Remove)
-                            }
-                        }
-                        for alignment in &alignments {
-                            apply_alignment(&mut node, *alignment, AddRemove::Add)
-                        }
-                        last_alignments_option = alignments.is_empty().not().then_some(alignments);
-                    } else if let Some(last_aligns) = last_alignments_option.take() {
-                        for align in last_aligns {
-                            apply_alignment(&mut node, align, AddRemove::Remove)
+        raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Node>(
+            align_signal,
+            move |mut node, aligns_option| {
+                if let Some(alignments) = aligns_option {
+                    // TODO: confirm that this last alignment removal strategy is working as intended
+                    if let Some(mut last_alignments) = last_alignments_option.take() {
+                        last_alignments.retain(|align| !alignments.contains(align));
+                        for alignment in last_alignments {
+                            apply_alignment(&mut node, alignment, AddRemove::Remove)
                         }
                     }
-                },
-            )
-        })
+                    for alignment in &alignments {
+                        apply_alignment(&mut node, *alignment, AddRemove::Add)
+                    }
+                    last_alignments_option = alignments.is_empty().not().then_some(alignments);
+                } else if let Some(last_aligns) = last_alignments_option.take() {
+                    for align in last_aligns {
+                        apply_alignment(&mut node, align, AddRemove::Remove)
+                    }
+                }
+            },
+        )
     })
 }
 
@@ -276,23 +274,17 @@ where
         mut child: Child,
         apply_alignment: fn(&mut Node, Alignment, AddRemove),
     ) -> Child {
-        child = child.update_raw_el(|raw_el| {
-            raw_el.defer_update(DeferredUpdaterAppendDirection::Back, |raw_el| {
-                raw_el.with_component::<Node>(Self::update_node)
-            })
-        });
+        child = child.update_raw_el(|raw_el|raw_el.with_component::<Node>(Self::update_node));
         // TODO: this .take means that child can't be passed around parents without losing align
         // info, but this can be easily added if desired
         if let Some(align) = child.align_mut().take() {
             match align {
                 AlignHolder::Align(align) => {
                     child = child.update_raw_el(|raw_el| {
-                        raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-                            raw_el.with_component::<Node>(move |mut node| {
-                                for align in align.alignments {
-                                    apply_alignment(&mut node, align, AddRemove::Add)
-                                }
-                            })
+                        raw_el.with_component::<Node>(move |mut node| {
+                            for align in align.alignments {
+                                apply_alignment(&mut node, align, AddRemove::Add)
+                            }
                         })
                     })
                 }

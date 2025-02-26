@@ -162,7 +162,7 @@ fn incrde_button<T: Component>(step: f32) -> impl Element {
             hovered
                 .signal()
                 .map_bool(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
-                .map(Into::into),
+                .map(BackgroundColor),
         )
         .hovered_sync(hovered)
         .on_pressing_with_system_with_sleep_throttle(

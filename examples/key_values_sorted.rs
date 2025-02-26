@@ -17,7 +17,7 @@ use std::{
 
 use bevy::prelude::*;
 use bevy_cosmic_edit::{CosmicBackgroundColor, CosmicWrap, CursorColor, MaxLines};
-use haalka::{prelude::*, text_input::FocusedTextInput, viewport_mutable::MutableViewport};
+use haalka::{prelude::*, text_input::FocusedTextInput};
 
 fn main() {
     App::new()
@@ -39,7 +39,6 @@ fn main() {
                 focus_scroller.run_if(resource_changed_or_removed::<FocusedTextInput>),
             ),
         )
-        .add_event::<MaybeChanged>()
         .add_observer(sort_one)
         .run();
 }
@@ -209,7 +208,7 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
                 .background_color_signal(
                     signal::or(hovered.signal(), selected.signal())
                         .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
-                        .map(Into::into),
+                        .map(BackgroundColor),
                 )
                 .hovered_sync(hovered)
                 .align_content(Align::center())
@@ -307,7 +306,7 @@ fn key_values() -> impl Element + Sizeable {
     Column::<Node>::new()
         .with_node(|mut node| node.row_gap = Val::Px(10.))
         .height(Val::Percent(90.))
-        .mutable_viewport(Overflow::clip_y(), LimitToBody::Vertical)
+        .mutable_viewport(haalka::prelude::Axis::Vertical)
         .on_scroll_with_system_on_hover(
             BasicScrollHandler::new()
                 .direction(ScrollDirection::Vertical)
@@ -357,7 +356,7 @@ fn x_button() -> impl Element + PointerEventAware {
             hovered
                 .signal()
                 .map_bool(|| bevy::color::palettes::basic::RED.into(), || *DARK_GRAY)
-                .map(Into::into),
+                .map(BackgroundColor),
         )
         .hovered_sync(hovered)
         .child(
@@ -401,7 +400,7 @@ fn ui_root() -> impl Element {
                                     hovered
                                         .signal()
                                         .map_bool(|| bevy::color::palettes::basic::GREEN.into(), || *DARK_GRAY)
-                                        .map(Into::into),
+                                        .map(BackgroundColor),
                                 )
                                 .hovered_sync(hovered)
                                 .align_content(Align::center())
@@ -416,7 +415,7 @@ fn ui_root() -> impl Element {
                                     PAIRS.lock_mut().push_cloned(RowData {
                                         key: {
                                             let data = TextInputData::new("");
-                                            data.focus.set(true);
+                                            // data.focus.set(true);
                                             data
                                         },
                                         value: TextInputData::new(""),

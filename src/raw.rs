@@ -81,14 +81,10 @@ impl RawHaalkaEl {
     // because it would pollute the struct with a type?)
     /// Force updates to be in the back of the line, with some crude ordering.
     ///
-    /// Useful when updates must be applied after some node is wrapped with another, for example,
-    /// the [`Sizeable`](super::sizeable::Sizeable) methods defer their updates to the back of the
-    /// line because they must be applied after any
-    /// [`ViewportMutable`](super::viewport_mutable::ViewportMutable) wrapping container is
-    /// applied, whose application is also deferred, but to the *front* of the back of the line.
+    /// Useful when updates must be applied after some node is wrapped with another.
     ///
     /// # Notes
-    /// Deferred updates is a lower level feature and is used internally to deal with update
+    /// Deferred updates is a lower level feature and was previously used internally to deal with update
     /// ordering issues in relation to scrollability and sizing. One can freely take advantage of it
     /// to do things like apply wrapping nodes on their own custom elements built on top of
     /// [`RawHaalkaEl`], but should be more wary of using it through

@@ -71,7 +71,7 @@ macro_rules! impl_haalka_methods {
                     }
 
                     #[doc = concat!("Reactively set this element's [`", stringify!($field_type), "`] [`Component`]. If the [`Signal`] outputs [`None`], the `C` [`Component`] is removed.")]
-                    pub fn [<$field _signal>]<S: Signal<Item = $field_type> + Send + 'static>(self, [<$field _signal>]: impl Into<Option<S>>) -> Self {
+                    pub fn [<$field _signal>]<S: Signal<Item = impl Into<Option<$field_type>>> + Send + 'static>(self, [<$field _signal>]: impl Into<Option<S>>) -> Self {
                         self.update_raw_el(|raw_el| raw_el.component_signal([<$field _signal>]))
                     }
 

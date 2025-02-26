@@ -17,9 +17,7 @@ pub trait Sizeable: RawElWrapper {
     fn height(mut self, height_option: impl Into<Option<Val>>) -> Self {
         if let Some(height) = height_option.into() {
             self = self.update_raw_el(|raw_el| {
-                raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-                    raw_el.with_component::<Node>(move |mut node| node.height = height)
-                })
+                raw_el.with_component::<Node>(move |mut node| node.height = height)
             });
         }
         self
@@ -34,12 +32,10 @@ pub trait Sizeable: RawElWrapper {
         if let Some(height_option_signal) = height_option_signal_option.into() {
             let height_option_signal = height_option_signal.map(|height_option| height_option.into());
             self = self.update_raw_el(|raw_el| {
-                raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-                    raw_el.on_signal_with_component::<Option<Val>, Node>(
-                        height_option_signal,
-                        move |mut node, height_option| node.height = height_option.unwrap_or(Val::Auto),
-                    )
-                })
+                raw_el.on_signal_with_component::<Option<Val>, Node>(
+                    height_option_signal,
+                    move |mut node, height_option| node.height = height_option.unwrap_or(Val::Auto),
+                )
             });
         }
         self
@@ -49,9 +45,7 @@ pub trait Sizeable: RawElWrapper {
     fn width(mut self, width_option: impl Into<Option<Val>>) -> Self {
         if let Some(width) = width_option.into() {
             self = self.update_raw_el(|raw_el| {
-                raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-                    raw_el.with_component::<Node>(move |mut node| node.width = width)
-                })
+                raw_el.with_component::<Node>(move |mut node| node.width = width)
             });
         }
         self
@@ -66,12 +60,10 @@ pub trait Sizeable: RawElWrapper {
         if let Some(width_option_signal) = width_option_signal_option.into() {
             let width_option_signal = width_option_signal.map(|width_option| width_option.into());
             self = self.update_raw_el(|raw_el| {
-                raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-                    raw_el.on_signal_with_component::<Option<Val>, Node>(
-                        width_option_signal,
-                        move |mut node, width_option| node.width = width_option.unwrap_or(Val::Auto),
-                    )
-                })
+                raw_el.on_signal_with_component::<Option<Val>, Node>(
+                    width_option_signal,
+                    move |mut node, width_option| node.width = width_option.unwrap_or(Val::Auto),
+                )
             });
         }
         self

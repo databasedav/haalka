@@ -38,7 +38,7 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
     let hovered = Mutable::new(false);
     Column::<Node>::new()
         .height(Val::Px(5. * COMPUTED_SIZE))
-        .mutable_viewport(Overflow::clip_y(), LimitToBody::Vertical)
+        .mutable_viewport(haalka::prelude::Axis::Vertical)
         .on_scroll_with_system_disableable_signal(
             BasicScrollHandler::new()
                 .direction(ScrollDirection::Vertical)
@@ -68,7 +68,7 @@ fn ui_root() -> impl Element {
                     node.padding = UiRect::horizontal(Val::Px(7.5));
                 })
                 .width(Val::Px(300.))
-                .mutable_viewport(Overflow::clip_x(), LimitToBody::Horizontal)
+                .mutable_viewport(haalka::prelude::Axis::Horizontal)
                 .on_scroll_with_system_disableable_signal(
                     BasicScrollHandler::new()
                         .direction(ScrollDirection::Horizontal)

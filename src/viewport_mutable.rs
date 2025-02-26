@@ -3,19 +3,17 @@
 
 use super::{
     raw::{
-        observe, register_system, utils::remove_system_holder_on_remove, DeferredUpdaterAppendDirection, RawElWrapper,
-        RawHaalkaEl,
+        observe, register_system, utils::remove_system_holder_on_remove, RawElWrapper
     },
     utils::clone,
 };
 use apply::Apply;
 use bevy_app::prelude::*;
-use bevy_ecs::prelude::*;
+use bevy_ecs::{prelude::*, system::SystemParam};
 use bevy_hierarchy::prelude::*;
 use bevy_math::prelude::*;
 use bevy_transform::prelude::*;
 use bevy_ui::prelude::*;
-use bevy_utils::prelude::*;
 use futures_signals::signal::{Mutable, Signal};
 
 /// Dimensions of an element's "scene", which contains both its visible (via its [`Viewport`]) and
@@ -32,21 +30,21 @@ pub struct Scene {
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Viewport {
     /// Horizontal offset.
-    pub x: f32,
+    pub offset_x: f32,
     /// Vertical offset.
-    pub y: f32,
+    pub offset_y: f32,
     #[allow(missing_docs)]
     pub width: f32,
     #[allow(missing_docs)]
     pub height: f32,
 }
 
-/// Specifies which axes viewport mutation is limited to the body of the [`Scene`].
-///
-/// For example, if no [`LimitToBody`] were specified, one could mutate the viewport (e.g. scroll)
-/// past the actual content of the element.
-#[derive(Clone, Copy)]
-pub enum LimitToBody {
+/// [`MutableViewport`]s with this [`Component`] receive [`ViewportLocationChange`] events.
+#[derive(Component)]
+pub struct OnViewportLocationChange;
+
+/// Along which axes the [`Viewport`] can be mutated.
+pub enum Axis {
     #[allow(missing_docs)]
     Horizontal,
     #[allow(missing_docs)]
@@ -55,75 +53,6 @@ pub enum LimitToBody {
     Both,
 }
 
-/// [`Component`] for holding the [`Scene`], [`Viewport`], and relavant configuration.
-#[derive(Component)]
-pub struct MutableViewport {
-    scene: Scene,
-    viewport: Viewport,
-    limit_to_body: Option<LimitToBody>,
-}
-
-impl MutableViewport {
-    #[allow(missing_docs)]
-    pub fn new(limit_to_body: Option<LimitToBody>) -> Self {
-        Self {
-            limit_to_body,
-            scene: default(),
-            viewport: default(),
-        }
-    }
-
-    #[allow(missing_docs)]
-    pub fn scene(&self) -> Scene {
-        self.scene
-    }
-
-    #[allow(missing_docs)]
-    pub fn viewport(&self) -> Viewport {
-        self.viewport
-    }
-}
-
-/// Marker [`Component`] for identifying the [`Viewport`] [`Entity`] of a [`MutableViewport`].
-#[derive(Component)]
-pub struct ViewportMarker;
-
-/// Event for modifying the horizontal and vertical offset of the [`Viewport`].
-#[derive(Default, Event)]
-pub struct ViewportMutation {
-    /// Optional horizontal offset mutation.
-    x: Option<f32>,
-    /// Optional vertical offset mutation.
-    y: Option<f32>,
-}
-
-impl ViewportMutation {
-    #[allow(missing_docs)]
-    pub fn x(x: f32) -> Self {
-        Self::default().with_x(x)
-    }
-
-    #[allow(missing_docs)]
-    pub fn y(y: f32) -> Self {
-        Self::default().with_y(y)
-    }
-
-    #[allow(missing_docs)]
-    pub fn with_x(mut self, x: f32) -> Self {
-        self.x = Some(x);
-        self
-    }
-
-    #[allow(missing_docs)]
-    pub fn with_y(mut self, y: f32) -> Self {
-        self.y = Some(y);
-        self
-    }
-}
-
-#[derive(Component)]
-struct OnViewportLocationChange;
-
 /// Enables the management of a limited visible window (viewport) onto the body of an element.
 /// CRITICALLY NOTE that methods expecting viewport mutability will not function without calling
 /// [`.mutable_viewport(...)`](ViewportMutable::mutable_viewport).
@@ -131,83 +60,13 @@ pub trait ViewportMutable: RawElWrapper {
     /// CRITICALLY NOTE, methods expecting viewport mutability will not function without calling
     /// this method. I could not find a way to enforce this at compile time; please let me know if
     /// you can.
-    ///
-    /// # Arguments
-    /// * `overflow` - [`Overflow`] setting for the wrapping container.
-    /// * `limit_to_body` - Whether to clamp scrolling to the body of the element on [`Some`] or
-    ///   [`None`] of its axes.
-    fn mutable_viewport(self, overflow: Overflow, limit_to_body: impl Into<Option<LimitToBody>>) -> Self {
-        let limit_to_body = limit_to_body.into();
+    fn mutable_viewport(self, axis: Axis) -> Self {
         self.update_raw_el(move |raw_el| {
             raw_el
-                .insert(MutableViewport::new(limit_to_body))
-                .observe(
-                    move |mutation: Trigger<ViewportMutation>,
-                          mut nodes: Query<&mut Node>,
-                          parents: Query<&Parent>,
-                          computed_nodes: Query<&ComputedNode>,
-                          settings: Query<&MutableViewport>| {
-                        let entity = mutation.entity();
-                        if let Some((((computed_node, parent), settings), mut node)) = computed_nodes
-                            .get(entity)
-                            .ok()
-                            .zip(
-                                parents
-                                    .get(entity)
-                                    .ok()
-                                    .and_then(|parent| computed_nodes.get(parent.get()).ok()),
-                            )
-                            .zip(settings.get(entity).ok())
-                            .zip(nodes.get_mut(entity).ok())
-                        {
-                            let &ViewportMutation {
-                                x: x_option,
-                                y: y_option,
-                            } = mutation.event();
-                            if let Some(mut x) = x_option {
-                                if matches!(
-                                    settings.limit_to_body,
-                                    Some(LimitToBody::Horizontal) | Some(LimitToBody::Both)
-                                ) {
-                                    x = x.clamp(-(computed_node.size().x - parent.size().x).max(0.), 0.)
-                                };
-                                node.left = Val::Px(x);
-                            }
-                            if let Some(mut y) = y_option {
-                                if matches!(
-                                    settings.limit_to_body,
-                                    Some(LimitToBody::Vertical) | Some(LimitToBody::Both)
-                                ) {
-                                    y = y.clamp(-(computed_node.size().y - parent.size().y).max(0.), 0.);
-                                };
-                                node.top = Val::Px(y);
-                            }
-                        }
-                    },
-                )
-                .defer_update(DeferredUpdaterAppendDirection::Front, move |raw_el| {
-                    RawHaalkaEl::from(Node {
-                        display: Display::Flex,
-                        overflow,
-                        ..default()
-                    })
-                    .insert(ViewportMarker)
-                    .child(raw_el) // this is the [`Scene`]
-                    .on_spawn_with_system(
-                        |In(entity), children: Query<&Children>, mut nodes: Query<&mut Node>| {
-                            // match the flex direction of `raw_el` above
-                            if let Some(&child) = firstborn(entity, &children) {
-                                if let Some((flex_direction, mut node)) = nodes
-                                    .get(child)
-                                    .map(|node| node.flex_direction)
-                                    .ok()
-                                    .zip(nodes.get_mut(entity).ok())
-                                {
-                                    node.flex_direction = flex_direction;
-                                }
-                            }
-                        },
-                    )
+                .with_component::<Node>(move |mut node| node.overflow = match axis {
+                    Axis::Horizontal => Overflow::scroll_x(),
+                    Axis::Vertical => Overflow::scroll_y(),
+                    Axis::Both => Overflow::scroll(),
                 })
         })
     }
@@ -248,12 +107,10 @@ pub trait ViewportMutable: RawElWrapper {
     ) -> Self {
         if let Some(x_signal) = x_signal_option.into() {
             self = self.update_raw_el(|raw_el| {
-                raw_el.on_signal_one_shot(
-                    x_signal,
-                    |In((entity, x)): In<(Entity, f32)>, mut commands: Commands| {
-                        commands.trigger_targets(ViewportMutation::x(x), entity);
-                    },
-                )
+                raw_el
+                .on_signal_with_component::<_, ScrollPosition>(x_signal, |mut scroll_position, x| {
+                    scroll_position.offset_x = x;
+                })
             });
         }
         self
@@ -266,71 +123,130 @@ pub trait ViewportMutable: RawElWrapper {
     ) -> Self {
         if let Some(y_signal) = y_signal_option.into() {
             self = self.update_raw_el(|raw_el| {
-                raw_el.on_signal_one_shot(
-                    y_signal,
-                    |In((entity, y)): In<(Entity, f32)>, mut commands: Commands| {
-                        commands.trigger_targets(ViewportMutation::y(y), entity);
-                    },
-                )
+                raw_el
+                .on_signal_with_component::<_, ScrollPosition>(y_signal, |mut scroll_position, y| {
+                    scroll_position.offset_y = y;
+                })
             });
         }
         self
     }
 }
 
+// TODO: should not fire when scrolling doesn't actually change the viewport
+/// [`Trigger`]ed when the [`Viewport`] or [`Scene`] of a [`MutableViewport`] changes; only entities
+/// with the [`OnViewportLocationChange`] component receive this event.
 #[derive(Event)]
-struct ViewportLocationChange {
-    scene: Scene,
-    viewport: Viewport,
+pub struct ViewportLocationChange {
+    #[allow(missing_docs)]
+    pub scene: Scene,
+    #[allow(missing_docs)]
+    pub viewport: Viewport,
 }
 
-#[allow(clippy::type_complexity)]
-fn scene_change_dispatcher(
-    mut data: Query<(Entity, &ComputedNode, &Node, &mut MutableViewport), Or<(Changed<Node>, Changed<Transform>)>>,
-    mut commands: Commands,
-) {
-    for (entity, computed_node, node, mut mutable_viewport) in data.iter_mut() {
-        let Vec2 { x, y } = computed_node.size();
-        mutable_viewport.scene.width = x;
-        mutable_viewport.scene.height = y;
-        if let Val::Px(x) = node.left {
-            mutable_viewport.viewport.x = -x;
+// #[allow(clippy::type_complexity)]
+// fn scene_change_dispatcher(
+//     mut data: Query<
+//         (Entity, &ComputedNode, &Node, &mut MutableViewport),
+//         (With<OnViewportLocationChange>, Or<(Changed<Node>, Changed<Transform>)>),
+//     >,
+//     mut commands: Commands,
+// ) {
+//     for (entity, computed_node, node, mut mutable_viewport) in data.iter_mut() {
+//         let Vec2 { x, y } = computed_node.size();
+//         mutable_viewport.scene.width = x;
+//         mutable_viewport.scene.height = y;
+//         if let Val::Px(x) = node.left {
+//             mutable_viewport.viewport.x = -x;
+//         }
+//         if let Val::Px(y) = node.top {
+//             mutable_viewport.viewport.y = -y;
+//         }
+//         let MutableViewport { scene, viewport, .. } = *mutable_viewport;
+//         commands.trigger_targets(ViewportLocationChange { scene, viewport }, entity);
+//     }
+// }
+
+// #[allow(clippy::type_complexity)]
+// fn viewport_change_dispatcher(
+//     data: Query<(Entity, &ComputedNode), (With<ViewportMarker>, Changed<ComputedNode>)>,
+//     children: Query<&Children>,
+//     mut mutable_viewports: Query<&mut MutableViewport, With<OnViewportLocationChange>>,
+//     mut commands: Commands,
+// ) {
+//     for (entity, computed_node) in data.iter() {
+//         let Vec2 { x, y } = computed_node.size();
+//         // [`Scene`] is the [`Viewport`]'s only child
+//         if let Some(&child) = firstborn(entity, &children) {
+//             if let Ok(mut mutable_viewport) = mutable_viewports.get_mut(child) {
+//                 mutable_viewport.viewport.width = x;
+//                 mutable_viewport.viewport.height = y;
+//                 let MutableViewport { scene, viewport, .. } = *mutable_viewport;
+//                 commands.trigger_targets(ViewportLocationChange { scene, viewport }, child);
+//             }
+//         }
+//     }
+// }
+
+/// Use to fetch the logical pixel coordinates of the UI node, based on its [`GlobalTransform`].
+#[derive(SystemParam)]
+pub struct LogicalRect<'w, 's> {
+    data: Query<'w, 's, (&'static ComputedNode, &'static GlobalTransform)>,
+}
+
+impl<'w, 's> LogicalRect<'w, 's> {
+    fn get(&self, entity: Entity) -> Option<Rect> {
+        if let Ok((computed_node, global_transform)) = self.data.get(entity) {
+            return Rect::from_center_size(
+                global_transform.translation().xy(),
+                computed_node.size(),
+            )
+            .apply(Some);
         }
-        if let Val::Px(y) = node.top {
-            mutable_viewport.viewport.y = -y;
-        }
-        let MutableViewport { scene, viewport, .. } = *mutable_viewport;
-        commands.trigger_targets(ViewportLocationChange { scene, viewport }, entity);
+        None
     }
 }
 
-#[allow(clippy::type_complexity)]
-fn viewport_change_dispatcher(
-    data: Query<(Entity, &ComputedNode), (With<ViewportMarker>, Changed<ComputedNode>)>,
+fn viewport_location_change_dispatcher(
+    data: Query<(Entity, &ScrollPosition), (Or<(Changed<ComputedNode>, Changed<ScrollPosition>)>, With<OnViewportLocationChange>)>,
     children: Query<&Children>,
-    mut mutable_viewports: Query<&mut MutableViewport>,
+    logical_rect: LogicalRect,
     mut commands: Commands,
 ) {
-    for (entity, computed_node) in data.iter() {
-        let Vec2 { x, y } = computed_node.size();
-        // [`Scene`] is the [`Viewport`]'s only child
-        if let Some(&child) = firstborn(entity, &children) {
-            if let Ok(mut mutable_viewport) = mutable_viewports.get_mut(child) {
-                mutable_viewport.viewport.width = x;
-                mutable_viewport.viewport.height = y;
-                let MutableViewport { scene, viewport, .. } = *mutable_viewport;
-                commands.trigger_targets(ViewportLocationChange { scene, viewport }, child);
+    for (entity, scroll_position) in data.iter() {
+        if let Some(Vec2 { x: viewport_width, y: viewport_height }) = logical_rect.get(entity).as_ref().map(Rect::size) {
+            let ScrollPosition { offset_x, offset_y } = *scroll_position;
+            let mut min = Vec2::MAX;
+            let mut max = Vec2::MIN;
+            for child in children.get(entity).ok().into_iter().flat_map(|children| children.iter()) {
+                if let Some(child_rect) = logical_rect.get(*child) {
+                    min = min.min(child_rect.min);
+                    max = max.max(child_rect.max);
+                }
             }
+            commands.trigger_targets(
+                ViewportLocationChange {
+                    scene: Scene { width: max.x - min.x, height: max.y - min.y },
+                    viewport: Viewport {
+                        offset_x,
+                        offset_y,
+                        width: viewport_width,
+                        height: viewport_height,
+                    },
+                },
+                entity,
+            );
         }
     }
 }
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(
-        Update,
-        (scene_change_dispatcher, viewport_change_dispatcher)
-            .run_if(any_with_component::<MutableViewport>.and(any_with_component::<OnViewportLocationChange>)),
-    );
+    app.add_systems(Update, viewport_location_change_dispatcher);
+    // app.add_systems(
+    //     Update,
+    //     (scene_change_dispatcher, viewport_change_dispatcher)
+    //         .run_if(any_with_component::<MutableViewport>.and(any_with_component::<OnViewportLocationChange>)),
+    // );
 }
 
 pub(crate) fn firstborn<'a>(entity: Entity, children: &'a Query<&Children>) -> Option<&'a Entity> {
