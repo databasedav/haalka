@@ -1,6 +1,3 @@
-#![allow(missing_docs)]
-#![allow(dead_code)]
-
 use bevy::{
     app::prelude::*,
     core_pipeline::prelude::*,
@@ -174,6 +171,3 @@ pub(crate) fn examples_plugin(app: &mut App) {
         }
     }
 }
-
-// TODO: this was needed otherwise clippy complains; how else to organize example specific utils?
-fn main() {}

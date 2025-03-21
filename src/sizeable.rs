@@ -1,7 +1,7 @@
 //! Semantics for managing elements' static or reactive vertical and horizontal length, integrated
 //! with the wrapper elements that [haalka](crate) employs, see [`Sizeable`].
 
-use super::raw::{DeferredUpdaterAppendDirection, RawElWrapper};
+use super::raw::RawElWrapper;
 use bevy_ui::prelude::*;
 use futures_signals::signal::{Signal, SignalExt};
 
@@ -16,9 +16,7 @@ pub trait Sizeable: RawElWrapper {
     /// Set the height of this element.
     fn height(mut self, height_option: impl Into<Option<Val>>) -> Self {
         if let Some(height) = height_option.into() {
-            self = self.update_raw_el(|raw_el| {
-                raw_el.with_component::<Node>(move |mut node| node.height = height)
-            });
+            self = self.update_raw_el(|raw_el| raw_el.with_component::<Node>(move |mut node| node.height = height));
         }
         self
     }
@@ -44,9 +42,7 @@ pub trait Sizeable: RawElWrapper {
     /// Set the width of this element.
     fn width(mut self, width_option: impl Into<Option<Val>>) -> Self {
         if let Some(width) = width_option.into() {
-            self = self.update_raw_el(|raw_el| {
-                raw_el.with_component::<Node>(move |mut node| node.width = width)
-            });
+            self = self.update_raw_el(|raw_el| raw_el.with_component::<Node>(move |mut node| node.width = width));
         }
         self
     }

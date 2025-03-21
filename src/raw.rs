@@ -84,10 +84,10 @@ impl RawHaalkaEl {
     /// Useful when updates must be applied after some node is wrapped with another.
     ///
     /// # Notes
-    /// Deferred updates is a lower level feature and was previously used internally to deal with update
-    /// ordering issues in relation to scrollability and sizing. One can freely take advantage of it
-    /// to do things like apply wrapping nodes on their own custom elements built on top of
-    /// [`RawHaalkaEl`], but should be more wary of using it through
+    /// Deferred updates is a lower level feature and was previously used internally to deal with
+    /// update ordering issues in relation to scrollability and sizing. One can freely take
+    /// advantage of it to do things like apply wrapping nodes on their own custom elements
+    /// built on top of [`RawHaalkaEl`], but should be more wary of using it through
     /// [`.update_raw_el`](RawElWrapper::update_raw_el) on the provided higher level UI elements
     /// like [`El`](super::el::El) and [`Column`](super::column::Column).
     pub fn defer_update(
@@ -825,7 +825,7 @@ impl RawElement for RawHaalkaEl {
 }
 
 /// Allows [`RawElement`]s and their [wrappers](RawElWrapper) to be spawned into the world.
-pub trait Spawnable: RawElement {
+pub trait Spawnable: RawElement where Self: Sized {
     /// Spawn the element into the world.
     fn spawn(self, world: &mut World) -> Entity {
         self.into_raw().into_node_builder().spawn(world)

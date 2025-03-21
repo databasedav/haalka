@@ -17,7 +17,7 @@ use std::{
 
 use bevy::prelude::*;
 use bevy_cosmic_edit::{CosmicBackgroundColor, CosmicWrap, CursorColor, MaxLines};
-use haalka::{prelude::*, text_input::FocusedTextInput};
+use haalka::{prelude::*, text_input::FocusedTextInput, viewport_mutable::MutableViewport};
 
 fn main() {
     App::new()

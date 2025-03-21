@@ -5,12 +5,11 @@ use super::{
     pointer_event_aware::PointerEventAware,
     raw::{observe, register_system, utils::remove_system_holder_on_remove},
     utils::{clone, spawn},
-    viewport_mutable::{firstborn, ViewportMutable},
+    viewport_mutable::ViewportMutable,
 };
 use apply::Apply;
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
-use bevy_hierarchy::Children;
 use bevy_input::{mouse::*, prelude::*};
 use bevy_ui::prelude::*;
 use bevy_utils::prelude::*;
@@ -122,27 +121,18 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
         self,
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + 'static,
     ) -> Self {
-        self.on_hovered_change_with_system(
-            |In((entity, hovered)), mut commands: Commands| {
-                if let Some(mut entity) = commands.get_entity(entity) {
-                    if hovered {
-                        entity.remove::<ScrollDisabled>();
-                    } else {
-                        entity.try_insert(ScrollDisabled);
-                    }
+        self.on_hovered_change_with_system(|In((entity, hovered)), mut commands: Commands| {
+            if let Some(mut entity) = commands.get_entity(entity) {
+                if hovered {
+                    entity.remove::<ScrollDisabled>();
+                } else {
+                    entity.try_insert(ScrollDisabled);
                 }
-            },
-        )
-        .update_raw_el(|raw_el| {
-            raw_el.on_spawn_with_system(|In(entity), children: Query<&Children>, mut commands: Commands| {
-                if let Some(&child) = firstborn(entity, &children) {
-                    if let Some(mut entity) = commands.get_entity(child) {
-                        entity.try_insert(ScrollDisabled);
-                    }
-                }
-            })
+            }
         })
         .on_scroll_with_system_disableable::<ScrollDisabled, _>(handler)
+        .update_raw_el(|raw_el| raw_el.insert(ScrollDisabled))
+        
     }
 
     /// When this element receives a [`MouseWheel`] event while it is hovered, run a function with
@@ -237,7 +227,10 @@ impl BasicScrollHandler {
     pub fn into_system(
         self,
     ) -> Box<
-        dyn FnMut(In<(Entity, MouseWheel)>, Res<ButtonInput<KeyCode>>, Query<&mut ScrollPosition>) + Send + Sync + 'static,
+        dyn FnMut(In<(Entity, MouseWheel)>, Res<ButtonInput<KeyCode>>, Query<&mut ScrollPosition>)
+            + Send
+            + Sync
+            + 'static,
     > {
         let BasicScrollHandler {
             direction: direction_signal_option,

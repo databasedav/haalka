@@ -62,17 +62,19 @@ fn button(symbol: &'static str) -> El<Node> {
 
 fn input_button(symbol: &'static str) -> impl Element {
     let hovered = Mutable::new(false);
-    let f = move || if symbol == "=" {
-        let mut output = OUTPUT.lock_mut();
-        if let Ok(result) = Context::<f64>::default().evaluate(&output) {
-            if let Some(result) = Decimal::from_f64((result * 100.).round() / 100.) {
-                *output = result.normalize().to_string();
-                return;
+    let f = move || {
+        if symbol == "=" {
+            let mut output = OUTPUT.lock_mut();
+            if let Ok(result) = Context::<f64>::default().evaluate(&output) {
+                if let Some(result) = Decimal::from_f64((result * 100.).round() / 100.) {
+                    *output = result.normalize().to_string();
+                    return;
+                }
             }
+            ERROR.set_neq(true);
+        } else {
+            *OUTPUT.lock_mut() += symbol;
         }
-        ERROR.set_neq(true);
-    } else {
-        *OUTPUT.lock_mut() += symbol;
     };
     button(symbol)
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
