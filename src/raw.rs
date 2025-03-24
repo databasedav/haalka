@@ -254,7 +254,7 @@ impl RawHaalkaEl {
 
     /// Reactively run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and
     /// the output of the [`Signal`].
-    pub fn on_signal_one_shot<T: Send + 'static, Marker>(
+    pub fn on_signal_with_system<T: Send + 'static, Marker>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
         system: impl IntoSystem<In<(Entity, T)>, (), Marker> + Send + 'static,
@@ -279,7 +279,7 @@ impl RawHaalkaEl {
     /// Reactively run a [`System`], if the `forwarder` points to [`Some`] [`Entity`], which takes
     /// [`In`](`System::In`) that element's [`Entity`] and the output of the [`Signal`].
     #[allow(clippy::type_complexity)]
-    pub fn on_signal_one_shot_forwarded<T: Send + 'static, Marker1, Marker2>(
+    pub fn on_signal_with_system_forwarded<T: Send + 'static, Marker1, Marker2>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
         forwarder: impl IntoSystem<In<Entity>, Option<Entity>, Marker1> + Send + 'static,
@@ -291,7 +291,7 @@ impl RawHaalkaEl {
             forwarder_system_holder.set(Some(register_system(world, forwarder)));
             handler_system_holder.set(Some(register_system(world, system)));
         }))
-        .on_signal_one_shot(
+        .on_signal_with_system(
             signal,
             clone!((forwarder_system_holder, handler_system_holder) move |In((entity, input)): In<(Entity, T)>, mut systems: Local<Option<(SystemId<In<Entity>, Option<Entity>>, SystemId<In<(Entity, T)>>)>>, mut commands: Commands| {
                 // only pay the read locking cost once
@@ -314,7 +314,7 @@ impl RawHaalkaEl {
         signal: impl Signal<Item = T> + Send + 'static,
         mut f: impl FnMut(EntityWorldMut, T) + Send + Sync + 'static,
     ) -> Self {
-        self.on_signal_one_shot(
+        self.on_signal_with_system(
             signal,
             move |In((entity, value)): In<(Entity, T)>, world: &mut World| {
                 if let Ok(entity) = world.get_entity_mut(entity) {
@@ -332,7 +332,7 @@ impl RawHaalkaEl {
         forwarder: impl IntoSystem<In<Entity>, Option<Entity>, Marker> + Send + 'static,
         mut f: impl FnMut(EntityWorldMut, T) + Send + Sync + 'static,
     ) -> Self {
-        self.on_signal_one_shot_forwarded(
+        self.on_signal_with_system_forwarded(
             signal,
             forwarder,
             move |In((entity, value)): In<(Entity, T)>, world: &mut World| {
@@ -350,7 +350,7 @@ impl RawHaalkaEl {
         signal: impl Signal<Item = T> + Send + 'static,
         mut f: impl FnMut(Mut<C>, T) + Send + Sync + 'static,
     ) -> Self {
-        self.on_signal_one_shot(
+        self.on_signal_with_system(
             signal,
             move |In((entity, value)): In<(Entity, T)>, mut query: Query<&mut C>| {
                 if let Ok(component) = query.get_mut(entity) {
@@ -368,7 +368,7 @@ impl RawHaalkaEl {
         forwarder: impl IntoSystem<In<Entity>, Option<Entity>, Marker> + Send + 'static,
         mut f: impl FnMut(Mut<C>, T) + Send + Sync + 'static,
     ) -> Self {
-        self.on_signal_one_shot_forwarded(
+        self.on_signal_with_system_forwarded(
             signal,
             forwarder,
             move |In((entity, value)): In<(Entity, T)>, mut query: Query<&mut C>| {

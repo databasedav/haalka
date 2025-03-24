@@ -88,7 +88,7 @@ pub mod prelude {
                 mouse_wheel_scrollable::{
                     BasicScrollHandler, MouseWheelScrollable, OnHoverMouseWheelScrollable, ScrollDirection,
                 },
-                pointer_event_aware::{SetCursor, CursorOnHoverDisabled, CursorOnHoverable, PointerEventAware},
+                pointer_event_aware::{SetCursor, CursorOnHoverDisabled, CursorOnHoverable, PointerEventAware, Enter, Leave},
                 row::Row,
                 sizeable::Sizeable,
                 stack::Stack,

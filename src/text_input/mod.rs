@@ -109,7 +109,7 @@ impl TextInput {
         mut f: impl FnMut(Mut<CosmicEditBuffer>, ResMut<CosmicFontSystem>, &DefaultAttrs, T) + Send + Sync + 'static,
     ) -> Self {
         self.update_raw_el(move |raw_el| {
-            raw_el.on_signal_one_shot(
+            raw_el.on_signal_with_system(
                 signal,
                 move |In((entity, value)): In<(Entity, T)>,
                       font_system: ResMut<CosmicFontSystem>,
@@ -202,7 +202,7 @@ impl TextInput {
     ) -> Self {
         if let Some(focus_signal) = focus_signal_option.into() {
             self = self.update_raw_el(|raw_el| {
-                raw_el.on_signal_one_shot(focus_signal, |In((entity, focus)), focused_option: Option<Res<FocusedTextInput>>, mut commands: Commands| {
+                raw_el.on_signal_with_system(focus_signal, |In((entity, focus)), focused_option: Option<Res<FocusedTextInput>>, mut commands: Commands| {
                     if focus {
                         commands.insert_resource(FocusedTextInput(entity));
                     } else if let Some(focused) = focused_option {
