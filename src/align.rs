@@ -33,7 +33,7 @@ use super::{
     raw::{RawElWrapper, RawHaalkaEl},
     row::Row,
     stack::Stack,
-    utils::{SyncBoxSignal, boxed_sync},
+    utils::{boxed_sync, SyncBoxSignal},
 };
 
 // TODO: replace moonzoon github links with docs.rs links once moonzoon crate published

@@ -15,7 +15,10 @@ use bevy_ui::prelude::*;
 use bevy_utils::prelude::*;
 use futures_signals::signal::{always, BoxSignal, Mutable, Signal, SignalExt};
 use haalka_futures_signals_ext::{SignalExtBool, SignalExtExt};
-use std::convert::Into;
+use std::{
+    convert::Into,
+    sync::{Arc, OnceLock},
+};
 
 /// Marker [`Component`] that disables an element's viewport from reacting to mouse wheel events.
 #[derive(Component, Default)]
@@ -35,7 +38,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
-            let system_holder = Mutable::new(None);
+            let system_holder = Arc::new(OnceLock::new());
             raw_el
                 .insert(ScrollEnabled)
                 .observe(|event: Trigger<OnAdd, Disabled>, mut commands: Commands| {
@@ -50,7 +53,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
                 })
                 .on_spawn(clone!((system_holder) move |world, entity| {
                     let system = register_system(world, handler);
-                    system_holder.set(Some(system));
+                    let _ = system_holder.set(system);
                     observe(world, entity, move |mouse_wheel: Trigger<MouseWheel>, mut commands: Commands| {
                         commands.run_system_with_input(system, (mouse_wheel.entity(), *mouse_wheel.event()));
                     });
@@ -132,7 +135,6 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
         })
         .on_scroll_with_system_disableable::<ScrollDisabled, _>(handler)
         .update_raw_el(|raw_el| raw_el.insert(ScrollDisabled))
-        
     }
 
     /// When this element receives a [`MouseWheel`] event while it is hovered, run a function with

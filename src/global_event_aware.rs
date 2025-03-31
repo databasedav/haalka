@@ -1,13 +1,14 @@
 //! Semantics for managing global event listeners.
 
+use std::sync::{Arc, OnceLock};
+
 use super::{
     element::UiRoot,
     raw::{observe, register_system, utils::remove_system_holder_on_remove, RawElWrapper},
     utils::clone,
 };
 use apply::Apply;
-use bevy_ecs::{prelude::*, system::SystemId};
-use futures_signals::signal::Mutable;
+use bevy_ecs::prelude::*;
 
 /// Enables registering "global" event listeners on the [`UiRoot`] node. The [`UiRoot`] must be
 /// manually registered with [`UiRootable::ui_root`](super::element::UiRootable::ui_root) for this
@@ -21,25 +22,23 @@ pub trait GlobalEventAware: RawElWrapper {
         handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
-            let system_holder = Mutable::new(None);
-            let observer_holder = Mutable::new(None);
+            let system_holder = Arc::new(OnceLock::new());
+            let observer_holder = Arc::new(OnceLock::new());
             raw_el
                 .on_spawn(clone!((system_holder) move |world, _| {
-                    system_holder.set(Some(register_system(world, handler)));
+                    let _ = system_holder.set(register_system(world, handler));
                 }))
                 .apply(remove_system_holder_on_remove(system_holder.clone()))
                 .on_spawn(clone!((observer_holder) move |world, entity| {
                     if let Some(ui_root) = world.get_resource::<UiRoot>().map(|&UiRoot(ui_root)| ui_root) {
-                        let observer = observe(world, ui_root, move |event: Trigger<E>, mut system: Local<Option<SystemId<In<(Entity, E)>>>>, mut commands: Commands| {
-                            // only pay the read locking cost once
-                            let &mut system = system.get_or_insert_with(|| system_holder.get().unwrap());
-                            commands.run_system_with_input(system, (entity, (*event).clone()));
+                        let observer = observe(world, ui_root, move |event: Trigger<E>, mut commands: Commands| {
+                            commands.run_system_with_input(system_holder.get().copied().unwrap(), (entity, (*event).clone()));
                         }).id();
-                        observer_holder.set(Some(observer));
+                        let _ = observer_holder.set(observer);
                     }
                 }))
                 .on_remove(move |world, _| {
-                    if let Some(observer) = observer_holder.get() {
+                    if let Some(&observer) = observer_holder.get() {
                         world.commands().queue(move |world: &mut World| {
                             world.despawn(observer);
                         })

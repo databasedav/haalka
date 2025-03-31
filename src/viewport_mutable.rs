@@ -1,6 +1,8 @@
 //! Semantics for managing elements whose contents can be partially visible, see
 //! [`ViewportMutable`].
 
+use std::sync::{Arc, OnceLock};
+
 use super::{
     raw::{observe, register_system, utils::remove_system_holder_on_remove, RawElWrapper},
     utils::clone,
@@ -13,7 +15,7 @@ use bevy_math::prelude::*;
 use bevy_transform::prelude::*;
 use bevy_ui::prelude::*;
 use bevy_utils::hashbrown::HashSet;
-use futures_signals::signal::{Mutable, Signal};
+use futures_signals::signal::Signal;
 
 /// Dimensions of an element's "scene", which contains both its visible (via its [`Viewport`]) and
 /// hidden parts.
@@ -93,12 +95,12 @@ pub trait ViewportMutable: RawElWrapper {
         handler: impl IntoSystem<In<(Entity, (Scene, Viewport))>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
-            let system_holder = Mutable::new(None);
+            let system_holder = Arc::new(OnceLock::new());
             raw_el
             .insert(OnViewportLocationChange)
             .on_spawn(clone!((system_holder) move |world, entity| {
                 let system = register_system(world, handler);
-                system_holder.set(Some(system));
+                let _ = system_holder.set(system);
                 observe(world, entity, move |viewport_location_change: Trigger<MutableViewport>, mut commands: Commands| {
                     let &MutableViewport { scene, viewport } = viewport_location_change.event();
                     commands.run_system_with_input(system, (entity, (scene, viewport)));
@@ -207,7 +209,12 @@ impl<'w, 's> SceneViewport<'w, 's> {
     }
 }
 
-fn dispatch_viewport_location_change(entity: Entity, scene_viewports: &SceneViewport, commands: &mut Commands, checked_viewport_listeners: &mut HashSet<Entity>) {
+fn dispatch_viewport_location_change(
+    entity: Entity,
+    scene_viewports: &SceneViewport,
+    commands: &mut Commands,
+    checked_viewport_listeners: &mut HashSet<Entity>,
+) {
     if let Some((scene, viewport)) = scene_viewports.get(entity) {
         if let Some(mut entity) = commands.get_entity(entity) {
             entity.insert(MutableViewport { scene, viewport });
@@ -239,7 +246,12 @@ fn viewport_location_change_dispatcher(
         if let Ok(parent) = parents.get(entity) {
             let parent = parent.get();
             if !checked_viewport_listeners.contains(&parent) && viewport_location_change_listeners.contains(parent) {
-                dispatch_viewport_location_change(parent, &scene_viewports, &mut commands, &mut checked_viewport_listeners);
+                dispatch_viewport_location_change(
+                    parent,
+                    &scene_viewports,
+                    &mut commands,
+                    &mut checked_viewport_listeners,
+                );
             }
         }
     }

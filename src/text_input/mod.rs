@@ -1,6 +1,6 @@
 //! Reactive text input widget and adjacent utilities, a thin wrapper around [`bevy_cosmic_edit`] integrated with [`Signal`]s.
 
-use std::{ops::{Deref, Not}, pin::Pin};
+use std::{ops::{Deref, Not}, pin::Pin, sync::{Arc, OnceLock}};
 
 use bevy_ecs::system::*;
 use bevy_ecs::prelude::*;
@@ -156,12 +156,12 @@ impl TextInput {
         handler: impl IntoSystem<In<(Entity, bool,)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
-            let system_holder = Mutable::new(None);
+            let system_holder = Arc::new(OnceLock::new());
             raw_el
             .with_entity(|mut entity| { entity.insert(Focusable { is_focused: false }); })
             .on_spawn(clone!((system_holder) move |world, entity| {
                 let system = register_system(world, handler);
-                system_holder.set(Some(system));
+                let _ = system_holder.set(system);
                 observe(world, entity, move |event: Trigger<FocusedChange>, mut commands: Commands| {
                     commands.run_system_with_input(system, (entity, event.event().0))
                 });
@@ -568,10 +568,10 @@ impl TextInput {
     /// When the string in this input changes, run a `handler` [`System`] which takes [`In`](System::In) the [`Entity`] of this input's [`Entity`] and the new [`String`].
     pub fn on_change_with_system<Marker>(self, handler: impl IntoSystem<In<(Entity, String,)>, (), Marker> + Send + 'static) -> Self {
         self.update_raw_el(|raw_el| {
-            let system_holder = Mutable::new(None);
+            let system_holder = Arc::new(OnceLock::new());
             raw_el.on_spawn(clone!((system_holder) move |world, entity| {
                 let system = register_system(world, handler);
-                system_holder.set(Some(system));
+                let _ = system_holder.set(system);
                 observe(world, entity, move |change: Trigger<TextInputChange>, mut commands: Commands| {
                     let entity = change.entity();
                     commands.run_system_with_input(system, (entity, change.event().0.clone()));

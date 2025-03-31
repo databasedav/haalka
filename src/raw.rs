@@ -4,7 +4,12 @@
 //! [`System`]s all using a declarative builder pattern/[fluent interface](https://en.wikipedia.org/wiki/Fluent_interface).
 //! Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`raw_el`](https://github.com/MoonZoon/MoonZoon/tree/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/raw_el).
 
-use std::{future::Future, marker::PhantomData, mem};
+use std::{
+    future::Future,
+    marker::PhantomData,
+    mem,
+    sync::{Arc, OnceLock},
+};
 
 use super::{
     node_builder::{async_world, NodeBuilder, TaskHolder},
@@ -17,7 +22,7 @@ use bevy_tasks::Task;
 use bevy_utils::prelude::*;
 use enclose::enclose as clone;
 use futures_signals::{
-    signal::{Mutable, Signal, SignalExt},
+    signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
 use haalka_futures_signals_ext::SignalExtBool;
@@ -259,16 +264,15 @@ impl RawHaalkaEl {
         signal: impl Signal<Item = T> + Send + 'static,
         system: impl IntoSystem<In<(Entity, T)>, (), Marker> + Send + 'static,
     ) -> Self {
-        let system_holder = Mutable::new(None);
+        let system_holder = Arc::new(OnceLock::new());
         self.on_spawn(clone!((system_holder) move |world, _| {
-            system_holder.set(Some(register_system(world, system)));
+            let _ = system_holder.set(register_system(world, system));
         }))
         .on_signal(
             signal,
             clone!((system_holder) move |entity, input| {
                 async_world().apply(RunSystemWithInput::new_with_input(
-                    // TODO: would caching this in a Local via SystemState be better/faster ?
-                    system_holder.get().unwrap(),
+                    system_holder.get().copied().unwrap(),
                     (entity, input),
                 ))
             }),
@@ -285,22 +289,20 @@ impl RawHaalkaEl {
         forwarder: impl IntoSystem<In<Entity>, Option<Entity>, Marker1> + Send + 'static,
         system: impl IntoSystem<In<(Entity, T)>, (), Marker2> + Send + 'static,
     ) -> Self {
-        let forwarder_system_holder = Mutable::new(None);
-        let handler_system_holder = Mutable::new(None);
+        let forwarder_system_holder = Arc::new(OnceLock::new());
+        let handler_system_holder = Arc::new(OnceLock::new());
         self.on_spawn(clone!((forwarder_system_holder, handler_system_holder) move |world, _| {
-            forwarder_system_holder.set(Some(register_system(world, forwarder)));
-            handler_system_holder.set(Some(register_system(world, system)));
+            let _ = forwarder_system_holder.set(register_system(world, forwarder));
+            let _ = handler_system_holder.set(register_system(world, system));
         }))
         .on_signal_with_system(
             signal,
-            clone!((forwarder_system_holder, handler_system_holder) move |In((entity, input)): In<(Entity, T)>, mut systems: Local<Option<(SystemId<In<Entity>, Option<Entity>>, SystemId<In<(Entity, T)>>)>>, mut commands: Commands| {
-                // only pay the read locking cost once
-                let &mut (forwarder, system) = systems.get_or_insert_with(|| (forwarder_system_holder.get().unwrap(), handler_system_holder.get().unwrap()));
-                commands.queue(move |world: &mut World| {
-                    if let Ok(Some(forwardee)) = world.run_system_with_input(forwarder, entity) {
-                        let _ = world.run_system_with_input(system, (forwardee, input));
+            clone!((forwarder_system_holder, handler_system_holder) move |In((entity, input)): In<(Entity, T)>, mut commands: Commands| {
+                commands.queue(clone!((forwarder_system_holder, handler_system_holder) move |world: &mut World| {
+                    if let Ok(Some(forwardee)) = world.run_system_with_input(forwarder_system_holder.get().copied().unwrap(), entity) {
+                        let _ = world.run_system_with_input(handler_system_holder.get().copied().unwrap(), (forwardee, input));
                     }
-                })
+                }))
             }),
         )
         .apply(remove_system_holder_on_remove(forwarder_system_holder))
@@ -448,11 +450,11 @@ impl RawHaalkaEl {
         self,
         handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
     ) -> Self {
-        let system_holder = Mutable::new(None);
+        let system_holder = Arc::new(OnceLock::new());
         self
             .on_spawn(clone!((system_holder) move |world, entity| {
                 let handler = register_system(world, handler);
-                system_holder.set(Some(handler));
+                let _ = system_holder.set(handler);
                 observe(world, entity, move |mut event: Trigger<E>, disabled: Query<&Disabled>, propagation_stopped: Query<&PropagationStopped>, mut commands: Commands| {
                     if !disabled.contains(entity) {
                         commands.run_system_with_input(handler, (entity, (*event).clone()));
@@ -825,7 +827,10 @@ impl RawElement for RawHaalkaEl {
 }
 
 /// Allows [`RawElement`]s and their [wrappers](RawElWrapper) to be spawned into the world.
-pub trait Spawnable: RawElement where Self: Sized {
+pub trait Spawnable: RawElement
+where
+    Self: Sized,
+{
     /// Spawn the element into the world.
     fn spawn(self, world: &mut World) -> Entity {
         self.into_raw().into_node_builder().spawn(world)
@@ -856,9 +861,9 @@ pub mod utils {
 
     /// Remove the held system from the [`World`] on element removal.
     pub fn remove_system_holder_on_remove<I: SystemInput + 'static, O: 'static>(
-        system_holder: Mutable<Option<SystemId<I, O>>>,
+        system_holder: Arc<OnceLock<SystemId<I, O>>>,
     ) -> impl FnOnce(RawHaalkaEl) -> RawHaalkaEl {
-        remove_system_on_remove(move || system_holder.get())
+        remove_system_on_remove(move || system_holder.get().copied())
     }
 
     /// Run an element's deferred updaters without spawning.

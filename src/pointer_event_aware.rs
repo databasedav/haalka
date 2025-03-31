@@ -1,7 +1,12 @@
 //! Semantics for managing how an [`Element`](super::element::Element) reacts to pointer events like
 //! hover, click, and press, see [`PointerEventAware`].
 
-use std::{future::Future, ops::Not, time::Duration};
+use std::{
+    future::Future,
+    ops::Not,
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 
 use apply::Apply;
 use bevy_app::prelude::*;
@@ -40,13 +45,13 @@ pub trait PointerEventAware: GlobalEventAware {
         handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
-            let system_holder = Mutable::new(None);
+            let system_holder = Arc::new(OnceLock::new());
             raw_el
                 .insert(PickingBehavior::default())
                 .insert(Hovered(false))
                 .on_spawn(clone!((system_holder) move |world, entity| {
                     let system = register_system(world, handler);
-                    system_holder.set(Some(system));
+                    let _ = system_holder.set(system);
                     observe(world, entity, move |mut enter: Trigger<Pointer<Enter>>, mut commands: Commands| {
                         enter.propagate(false);
                         commands.run_system_with_input(system, (enter.entity(), true));
@@ -138,12 +143,11 @@ pub trait PointerEventAware: GlobalEventAware {
         self,
         handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + 'static,
     ) -> Self {
-        let system_holder = Mutable::new(None);
+        let system_holder = Arc::new(OnceLock::new());
         self.update_raw_el(|raw_el| {
             raw_el
                 .on_spawn(clone!((system_holder) move |world, _| {
-                    let system = register_system(world, handler);
-                    system_holder.set(Some(system));
+                    let _ = system_holder.set(register_system(world, handler));
                 }))
                 .apply(remove_system_holder_on_remove(system_holder.clone()))
         })
@@ -151,12 +155,9 @@ pub trait PointerEventAware: GlobalEventAware {
             move |In((entity, click)): In<(Entity, Pointer<Click>)>,
                   children: Query<&Children>,
                   ui_root: Res<UiRoot>,
-                  mut system: Local<Option<SystemId<In<(Entity, Pointer<Click>)>>>>,
                   mut commands: Commands| {
                 if !is_inside_or_removed_from_dom(entity, &click, ui_root.0, &children) {
-                    // only pay the read locking cost once
-                    let &mut system = system.get_or_insert_with(|| system_holder.get().unwrap());
-                    commands.run_system_with_input(system, (entity, click));
+                    commands.run_system_with_input(system_holder.get().copied().unwrap(), (entity, click));
                 }
             },
         )
@@ -178,12 +179,12 @@ pub trait PointerEventAware: GlobalEventAware {
         handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
-            let system_holder = Mutable::new(None);
+            let system_holder = Arc::new(OnceLock::new());
             raw_el
                 .insert(PickingBehavior::default())
                 .on_spawn(clone!((system_holder) move |world, entity| {
                     let system = register_system(world, handler);
-                    system_holder.set(Some(system));
+                    let _ = system_holder.set(system);
                     observe(world, entity, move |press: Trigger<Press>, blocked: Query<&Blocked>, mut commands: Commands| {
                         let entity = press.entity();
                         if !blocked.contains(entity) {
@@ -224,25 +225,20 @@ pub trait PointerEventAware: GlobalEventAware {
         self,
         handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + 'static,
     ) -> Self {
-        let system_holder = Mutable::new(None);
+        let system_holder = Arc::new(OnceLock::new());
         self.update_raw_el(clone!(
             (system_holder) | raw_el | {
                 raw_el.on_spawn(clone!((system_holder) move |world, _| {
-                    system_holder.set(Some(register_system(world, handler)));
+                    let _ = system_holder.set(register_system(world, handler));
                 }))
             }
         ))
         .update_raw_el(remove_system_holder_on_remove(system_holder.clone()))
         .on_pressed_with_system_blockable::<_, PressHandlingBlocked>(
-            move |In((entity, cur)),
-                  mut pressed: Local<bool>,
-                  mut system: Local<Option<SystemId<In<(Entity, bool)>>>>,
-                  mut commands: Commands| {
+            move |In((entity, cur)), mut pressed: Local<bool>, mut commands: Commands| {
                 if cur != *pressed {
                     *pressed = cur;
-                    // only pay the read locking cost once
-                    let &mut system = system.get_or_insert_with(|| system_holder.get().unwrap());
-                    commands.run_system_with_input(system, (entity, cur));
+                    commands.run_system_with_input(system_holder.get().copied().unwrap(), (entity, cur));
                 }
             },
         )
@@ -260,22 +256,20 @@ pub trait PointerEventAware: GlobalEventAware {
         self,
         handler: impl IntoSystem<In<Entity>, (), Marker> + Send + 'static,
     ) -> Self {
-        let system_holder = Mutable::new(None);
+        let system_holder = Arc::new(OnceLock::new());
         self.update_raw_el(clone!(
             (system_holder) | raw_el | {
                 raw_el
                     .on_spawn(clone!((system_holder) move |world, _| {
-                        system_holder.set(Some(register_system(world, handler)));
+                        let _ = system_holder.set(register_system(world, handler));
                     }))
                     .apply(remove_system_holder_on_remove(system_holder.clone()))
             }
         ))
         .on_pressed_with_system_blockable::<_, Blocked>(
-            move |In((entity, pressed)), mut system: Local<Option<SystemId<In<Entity>>>>, mut commands: Commands| {
+            move |In((entity, pressed)), mut commands: Commands| {
                 if pressed {
-                    // only pay the read locking cost once
-                    let &mut system = system.get_or_insert_with(|| system_holder.get().unwrap());
-                    commands.run_system_with_input(system, entity);
+                    commands.run_system_with_input(system_holder.get().copied().unwrap(), entity);
                 }
             },
         )
@@ -311,21 +305,20 @@ pub trait PointerEventAware: GlobalEventAware {
         mut throttle: impl FnMut() -> Fut + Send + 'static,
     ) -> Self {
         let (sender, receiver) = channel(());
-        let system_holder = Mutable::new(None);
+        let system_holder = Arc::new(OnceLock::new());
         self.update_raw_el(|raw_el| {
             raw_el
                 .component_signal::<PressHandlingBlocked, _>(receiver.map_future(move |_| throttle()).map(|_| None))
                 .observe(move |_: Trigger<OnAdd, PressHandlingBlocked>| sender.send(()).unwrap())
                 .on_spawn(
-                    clone!((system_holder) move |world, _| system_holder.set(Some(register_system(world, handler)))),
+                    clone!((system_holder) move |world, _| { let _ = system_holder.set(register_system(world, handler)); }),
                 )
-        })
+                .apply(remove_system_holder_on_remove(system_holder.clone()))
+            })
         .on_pressed_with_system_blockable::<_, PressHandlingBlocked>(
-            move |In((entity, pressed)), mut system: Local<Option<SystemId<In<Entity>>>>, mut commands: Commands| {
+            move |In((entity, pressed)), mut commands: Commands| {
                 if pressed {
-                    // only pay the read locking cost once
-                    let &mut system = system.get_or_insert_with(|| system_holder.get().unwrap());
-                    commands.run_system_with_input(system, entity);
+                    commands.run_system_with_input(system_holder.get().copied().unwrap(), entity);
                     if let Some(mut entity) = commands.get_entity(entity) {
                         entity.try_insert(PressHandlingBlocked);
                     }
