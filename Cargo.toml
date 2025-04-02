@@ -211,3 +211,8 @@ doc-scrape-examples = true
 name = "snake"
 path = "examples/snake.rs"
 doc-scrape-examples = true
+
+[[example]]
+name = "nested_lists"
+path = "examples/nested_lists.rs"
+doc-scrape-examples = true
