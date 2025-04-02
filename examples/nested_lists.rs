@@ -1,11 +1,10 @@
-//!
+//! nested dynamic lists
 
 mod utils;
 use rand::seq::SliceRandom;
 use utils::*;
 
-use bevy::prelude::*;
-use bevy::color::palettes::css::*;
+use bevy::{color::palettes::css::*, prelude::*};
 use haalka::prelude::*;
 
 fn main() {
@@ -25,7 +24,7 @@ fn main() {
 
 #[derive(Clone, Default)]
 struct Lists {
-    lists: MutableVec<Lists>
+    lists: MutableVec<Lists>,
 }
 
 static COLORS: &[Color] = &[
@@ -172,39 +171,38 @@ fn random_color() -> Color {
 
 fn lists_element(lists: Lists) -> Column<Node> {
     let Lists { lists } = lists;
-    Column::<Node>::new()
-    .item(
+    Column::<Node>::new().item(
         Row::<Node>::new()
             .with_node(|mut node| node.column_gap = Val::Px(10.))
             .item(
                 El::<Node>::new()
-                .width(Val::Px(80.))
-                .height(Val::Px(40.))
-                .background_color(BackgroundColor(random_color()))
+                    .width(Val::Px(80.))
+                    .height(Val::Px(40.))
+                    .background_color(BackgroundColor(random_color())),
             )
             .item(
                 Column::<Node>::new()
-                // .align(Align::new().center_y().left())
-                .with_node(|mut node| node.row_gap = Val::Px(10.))
-                .items_signal_vec(lists.signal_vec_cloned().map(lists_element))
-                .item(
-                    El::<Node>::new()
-                    .width(Val::Px(30.))
-                    .height(Val::Px(30.))
-                    .background_color(BackgroundColor(DARK_GRAY.into()))
-                    .align_content(Align::center())
-                    .child(
-                        El::<Text>::new()
-                        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-                        .text_font(TextFont::from_font_size(30.))
-                        .text_color(TextColor(Color::WHITE))
-                        .text(Text::from("+"))
-                        .on_click(move || {
-                            lists.lock_mut().push_cloned(default());
-                        })
-                    )
-                )
-            )
+                    // .align(Align::new().center_y().left())
+                    .with_node(|mut node| node.row_gap = Val::Px(10.))
+                    .items_signal_vec(lists.signal_vec_cloned().map(lists_element))
+                    .item(
+                        El::<Node>::new()
+                            .width(Val::Px(30.))
+                            .height(Val::Px(30.))
+                            .background_color(BackgroundColor(DARK_GRAY.into()))
+                            .align_content(Align::center())
+                            .child(
+                                El::<Text>::new()
+                                    .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
+                                    .text_font(TextFont::from_font_size(30.))
+                                    .text_color(TextColor(Color::WHITE))
+                                    .text(Text::from("+"))
+                                    .on_click(move || {
+                                        lists.lock_mut().push_cloned(default());
+                                    }),
+                            ),
+                    ),
+            ),
     )
 }
 
@@ -215,13 +213,13 @@ fn ui_root() -> impl Element {
         .align_content(Align::new().top().left())
         .child(
             lists_element(MASTER.clone())
-            .with_node(|mut node| {
-                node.left = Val::Px(20.);
-                node.top = Val::Px(20.);
-            })
-            .height(Val::Percent(100.))
-            .mutable_viewport(Overflow::clip_y(), None)
-            .on_scroll_with_system(BasicScrollHandler::new().pixels(20.).into_system())
+                .with_node(|mut node| {
+                    node.left = Val::Px(20.);
+                    node.top = Val::Px(20.);
+                })
+                .height(Val::Percent(100.))
+                .mutable_viewport(Overflow::clip_y(), None)
+                .on_scroll_with_system(BasicScrollHandler::new().pixels(20.).into_system()),
         )
 }
 
