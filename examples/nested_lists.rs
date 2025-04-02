@@ -182,7 +182,6 @@ fn lists_element(lists: Lists) -> Column<Node> {
             )
             .item(
                 Column::<Node>::new()
-                    // .align(Align::new().center_y().left())
                     .with_node(|mut node| node.row_gap = Val::Px(10.))
                     .items_signal_vec(lists.signal_vec_cloned().map(lists_element))
                     .item(
@@ -191,9 +190,9 @@ fn lists_element(lists: Lists) -> Column<Node> {
                             .height(Val::Px(30.))
                             .background_color(BackgroundColor(DARK_GRAY.into()))
                             .align_content(Align::center())
+                            .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
                             .child(
                                 El::<Text>::new()
-                                    .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
                                     .text_font(TextFont::from_font_size(30.))
                                     .text_color(TextColor(Color::WHITE))
                                     .text(Text::from("+"))
@@ -210,6 +209,7 @@ fn ui_root() -> impl Element {
     El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
+        .cursor(CursorIcon::System(SystemCursorIcon::Default))
         .align_content(Align::new().top().left())
         .child(
             lists_element(MASTER.clone())
