@@ -1061,7 +1061,7 @@ fn menu() -> impl Element {
                                     }
                                 } else {
                                     SUB_MENU_SELECTED.set_neq(Some(if matches!(event, MenuInput::Up) {
-                                        SubMenu::iter().last().unwrap()
+                                        SubMenu::iter().next_back().unwrap()
                                     } else {
                                         SubMenu::iter().next().unwrap()
                                     }));
