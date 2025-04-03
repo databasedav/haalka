@@ -15,7 +15,7 @@ let INSTALL_NIX_ACTION_VERSION = "30" in
 let CACHIX_ACTION_VERSION = "15" in
 {
   REPO = "https://github.com/databasedav/haalka",
-  GITHUB_PAGES_DEPLOY_ACTION_VERSION = "4.7.2",
+  GITHUB_PAGES_DEPLOY_ACTION_VERSION = "4.7.3",
   GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT = 100,
   checkout = {
     name = "checkout repo",

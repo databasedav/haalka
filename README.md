@@ -132,6 +132,10 @@ All examples are compiled to wasm for both webgl2 and webgpu (check [compatibili
 
     simple calculator, spurred by <https://discord.com/channels/691052431525675048/885021580353237032/1263661461364932639>
 
+- [**`nested_lists`**](https://github.com/databasedav/haalka/blob/main/examples/nested_lists.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/nested_lists/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/nested_lists/)
+
+    nested dynamic lists, arbitrarily deeply nested retained reactivity, spurred by <https://discord.com/channels/691052431525675048/885021580353237032/1356769984474517617>
+
 - [**`main_menu`**](https://github.com/databasedav/haalka/blob/main/examples/main_menu.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/main_menu/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/main_menu/)
 
     sub menus, sliders, dropdowns, reusable composable widgets, gamepad navigation
@@ -163,6 +167,7 @@ cargo run --example snake
 cargo run --example dot_counter
 cargo run --example key_values_sorted
 cargo run --example calculator
+cargo run --example nested_lists
 
 # ui challenges from https://github.com/bevyengine/bevy/discussions/11100
 cargo run --example main_menu
