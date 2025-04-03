@@ -173,9 +173,9 @@ fn lists_element(lists: Lists) -> Column<Node> {
     let Lists { lists } = lists;
     Column::<Node>::new().item(
         Row::<Node>::new()
-        .with_node(|mut node| node.column_gap = Val::Px(10.))
-        .item(
-            El::<Node>::new()
+            .with_node(|mut node| node.column_gap = Val::Px(10.))
+            .item(
+                El::<Node>::new()
                     .align(Align::new().top())
                     .width(Val::Px(80.))
                     .height(Val::Px(40.))
