@@ -1,4 +1,4 @@
-//! nested dynamic lists
+//! Nested dynamic lists, arbitrarily deeply nested retained reactivity, spurred by <https://discord.com/channels/691052431525675048/885021580353237032/1356769984474517617>
 
 mod utils;
 use rand::seq::SliceRandom;
