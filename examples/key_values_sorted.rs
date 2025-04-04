@@ -415,7 +415,7 @@ fn ui_root() -> impl Element {
                                     PAIRS.lock_mut().push_cloned(RowData {
                                         key: {
                                             let data = TextInputData::new("");
-                                            // data.focus.set(true);
+                                            data.focus.set(true);
                                             data
                                         },
                                         value: TextInputData::new(""),

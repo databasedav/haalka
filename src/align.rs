@@ -23,7 +23,7 @@ use std::{collections::BTreeSet, ops::Not};
 
 use bevy_ecs::prelude::*;
 use bevy_ui::prelude::*;
-use futures_signals::signal::{Signal, SignalExt};
+use futures_signals::signal::{BoxSignal, Signal, SignalExt};
 
 use super::{
     column::Column,
@@ -33,7 +33,6 @@ use super::{
     raw::{RawElWrapper, RawHaalkaEl},
     row::Row,
     stack::Stack,
-    utils::{boxed_sync, SyncBoxSignal},
 };
 
 // TODO: replace moonzoon github links with docs.rs links once moonzoon crate published
@@ -115,7 +114,7 @@ pub enum AlignHolder {
     /// Static
     Align(Align),
     /// Reactive
-    AlignSignal(SyncBoxSignal<'static, Option<Align>>),
+    AlignSignal(BoxSignal<'static, Option<Align>>),
 }
 
 /// Whether to add or remove an [`Alignment`]. See [`Alignable`] and [`ChildAlignable`].
@@ -185,7 +184,7 @@ pub trait Alignable: RawElWrapper {
         Self: Sized,
     {
         if let Some(align_option_signal) = align_option_signal_option.into() {
-            *self.align_mut() = Some(AlignHolder::AlignSignal(boxed_sync(align_option_signal)));
+            *self.align_mut() = Some(AlignHolder::AlignSignal(align_option_signal.boxed()));
         }
         self
     }
