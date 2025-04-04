@@ -52,7 +52,7 @@ pub struct MutableViewport {
     pub viewport: Viewport,
 }
 
-/// [`MutableViewport`]s with this [`Component`] receive [`ViewportLocationChange`] events.
+/// [`MutableViewport`]s with this [`Component`] receive [`MutableViewport`] events.
 #[derive(Component)]
 pub struct OnViewportLocationChange;
 
@@ -153,7 +153,7 @@ pub struct LogicalRect<'w, 's> {
     data: Query<'w, 's, (&'static ComputedNode, &'static GlobalTransform)>,
 }
 
-impl<'w, 's> LogicalRect<'w, 's> {
+impl LogicalRect<'_, '_> {
     /// Get the logical pixel coordinates of the UI node, based on its [`GlobalTransform`].
     pub fn get(&self, entity: Entity) -> Option<Rect> {
         if let Ok((computed_node, global_transform)) = self.data.get(entity) {
@@ -170,7 +170,7 @@ struct SceneViewport<'w, 's> {
     scroll_positions: Query<'w, 's, &'static ScrollPosition>,
 }
 
-impl<'w, 's> SceneViewport<'w, 's> {
+impl SceneViewport<'_, '_> {
     fn get(&self, entity: Entity) -> Option<(Scene, Viewport)> {
         if let Some(Vec2 {
             x: viewport_width,
@@ -224,6 +224,7 @@ fn dispatch_viewport_location_change(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn viewport_location_change_dispatcher(
     viewports: Query<
         Entity,

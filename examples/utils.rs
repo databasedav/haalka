@@ -1,3 +1,6 @@
+#![allow(missing_docs)]
+#![allow(dead_code)]
+
 use bevy::{
     app::prelude::*,
     core_pipeline::prelude::*,
