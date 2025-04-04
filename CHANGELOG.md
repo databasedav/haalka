@@ -1,6 +1,6 @@
-All notable changes to this project will be documented in this file.
+all notable changes to this project will be documented in this file
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project vaguely adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Common Changelog](https://common-changelog.org/), and this project vaguely adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## unreleased
 
@@ -10,12 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `SyncBoxSignal` and `boxed_sync` signal utils
 
 ### changed
-- renamed `RawHaalkaEl::on_signal_one_shot...` to `RawHaalkaEl::on_signal_with_system...` (BREAKING)
-- mutable viewport uses Bevy-native `ScrollPosition` instead of manually managed clipped child (BREAKING)
-- renamed `Viewport.x/y` to `Viewport.offset_x/offset_y` (BREAKING)
-- `ViewportMutable::mutable_viewport` takes new overflow `Axis` (BREAKING)
-- `impl_haalka_methods!` derived `_signal` methods take `Signal<Item = impl Into<Option<$field_type>>` instead of `Signal<Item = $field_type>` (BREAKING)
-- `raw::utils::remove_system_holder_on_remove` takes `Arc<OnceLock>` instead of `Mutable` (BREAKING)
+- **breaking:** renamed `RawHaalkaEl::on_signal_one_shot...` to `RawHaalkaEl::on_signal_with_system...`
+- **breaking:** mutable viewport uses Bevy-native `ScrollPosition` instead of manually managed clipped child
+- **breaking:** renamed `Viewport.x/y` to `Viewport.offset_x/offset_y`
+- **breaking:** `ViewportMutable::mutable_viewport` takes new overflow `Axis`
+- **breaking:** `impl_haalka_methods!` derived `_signal` methods take `Signal<Item = impl Into<Option<$field_type>>` instead of `Signal<Item = $field_type>`
+- **breaking:** `raw::utils::remove_system_holder_on_remove` takes `Arc<OnceLock>` instead of `Mutable`
 - one-shot system id's stored in `Arc<OnceLock>` instead of `Mutable`
 - `MutableViewport` is now an observable `Event`, used internally for `ViewportMutable::on_viewport_location_change...`
 - basic scroll handler respects pixel scroll units
@@ -23,9 +23,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - snake example updated to use observers
 
 ### removed
-- `LimitToBody` and its functionality (BREAKING)
-- `MutableViewport.limit_to_body` (BREAKING)
-- `ViewportMarker` (BREAKING)
+- **breaking:** `LimitToBody` and its functionality
+- **breaking:** `MutableViewport.limit_to_body`
+- **breaking:** `ViewportMarker`
 
 ### fixed
 - `OnHoverMouseWheelScrollable` methods no longer allow scroll before first hover (0.2.4 fix was partially reverted in 0.3.0)
