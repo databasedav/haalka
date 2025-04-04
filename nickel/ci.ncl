@@ -74,7 +74,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
             binstall,
             {
               name = "install cargo all features",
-              run = "cargo binstall --no-confirm -continue-on-failure cargo-all-features"
+              run = "cargo binstall --no-confirm --continue-on-failure cargo-all-features"
             },
             {
               name = "check all features",
