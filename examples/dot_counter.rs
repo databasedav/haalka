@@ -67,7 +67,7 @@ fn main() {
                 }
             },
         )
-        // .insert_resource(bevy_cosmic_edit::CursorPluginDisabled)
+        .insert_resource(bevy_cosmic_edit::CursorPluginDisabled)
         .run();
 }
 
