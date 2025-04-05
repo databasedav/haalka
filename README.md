@@ -184,7 +184,7 @@ Or with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 ## Bevy compatibility
 |bevy|haalka|
 |-|-|
-|`0.15`|`0.3`|
+|`0.15`|`0.4`|
 |`0.14`|`0.2`|
 |`0.13`|`0.1`|
 
