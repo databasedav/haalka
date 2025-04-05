@@ -51,7 +51,6 @@ fn main() {
             HEALTH_TICK_RATE,
             TimerMode::Repeating,
         )))
-        .add_event::<SpawnPlayer>()
         .run();
 }
 
@@ -175,7 +174,7 @@ fn healthbar(
                 .width_signal(percent_health.signal().map(|ph| ph * 100.).map(Val::Percent))
                 .background_color_signal(percent_health.signal().map(move |percent_health| {
                     let [r, g, b, ..] = color_gradient.at(percent_health as f64).to_rgba8();
-                    Color::srgb_u8(r, g, b).into()
+                    BackgroundColor(Color::srgb_u8(r, g, b))
                 })),
         )
         .layer(
@@ -215,7 +214,7 @@ fn respawn_button() -> impl Element {
             hovered
                 .signal()
                 .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
-                .map(Into::into),
+                .map(BackgroundColor),
         )
         .hovered_sync(hovered)
         .align_content(Align::center())

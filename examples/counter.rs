@@ -30,6 +30,7 @@ fn ui_root() -> impl Element {
     El::<Node>::new()
         .height(Val::Percent(100.))
         .width(Val::Percent(100.))
+        .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(
             Row::<Node>::new()
@@ -50,13 +51,14 @@ fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element
     El::<Node>::new()
         .width(Val::Px(45.0))
         .align_content(Align::center())
+        .border_radius(BorderRadius::MAX)
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
                 .signal()
                 .map_bool(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
-                .map(Into::into),
+                .map(BackgroundColor),
         )
-        .border_radius(BorderRadius::MAX)
         .hovered_sync(hovered)
         .on_click(move || *counter.lock_mut() += step)
         .child(

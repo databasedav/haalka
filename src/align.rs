@@ -30,7 +30,7 @@ use super::{
     el::El,
     element::ElementWrapper,
     grid::Grid,
-    raw::{DeferredUpdaterAppendDirection, RawElWrapper, RawHaalkaEl},
+    raw::{RawElWrapper, RawHaalkaEl},
     row::Row,
     stack::Stack,
 };
@@ -131,29 +131,24 @@ fn register_align_signal<REW: RawElWrapper>(
 ) -> REW {
     let mut last_alignments_option: Option<Vec<Alignment>> = None;
     element.update_raw_el(|raw_el| {
-        raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-            raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Node>(
-                align_signal,
-                move |mut node, aligns_option| {
-                    if let Some(alignments) = aligns_option {
-                        // TODO: confirm that this last alignment removal strategy is working as intended
-                        if let Some(mut last_alignments) = last_alignments_option.take() {
-                            last_alignments.retain(|align| !alignments.contains(align));
-                            for alignment in last_alignments {
-                                apply_alignment(&mut node, alignment, AddRemove::Remove)
-                            }
-                        }
-                        for alignment in &alignments {
-                            apply_alignment(&mut node, *alignment, AddRemove::Add)
-                        }
-                        last_alignments_option = alignments.is_empty().not().then_some(alignments);
-                    } else if let Some(last_aligns) = last_alignments_option.take() {
-                        for align in last_aligns {
-                            apply_alignment(&mut node, align, AddRemove::Remove)
-                        }
+        raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Node>(align_signal, move |mut node, aligns_option| {
+            if let Some(alignments) = aligns_option {
+                // TODO: confirm that this last alignment removal strategy is working as intended
+                if let Some(mut last_alignments) = last_alignments_option.take() {
+                    last_alignments.retain(|align| !alignments.contains(align));
+                    for alignment in last_alignments {
+                        apply_alignment(&mut node, alignment, AddRemove::Remove)
                     }
-                },
-            )
+                }
+                for alignment in &alignments {
+                    apply_alignment(&mut node, *alignment, AddRemove::Add)
+                }
+                last_alignments_option = alignments.is_empty().not().then_some(alignments);
+            } else if let Some(last_aligns) = last_alignments_option.take() {
+                for align in last_aligns {
+                    apply_alignment(&mut node, align, AddRemove::Remove)
+                }
+            }
         })
     })
 }
@@ -181,7 +176,7 @@ pub trait Alignable: RawElWrapper {
     }
 
     /// Reactively align this element, itself. See [`Align`].
-    fn align_signal<S: Signal<Item = Option<Align>> + Send + 'static>(
+    fn align_signal<S: Signal<Item = Option<Align>> + Send + Sync + 'static>(
         mut self,
         align_option_signal_option: impl Into<Option<S>>,
     ) -> Self
@@ -201,7 +196,7 @@ pub trait Alignable: RawElWrapper {
         Self::apply_content_alignment
     }
 
-    /// How to modify the node of this element given a content alignment and whether to add or
+    /// How to modify the [`Node`] of this element given a content alignment and whether to add or
     /// remove it.
     fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove);
 
@@ -257,7 +252,7 @@ pub trait ChildAlignable
 where
     Self: 'static,
 {
-    /// Static node modifications for children of this type.
+    /// Static [`Node`] modifications for children of this type.
     fn update_node(_node: Mut<Node>) {} // only some require base updates
 
     /// Allows implementor to override the self alignment processing function. The `&self`
@@ -267,7 +262,7 @@ where
         Self::apply_alignment
     }
 
-    /// How to modify the node of children of this element given a self alignment and whether to
+    /// How to modify the [`Node`] of children of this element given a self alignment and whether to
     /// add or remove it.
     fn apply_alignment(node: &mut Node, align: Alignment, action: AddRemove);
 
@@ -276,23 +271,17 @@ where
         mut child: Child,
         apply_alignment: fn(&mut Node, Alignment, AddRemove),
     ) -> Child {
-        child = child.update_raw_el(|raw_el| {
-            raw_el.defer_update(DeferredUpdaterAppendDirection::Back, |raw_el| {
-                raw_el.with_component::<Node>(Self::update_node)
-            })
-        });
+        child = child.update_raw_el(|raw_el| raw_el.with_component::<Node>(Self::update_node));
         // TODO: this .take means that child can't be passed around parents without losing align
         // info, but this can be easily added if desired
         if let Some(align) = child.align_mut().take() {
             match align {
                 AlignHolder::Align(align) => {
                     child = child.update_raw_el(|raw_el| {
-                        raw_el.defer_update(DeferredUpdaterAppendDirection::Back, move |raw_el| {
-                            raw_el.with_component::<Node>(move |mut node| {
-                                for align in align.alignments {
-                                    apply_alignment(&mut node, align, AddRemove::Add)
-                                }
-                            })
+                        raw_el.with_component::<Node>(move |mut node| {
+                            for align in align.alignments {
+                                apply_alignment(&mut node, align, AddRemove::Add)
+                            }
                         })
                     })
                 }
@@ -359,6 +348,12 @@ pub struct AlignabilityFacade {
     raw_el: RawHaalkaEl,
     align: Option<AlignHolder>,
     aligner: Aligner,
+}
+
+impl<NodeType: Bundle> From<NodeType> for AlignabilityFacade {
+    fn from(node_bundle: NodeType) -> Self {
+        AlignabilityFacade::new(RawHaalkaEl::from(node_bundle), None, Aligner::El)
+    }
 }
 
 impl AlignabilityFacade {

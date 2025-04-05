@@ -219,7 +219,7 @@ fn ui_root() -> impl Element {
                     node.top = Val::Px(20.);
                 })
                 .height(Val::Percent(100.))
-                .mutable_viewport(Overflow::clip_y(), None)
+                .mutable_viewport(haalka::prelude::Axis::Vertical)
                 .on_scroll_with_system(BasicScrollHandler::new().pixels(20.).into_system()),
         )
 }

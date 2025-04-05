@@ -30,7 +30,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
           binstall,
           {
             name = "install build dependencies",
-            run = "cargo binstall --no-confirm wasm-bindgen-cli wasm-opt nickel-lang-cli trunk",
+            run = "cargo binstall --no-confirm --continue-on-failure wasm-bindgen-cli wasm-opt nickel-lang-cli trunk",
           },
           {
             name = "build example",

@@ -2,6 +2,7 @@
 
 [![Crates.io Version](https://img.shields.io/crates/v/haalka?style=for-the-badge)](https://crates.io/crates/haalka)
 [![Docs.rs](https://img.shields.io/docsrs/haalka?style=for-the-badge)](https://docs.rs/haalka)
+[![Following released Bevy versions](https://img.shields.io/badge/Bevy%20tracking-released%20version-lightblue?style=for-the-badge)](https://bevyengine.org/learn/quick-start/plugin-development/#main-branch-tracking)
 
 ```text
 in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "easy"
@@ -9,7 +10,7 @@ in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "
 
 [haalka](https://github.com/databasedav/haalka) is an ergonomic reactive [Bevy](https://github.com/bevyengine/bevy) UI library powered by the incredible [FRP](https://en.wikipedia.org/wiki/Functional_reactive_programming) signals of [futures-signals](https://github.com/Pauan/rust-signals) and the convenient async ECS of [bevy-async-ecs](https://github.com/dlom/bevy-async-ecs) with API ported from web UI libraries [MoonZoon](https://github.com/MoonZoon/MoonZoon) and [Dominator](https://github.com/Pauan/rust-dominator).
 
-While haalka is primarily targeted at UI and provides high level UI abstractions as such, its [core abstraction](https://docs.rs/haalka/latest/haalka/struct.RawHaalkaEl.html) can be used to manage signals-powered reactivity for any entity, not just [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs).
+While haalka is primarily targeted at UI and provides high level UI abstractions as such, its [core abstraction](https://docs.rs/haalka/latest/haalka/struct.RawHaalkaEl.html) can be used to manage signals-powered reactivity for any entity, not just [`bevy_ui` nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs).
 
 ## considerations
 
@@ -51,6 +52,7 @@ fn ui_root() -> impl Element {
     El::<Node>::new()
         .height(Val::Percent(100.))
         .width(Val::Percent(100.))
+        .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(
             Row::<Node>::new()
@@ -71,13 +73,14 @@ fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element
     El::<Node>::new()
         .width(Val::Px(45.0))
         .align_content(Align::center())
+        .border_radius(BorderRadius::MAX)
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
                 .signal()
                 .map_bool(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
-                .map(Into::into),
+                .map(BackgroundColor),
         )
-        .border_radius(BorderRadius::MAX)
         .hovered_sync(hovered)
         .on_click(move || *counter.lock_mut() += step)
         .child(

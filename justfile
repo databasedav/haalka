@@ -27,7 +27,7 @@ example_wasm name *extras:
 release *extras:
   cargo release --unpublished --sign-tag {{ extras }}
 
-# TODO: figure out y ci doesn't do this
+# TODO: https://github.com/release-plz/release-plz/issues/1773
 sign_tag tag:
   GIT_COMMITTER_DATE="$(git log -1 --format=%aD {{ tag }})" git tag {{ tag }} {{ tag }} -f -s && git push --tags --force
 

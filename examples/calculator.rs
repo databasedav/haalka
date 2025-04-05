@@ -62,24 +62,25 @@ fn button(symbol: &'static str) -> El<Node> {
 
 fn input_button(symbol: &'static str) -> impl Element {
     let hovered = Mutable::new(false);
+    let f = move || {
+        if symbol == "=" {
+            let mut output = OUTPUT.lock_mut();
+            if let Ok(result) = Context::<f64>::default().evaluate(&output) {
+                if let Some(result) = Decimal::from_f64((result * 100.).round() / 100.) {
+                    *output = result.normalize().to_string();
+                    return;
+                }
+            }
+            ERROR.set_neq(true);
+        } else {
+            *OUTPUT.lock_mut() += symbol;
+        }
+    };
     button(symbol)
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .background_color_signal(hovered.signal().map_bool(|| BLUE, || PINK).map(Into::into))
+        .background_color_signal(hovered.signal().map_bool(|| BLUE, || PINK).map(BackgroundColor))
         .hovered_sync(hovered)
-        .on_click(move || {
-            let mut output = OUTPUT.lock_mut();
-            if symbol == "=" {
-                if let Ok(result) = Context::<f64>::default().evaluate(&output) {
-                    if let Some(result) = Decimal::from_f64((result * 100.).round() / 100.) {
-                        *output = result.normalize().to_string();
-                        return;
-                    }
-                }
-                ERROR.set_neq(true);
-            } else {
-                *output += symbol;
-            }
-        })
+        .on_click(f)
 }
 
 static OUTPUT: Lazy<Mutable<String>> = Lazy::new(default);
@@ -122,7 +123,7 @@ fn clear_button() -> impl Element {
                 }
             }
             .dedupe()
-            .map(Into::into),
+            .map(BackgroundColor),
         )
         .cursor_disableable_signal(CursorIcon::System(SystemCursorIcon::Pointer), output_empty.signal())
         .hovered_sync(hovered)

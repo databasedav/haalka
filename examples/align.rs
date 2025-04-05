@@ -76,7 +76,7 @@ fn alignment_button(alignment: Alignment) -> impl Element {
                     .map(move |other_alignment| alignment == other_alignment),
             )
             .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
-            .map(Into::into),
+            .map(BackgroundColor),
         )
         .hovered_sync(hovered)
         .align_content(Align::center())
@@ -208,9 +208,11 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
                 hovered_signal,
             )
             .map_bool(
-                || bevy::color::palettes::basic::BLUE.into(),
-                || bevy::color::palettes::css::MIDNIGHT_BLUE.into(),
-            ),
+                || bevy::color::palettes::basic::BLUE,
+                || bevy::color::palettes::css::MIDNIGHT_BLUE,
+            )
+            .map(Into::<Color>::into)
+            .map(BackgroundColor),
         )
         .with_node(|mut node| node.padding = UiRect::all(Val::Px(5.)))
         .child(

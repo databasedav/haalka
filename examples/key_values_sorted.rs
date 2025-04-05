@@ -17,7 +17,11 @@ use std::{
 
 use bevy::prelude::*;
 use bevy_cosmic_edit::{CosmicBackgroundColor, CosmicWrap, CursorColor, MaxLines};
-use haalka::{prelude::*, text_input::FocusedTextInput, viewport_mutable::MutableViewport};
+use haalka::{
+    prelude::*,
+    text_input::FocusedTextInput,
+    viewport_mutable::{LogicalRect, MutableViewport},
+};
 
 fn main() {
     App::new()
@@ -39,8 +43,8 @@ fn main() {
                 focus_scroller.run_if(resource_changed_or_removed::<FocusedTextInput>),
             ),
         )
-        .add_event::<MaybeChanged>()
         .add_observer(sort_one)
+        .insert_resource(bevy_cosmic_edit::CursorPluginDisabled)
         .run();
 }
 
@@ -206,10 +210,11 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
             El::<Node>::new()
                 .width(Val::Px(200.))
                 .height(Val::Px(80.))
+                .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
                 .background_color_signal(
                     signal::or(hovered.signal(), selected.signal())
                         .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
-                        .map(Into::into),
+                        .map(BackgroundColor),
                 )
                 .hovered_sync(hovered)
                 .align_content(Align::center())
@@ -307,14 +312,15 @@ fn key_values() -> impl Element + Sizeable {
     Column::<Node>::new()
         .with_node(|mut node| node.row_gap = Val::Px(10.))
         .height(Val::Percent(90.))
-        .mutable_viewport(Overflow::clip_y(), LimitToBody::Vertical)
+        .mutable_viewport(haalka::prelude::Axis::Vertical)
+        .viewport_y_sync(SCROLL_POSITION.clone())
         .on_scroll_with_system_on_hover(
             BasicScrollHandler::new()
                 .direction(ScrollDirection::Vertical)
                 .pixels(20.)
                 .into_system(),
         )
-        .viewport_y_signal(SCROLL_POSITION.signal())
+        .viewport_y_signal(SCROLL_POSITION.signal().dedupe())
         .items_signal_vec(PAIRS.signal_vec_cloned().enumerate().map(
             |(
                 index_option,
@@ -353,11 +359,12 @@ fn x_button() -> impl Element + PointerEventAware {
     El::<Node>::new()
         .width(Val::Px(INPUT_HEIGHT))
         .height(Val::Px(INPUT_HEIGHT))
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
                 .signal()
                 .map_bool(|| bevy::color::palettes::basic::RED.into(), || *DARK_GRAY)
-                .map(Into::into),
+                .map(BackgroundColor),
         )
         .hovered_sync(hovered)
         .child(
@@ -375,6 +382,7 @@ fn ui_root() -> impl Element {
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
+        .cursor(CursorIcon::System(SystemCursorIcon::Default))
         .child(
             Row::<Node>::new()
                 .height(Val::Percent(100.))
@@ -397,11 +405,12 @@ fn ui_root() -> impl Element {
                             El::<Node>::new()
                                 .width(Val::Px(INPUT_WIDTH))
                                 .height(Val::Px(INPUT_HEIGHT))
+                                .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
                                 .background_color_signal(
                                     hovered
                                         .signal()
                                         .map_bool(|| bevy::color::palettes::basic::GREEN.into(), || *DARK_GRAY)
-                                        .map(Into::into),
+                                        .map(BackgroundColor),
                                 )
                                 .hovered_sync(hovered)
                                 .align_content(Align::center())
@@ -436,7 +445,7 @@ fn ui_root() -> impl Element {
 }
 
 fn scroll_to_bottom() {
-    SCROLL_POSITION.set(f32::MIN);
+    SCROLL_POSITION.set(f32::MAX);
 }
 
 fn tabber(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
@@ -498,50 +507,25 @@ fn escaper(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
 // on focus change, check if the focused element is in view, if not, scroll to it
 fn focus_scroller(
     focused_text_input_option: Option<Res<FocusedTextInput>>,
-    data_query: Query<(&ComputedNode, &GlobalTransform, &mut Node)>,
     parents: Query<&Parent>,
     mutable_viewports: Query<&MutableViewport>,
+    logical_rect: LogicalRect,
 ) {
     if let Some(focused_text_input) = focused_text_input_option.as_deref().map(Deref::deref).copied() {
-        if let Ok((text_input_computed_node, text_input_transform, _)) = data_query.get(focused_text_input) {
-            for parent in parents.iter_ancestors(focused_text_input) {
-                if mutable_viewports.contains(parent) {
-                    if let Ok((scene_computed_node, scene_transform, _scene_style)) = data_query.get(parent) {
-                        if let Some((viewport_computed_node, viewport_transform, viewport_node)) = parents
-                            .get(parent)
-                            .ok()
-                            .and_then(|parent| data_query.get(parent.get()).ok())
-                        {
-                            let text_input_rect = Rect::from_center_size(
-                                text_input_transform.translation().xy(),
-                                text_input_computed_node.size(),
-                            );
-                            let scene_rect =
-                                Rect::from_center_size(scene_transform.translation().xy(), scene_computed_node.size());
-                            let viewport_rect = Rect::from_center_size(
-                                viewport_transform.translation().xy(),
-                                viewport_computed_node.size(),
-                            );
-                            let scrolled_option = match viewport_node.top {
-                                Val::Px(top) => Some(top),
-                                Val::Auto => Some(0.),
-                                _ => None,
-                            };
-                            if let Some(scrolled) = scrolled_option {
-                                let container_base = viewport_rect.min.y - scrolled;
-                                let child_offset = text_input_rect.min.y - scrolled - container_base;
-                                // TODO: is there a simpler/ more general way to check for node visibility ?
-                                if child_offset + INPUT_HEIGHT - scrolled > viewport_rect.height() {
-                                    SCROLL_POSITION.set(
-                                        scene_rect.min.y - text_input_rect.min.y + viewport_rect.height()
-                                            - INPUT_HEIGHT,
-                                    );
-                                } else if child_offset < scrolled {
-                                    SCROLL_POSITION.set(scene_rect.min.y - text_input_rect.min.y);
-                                }
-                            }
+        if let Some(text_input_rect) = logical_rect.get(focused_text_input) {
+            for ancestor in parents.iter_ancestors(focused_text_input) {
+                if mutable_viewports.contains(ancestor) {
+                    if let Some(viewport_rect) = logical_rect.get(ancestor) {
+                        let d = text_input_rect.min.y - viewport_rect.min.y;
+                        if d < 0. {
+                            SCROLL_POSITION.update(|sp| sp + d);
+                        }
+                        let d = text_input_rect.max.y - viewport_rect.max.y;
+                        if d > 0. {
+                            SCROLL_POSITION.update(|sp| sp + d);
                         }
                     }
+                    break;
                 }
             }
         }

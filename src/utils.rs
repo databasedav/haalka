@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{pin::Pin, time::Duration};
 
 use bevy_tasks::{prelude::*, *};
 #[doc(no_inline)]
@@ -48,6 +48,16 @@ pub fn signal_eq<T: PartialEq + Send>(
     signal_2: impl Signal<Item = T> + Send + 'static,
 ) -> impl Signal<Item = bool> + Send + 'static {
     map_ref!(signal_1, signal_2 => *signal_1 == *signal_2).dedupe()
+}
+
+// TODO: get these from futures-signals https://github.com/Pauan/rust-signals/pull/85
+pub type SyncBoxSignal<'a, T> = Pin<Box<dyn Signal<Item = T> + Send + Sync + 'a>>;
+
+pub fn boxed_sync<'a, S, T>(signal: S) -> Pin<Box<dyn Signal<Item = T> + Send + Sync + 'a>>
+where
+    S: Sized + Send + Sync + Signal<Item = T> + 'a,
+{
+    Box::pin(signal)
 }
 
 cfg_if::cfg_if! {

@@ -54,7 +54,7 @@ jobs:
     - name: install binstall
       uses: cargo-bins/cargo-binstall@main
     - name: install cargo all features
-      run: cargo binstall --no-confirm cargo-all-features
+      run: cargo binstall --no-confirm --continue-on-failure cargo-all-features
     - name: check all features
       run: just check_all_features
   clippy:

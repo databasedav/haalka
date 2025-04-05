@@ -216,3 +216,9 @@ doc-scrape-examples = true
 name = "nested_lists"
 path = "examples/nested_lists.rs"
 doc-scrape-examples = true
+
+[[example]]
+name = "utils"
+path = "examples/utils.rs"
+doc-scrape-examples = true
+crate-type = ["lib"]

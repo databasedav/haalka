@@ -15,7 +15,7 @@ use bevy_text::{
 use utils::*;
 
 use bevy::prelude::*;
-use bevy_cosmic_edit::{CosmicBackgroundColor, CosmicTextChanged, CosmicWrap, CursorColor};
+use bevy_cosmic_edit::{CosmicBackgroundColor, CosmicTextChanged, CosmicWrap, CursorColor, MaxLines};
 use haalka::{prelude::*, text_input::FocusedTextInput};
 use strum::{self, IntoEnumIterator};
 
@@ -39,7 +39,6 @@ fn main() {
             ),
         )
         .add_systems(Update, name_changed)
-        .add_event::<SetShape>()
         .add_observer(
             |event: Trigger<SetShape>,
              character: Single<Entity, With<MeshMaterial3d<StandardMaterial>>>,
@@ -101,7 +100,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
                     Color::BLACK
                 }
             })
-            .map(Into::into)
+            .map(BorderColor)
     };
     let background_color_signal = {
         selected_hovered_broadcaster
@@ -115,7 +114,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
                     NORMAL_BUTTON
                 }
             })
-            .map(Into::into)
+            .map(BackgroundColor)
     };
     El::<Node>::new()
         .width(BUTTON_WIDTH)
@@ -170,6 +169,7 @@ fn ui_root() -> impl Element {
                                 .cursor_color(CursorColor(Color::WHITE))
                                 .fill_color(CosmicBackgroundColor(NORMAL_BUTTON))
                                 .attrs(TextAttrs::new().color(Color::WHITE))
+                                .max_lines(MaxLines(1))
                                 .placeholder(
                                     Placeholder::new()
                                         .text("name")
@@ -188,7 +188,7 @@ fn ui_root() -> impl Element {
                             Column::<Node>::new()
                                 .height(Val::Px(200.))
                                 .align(Align::new().center_x())
-                                .mutable_viewport(Overflow::clip_y(), LimitToBody::Vertical)
+                                .mutable_viewport(haalka::prelude::Axis::Vertical)
                                 .on_scroll_with_system_on_hover(
                                     BasicScrollHandler::new()
                                         .direction(ScrollDirection::Vertical)
@@ -212,7 +212,7 @@ fn name_changed(mut changed_events: EventReader<CosmicTextChanged>, mut commands
         if let Some((i, shape)) = Shape::iter().enumerate().find(|(_, shape)| &shape.to_string() == text) {
             commands.trigger(SetShape(shape));
             if let Val::Px(height) = BUTTON_HEIGHT {
-                SCROLL_POSITION.set(i as f32 * -height);
+                SCROLL_POSITION.set(i as f32 * height);
             }
         }
     }
