@@ -15,7 +15,7 @@ use bevy_math::prelude::*;
 use bevy_transform::prelude::*;
 use bevy_ui::prelude::*;
 use bevy_utils::hashbrown::HashSet;
-use futures_signals::signal::Signal;
+use futures_signals::signal::{Signal, Mutable};
 
 /// Dimensions of an element's "scene", which contains both its visible (via its [`Viewport`]) and
 /// hidden parts.
@@ -76,7 +76,7 @@ pub trait ViewportMutable: RawElWrapper {
     fn mutable_viewport(self, axis: Axis) -> Self {
         self.update_raw_el(move |raw_el| {
             raw_el
-                // .insert(MutableViewport::default())
+                .insert(MutableViewport::default())
                 .with_component::<Node>(move |mut node| {
                     node.overflow = match axis {
                         Axis::Horizontal => Overflow::scroll_x(),
@@ -144,6 +144,16 @@ pub trait ViewportMutable: RawElWrapper {
             });
         }
         self
+    }
+
+    /// Sync a [`Mutable<f32>`] with this element's viewport's x offset.
+    fn viewport_x_sync(self, viewport_x: Mutable<f32>) -> Self {
+        self.on_viewport_location_change(move |_, viewport| viewport_x.set_neq(viewport.offset_x))
+    }
+
+    /// Sync a [`Mutable<f32>`] with this element's viewport's y offset.
+    fn viewport_y_sync(self, viewport_y: Mutable<f32>) -> Self {
+        self.on_viewport_location_change(move |_, viewport| viewport_y.set_neq(viewport.offset_y))
     }
 }
 

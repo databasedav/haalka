@@ -5,6 +5,7 @@ the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## unreleased
 
 ### added
+- `ViewportMutable::viewport_x/y_sync` methods
 - blanket `impl<NodeType: Bundle> From<NodeType> for AlignabilityFacade`
 - `LogicalRect` `SystemParam`
 - `SyncBoxSignal` and `boxed_sync` signal utils
