@@ -15,7 +15,7 @@ use bevy_math::prelude::*;
 use bevy_transform::prelude::*;
 use bevy_ui::prelude::*;
 use bevy_utils::hashbrown::HashSet;
-use futures_signals::signal::{Signal, Mutable};
+use futures_signals::signal::{Mutable, Signal};
 
 /// Dimensions of an element's "scene", which contains both its visible (via its [`Viewport`]) and
 /// hidden parts.
