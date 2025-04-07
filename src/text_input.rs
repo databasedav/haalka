@@ -888,14 +888,8 @@ impl_haalka_methods! {
 }
 
 pub(super) fn plugin(app: &mut App) {
-    let font_bytes: &[u8] = include_bytes!("fonts/FiraMono-subset.ttf");
-    let font_config = bevy_cosmic_edit::CosmicFontConfig {
-        fonts_dir_path: None,
-        font_bytes: Some(vec![font_bytes]),
-        load_system_fonts: true,
-    };
     app
-    .add_plugins(bevy_cosmic_edit::CosmicEditPlugin { font_config })
+    .add_plugins(bevy_cosmic_edit::CosmicEditPlugin::default())
     .add_systems(
         Update,
         (

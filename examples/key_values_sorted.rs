@@ -433,7 +433,7 @@ fn ui_root() -> impl Element {
                                     async {
                                         // TODO: need "after rendered" hook to exactly sync when this scroll should be
                                         // triggered
-                                        sleep(Duration::from_millis(200)).await;
+                                        sleep(Duration::from_millis(150)).await;
                                         scroll_to_bottom()
                                     }
                                     .apply(spawn)
