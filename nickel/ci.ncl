@@ -30,7 +30,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
         clippy = {
           steps = [
             checkout,
-            rust_toolchain & { with = { components = "clippy" } },
+            rust_toolchain & { with = { toolchain = "nightly", components = "clippy" } },
             bevy_dependencies,
             cached_target_populate,
             just,

@@ -9,8 +9,8 @@ use super::{
 use bevy_core::prelude::*;
 use bevy_ecs::{component::ComponentId, prelude::*, system::RunSystemOnce, world::DeferredWorld};
 use bevy_hierarchy::prelude::*;
-use bevy_picking::prelude::*;
 use bevy_log::warn;
+use bevy_picking::prelude::*;
 use futures_signals::signal::{Signal, SignalExt};
 
 /// [`Element`]s are [`RawElement`]s that wrap [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs)
@@ -167,9 +167,9 @@ impl<T: Alignable> TypeEraseable for T {
 fn warn_non_orphan_ui_root(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
     world.commands().queue(move |world: &mut World| {
         let _ = world.run_system_once(move |parents: Query<&Parent>| {
-            if parents.iter_ancestors(entity).count() > 1 {
+            if parents.iter_ancestors(entity).count() > 0 {
                 warn!(
-                    "Entity {:?} is registered as a UiRoot but is not an orphan (has a parent). This may lead to unexpected behavior.",
+                    "entity {:?} is registered as a UiRoot but is not an orphan (has a parent); this may lead to unexpected behavior",
                     entity
                 );
             }
@@ -189,11 +189,7 @@ pub struct UiRoot;
 pub trait UiRootable: RawElWrapper {
     /// Mark this node as the root of the UI tree.
     fn ui_root(self) -> Self {
-        self.update_raw_el(|raw_el| {
-            raw_el
-                .insert(UiRoot)
-                .insert(PickingBehavior::default())
-        })
+        self.update_raw_el(|raw_el| raw_el.insert(UiRoot).insert(PickingBehavior::default()))
     }
 }
 

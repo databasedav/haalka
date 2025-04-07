@@ -1,29 +1,20 @@
 //! Simple button, port of <https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs>.
 
 mod utils;
-use std::i32;
-
 use utils::*;
 
 use bevy::prelude::*;
 use haalka::prelude::*;
-use aalo::prelude::*;
 
 fn main() {
     App::new()
         .add_plugins(examples_plugin)
-        .add_plugins(AaloPlugin::new().world())
         .add_systems(
             Startup,
             (
                 |world: &mut World| {
-                    // let camera = world.spawn(Camera2d).id();
                     let font = world.resource::<AssetServer>().load("fonts/FiraMono-subset.ttf");
-                    ui_root(font)
-                    // .update_raw_el(move |raw_el| {
-                    //     raw_el.insert(TargetCamera(camera))
-                    // })
-                    .spawn(world);
+                    ui_root(font).spawn(world);
                 },
                 camera,
             ),
@@ -104,8 +95,7 @@ fn button(font: Handle<Font>) -> impl Element {
 }
 
 fn camera(mut commands: Commands) {
-    // commands.spawn(Camera2d);
-    commands.spawn((Camera2d, IsDefaultUiCamera));
+    commands.spawn(Camera2d);
 }
 
 fn ui_root(font: Handle<Font>) -> impl Element {

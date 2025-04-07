@@ -20,12 +20,10 @@ use bevy::{
 };
 use bevy_cosmic_edit::*;
 use haalka::prelude::*;
-use aalo::prelude::*;
 
 fn main() {
     App::new()
         .add_plugins(examples_plugin)
-        .add_plugins(AaloPlugin::new().world())
         .add_systems(
             Startup,
             (
@@ -40,7 +38,7 @@ fn main() {
 
 fn ui_root() -> impl Element {
     El::<Node>::new()
-        // .ui_root()
+        .ui_root()
         .cursor(CursorIcon::System(SystemCursorIcon::Default))
         .height(Val::Percent(100.))
         .width(Val::Percent(100.))

@@ -17,7 +17,9 @@ fn main() {
         .add_systems(
             Startup,
             (
-                |world: &mut World| { ui_root().spawn(world); },
+                |world: &mut World| {
+                    ui_root().spawn(world);
+                },
                 ui_camera,
                 dot_camera,
                 |mut commands: Commands| {

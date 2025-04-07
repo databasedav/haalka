@@ -12,7 +12,6 @@ use bevy::{
     utils::prelude::*,
     window::prelude::*,
 };
-use bevy_picking::PickingBehavior;
 use bevy_window::WindowResolution;
 use haalka::prelude::*;
 use haalka_futures_signals_ext::SignalExtBool;
@@ -157,7 +156,6 @@ pub(crate) fn examples_plugin(app: &mut App) {
                 }
                 el = el.item(El::<Text>::new().text(Text::new("press f2 to toggle fps counter")));
                 El::<Node>::new()
-                    .update_raw_el(|raw_el| raw_el.insert(PickingBehavior { should_block_lower: false, ..default() }))
                     .with_node(|mut node| {
                         node.padding.bottom = Val::Px(FPS_PADDING);
                         node.padding.left = Val::Px(FPS_PADDING);
