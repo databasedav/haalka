@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0; background-color: #2b2c2f;">
+
+<head>
+    <meta charset="utf-8" />
+    <title>haalka healthbar example</title>
+    
+    
+<script type="module">
+import init, * as bindings from './haalka-ded787e595d79e60.js';
+const wasm = await init({ module_or_path: './haalka-ded787e595d79e60_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+<link rel="modulepreload" href="./haalka-ded787e595d79e60.js" crossorigin="anonymous" integrity="sha384-QANoSbAIc0OtbdF/5xbCyCzgZJPcddby8f/S0c1fYnG13Yrwj5If2hiqLEjOr/tP"><link rel="preload" href="./haalka-ded787e595d79e60_bg.wasm" crossorigin="anonymous" integrity="sha384-DzkJfOKGJJW+146SmeLEZMKZofLfzoN+7PGNwdOmgzzZwkPDGwnue0FNhZvOjxoS" as="fetch" type="application/wasm"></head>
+
+<body style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
+    <div id="game" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0; display: flex;">
+        <canvas id="bevy">
+            js and canvas support is required
+        </canvas>
+    </div>
+</body>
+
+</html>
