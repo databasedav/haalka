@@ -100,7 +100,6 @@ fn camera(mut commands: Commands) {
 
 fn ui_root(font: Handle<Font>) -> impl Element {
     El::<Node>::new()
-        .global_z_index(GlobalZIndex(i32::MAX))
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
