@@ -4,6 +4,10 @@ the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## unreleased
 
+### changed
+
+- `UiRoot` is now a component, allowing multiple ui roots
+
 # 0.4.0 (2025-04-04)
 
 ### added
