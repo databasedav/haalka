@@ -10,7 +10,7 @@ use bevy_utils::prelude::*;
 use bevy_app::prelude::*;
 use bevy_derive::*;
 use bevy_picking::prelude::*;
-use bevy_text::cosmic_text;
+use bevy_text::{cosmic_text, DEFAULT_FONT_DATA};
 
 use crate::impl_haalka_methods;
 
@@ -888,8 +888,13 @@ impl_haalka_methods! {
 }
 
 pub(super) fn plugin(app: &mut App) {
+    let font_config = bevy_cosmic_edit::CosmicFontConfig {
+        font_bytes: Some(vec![DEFAULT_FONT_DATA]),
+        load_system_fonts: false,
+        ..default()
+    };
     app
-    .add_plugins(bevy_cosmic_edit::CosmicEditPlugin::default())
+    .add_plugins(bevy_cosmic_edit::CosmicEditPlugin { font_config })
     .add_systems(
         Update,
         (
