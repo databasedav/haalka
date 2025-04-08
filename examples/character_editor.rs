@@ -65,7 +65,7 @@ const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
 const CLICKED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
 const BUTTON_WIDTH: Val = Val::Px(250.);
-const BUTTON_HEIGHT: Val = Val::Px(65.);
+const BUTTON_HEIGHT: Val = Val::Px(50.);
 
 #[derive(Clone, Copy, PartialEq, strum::Display, strum::EnumIter)]
 #[strum(serialize_all = "lowercase")]
