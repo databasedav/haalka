@@ -4,9 +4,17 @@ the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## unreleased
 
+### added
+
+- `scroll_normalizer` for more predictable mouse scrolling
+
 ### changed
 
 - `UiRoot` is now a component, allowing multiple ui roots
+
+### removed
+
+- no longer bundling fira mono, using Bevy's embedded default font directly
 
 # 0.4.0 (2025-04-04)
 
