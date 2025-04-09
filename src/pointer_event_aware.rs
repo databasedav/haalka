@@ -154,10 +154,16 @@ pub trait PointerEventAware: GlobalEventAware {
         .on_global_event_with_system::<Pointer<Click>, _>(
             move |In((entity, click)): In<(Entity, Pointer<Click>)>,
                   children: Query<&Children>,
-                  ui_root: Res<UiRoot>,
+                  parent: Query<&Parent>,
+                  ui_roots: Query<&UiRoot>,
                   mut commands: Commands| {
-                if !is_inside_or_removed_from_dom(entity, &click, ui_root.0, &children) {
-                    commands.run_system_with_input(system_holder.get().copied().unwrap(), (entity, click));
+                for ancestor in parent.iter_ancestors(entity) {
+                    if ui_roots.contains(ancestor) {
+                        if !is_inside_or_removed_from_dom(entity, &click, ancestor, &children) {
+                            commands.run_system_with_input(system_holder.get().copied().unwrap(), (entity, click));
+                        }
+                        break;
+                    }
                 }
             },
         )

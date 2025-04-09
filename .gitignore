@@ -3,3 +3,5 @@ test.ncl
 index.html
 dist
 trunk
+rust-toolchain.toml
+.cargo

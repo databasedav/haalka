@@ -176,6 +176,14 @@ pub struct BasicScrollHandler {
 const DEFAULT_SCROLL_DIRECTION: ScrollDirection = ScrollDirection::Vertical;
 const DEFAULT_SCROLL_MAGNITUDE: f32 = 10.;
 
+/// Normalizes the scroll amount based on the scroll unit and the specified magnitude.
+pub fn scroll_normalizer(unit: MouseScrollUnit, scroll: f32, magnitude: f32) -> f32 {
+    match unit {
+        MouseScrollUnit::Line => scroll * magnitude,
+        MouseScrollUnit::Pixel => scroll.abs().min(magnitude) * scroll.signum(),
+    }
+}
+
 impl BasicScrollHandler {
     #[allow(missing_docs)]
     pub fn new() -> Self {
@@ -259,10 +267,7 @@ impl BasicScrollHandler {
         let f = move |In((entity, mouse_wheel)): In<(Entity, MouseWheel)>,
                       keys: Res<ButtonInput<KeyCode>>,
                       mut scroll_positions: Query<&mut ScrollPosition>| {
-            let mut dy = mouse_wheel.y;
-            if matches!(mouse_wheel.unit, MouseScrollUnit::Line) {
-                dy *= magnitude.get();
-            };
+            let dy = scroll_normalizer(mouse_wheel.unit, mouse_wheel.y, magnitude.get());
             let direction = direction.get();
             if let Ok(mut scroll_position) = scroll_positions.get_mut(entity) {
                 if matches!(direction, ScrollDirection::Vertical)

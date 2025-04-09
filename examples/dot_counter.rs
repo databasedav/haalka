@@ -18,16 +18,9 @@ fn main() {
             Startup,
             (
                 |world: &mut World| {
-                    let camera = world.spawn((Camera2d, IsDefaultUiCamera)).id();
-                    ui_root()
-                        .update_raw_el(|raw_el| {
-                            raw_el.with_entity(move |mut entity| {
-                                // https://github.com/bevyengine/bevy/discussions/11223
-                                entity.insert(TargetCamera(camera));
-                            })
-                        })
-                        .spawn(world);
+                    ui_root().spawn(world);
                 },
+                ui_camera,
                 dot_camera,
                 |mut commands: Commands| {
                     commands.spawn((Spawner, MutableTimer::from(SPAWN_RATE.clone())));
@@ -317,6 +310,10 @@ const BLUE: Color = Color::srgb(0.25, 0.25, 0.75);
 const GREEN: Color = Color::srgb(0.25, 0.75, 0.25);
 const RED: Color = Color::srgb(0.75, 0.25, 0.25);
 const YELLOW: Color = Color::srgb(0.75, 0.75, 0.25);
+
+fn ui_camera(mut commands: Commands) {
+    commands.spawn((Camera2d, IsDefaultUiCamera));
+}
 
 fn dot_camera(mut commands: Commands) {
     // https://github.com/bevyengine/bevy/discussions/11223

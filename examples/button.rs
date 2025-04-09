@@ -13,8 +13,7 @@ fn main() {
             Startup,
             (
                 |world: &mut World| {
-                    let font = world.resource::<AssetServer>().load("fonts/FiraMono-subset.ttf");
-                    ui_root(font).spawn(world);
+                    ui_root().spawn(world);
                 },
                 camera,
             ),
@@ -26,7 +25,7 @@ const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
 const PRESSED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
 
-fn button(font: Handle<Font>) -> impl Element {
+fn button() -> impl Element {
     let (pressed, pressed_signal) = Mutable::new_and_signal(false);
     let (hovered, hovered_signal) = Mutable::new_and_signal(false);
     let pressed_hovered_broadcaster =
@@ -72,7 +71,6 @@ fn button(font: Handle<Font>) -> impl Element {
         .child(
             El::<Text>::new()
                 .text_font(TextFont {
-                    font,
                     font_size: 33.0,
                     ..default()
                 })
@@ -98,10 +96,10 @@ fn camera(mut commands: Commands) {
     commands.spawn(Camera2d);
 }
 
-fn ui_root(font: Handle<Font>) -> impl Element {
+fn ui_root() -> impl Element {
     El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
-        .child(button(font))
+        .child(button())
 }
