@@ -121,8 +121,6 @@ pub mod prelude {
             pub use crate::utils::*;
             #[doc(no_inline)]
             pub use apply::{Also, Apply};
-            #[doc(no_inline)]
-            pub use once_cell::sync::Lazy;
         }
     }
 }

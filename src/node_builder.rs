@@ -6,7 +6,6 @@ use super::utils::{clone, spawn};
 use apply::Apply;
 use bevy_async_ecs::AsyncWorld;
 use bevy_ecs::prelude::*;
-use bevy_hierarchy::prelude::*;
 use bevy_tasks::Task;
 use bevy_utils::prelude::*;
 use futures_signals::{
@@ -98,7 +97,7 @@ impl NodeBuilder {
             } else {
                 // parent despawned during child spawning
                 if let Ok(child) = world.get_entity_mut(child_entity) {
-                    child.despawn_recursive();
+                    child.despawn();
                 }
             }
         };
@@ -123,7 +122,7 @@ impl NodeBuilder {
                                 if let Some(existing_child) = existing_child_option.take() {
                                     if let Ok(entity) = world.get_entity_mut(existing_child) {
                                         // need to call like this to avoid type ambiguity
-                                        EntityWorldMut::despawn_recursive(entity);  // removes from parent
+                                        EntityWorldMut::despawn(entity);  // removes from parent
                                     }
                                 }
                                 let child_entity = world.spawn_empty().id();
@@ -134,7 +133,7 @@ impl NodeBuilder {
                                     existing_child_option.set(Some(child_entity));
                                 } else {  // parent despawned during child spawning
                                     if let Ok(child) = world.get_entity_mut(child_entity) {
-                                        child.despawn_recursive();
+                                        child.despawn();
                                     }
                                 }
                                 child_block_populations.lock_mut().set(block, 1);
@@ -143,7 +142,7 @@ impl NodeBuilder {
                             async_world().apply(move |world: &mut World| {
                                 if let Some(existing_child) = existing_child_option.take() {
                                     if let Ok(entity) = world.get_entity_mut(existing_child) {
-                                        entity.despawn_recursive();
+                                        entity.despawn();
                                     }
                                 }
                                 child_block_populations.lock_mut().set(block, 0);
@@ -181,7 +180,7 @@ impl NodeBuilder {
                 // parent despawned during child spawning
                 for child in children_entities {
                     if let Ok(child) = world.get_entity_mut(child) {
-                        child.despawn_recursive();
+                        child.despawn();
                     }
                 }
             }
@@ -211,7 +210,7 @@ impl NodeBuilder {
                                     for child in children_lock.drain(..) {
                                         if let Ok(child) = world.get_entity_mut(child) {
                                             // need to call like this to avoid type ambiguity
-                                            EntityWorldMut::despawn_recursive(child);  // removes from parent
+                                            EntityWorldMut::despawn(child);  // removes from parent
                                         }
                                     }
                                     for _ in 0..children.len() {
@@ -227,7 +226,7 @@ impl NodeBuilder {
                                     } else {  // parent despawned during child spawning
                                         for entity in children_lock.drain(..) {
                                             if let Ok(child) = world.get_entity_mut(entity) {
-                                                child.despawn_recursive();
+                                                child.despawn();
                                             }
                                         }
                                     }
@@ -246,7 +245,7 @@ impl NodeBuilder {
                                         child_block_populations.lock_mut().set(block, children_lock.len());
                                     } else {  // parent despawned during child spawning
                                         if let Ok(child) = world.get_entity_mut(child_entity) {
-                                            child.despawn_recursive();
+                                            child.despawn();
                                         }
                                     }
                                 })
@@ -264,7 +263,7 @@ impl NodeBuilder {
                                         child_block_populations.lock_mut().set(block, children_lock.len());
                                     } else {  // parent despawned during child spawning
                                         if let Ok(child) = world.get_entity_mut(child_entity) {
-                                            child.despawn_recursive();
+                                            child.despawn();
                                         }
                                     }
                                 })
@@ -274,7 +273,7 @@ impl NodeBuilder {
                                 async_world().apply(move |world: &mut World| {
                                     if let Some(existing_child) = children_entities.lock_ref().get(index).copied() {
                                         if let Ok(child) = world.get_entity_mut(existing_child) {
-                                            child.despawn_recursive();  // removes from parent
+                                            child.despawn();  // removes from parent
                                         }
                                     }
                                     let child_entity = world.spawn_empty().id();
@@ -285,7 +284,7 @@ impl NodeBuilder {
                                         node.spawn_on_entity(world, child_entity);
                                     } else {  // parent despawned during child spawning
                                         if let Ok(child) = world.get_entity_mut(child_entity) {
-                                            child.despawn_recursive();
+                                            child.despawn();
                                         }
                                     }
                                 })
@@ -328,7 +327,7 @@ impl NodeBuilder {
                                     let mut children_lock = children_entities.lock_mut();
                                     if let Some(existing_child) = children_lock.get(index).copied() {
                                         if let Ok(child) = world.get_entity_mut(existing_child) {
-                                            child.despawn_recursive();  // removes from parent
+                                            child.despawn();  // removes from parent
                                         }
                                         children_lock.remove(index);
                                         child_block_populations.lock_mut().set(block, children_lock.len());
@@ -341,7 +340,7 @@ impl NodeBuilder {
                                     let mut children_lock = children_entities.lock_mut();
                                     if let Some(child_entity) = children_lock.pop() {
                                         if let Ok(child) = world.get_entity_mut(child_entity) {
-                                            child.despawn_recursive();
+                                            child.despawn();
                                         }
                                         child_block_populations.lock_mut().set(block, children_lock.len());
                                     }
@@ -353,7 +352,7 @@ impl NodeBuilder {
                                     let mut children_lock = children_entities.lock_mut();
                                     for child_entity in children_lock.drain(..) {
                                         if let Ok(child) = world.get_entity_mut(child_entity) {
-                                            child.despawn_recursive();
+                                            child.despawn();
                                         }
                                     }
                                     child_block_populations.lock_mut().set(block, children_lock.len());

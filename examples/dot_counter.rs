@@ -56,7 +56,7 @@ fn main() {
              mut rng: GlobalEntropy<ChaCha8Rng>,
              mut commands: Commands| {
                 if let Some(dot) = dots.iter().choose(rng.as_mut()) {
-                    commands.entity(dot).despawn_recursive();
+                    commands.entity(dot).despawn();
                 }
             },
         )

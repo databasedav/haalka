@@ -34,7 +34,7 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Row<NodeType> {
                     node.flex_direction = FlexDirection::Row;
                     node.align_items = AlignItems::Center;
                 })
-                .insert(PickingBehavior::IGNORE),
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }

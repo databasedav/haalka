@@ -323,7 +323,7 @@ fn decay(mut health: Query<&mut Health>, mut health_tick_timer: ResMut<HealthTic
 fn despawn_when_dead(mut commands: Commands, query: Query<(Entity, &Health), Changed<Health>>) {
     if let Ok((entity, health)) = query.get_single() {
         if health.0 == 0 {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).despawn();
         }
     }
 }

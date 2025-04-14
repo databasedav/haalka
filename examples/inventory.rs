@@ -269,7 +269,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
         .update_raw_el(clone!((cell_data_option, down) move |mut raw_el| {
             if insertable {
                 raw_el = raw_el
-                .insert(PickingBehavior::default())
+                .insert(Pickable::default())
                 .on_event_disableable::<Pointer<Click>, BlockClick>(
                     clone!((cell_data_option => self_cell_data_option) move |click| {
                         let mut consume = false;
@@ -315,9 +315,9 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             raw_el
             // we don't want the click listener to trigger if we've just grabbed some of
             // the stack as it would immediately drop one down, so we track the `Down` state
-            .on_event_with_system::<Pointer<Down>, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).insert(BlockClick); })
-            .on_event_with_system::<Pointer<Up>, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).remove::<BlockClick>(); })
-            .on_event_disableable_signal::<Pointer<Down>>(
+            .on_event_with_system::<Pointer<Pressed>, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).insert(BlockClick); })
+            .on_event_with_system::<Pointer<Released>, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).remove::<BlockClick>(); })
+            .on_event_disableable_signal::<Pointer<Pressed>>(
                 clone!((cell_data_option, down) move |pointer_down| {
                     let to_drag_option = {
                         if pointer_down.button == PointerButton::Secondary {
@@ -616,7 +616,7 @@ fn inventory() -> impl Element {
                                             .child(cell(output.clone(), false).align(Align::center()))
                                             .update_raw_el(clone!((inputs) move |raw_el| {
                                                 raw_el
-                                                .on_event_disableable_signal::<Pointer<Down>>(
+                                                .on_event_disableable_signal::<Pointer<Pressed>>(
                                                     clone!((inputs) move |_| {
                                                         for input in inputs.lock_ref().iter() {
                                                             input.take();
@@ -672,7 +672,7 @@ fn ui_root() -> impl Element {
                 .on_event_with_system::<Pointer<Move>, _>(|In((_, move_)): In<(_, Pointer<Move>)>| {
                     POINTER_POSITION.set(move_.pointer_location.position.into());
                 })
-                .component_signal::<PickingBehavior, _>(is_dragging().map_true(default))
+                .component_signal::<Pickable, _>(is_dragging().map_true(default))
         })
         .align_content(Align::center())
         .layer(inventory())
@@ -686,7 +686,7 @@ fn ui_root() -> impl Element {
                     icon(cell_data.index.signal(), cell_data.count.signal())
                         .update_raw_el(|raw_el| {
                             raw_el.defer_update(DeferredUpdaterAppendDirection::Front, |raw_el| {
-                                raw_el.insert(PickingBehavior {
+                                raw_el.insert(Pickable {
                                     // required to allow cell hover to leak through a dragging icon
                                     should_block_lower: false,
                                     is_hoverable: true,

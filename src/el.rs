@@ -37,7 +37,7 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for El<NodeType> {
                     node.display = Display::Flex;
                     node.flex_direction = FlexDirection::Column;
                 })
-                .insert(PickingBehavior::IGNORE),
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }

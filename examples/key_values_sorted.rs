@@ -507,7 +507,7 @@ fn escaper(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
 // on focus change, check if the focused element is in view, if not, scroll to it
 fn focus_scroller(
     focused_text_input_option: Option<Res<FocusedTextInput>>,
-    parents: Query<&Parent>,
+    child_ofs: Query<&ChildOf>,
     mutable_viewports: Query<&MutableViewport>,
     logical_rect: LogicalRect,
 ) {

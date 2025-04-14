@@ -111,7 +111,7 @@ struct MarkDefaultUiCameraSet;
 #[allow(clippy::type_complexity)]
 fn mark_default_ui_camera(cameras: Query<Entity, Or<(With<Camera2d>, With<Camera3d>)>>, mut commands: Commands) {
     if let Ok(entity) = cameras.get_single() {
-        if let Some(mut entity) = commands.get_entity(entity) {
+        if let Ok(mut entity) = commands.get_entity(entity) {
             entity.try_insert(IsDefaultUiCamera);
         }
     }

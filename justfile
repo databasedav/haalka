@@ -29,7 +29,7 @@ release *extras:
 
 # TODO: https://github.com/release-plz/release-plz/issues/1773
 sign_tag tag:
-  GIT_COMMITTER_DATE="$(git log -1 --format=%aD {{ tag }})" git tag {{ tag }} {{ tag }} -f -s && git push --tags --force
+  GIT_COMMITTER_DATE="$(git log -1 --format=%aD {{ tag }})" git tag {{ tag }} {{ tag }}^{} -f -s && git push --tags --force
 
 sync_counter_example_readme:
   uv run python sync_counter_example_readme.py

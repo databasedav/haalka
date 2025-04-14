@@ -48,7 +48,7 @@ impl UiRootable for TextInput {}
 impl ViewportMutable for TextInput {}
 impl CursorOnHoverable for TextInput {}
 
-/// Marker [`Component`] for [`TextInput`] to prevent focusing on [`Pointer<Down>`] events. Useful when input focus is more conditional.
+/// Marker [`Component`] for [`TextInput`] to prevent focusing on [`Pointer<Pressed>`] events. Useful when input focus is more conditional.
 #[derive(Component)]
 pub struct TextInputFocusOnDownDisabled;
 
@@ -58,11 +58,11 @@ impl TextInput {
     pub fn new() -> Self {
         let el = El::<Node>::new().update_raw_el(|raw_el| {
             raw_el
-                .insert((TextEdit, PickingBehavior::default()))
+                .insert((TextEdit, Pickable::default()))
                 // TODO: remove 0.16 https://github.com/bevyengine/bevy/issues/16643#issuecomment-2518163688
                 .insert(ImageNode::default().with_mode(NodeImageMode::Stretch))
-                .on_event_with_system::<Pointer<Down>, _>(
-                    move |In((entity, _)): In<(_, Pointer<Down>)>,
+                .on_event_with_system::<Pointer<Pressed>, _>(
+                    move |In((entity, _)): In<(_, Pointer<Pressed>)>,
                             mut focusable_query: Query<(Entity, &mut Focusable), Without<TextInputFocusOnDownDisabled>>,
                             mut commands: Commands| {
                         // TODO: remove this focusable trigger and uncomment .insert_resource below when https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
@@ -163,7 +163,7 @@ impl TextInput {
                 let system = register_system(world, handler);
                 let _ = system_holder.set(system);
                 observe(world, entity, move |event: Trigger<FocusedChange>, mut commands: Commands| {
-                    commands.run_system_with_input(system, (entity, event.event().0))
+                    commands.run_system_with(system, (entity, event.event().0))
                 });
             }))
             .apply(remove_system_holder_on_remove(system_holder.clone()))
@@ -573,8 +573,8 @@ impl TextInput {
                 let system = register_system(world, handler);
                 let _ = system_holder.set(system);
                 observe(world, entity, move |change: Trigger<TextInputChange>, mut commands: Commands| {
-                    let entity = change.entity();
-                    commands.run_system_with_input(system, (entity, change.event().0.clone()));
+                    let entity = change.target();
+                    commands.run_system_with(system, (entity, change.event().0.clone()));
                 });
             }))
             .insert(ListenToChanges)

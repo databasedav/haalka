@@ -36,7 +36,7 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Grid<NodeType> {
                 .with_component::<Node>(|mut node| {
                     node.display = Display::Grid;
                 })
-                .insert(PickingBehavior::IGNORE),
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }

@@ -1,7 +1,7 @@
 //! Semantics for managing elements whose contents can be partially visible, see
 //! [`ViewportMutable`].
 
-use std::sync::{Arc, OnceLock};
+use std::{sync::{Arc, OnceLock}, collections::HashSet};
 
 use super::{
     raw::{observe, register_system, utils::remove_system_holder_on_remove, RawElWrapper},
@@ -10,11 +10,9 @@ use super::{
 use apply::Apply;
 use bevy_app::prelude::*;
 use bevy_ecs::{prelude::*, system::SystemParam};
-use bevy_hierarchy::prelude::*;
 use bevy_math::prelude::*;
 use bevy_transform::prelude::*;
 use bevy_ui::prelude::*;
-use bevy_utils::hashbrown::HashSet;
 use futures_signals::signal::{Mutable, Signal};
 
 /// Dimensions of an element's "scene", which contains both its visible (via its [`Viewport`]) and
@@ -44,7 +42,7 @@ pub struct Viewport {
 /// [`Component`] for holding the [`Scene`] and [`Viewport`]. Also an [`Event`] which is
 /// [`Trigger`]ed when the [`Viewport`] or [`Scene`] of a [`MutableViewport`] changes; only entities
 /// with the [`OnViewportLocationChange`] component receive this event.
-#[derive(Event, Default)]
+#[derive(Component, Event, Default)]
 pub struct MutableViewport {
     #[allow(missing_docs)]
     pub scene: Scene,
@@ -103,7 +101,7 @@ pub trait ViewportMutable: RawElWrapper {
                 let _ = system_holder.set(system);
                 observe(world, entity, move |viewport_location_change: Trigger<MutableViewport>, mut commands: Commands| {
                     let &MutableViewport { scene, viewport } = viewport_location_change.event();
-                    commands.run_system_with_input(system, (entity, (scene, viewport)));
+                    commands.run_system_with(system, (entity, (scene, viewport)));
                 });
             }))
             .apply(remove_system_holder_on_remove(system_holder))
@@ -197,7 +195,7 @@ impl SceneViewport<'_, '_> {
                     .into_iter()
                     .flat_map(|children| children.iter())
                 {
-                    if let Some(child_rect) = self.logical_rect.get(*child) {
+                    if let Some(child_rect) = self.logical_rect.get(child) {
                         min = min.min(child_rect.min);
                         max = max.max(child_rect.max);
                     }
@@ -226,7 +224,7 @@ fn dispatch_viewport_location_change(
     checked_viewport_listeners: &mut HashSet<Entity>,
 ) {
     if let Some((scene, viewport)) = scene_viewports.get(entity) {
-        if let Some(mut entity) = commands.get_entity(entity) {
+        if let Ok(mut entity) = commands.get_entity(entity) {
             entity.insert(MutableViewport { scene, viewport });
         }
         commands.trigger_targets(MutableViewport { scene, viewport }, entity);
@@ -245,7 +243,7 @@ fn viewport_location_change_dispatcher(
     >,
     changed_computed_nodes: Query<Entity, Changed<ComputedNode>>,
     viewport_location_change_listeners: Query<Entity, With<OnViewportLocationChange>>,
-    parents: Query<&Parent>,
+    child_ofs: Query<&ChildOf>,
     scene_viewports: SceneViewport,
     mut commands: Commands,
 ) {
@@ -254,8 +252,7 @@ fn viewport_location_change_dispatcher(
         dispatch_viewport_location_change(entity, &scene_viewports, &mut commands, &mut checked_viewport_listeners);
     }
     for entity in changed_computed_nodes.iter() {
-        if let Ok(parent) = parents.get(entity) {
-            let parent = parent.get();
+        if let Ok(&ChildOf(parent)) = child_ofs.get(entity) {
             if !checked_viewport_listeners.contains(&parent) && viewport_location_change_listeners.contains(parent) {
                 dispatch_viewport_location_change(
                     parent,

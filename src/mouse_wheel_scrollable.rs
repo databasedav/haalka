@@ -42,12 +42,12 @@ pub trait MouseWheelScrollable: ViewportMutable {
             raw_el
                 .insert(ScrollEnabled)
                 .observe(|event: Trigger<OnAdd, Disabled>, mut commands: Commands| {
-                    if let Some(mut entity) = commands.get_entity(event.entity()) {
+                    if let Ok(mut entity) = commands.get_entity(event.target()) {
                         entity.remove::<ScrollEnabled>();
                     }
                 })
                 .observe(move |event: Trigger<OnRemove, Disabled>, mut commands: Commands| {
-                    if let Some(mut entity) = commands.get_entity(event.entity()) {
+                    if let Ok(mut entity) = commands.get_entity(event.target()) {
                         entity.try_insert(ScrollEnabled);
                     }
                 })
@@ -55,7 +55,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
                     let system = register_system(world, handler);
                     let _ = system_holder.set(system);
                     observe(world, entity, move |mouse_wheel: Trigger<MouseWheel>, mut commands: Commands| {
-                        commands.run_system_with_input(system, (mouse_wheel.entity(), *mouse_wheel.event()));
+                        commands.run_system_with(system, (mouse_wheel.target(), *mouse_wheel.event()));
                     });
                 }))
                 .apply(remove_system_holder_on_remove(system_holder))
@@ -125,7 +125,7 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.on_hovered_change_with_system(|In((entity, hovered)), mut commands: Commands| {
-            if let Some(mut entity) = commands.get_entity(entity) {
+            if let Ok(mut entity) = commands.get_entity(entity) {
                 if hovered {
                     entity.remove::<ScrollDisabled>();
                 } else {

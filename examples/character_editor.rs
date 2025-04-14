@@ -45,7 +45,7 @@ fn main() {
              mut meshes: ResMut<Assets<Mesh>>,
              mut commands: Commands| {
                 let shape = **event;
-                if let Some(mut entity) = commands.get_entity(*character) {
+                if let Ok(mut entity) = commands.get_entity(*character) {
                     entity.insert(Mesh3d(meshes.add(match shape {
                         Shape::Sphere => Sphere::default().mesh().ico(5).unwrap(),
                         Shape::Plane => Plane3d::default().mesh().size(1., 1.).into(),

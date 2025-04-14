@@ -37,7 +37,7 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Stack<NodeType> {
                     node.grid_auto_rows =
                         GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
                 })
-                .insert(PickingBehavior::IGNORE),
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
