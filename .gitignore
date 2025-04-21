@@ -5,3 +5,4 @@ dist
 trunk
 rust-toolchain.toml
 .cargo
+examples/test.rs
