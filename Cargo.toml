@@ -23,33 +23,34 @@ cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 all-features = true
 
 [dependencies]
-bevy_app = "0.16.0-rc.4"
-bevy_ecs = { version = "0.16.0-rc.4", features = ["multi_threaded"] }
-bevy_tasks = { version = "0.16.0-rc.4", features = ["multi_threaded"] }
-bevy_utils = "0.16.0-rc.4"
-bevy_log = "0.16.0-rc.4"
-bevy_color = { version = "0.16.0-rc.4", optional = true, default-features = false }
-bevy_derive = { version = "0.16.0-rc.4", optional = true, default-features = false }
-bevy_input = { version = "0.16.0-rc.4", optional = true, default-features = false }
-bevy_math = { version = "0.16.0-rc.4", optional = true, default-features = false }
-bevy_picking = { version = "0.16.0-rc.4", optional = true, default-features = false }
-bevy_reflect = { version = "0.16.0-rc.4", optional = true, default-features = false }
-bevy_render = { version = "0.16.0-rc.4", optional = true, default-features = false, features = ["webgl"] }
-bevy_text = { version = "0.16.0-rc.4", optional = true, default-features = false }
-bevy_transform = { version = "0.16.0-rc.4", optional = true, default-features = false }
-bevy_ui = { version = "0.16.0-rc.4", optional = true, default-features = false }
-bevy_window = { version = "0.16.0-rc.4", optional = true, default-features = false }
-bevy_winit = { version = "0.16.0-rc.4", optional = true, default-features = false, features = ["x11"] }
-bevy_dev_tools = { version = "0.16.0-rc.4", optional = true }
+bevy_app = "0.16.0-rc.5"
+bevy_ecs = { version = "0.16.0-rc.5", features = ["multi_threaded"] }
+bevy_tasks = { version = "0.16.0-rc.5", features = ["multi_threaded"] }
+bevy_utils = "0.16.0-rc.5"
+bevy_log = "0.16.0-rc.5"
+bevy_color = { version = "0.16.0-rc.5", optional = true, default-features = false }
+bevy_derive = { version = "0.16.0-rc.5", optional = true, default-features = false }
+bevy_input = { version = "0.16.0-rc.5", optional = true, default-features = false }
+bevy_math = { version = "0.16.0-rc.5", optional = true, default-features = false }
+bevy_picking = { version = "0.16.0-rc.5", optional = true, default-features = false }
+bevy_reflect = { version = "0.16.0-rc.5", optional = true, default-features = false }
+bevy_render = { version = "0.16.0-rc.5", optional = true, default-features = false, features = ["webgl"] }
+bevy_text = { version = "0.16.0-rc.5", optional = true, default-features = false }
+bevy_transform = { version = "0.16.0-rc.5", optional = true, default-features = false }
+bevy_ui = { version = "0.16.0-rc.5", optional = true, default-features = false }
+bevy_window = { version = "0.16.0-rc.5", optional = true, default-features = false }
+bevy_winit = { version = "0.16.0-rc.5", optional = true, default-features = false, features = ["x11"] }
+bevy_dev_tools = { version = "0.16.0-rc.5", optional = true }
 bevy_cosmic_edit = { version = "0.26", optional = true }
 # bevy-async-ecs = "0.7"
-bevy-async-ecs = { git = "https://github.com/dlom/bevy-async-ecs.git", rev = "ecd3eda035c78f933c9655a1256bbab2d65433da" }
+bevy-async-ecs = { git = "https://github.com/dlom/bevy-async-ecs.git", rev = "5a62ad6aa07c9ef478baff12fc33656bf3ecfc5d" }
 apply = "0.3"
 cfg-if = "1.0"
 enclose = "1.2"
 futures-signals = "0.3"
 paste = { version = "1.0", optional = true }
 document-features = { version = "0.2", optional = true }
+# aalo = { path = "../aalo", version = "0.0", optional = true }
 
 # TODO: use MoonZoon's futures-signals/futures-util extensions directly when it is published as a crate
 haalka_futures_signals_ext = { version = "0.0.2", path = "MoonZoon/crates/futures_signals_ext" }
@@ -60,12 +61,12 @@ async-io = "2.3"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 gloo-timers = { version = "0.3", features = ["futures"] }
 send_wrapper = { version = "0.6", features = ["futures"] }
-bevy_winit = { version = "0.16.0-rc.4", optional = true }
-bevy_audio = { version = "0.16.0-rc.4", optional = true, features = ["android_shared_stdcxx"] }
-bevy_core_pipeline = { version = "0.16.0-rc.4", optional = true, default-features = false, features = ["webgl"] }
-bevy_pbr = { version = "0.16.0-rc.4", optional = true, default-features = false, features = ["webgl"] }
-bevy_gizmos = { version = "0.16.0-rc.4", optional = true, default-features = false, features = ["webgl"] }
-bevy_sprite = { version = "0.16.0-rc.4", optional = true, default-features = false, features = ["webgl"] }
+bevy_winit = { version = "0.16.0-rc.5", optional = true }
+bevy_audio = { version = "0.16.0-rc.5", optional = true, features = ["android_shared_stdcxx"] }
+bevy_core_pipeline = { version = "0.16.0-rc.5", optional = true, default-features = false, features = ["webgl"] }
+bevy_pbr = { version = "0.16.0-rc.5", optional = true, default-features = false, features = ["webgl"] }
+bevy_gizmos = { version = "0.16.0-rc.5", optional = true, default-features = false, features = ["webgl"] }
+bevy_sprite = { version = "0.16.0-rc.5", optional = true, default-features = false, features = ["webgl"] }
 
 [features]
 default = [
@@ -91,7 +92,7 @@ ui = [
 ]
 
 ## [bevy_cosmic_edit](https://github.com/Dimchikkk/bevy_cosmic_edit) text input widget integrated with signals.
-text_input = ["ui", "bevy_color", "bevy_cosmic_edit", "bevy_text/default_font"]
+# text_input = ["ui", "bevy_color", "bevy_cosmic_edit", "bevy_text/default_font"]
 
 ## Macro ([`impl_haalka_methods!`](https://docs.rs/haalka/latest/haalka/macro.impl_haalka_methods.html)) for deriving convenience methods for modifying components on custom element structs with static values, functions, or signals.
 derive = ["paste"]
@@ -117,7 +118,7 @@ webgpu = [
 deployed_wasm_example = []
 
 [dev-dependencies]
-bevy = "0.15"
+bevy = "0.16.0-rc.5"
 bevy_asset_loader = { version = "0.22", features = ["2d"] }
 bevy_rand = { version = "0.9", features = ["rand_chacha"] }
 colorgrad = "0.6"
@@ -125,7 +126,6 @@ rand = "0.8"
 strum = { version = "0.25", features = ["derive"] }
 calc = { version = "0.4", default-features = false }
 rust_decimal = "1.35"
-aalo = { path = "../aalo", version = "0.0" }
 
 [package.metadata.cargo-all-features]
 allowlist = [

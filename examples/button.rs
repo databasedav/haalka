@@ -5,12 +5,10 @@ use utils::*;
 
 use bevy::prelude::*;
 use haalka::prelude::*;
-use aalo::prelude::*;
 
 fn main() {
     App::new()
         .add_plugins(examples_plugin)
-        .add_plugins(AaloPlugin::new().world())
         .add_systems(
             Startup,
             (

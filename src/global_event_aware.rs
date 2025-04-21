@@ -45,7 +45,7 @@ pub trait GlobalEventAware: RawElWrapper {
                 .on_remove(move |world, _| {
                     if let Some(&observer) = observer_holder.get() {
                         world.commands().queue(move |world: &mut World| {
-                            world.try_despawn(observer);
+                            let _ = world.try_despawn(observer);
                         })
                     }
                 })

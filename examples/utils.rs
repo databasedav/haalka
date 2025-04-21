@@ -1,6 +1,8 @@
 #![allow(missing_docs)]
 #![allow(dead_code)]
 
+use std::sync::LazyLock;
+
 use bevy::{
     app::prelude::*,
     core_pipeline::prelude::*,
@@ -15,7 +17,6 @@ use bevy::{
 use bevy_window::WindowResolution;
 use haalka::prelude::*;
 use haalka_futures_signals_ext::SignalExtBool;
-use once_cell::sync::Lazy;
 
 // TODO: port https://github.com/mintlu8/bevy-rectray/blob/main/examples/accordion.rs
 // requires tweening api
@@ -34,7 +35,7 @@ const FPS_OVERLAY_ZINDEX: i32 = i32::MAX - 32;
 impl Plugin for FpsOverlayPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<FrameTimeDiagnosticsPlugin>() {
-            app.add_plugins(FrameTimeDiagnosticsPlugin);
+            app.add_plugins(FrameTimeDiagnosticsPlugin::default());
         }
 
         fn fps_element(fps: impl Signal<Item = f64> + Send + 'static) -> impl Element {
@@ -53,7 +54,7 @@ impl Plugin for FpsOverlayPlugin {
                 )
         }
 
-        static FPS: Lazy<Mutable<f64>> = Lazy::new(default);
+        static FPS: LazyLock<Mutable<f64>> = LazyLock::new(default);
 
         fn update_fps(diagnostic: Res<DiagnosticsStore>) {
             if let Some(fps_diagnostic) = diagnostic.get(&FrameTimeDiagnosticsPlugin::FPS) {
@@ -63,7 +64,7 @@ impl Plugin for FpsOverlayPlugin {
             }
         }
 
-        static SHOW: Lazy<Mutable<bool>> = Lazy::new(default);
+        static SHOW: LazyLock<Mutable<bool>> = LazyLock::new(default);
 
         fn fps_ui_root() -> impl Element {
             El::<Node>::new()
@@ -110,7 +111,7 @@ struct MarkDefaultUiCameraSet;
 
 #[allow(clippy::type_complexity)]
 fn mark_default_ui_camera(cameras: Query<Entity, Or<(With<Camera2d>, With<Camera3d>)>>, mut commands: Commands) {
-    if let Ok(entity) = cameras.get_single() {
+    if let Ok(entity) = cameras.single() {
         if let Ok(mut entity) = commands.get_entity(entity) {
             entity.try_insert(IsDefaultUiCamera);
         }
