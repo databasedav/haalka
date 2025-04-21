@@ -125,6 +125,7 @@ rand = "0.8"
 strum = { version = "0.25", features = ["derive"] }
 calc = { version = "0.4", default-features = false }
 rust_decimal = "1.35"
+aalo = { path = "../aalo", version = "0.0" }
 
 [package.metadata.cargo-all-features]
 allowlist = [
