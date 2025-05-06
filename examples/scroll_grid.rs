@@ -109,7 +109,7 @@ const ROYGBIV: &[Srgba] = &[
     bevy::color::palettes::css::VIOLET,
 ];
 
-static CELLS: Lazy<Vec<Vec<Mutable<LetterColor>>>> = Lazy::new(|| {
+static CELLS: LazyLock<Vec<Vec<Mutable<LetterColor>>>> = LazyLock::new(|| {
     let cells = (0..5)
         .map(|_| (0..5).map(|_| Mutable::new(default())).collect::<Vec<_>>())
         .collect::<Vec<_>>();

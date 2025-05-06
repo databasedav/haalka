@@ -65,7 +65,7 @@ fn nine_slice_el(frame_signal: impl Signal<Item = usize> + Send + 'static) -> El
                 },
             )
             .with_mode(NodeImageMode::Sliced(TextureSlicer {
-                border: BorderRect::square(24.0),
+                border: BorderRect::all(24.0),
                 center_scale_mode: SliceScaleMode::Stretch,
                 sides_scale_mode: SliceScaleMode::Stretch,
                 max_corner_scale: 1.0,
@@ -99,7 +99,7 @@ fn nine_slice_button() -> impl Element {
     .pressed_sync(pressed)
 }
 
-static WIDTH: Lazy<Mutable<f32>> = Lazy::new(default);
+static WIDTH: LazyLock<Mutable<f32>> = LazyLock::new(default);
 
 fn horizontal() -> impl Element {
     Row::<Node>::new()

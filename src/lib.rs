@@ -101,8 +101,7 @@ pub mod prelude {
             cfg_if::cfg_if! {
                 if #[cfg(feature = "text_input")] {
                     #[doc(inline)]
-                    pub use super::text_input::{Placeholder, TextAttrs, TextInput};
-                    pub use bevy_cosmic_edit;
+                    pub use super::text_input::TextInput;
                 }
             }
         }
@@ -121,6 +120,7 @@ pub mod prelude {
             pub use crate::utils::*;
             #[doc(no_inline)]
             pub use apply::{Also, Apply};
+            pub use std::sync::LazyLock;
         }
     }
 }

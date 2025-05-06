@@ -36,7 +36,7 @@ pub struct NodeBuilder {
     #[allow(clippy::type_complexity)]
     on_spawns: Vec<Box<dyn FnOnce(&mut World, Entity) + Send>>,
     task_wrappers: Vec<Box<dyn FnOnce(Entity) -> Task<()> + Send>>,
-    child_block_populations: MutableVec<usize>,
+    child_block_populations: Arc<Mutex<Vec<usize>>>,
 }
 
 impl<T: Bundle> From<T> for NodeBuilder {
@@ -85,9 +85,9 @@ impl NodeBuilder {
     // be registered thru this abstraction because of the way siblings are tracked
     /// Declare a static child.
     pub fn child(self, child: NodeBuilder) -> Self {
-        let block = self.child_block_populations.lock_ref().len();
-        self.child_block_populations.lock_mut().push(1);
-        let offset = offset(block, &self.child_block_populations.lock_ref());
+        let block = self.child_block_populations.lock().unwrap().len();
+        self.child_block_populations.lock().unwrap().push(1);
+        let offset = offset(block, &self.child_block_populations.lock().unwrap());
         let on_spawn = move |world: &mut World, parent| {
             let child_entity = world.spawn_empty().id();
             if let Ok(ref mut parent) = world.get_entity_mut(parent) {
@@ -109,8 +109,8 @@ impl NodeBuilder {
         mut self,
         child_option: impl Signal<Item = impl Into<Option<NodeBuilder>> + Send> + Send + 'static,
     ) -> Self {
-        let block = self.child_block_populations.lock_ref().len();
-        self.child_block_populations.lock_mut().push(0);
+        let block = self.child_block_populations.lock().unwrap().len();
+        self.child_block_populations.lock().unwrap().push(0);
         let child_block_populations = self.child_block_populations.clone();
         let task_wrapper = move |entity: Entity| {
             let existing_child_option = Mutable::new(None);
@@ -127,7 +127,7 @@ impl NodeBuilder {
                                 }
                                 let child_entity = world.spawn_empty().id();
                                 if let Ok(mut parent) = world.get_entity_mut(parent) {
-                                    let offset = offset(block, &child_block_populations.lock_ref());
+                                    let offset = offset(block, &child_block_populations.lock().unwrap());
                                     parent.insert_children(offset, &[child_entity]);
                                     child.spawn_on_entity(world, child_entity);
                                     existing_child_option.set(Some(child_entity));
@@ -136,7 +136,7 @@ impl NodeBuilder {
                                         child.despawn();
                                     }
                                 }
-                                child_block_populations.lock_mut().set(block, 1);
+                                child_block_populations.lock().unwrap()[block] = 1;
                             }).await;
                         } else {
                             async_world().apply(move |world: &mut World| {
@@ -145,7 +145,7 @@ impl NodeBuilder {
                                         entity.despawn();
                                     }
                                 }
-                                child_block_populations.lock_mut().set(block, 0);
+                                child_block_populations.lock().unwrap()[block] = 0;
                             })
                             .await;
                         }
@@ -160,12 +160,12 @@ impl NodeBuilder {
 
     /// Declare static children.
     pub fn children(self, children: impl IntoIterator<Item = NodeBuilder> + Send + 'static) -> Self {
-        let block = self.child_block_populations.lock_ref().len();
+        let block = self.child_block_populations.lock().unwrap().len();
         let children = children.into_iter().collect::<Vec<_>>();
         let population = children.len();
-        self.child_block_populations.lock_mut().push(population);
+        self.child_block_populations.lock().unwrap().push(population);
         let child_block_populations = self.child_block_populations.clone();
-        let offset = offset(block, &child_block_populations.lock_ref());
+        let offset = offset(block, &child_block_populations.lock().unwrap());
         let on_spawn = move |world: &mut World, parent: Entity| {
             let mut children_entities = vec![];
             for _ in 0..children.len() {
@@ -193,8 +193,8 @@ impl NodeBuilder {
         mut self,
         children_signal_vec: impl SignalVec<Item = NodeBuilder> + Send + 'static,
     ) -> Self {
-        let block = self.child_block_populations.lock_ref().len();
-        self.child_block_populations.lock_mut().push(0);
+        let block = self.child_block_populations.lock().unwrap().len();
+        self.child_block_populations.lock().unwrap().push(0);
         let child_block_populations = self.child_block_populations.clone();
         let task_wrapper = move |entity: Entity| {
             clone!((entity => parent) {
@@ -217,12 +217,12 @@ impl NodeBuilder {
                                         children_lock.push(world.spawn_empty().id());
                                     }
                                     if let Ok(mut parent) = world.get_entity_mut(parent) {
-                                        let offset = offset(block, &child_block_populations.lock_ref());
+                                        let offset = offset(block, &child_block_populations.lock().unwrap());
                                         parent.insert_children(offset, children_lock.as_slice());
                                         for (child, child_entity) in children.into_iter().zip(children_lock.iter().copied()) {
                                             child.spawn_on_entity(world, child_entity);
                                         }
-                                        child_block_populations.lock_mut().set(block, children_lock.len());
+                                        child_block_populations.lock().unwrap()[block] = children_lock.len();
                                     } else {  // parent despawned during child spawning
                                         for entity in children_lock.drain(..) {
                                             if let Ok(child) = world.get_entity_mut(entity) {
@@ -237,12 +237,12 @@ impl NodeBuilder {
                                 async_world().apply(move |world: &mut World| {
                                     let child_entity = world.spawn_empty().id();
                                     if let Ok(mut parent) = world.get_entity_mut(parent) {
-                                        let offset = offset(block, &child_block_populations.lock_ref());
+                                        let offset = offset(block, &child_block_populations.lock().unwrap());
                                         parent.insert_children(offset + index, &[child_entity]);
                                         child.spawn_on_entity(world, child_entity);
                                         let mut children_lock = children_entities.lock_mut();
                                         children_lock.insert(index, child_entity);
-                                        child_block_populations.lock_mut().set(block, children_lock.len());
+                                        child_block_populations.lock().unwrap()[block] = children_lock.len();
                                     } else {  // parent despawned during child spawning
                                         if let Ok(child) = world.get_entity_mut(child_entity) {
                                             child.despawn();
@@ -256,11 +256,11 @@ impl NodeBuilder {
                                     let child_entity = world.spawn_empty().id();
                                     if let Ok(mut parent) = world.get_entity_mut(parent) {
                                         let mut children_lock = children_entities.lock_mut();
-                                        let offset = offset(block, &child_block_populations.lock_ref());
+                                        let offset = offset(block, &child_block_populations.lock().unwrap());
                                         parent.insert_children(offset + children_lock.len(), &[child_entity]);
                                         child.spawn_on_entity(world, child_entity);
                                         children_lock.push(child_entity);
-                                        child_block_populations.lock_mut().set(block, children_lock.len());
+                                        child_block_populations.lock().unwrap()[block] = children_lock.len();
                                     } else {  // parent despawned during child spawning
                                         if let Ok(child) = world.get_entity_mut(child_entity) {
                                             child.despawn();
@@ -279,7 +279,7 @@ impl NodeBuilder {
                                     let child_entity = world.spawn_empty().id();
                                     if let Ok(mut parent) = world.get_entity_mut(parent) {
                                         children_entities.lock_mut().set(index, child_entity);
-                                        let offset = offset(block, &child_block_populations.lock_ref());
+                                        let offset = offset(block, &child_block_populations.lock().unwrap());
                                         parent.insert_children(offset + index, &[child_entity]);
                                         node.spawn_on_entity(world, child_entity);
                                     } else {  // parent despawned during child spawning
@@ -316,7 +316,7 @@ impl NodeBuilder {
                                         }
                                     }
                                     if let Ok(mut parent) = world.get_entity_mut(parent) {
-                                        let offset = offset(block, &child_block_populations.lock_ref());
+                                        let offset = offset(block, &child_block_populations.lock().unwrap());
                                         swap(&mut parent, children_lock.as_slice(), offset + old_index, offset + new_index);
                                     }
                                 })
@@ -330,7 +330,7 @@ impl NodeBuilder {
                                             child.despawn();  // removes from parent
                                         }
                                         children_lock.remove(index);
-                                        child_block_populations.lock_mut().set(block, children_lock.len());
+                                        child_block_populations.lock().unwrap()[block] = children_lock.len();
                                     }
                                 })
                                 .await;
@@ -342,7 +342,7 @@ impl NodeBuilder {
                                         if let Ok(child) = world.get_entity_mut(child_entity) {
                                             child.despawn();
                                         }
-                                        child_block_populations.lock_mut().set(block, children_lock.len());
+                                        child_block_populations.lock().unwrap()[block] = children_lock.len();
                                     }
                                 })
                                 .await;
@@ -355,7 +355,7 @@ impl NodeBuilder {
                                             child.despawn();
                                         }
                                     }
-                                    child_block_populations.lock_mut().set(block, children_lock.len());
+                                    child_block_populations.lock().unwrap()[block] = children_lock.len();
                                 })
                                 .await;
                             }

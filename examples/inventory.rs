@@ -71,7 +71,7 @@ const CELL_BORDER_WIDTH: f32 = 2.;
 const CELL_DARK_BORDER_COLOR: Color = Color::hsl(0., 0., 0.19);
 // const CELL_LIGHT_BORDER_COLOR: Color = Color::hsl(0., 0., 0.98);
 
-static ITEM_NAMES: Lazy<HashMap<usize, &'static str>> = Lazy::new(|| {
+static ITEM_NAMES: LazyLock<HashMap<usize, &'static str>> = LazyLock::new(|| {
     HashMap::from([
         (0, "copper dagger"),
         (1, "copper sword"),
@@ -654,9 +654,9 @@ fn inventory() -> impl Element {
         )
 }
 
-static DRAGGING_OPTION: Lazy<Mutable<Option<Mutable<Option<CellData>>>>> = Lazy::new(default);
+static DRAGGING_OPTION: LazyLock<Mutable<Option<Mutable<Option<CellData>>>>> = LazyLock::new(default);
 
-static POINTER_POSITION: Lazy<Mutable<(f32, f32)>> = Lazy::new(default);
+static POINTER_POSITION: LazyLock<Mutable<(f32, f32)>> = LazyLock::new(default);
 
 fn is_dragging() -> impl Signal<Item = bool> {
     DRAGGING_OPTION.signal_ref(Option::is_some)

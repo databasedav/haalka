@@ -25,9 +25,9 @@ fn main() {
 const LETTER_SIZE: f32 = 54.167; // 65 / 1.2
 const COMPUTED_SIZE: f32 = 66.; // TODO: how/y tho ?
 
-static SHIFTED: Lazy<Mutable<bool>> = Lazy::new(default);
+static SHIFTED: LazyLock<Mutable<bool>> = LazyLock::new(default);
 
-fn letter(letter: &str, color: Color) -> impl Element {
+fn letter(letter: String, color: Color) -> impl Element {
     El::<Text>::new()
         .text_font(TextFont::from_font_size(LETTER_SIZE))
         .text_color(TextColor(color))
@@ -51,7 +51,7 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
         .items(
             "abcdefghijklmnopqrstuvwxyz"
                 .chars()
-                .map(move |c| letter(&c.to_string(), color)),
+                .map(move |c| letter(c.to_string(), color)),
         )
 }
 

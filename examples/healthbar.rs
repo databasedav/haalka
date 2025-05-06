@@ -71,7 +71,7 @@ struct StyleData {
     scale: f32,
 }
 
-static STYLE_DATA: Lazy<Mutable<StyleData>> = Lazy::new(default);
+static STYLE_DATA: LazyLock<Mutable<StyleData>> = LazyLock::new(default);
 
 #[derive(Component)]
 struct Health(u32);
@@ -199,7 +199,7 @@ fn healthbar(
         )
 }
 
-static HEALTH_OPTION_MUTABLE: Lazy<Mutable<Option<Mutable<u32>>>> = Lazy::new(default);
+static HEALTH_OPTION_MUTABLE: LazyLock<Mutable<Option<Mutable<u32>>>> = LazyLock::new(default);
 
 #[derive(Event)]
 struct SpawnPlayer;

@@ -11,7 +11,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             HaalkaPlugin,
-            FrameTimeDiagnosticsPlugin,
+            FrameTimeDiagnosticsPlugin::default(),
             LogDiagnosticsPlugin::default(),
         ))
         .add_systems(Startup, (setup, spawn_ui_root))

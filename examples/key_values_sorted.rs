@@ -51,9 +51,9 @@ fn main() {
 const INPUT_HEIGHT: f32 = 40.;
 const INPUT_WIDTH: f32 = 200.;
 const STARTING_SORTED_BY: KeyValue = KeyValue::Key;
-static DARK_GRAY: Lazy<Color> = Lazy::new(|| Srgba::gray(0.25).into());
+static DARK_GRAY: LazyLock<Color> = LazyLock::new(|| Srgba::gray(0.25).into());
 
-static PAIRS: Lazy<MutableVec<RowData>> = Lazy::new(|| {
+static PAIRS: LazyLock<MutableVec<RowData>> = LazyLock::new(|| {
     let mut pairs = [
         ("lorem", "ipsum"),
         ("dolor", "sit"),
@@ -112,7 +112,7 @@ enum KeyValue {
     Value,
 }
 
-static SORT_BY: Lazy<Mutable<KeyValue>> = Lazy::new(|| Mutable::new(STARTING_SORTED_BY));
+static SORT_BY: LazyLock<Mutable<KeyValue>> = LazyLock::new(|| Mutable::new(STARTING_SORTED_BY));
 
 #[derive(Clone)]
 struct TextInputData {
@@ -306,7 +306,7 @@ fn sort_one(maybe_changed: Trigger<MaybeChanged>) {
     }
 }
 
-static SCROLL_POSITION: Lazy<Mutable<f32>> = Lazy::new(default);
+static SCROLL_POSITION: LazyLock<Mutable<f32>> = LazyLock::new(default);
 
 fn key_values() -> impl Element + Sizeable {
     Column::<Node>::new()
@@ -513,7 +513,7 @@ fn focus_scroller(
 ) {
     if let Some(focused_text_input) = focused_text_input_option.as_deref().map(Deref::deref).copied() {
         if let Some(text_input_rect) = logical_rect.get(focused_text_input) {
-            for ancestor in parents.iter_ancestors(focused_text_input) {
+            for ancestor in child_ofs.iter_ancestors(focused_text_input) {
                 if mutable_viewports.contains(ancestor) {
                     if let Some(viewport_rect) = logical_rect.get(ancestor) {
                         let d = text_input_rect.min.y - viewport_rect.min.y;

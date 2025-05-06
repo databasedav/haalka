@@ -189,9 +189,9 @@ Or with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 |`0.13`|`0.1`|
 
 ## development
-- include submodules when fetching the repo
+- avoid the gh-pages branch and include submodules when fetching the repo
     ```bash
-    git clone --recurse-submodules https://github.com/databasedav/haalka.git
+    git clone --single-branch --branch main --recurse-submodules https://github.com/databasedav/haalka.git
     ```
 - install [just](https://github.com/casey/just?tab=readme-ov-file#installation)
 - install [nickel](https://github.com/tweag/nickel?tab=readme-ov-file#run) for modifying CI configuration (`nickel` must be in your PATH)

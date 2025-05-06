@@ -74,15 +74,15 @@ impl From<Cell> for BackgroundColor {
     }
 }
 
-static TICK_RATE: Lazy<Mutable<u32>> = Lazy::new(|| Mutable::new(STARTING_TICKS_PER_SECOND));
+static TICK_RATE: LazyLock<Mutable<u32>> = LazyLock::new(|| Mutable::new(STARTING_TICKS_PER_SECOND));
 
-static SCORE: Lazy<Mutable<u32>> = Lazy::new(default);
+static SCORE: LazyLock<Mutable<u32>> = LazyLock::new(default);
 
-static GRID_SIZE: Lazy<Mutable<usize>> = Lazy::new(|| Mutable::new(STARTING_SIZE));
+static GRID_SIZE: LazyLock<Mutable<usize>> = LazyLock::new(|| Mutable::new(STARTING_SIZE));
 
 type CellsType = MutableBTreeMap<(usize, usize), Mutable<Cell>>;
 
-static CELLS: Lazy<CellsType> = Lazy::new(|| {
+static CELLS: LazyLock<CellsType> = LazyLock::new(|| {
     (0..STARTING_SIZE)
         .flat_map(|x| (0..STARTING_SIZE).map(move |y| ((x, y), Mutable::new(Cell::Empty))))
         .collect::<BTreeMap<_, _>>()
@@ -292,7 +292,7 @@ fn text_button(text_: &str) -> impl Element + PointerEventAware {
 #[derive(Resource)]
 struct Snake(VecDeque<(usize, usize)>);
 
-static GAME_OVER: Lazy<Mutable<bool>> = Lazy::new(default);
+static GAME_OVER: LazyLock<Mutable<bool>> = LazyLock::new(default);
 
 #[derive(Clone, Copy, EnumIter, PartialEq, Debug)]
 enum Direction {

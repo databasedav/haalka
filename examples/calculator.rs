@@ -83,8 +83,8 @@ fn input_button(symbol: &'static str) -> impl Element {
         .on_click(f)
 }
 
-static OUTPUT: Lazy<Mutable<String>> = Lazy::new(default);
-static ERROR: Lazy<Mutable<bool>> = Lazy::new(default);
+static OUTPUT: LazyLock<Mutable<String>> = LazyLock::new(default);
+static ERROR: LazyLock<Mutable<bool>> = LazyLock::new(default);
 
 fn display() -> impl Element {
     textable_element(OUTPUT.signal_cloned())

@@ -204,7 +204,7 @@ fn menu_base(width: f32, height: f32, title: &str) -> Column<Node> {
 // here, we use a global to keep track of any dropdowns that are dropped down, passing it to
 // `only_one_up_flipper` to ensure only one is dropped down at a time; a mutable for this can be
 // managed more locally, but adds significant unwieldiness
-static DROPDOWN_SHOWING_OPTION: Lazy<Mutable<Option<Mutable<bool>>>> = Lazy::new(default);
+static DROPDOWN_SHOWING_OPTION: LazyLock<Mutable<Option<Mutable<bool>>>> = LazyLock::new(default);
 
 fn lil_baby_button() -> Button {
     Button::new()
@@ -592,7 +592,7 @@ fn only_one_up_flipper(
     to_flip.set(!cur);
 }
 
-static MENU_ITEM_HOVERED_OPTION: Lazy<Mutable<Option<Mutable<bool>>>> = Lazy::new(default);
+static MENU_ITEM_HOVERED_OPTION: LazyLock<Mutable<Option<Mutable<bool>>>> = LazyLock::new(default);
 
 fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<Node> {
     Stack::<Node>::new()
@@ -1036,9 +1036,9 @@ fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
         )
 }
 
-static SUB_MENU_SELECTED: Lazy<Mutable<Option<SubMenu>>> = Lazy::new(default);
+static SUB_MENU_SELECTED: LazyLock<Mutable<Option<SubMenu>>> = LazyLock::new(default);
 
-static SHOW_SUB_MENU: Lazy<Mutable<Option<SubMenu>>> = Lazy::new(default);
+static SHOW_SUB_MENU: LazyLock<Mutable<Option<SubMenu>>> = LazyLock::new(default);
 
 fn menu() -> impl Element {
     Stack::<Node>::new()
@@ -1133,7 +1133,7 @@ struct AudioSettings {
     voice_volume: Mutable<f32>,
 }
 
-static AUDIO_SETTINGS: Lazy<AudioSettings> = Lazy::new(|| AudioSettings {
+static AUDIO_SETTINGS: LazyLock<AudioSettings> = LazyLock::new(|| AudioSettings {
     master_volume: Mutable::new(100.),
     effect_volume: Mutable::new(50.),
     music_volume: Mutable::new(50.),
@@ -1148,7 +1148,7 @@ struct GraphicsSettings {
     bloom_quality: Mutable<Option<Quality>>,
 }
 
-static GRAPHICS_SETTINGS: Lazy<GraphicsSettings> = Lazy::new(|| GraphicsSettings {
+static GRAPHICS_SETTINGS: LazyLock<GraphicsSettings> = LazyLock::new(|| GraphicsSettings {
     preset_quality: Mutable::new(Some(Quality::Medium)),
     texture_quality: Mutable::new(Some(Quality::Medium)),
     shadow_quality: Mutable::new(Some(Quality::Medium)),
@@ -1163,7 +1163,7 @@ struct MiscDemoSettings {
     iterable_options: Mutable<String>,
 }
 
-static MISC_DEMO_SETTINGS: Lazy<MiscDemoSettings> = Lazy::new(|| MiscDemoSettings {
+static MISC_DEMO_SETTINGS: LazyLock<MiscDemoSettings> = LazyLock::new(|| MiscDemoSettings {
     dropdown: Mutable::new(None),
     radio_group: Mutable::new(None),
     checkbox: Mutable::new(false),
@@ -1182,7 +1182,7 @@ enum MenuInput {
 }
 
 impl Event for MenuInput {
-    type Traversal = &'static Parent;
+    type Traversal = &'static ChildOf;
 
     const AUTO_PROPAGATE: bool = true;
 }

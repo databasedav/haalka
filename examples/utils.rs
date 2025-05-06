@@ -168,10 +168,4 @@ pub(crate) fn examples_plugin(app: &mut App) {
             },
         ),
     );
-    cfg_if::cfg_if! {
-        if #[cfg(all(feature = "text_input", feature = "debug"))] {
-            use haalka::utils::CosmicMulticamHandlerSet;
-            app.configure_sets(PostStartup, (MarkDefaultUiCameraSet, CosmicMulticamHandlerSet).chain());
-        }
-    }
 }

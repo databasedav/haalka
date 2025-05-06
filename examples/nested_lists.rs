@@ -1,7 +1,7 @@
 //! Nested dynamic lists, arbitrarily deeply nested retained reactivity, spurred by <https://discord.com/channels/691052431525675048/885021580353237032/1356769984474517617>
 
 mod utils;
-use rand::seq::SliceRandom;
+use rand::seq::IndexedRandom;
 use utils::*;
 
 use bevy::{color::palettes::css::*, prelude::*};
@@ -162,10 +162,10 @@ static COLORS: &[Color] = &[
     bevy::prelude::Color::Srgba(YELLOW_GREEN),
 ];
 
-static MASTER: Lazy<Lists> = Lazy::new(default);
+static MASTER: LazyLock<Lists> = LazyLock::new(default);
 
 fn random_color() -> Color {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     COLORS.choose(&mut rng).copied().unwrap()
 }
 

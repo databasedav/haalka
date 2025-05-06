@@ -58,9 +58,9 @@ enum Alignment {
     Content,
 }
 
-static ALIGNMENT: Lazy<Mutable<Alignment>> = Lazy::new(|| Mutable::new(Alignment::Self_));
-static RECTANGLE_SELF_ALIGNMENT: Lazy<Mutable<Option<RectangleAlignment>>> = Lazy::new(default);
-static RECTANGLE_CONTENT_ALIGNMENT: Lazy<Mutable<Option<RectangleAlignment>>> = Lazy::new(default);
+static ALIGNMENT: LazyLock<Mutable<Alignment>> = LazyLock::new(|| Mutable::new(Alignment::Self_));
+static RECTANGLE_SELF_ALIGNMENT: LazyLock<Mutable<Option<RectangleAlignment>>> = LazyLock::new(default);
+static RECTANGLE_CONTENT_ALIGNMENT: LazyLock<Mutable<Option<RectangleAlignment>>> = LazyLock::new(default);
 
 fn alignment_button(alignment: Alignment) -> impl Element {
     let hovered = Mutable::new(false);

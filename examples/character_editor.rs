@@ -8,15 +8,16 @@
 //! - On the top of the UI is a text field for the character name.
 
 mod utils;
+use bevy_input_focus::InputFocus;
 use bevy_text::{
     cosmic_text::{Family, FamilyOwned},
     FontWeight,
 };
+use bevy_ui_text_input::TextInputPrompt;
 use utils::*;
 
 use bevy::prelude::*;
-use bevy_cosmic_edit::{CosmicBackgroundColor, CosmicTextChanged, CosmicWrap, CursorColor, MaxLines};
-use haalka::{prelude::*, text_input::FocusedTextInput};
+use haalka::prelude::*;
 use strum::{self, IntoEnumIterator};
 
 fn main() {
@@ -38,7 +39,7 @@ fn main() {
                 },
             ),
         )
-        .add_systems(Update, name_changed)
+        // .add_systems(Update, name_changed)
         .add_observer(
             |event: Trigger<SetShape>,
              character: Single<Entity, With<MeshMaterial3d<StandardMaterial>>>,
@@ -78,8 +79,8 @@ enum Shape {
     Torus,
 }
 
-static SELECTED_SHAPE: Lazy<Mutable<Shape>> = Lazy::new(|| Mutable::new(Shape::Cuboid));
-static SCROLL_POSITION: Lazy<Mutable<f32>> = Lazy::new(default);
+static SELECTED_SHAPE: LazyLock<Mutable<Shape>> = LazyLock::new(|| Mutable::new(Shape::Cuboid));
+static SCROLL_POSITION: LazyLock<Mutable<f32>> = LazyLock::new(default);
 
 fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
     let selected = SELECTED_SHAPE.signal().eq(shape);
@@ -158,27 +159,29 @@ fn ui_root() -> impl Element {
                             TextInput::new()
                                 .width(BUTTON_WIDTH)
                                 .height(Val::Px(40.))
-                                .mode(CosmicWrap::InfiniteLine)
-                                .scroll_disabled()
-                                .attrs(
-                                    TextAttrs::new()
-                                        .family(FamilyOwned::new(Family::Name("Fira Mono")))
-                                        .weight(FontWeight::MEDIUM),
-                                )
+                                // .scroll_disabled()
                                 .cursor(CursorIcon::System(SystemCursorIcon::Text))
-                                .cursor_color(CursorColor(Color::WHITE))
-                                .fill_color(CosmicBackgroundColor(NORMAL_BUTTON))
-                                .attrs(TextAttrs::new().color(Color::WHITE))
-                                .max_lines(MaxLines(1))
-                                .placeholder(
-                                    Placeholder::new()
-                                        .text("name")
-                                        .attrs(TextAttrs::new().color(bevy::color::palettes::basic::GRAY)),
-                                )
+                                // .cursor_color(CursorColor(Color::WHITE))
+                                // .fill_color(CosmicBackgroundColor(NORMAL_BUTTON))
+                                .text_color(TextColor(Color::WHITE))
+                                // .max_lines(MaxLines(1))
+                                .text_input_prompt(TextInputPrompt {
+                                    text: "name".to_string(),
+                                    color: Some(bevy::color::palettes::basic::GRAY.into()),
+                                    ..default()
+                                })
                                 .focus_signal(focused.signal())
                                 .focused_sync(focused)
+                                .on_change_with_system(|In((_, text)), mut commands: Commands| {
+                                    if let Some((i, shape)) = Shape::iter().enumerate().find(|(_, shape)| shape.to_string() == text) {
+                                        commands.trigger(SetShape(shape));
+                                        if let Val::Px(height) = BUTTON_HEIGHT {
+                                            SCROLL_POSITION.set(i as f32 * height);
+                                        }
+                                    }
+                                })
                                 .on_click_outside_with_system(|In(_), mut commands: Commands| {
-                                    commands.remove_resource::<FocusedTextInput>()
+                                    commands.insert_resource(InputFocus(None))
                                 })
                         })
                         .item({
@@ -205,17 +208,6 @@ fn ui_root() -> impl Element {
                         }),
                 ),
         )
-}
-
-fn name_changed(mut changed_events: EventReader<CosmicTextChanged>, mut commands: Commands) {
-    for CosmicTextChanged((_, text)) in changed_events.read() {
-        if let Some((i, shape)) = Shape::iter().enumerate().find(|(_, shape)| &shape.to_string() == text) {
-            commands.trigger(SetShape(shape));
-            if let Val::Px(height) = BUTTON_HEIGHT {
-                SCROLL_POSITION.set(i as f32 * height);
-            }
-        }
-    }
 }
 
 #[derive(Event, Deref)]

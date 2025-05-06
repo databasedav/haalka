@@ -228,9 +228,9 @@ struct Counts {
 const STARTING_SPAWN_RATE: f32 = 1.5;
 const STARTING_DESPAWN_RATE: f32 = 1.;
 
-static SPAWN_RATE: Lazy<Mutable<f32>> = Lazy::new(|| Mutable::new(STARTING_SPAWN_RATE));
-static DESPAWN_RATE: Lazy<Mutable<f32>> = Lazy::new(|| Mutable::new(STARTING_DESPAWN_RATE));
-static COUNTS: Lazy<Counts> = Lazy::new(default);
+static SPAWN_RATE: LazyLock<Mutable<f32>> = LazyLock::new(|| Mutable::new(STARTING_SPAWN_RATE));
+static DESPAWN_RATE: LazyLock<Mutable<f32>> = LazyLock::new(|| Mutable::new(STARTING_DESPAWN_RATE));
+static COUNTS: LazyLock<Counts> = LazyLock::new(default);
 
 fn ui_root() -> impl Element {
     let counts = MutableVec::new_with_values(vec![
