@@ -4,6 +4,7 @@
 //! (yes i take requests)
 
 mod utils;
+use bevy_input_focus::InputFocus;
 use bevy_text::{
     cosmic_text::{Family, FamilyOwned},
     FontWeight,
@@ -16,10 +17,8 @@ use std::{
 };
 
 use bevy::prelude::*;
-use bevy_cosmic_edit::{CosmicBackgroundColor, CosmicWrap, CursorColor, MaxLines};
 use haalka::{
     prelude::*,
-    text_input::FocusedTextInput,
     viewport_mutable::{LogicalRect, MutableViewport},
 };
 
@@ -40,11 +39,10 @@ fn main() {
             (
                 tabber,
                 escaper,
-                focus_scroller.run_if(resource_changed_or_removed::<FocusedTextInput>),
+                focus_scroller.run_if(resource_changed_or_removed::<InputFocus>),
             ),
         )
         .add_observer(sort_one)
-        .insert_resource(bevy_cosmic_edit::CursorPluginDisabled)
         .run();
 }
 

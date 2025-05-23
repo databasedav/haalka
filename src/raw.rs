@@ -690,6 +690,13 @@ impl RawHaalkaEl {
     }
 }
 
+fn on_remove_on_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    let fs = world.get_mut::<OnRemove>(entity).unwrap().0.drain(..).collect::<Vec<_>>();
+    for f in fs {
+        f(&mut world, entity);
+    }
+}
+
 #[allow(clippy::type_complexity)]
 struct OnRemove(Vec<Box<dyn FnOnce(&mut DeferredWorld, Entity) + Send + Sync + 'static>>);
 
@@ -697,13 +704,8 @@ impl Component for OnRemove {
     const STORAGE_TYPE: StorageType = StorageType::Table;
     type Mutability = Mutable;
 
-    fn register_component_hooks(hooks: &mut ComponentHooks) {
-        hooks.on_remove(|mut world, HookContext { entity, .. }: HookContext| {
-            let fs = world.get_mut::<Self>(entity).unwrap().0.drain(..).collect::<Vec<_>>();
-            for f in fs {
-                f(&mut world, entity);
-            }
-        });
+    fn on_remove() -> Option<ComponentHook> {
+        Some(on_remove_on_remove)
     }
 }
 

@@ -1,6 +1,7 @@
 //! Demonstrates how to forward ECS changes to UI.
 
 mod utils;
+use bevy_ecs::component::HookContext;
 use bevy_render::view::RenderLayers;
 use utils::*;
 
@@ -38,7 +39,7 @@ fn main() {
              mut meshes: ResMut<Assets<Mesh>>,
              mut materials: ResMut<Assets<ColorMaterial>>,
              mut commands: Commands| {
-                let translation = Vec3::new(rng.gen::<f32>() * HEIGHT, rng.gen::<f32>() * HEIGHT, 0.)
+                let translation = Vec3::new(rng.random::<f32>() * HEIGHT, rng.random::<f32>() * HEIGHT, 0.)
                     - Vec3::new(WIDTH / 2., HEIGHT / 2., -1.);
                 let color = position_to_color(translation);
                 commands.spawn((
@@ -60,7 +61,6 @@ fn main() {
                 }
             },
         )
-        .insert_resource(bevy_cosmic_edit::CursorPluginDisabled)
         .run();
 }
 
@@ -342,13 +342,13 @@ fn update_color_count(color: ColorCategory, step: i32) {
     count.update(|count| count + step);
 }
 
-fn incr_color_count(world: bevy::ecs::world::DeferredWorld, entity: Entity, _: bevy::ecs::component::ComponentId) {
+fn incr_color_count(world: bevy::ecs::world::DeferredWorld, HookContext { entity, .. }: HookContext) {
     if let Some(Dot(color)) = world.get::<Dot>(entity).copied() {
         update_color_count(color, 1);
     }
 }
 
-fn decr_color_count(world: bevy::ecs::world::DeferredWorld, entity: Entity, _: bevy::ecs::component::ComponentId) {
+fn decr_color_count(world: bevy::ecs::world::DeferredWorld, HookContext { entity, .. }: HookContext) {
     if let Some(Dot(color)) = world.get::<Dot>(entity).copied() {
         update_color_count(color, -1);
     }

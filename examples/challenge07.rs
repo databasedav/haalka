@@ -18,7 +18,6 @@ use bevy::{
         *,
     },
 };
-use bevy_cosmic_edit::*;
 use haalka::prelude::*;
 
 fn main() {

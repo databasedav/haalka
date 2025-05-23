@@ -19,7 +19,7 @@ use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use haalka::{prelude::*, raw::DeferredUpdaterAppendDirection};
 use rand::{
-    distributions::{Bernoulli, Distribution},
+    distr::{Bernoulli, Distribution},
     Rng,
 };
 
@@ -48,8 +48,8 @@ fn main() {
                                   camera: Single<Entity, With<IsDefaultUiCamera>>,
                                   mut commands: Commands| {
                                 // https://github.com/bevyengine/bevy/discussions/11223
-                                if let Some(mut commands) = commands.get_entity(entity) {
-                                    commands.try_insert(TargetCamera(*camera));
+                                if let Ok(mut commands) = commands.get_entity(entity) {
+                                    commands.try_insert(UiTargetCamera(*camera));
                                 }
                             },
                         )
