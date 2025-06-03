@@ -102,6 +102,7 @@ pub mod prelude {
                 if #[cfg(feature = "text_input")] {
                     #[doc(inline)]
                     pub use super::text_input::TextInput;
+                    pub use bevy_ui_text_input;
                 }
             }
         }

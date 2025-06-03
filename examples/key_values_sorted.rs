@@ -9,6 +9,7 @@ use bevy_text::{
     cosmic_text::{Family, FamilyOwned},
     FontWeight,
 };
+use bevy_ui_text_input::TextInputMode;
 use utils::*;
 
 use std::{
@@ -141,30 +142,12 @@ fn text_input(
     TextInput::new()
         .width(Val::Px(INPUT_WIDTH))
         .height(Val::Px(INPUT_HEIGHT))
-        .mode(CosmicWrap::InfiniteLine)
-        .max_lines(MaxLines(1))
-        .scroll_disabled()
-        .attrs(
-            TextAttrs::new()
-                .family(FamilyOwned::new(Family::Name("Fira Mono")))
-                .weight(FontWeight::MEDIUM),
-        )
+        .with_text_input_node(|mut node| {
+            node.mode = TextInputMode::TextSingleLine;
+            node.alignment = Some(bevy::text::cosmic_text::Align::Center);
+        })
         .cursor(CursorIcon::System(SystemCursorIcon::Text))
-        .cursor_color_signal(
-            focus
-                .signal()
-                .map_bool(|| Color::WHITE, || Color::BLACK)
-                .map(CursorColor),
-        )
-        // TODO: flip colors once https://github.com/Dimchikkk/bevy_cosmic_edit/issues/144
-        .fill_color_signal(
-            focus
-                .signal()
-                // .map_bool(|| Color::WHITE, || *DARK_GRAY)
-                .map_bool(|| *DARK_GRAY, || Color::WHITE)
-                .map(CosmicBackgroundColor),
-        )
-        .attrs(TextAttrs::new().color_signal(focus.signal().map_bool(|| Color::WHITE, || Color::BLACK).map(Some)))
+        .text_color_signal(focus.signal().map_bool(|| Color::BLACK, || Color::WHITE).map(TextColor))
         .focus_signal(focus.signal())
         .on_focused_change_with_system(
             clone!((focus) move |In((_, is_focused)): In<(Entity, bool)>, mut commands: Commands| {
@@ -178,6 +161,13 @@ fn text_input(
         )
         .text_signal(string.signal_cloned())
         .on_change_sync(string)
+        .into_el()
+        .background_color_signal(
+            focus
+                .signal()
+                .map_bool(|| Color::WHITE, || *DARK_GRAY)
+                .map(BackgroundColor),
+        )
     // TODO: this unfocuses on click for some reason ...
     // .on_click_outside_with_system(|In(_), mut commands: Commands|
     // commands.remove_resource::<FocusedTextInput>())
@@ -418,7 +408,7 @@ fn ui_root() -> impl Element {
                                         .text(Text::new("+")),
                                 )
                                 .on_click_with_system(|_: In<_>, mut commands: Commands| {
-                                    commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, can remove once https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
+                                    // commands.remove_resource::<InputFocus>(); // TODO: shouldn't need this, can remove once https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
                                     clear_focus();
                                     PAIRS.lock_mut().push_cloned(RowData {
                                         key: {
@@ -451,7 +441,7 @@ fn tabber(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
     // require minimum press time before starting to repeat, and repeating seems slower than refresh
     // rate
     if keys.pressed(KeyCode::ShiftLeft) && keys.just_pressed(KeyCode::Tab) {
-        commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
+        // commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
         let pairs = PAIRS.lock_ref();
         let focused_option = pairs
             .iter()
@@ -472,7 +462,7 @@ fn tabber(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
             last.value.focus.set(true);
         }
     } else if keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::Enter) {
-        commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
+        // commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
         let pairs = PAIRS.lock_ref();
         let focused_option = pairs
             .iter()
@@ -497,19 +487,19 @@ fn tabber(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
 
 fn escaper(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
     if keys.just_pressed(KeyCode::Escape) {
-        commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
+        // commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
         clear_focus();
     }
 }
 
 // on focus change, check if the focused element is in view, if not, scroll to it
 fn focus_scroller(
-    focused_text_input_option: Option<Res<FocusedTextInput>>,
+    focused_text_input_option: Res<InputFocus>,
     child_ofs: Query<&ChildOf>,
     mutable_viewports: Query<&MutableViewport>,
     logical_rect: LogicalRect,
 ) {
-    if let Some(focused_text_input) = focused_text_input_option.as_deref().map(Deref::deref).copied() {
+    if let Some(focused_text_input) = focused_text_input_option.0 {
         if let Some(text_input_rect) = logical_rect.get(focused_text_input) {
             for ancestor in child_ofs.iter_ancestors(focused_text_input) {
                 if mutable_viewports.contains(ancestor) {

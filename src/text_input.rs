@@ -21,13 +21,10 @@ use super::{
 };
 use apply::Apply;
 use bevy_ui_text_input::{text_input_pipeline::TextInputPipeline, *};
-use cosmic_text::FontSystem;
-use futures_signals::signal::{always, BoxSignal, Mutable, Signal, SignalExt};
-use haalka_futures_signals_ext::SignalExtBool;
+use futures_signals::signal::{Mutable, Signal, SignalExt};
 use paste::paste;
 
 /// Reactive text input widget, a thin wrapper around [`bevy_cosmic_edit`] integrated with [`Signal`]s.
-#[derive(Default)]
 pub struct TextInput {
     el: El<Node>,
 }
@@ -282,6 +279,7 @@ fn on_focus_changed(
 impl_haalka_methods! {
     TextInput {
         node: Node,
+        text_input_node: TextInputNode,
         text_input_buffer: TextInputBuffer,
         text_font: TextFont,
         text_input_layout_info: TextInputLayoutInfo,
