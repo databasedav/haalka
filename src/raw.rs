@@ -12,11 +12,11 @@ use std::{
 };
 
 use super::{
-    node_builder::{async_world, NodeBuilder, TaskHolder},
+    node_builder::{NodeBuilder, TaskHolder, async_world},
     raw::utils::remove_system_holder_on_remove,
 };
 use apply::Apply;
-use bevy_ecs::{component::*, prelude::*, system::*, world::*, error::*};
+use bevy_ecs::{component::*, error::*, prelude::*, system::*, world::*};
 use bevy_log::error;
 use bevy_tasks::Task;
 use bevy_utils::prelude::*;
@@ -691,7 +691,12 @@ impl RawHaalkaEl {
 }
 
 fn on_remove_on_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
-    let fs = world.get_mut::<OnRemove>(entity).unwrap().0.drain(..).collect::<Vec<_>>();
+    let fs = world
+        .get_mut::<OnRemove>(entity)
+        .unwrap()
+        .0
+        .drain(..)
+        .collect::<Vec<_>>();
     for f in fs {
         f(&mut world, entity);
     }

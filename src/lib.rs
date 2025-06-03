@@ -67,9 +67,9 @@ impl Plugin for HaalkaPlugin {
 pub mod prelude {
     #[doc(inline)]
     pub use crate::{
+        HaalkaPlugin,
         node_builder::async_world,
         raw::{RawElWrapper, RawElement, RawHaalkaEl, Spawnable},
-        HaalkaPlugin,
     };
 
     #[doc(no_inline)]

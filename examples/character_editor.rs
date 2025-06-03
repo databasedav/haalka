@@ -10,8 +10,8 @@
 mod utils;
 use bevy_input_focus::InputFocus;
 use bevy_text::{
-    cosmic_text::{self, Family, FamilyOwned},
     FontWeight,
+    cosmic_text::{self, Family, FamilyOwned},
 };
 use bevy_ui_text_input::{TextInputMode, TextInputPrompt};
 use utils::*;
@@ -159,39 +159,41 @@ fn ui_root() -> impl Element {
                         .item({
                             let focused = Mutable::new(false);
                             El::<Node>::new()
-                            .update_raw_el(|raw_el| raw_el.insert(BackgroundColor(NORMAL_BUTTON)))
-                            .height(BUTTON_HEIGHT)
-                            .child(
-                                TextInput::new()
-                                .with_node(|mut node| node.left = Val::Px(10.))
-                                .align(Align::new().center_y())
-                                .height(Val::Px(30.))
-                                    .with_text_input_node(|mut node| {
-                                        node.mode = TextInputMode::TextSingleLine;
-                                        // TODO: swap when https://github.com/ickshonpe/bevy_ui_text_input/issues/10
-                                        // node.alignment = Some(cosmic_text::Align::End)
-                                    })
-                                    .cursor(CursorIcon::System(SystemCursorIcon::Text))
-                                    .text_color(TextColor(Color::WHITE))
-                                    .text_input_prompt(TextInputPrompt {
-                                        text: "name".to_string(),
-                                        color: Some(bevy::color::palettes::basic::GRAY.into()),
-                                        ..default()
-                                    })
-                                    .focus_signal(focused.signal())
-                                    .focused_sync(focused)
-                                    .on_change_with_system(|In((_, text)), mut commands: Commands| {
-                                        if let Some((i, shape)) = Shape::iter().enumerate().find(|(_, shape)| shape.to_string() == text) {
-                                            commands.trigger(SetShape(shape));
-                                            if let Val::Px(height) = BUTTON_HEIGHT {
-                                                SCROLL_POSITION.set(i as f32 * height);
+                                .update_raw_el(|raw_el| raw_el.insert(BackgroundColor(NORMAL_BUTTON)))
+                                .height(BUTTON_HEIGHT)
+                                .child(
+                                    TextInput::new()
+                                        .with_node(|mut node| node.left = Val::Px(10.))
+                                        .align(Align::new().center_y())
+                                        .height(Val::Px(30.))
+                                        .with_text_input_node(|mut node| {
+                                            node.mode = TextInputMode::TextSingleLine;
+                                            // TODO: swap when https://github.com/ickshonpe/bevy_ui_text_input/issues/10
+                                            // node.alignment = Some(cosmic_text::Align::End)
+                                        })
+                                        .cursor(CursorIcon::System(SystemCursorIcon::Text))
+                                        .text_color(TextColor(Color::WHITE))
+                                        .text_input_prompt(TextInputPrompt {
+                                            text: "name".to_string(),
+                                            color: Some(bevy::color::palettes::basic::GRAY.into()),
+                                            ..default()
+                                        })
+                                        .focus_signal(focused.signal())
+                                        .focused_sync(focused)
+                                        .on_change_with_system(|In((_, text)), mut commands: Commands| {
+                                            if let Some((i, shape)) =
+                                                Shape::iter().enumerate().find(|(_, shape)| shape.to_string() == text)
+                                            {
+                                                commands.trigger(SetShape(shape));
+                                                if let Val::Px(height) = BUTTON_HEIGHT {
+                                                    SCROLL_POSITION.set(i as f32 * height);
+                                                }
                                             }
-                                        }
-                                    })
-                                    .on_click_outside_with_system(|In(_), mut commands: Commands| {
-                                        commands.insert_resource(InputFocus(None))
-                                    })
-                            )
+                                        })
+                                        .on_click_outside_with_system(|In(_), mut commands: Commands| {
+                                            commands.insert_resource(InputFocus(None))
+                                        }),
+                                )
                         })
                         .item({
                             let hovereds = MutableVec::new_with_values(

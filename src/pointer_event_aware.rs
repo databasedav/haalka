@@ -24,7 +24,7 @@ use bevy_utils::prelude::*;
 use bevy_window::{prelude::*, *};
 use bevy_winit::cursor::CursorIcon;
 use enclose::enclose as clone;
-use futures_signals::signal::{always, channel, Mutable, Signal, SignalExt};
+use futures_signals::signal::{Mutable, Signal, SignalExt, always, channel};
 use haalka_futures_signals_ext::SignalExtBool;
 
 use super::{
@@ -569,12 +569,7 @@ pub trait CursorOnHoverable: PointerEventAware {
                                 .zip(child_ofs.get(entity).ok())
                             {
                                 if let Some(hit) = hover_map.get(&entity).cloned() {
-                                    pointer_over.write(Pointer::new(
-                                        PointerId::Mouse,
-                                        location,
-                                        parent,
-                                        Over { hit },
-                                    ));
+                                    pointer_over.write(Pointer::new(PointerId::Mouse, location, parent, Over { hit }));
                                 }
                             }
                         }

@@ -13,7 +13,7 @@ use bevy_ecs::prelude::*;
 use bevy_input::{mouse::*, prelude::*};
 use bevy_ui::prelude::*;
 use bevy_utils::prelude::*;
-use futures_signals::signal::{always, BoxSignal, Mutable, Signal, SignalExt};
+use futures_signals::signal::{BoxSignal, Mutable, Signal, SignalExt, always};
 use haalka_futures_signals_ext::{SignalExtBool, SignalExtExt};
 use std::{
     convert::Into,

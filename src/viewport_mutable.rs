@@ -1,10 +1,13 @@
 //! Semantics for managing elements whose contents can be partially visible, see
 //! [`ViewportMutable`].
 
-use std::{sync::{Arc, OnceLock}, collections::HashSet};
+use std::{
+    collections::HashSet,
+    sync::{Arc, OnceLock},
+};
 
 use super::{
-    raw::{observe, register_system, utils::remove_system_holder_on_remove, RawElWrapper},
+    raw::{RawElWrapper, observe, register_system, utils::remove_system_holder_on_remove},
     utils::clone,
 };
 use apply::Apply;

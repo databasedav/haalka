@@ -6,8 +6,8 @@
 mod utils;
 use bevy_input_focus::InputFocus;
 use bevy_text::{
-    cosmic_text::{Family, FamilyOwned},
     FontWeight,
+    cosmic_text::{Family, FamilyOwned},
 };
 use bevy_ui_text_input::TextInputMode;
 use utils::*;

@@ -19,8 +19,8 @@ use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use haalka::{prelude::*, raw::DeferredUpdaterAppendDirection};
 use rand::{
-    distr::{Bernoulli, Distribution},
     Rng,
+    distr::{Bernoulli, Distribution},
 };
 
 fn main() {
