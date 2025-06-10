@@ -117,12 +117,19 @@ deployed_wasm_example = []
 [dev-dependencies]
 bevy = "0.16"
 bevy_asset_loader = { version = "0.23.0-rc.3", features = ["2d"] }
-bevy_rand = { version = "0.11", features = ["rand_chacha"] }
 colorgrad = "0.7"
 rand = "0.9"
 strum = { version = "0.27", features = ["derive"] }
 calc = { version = "0.4", default-features = false }
 rust_decimal = "1.37"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.bevy_rand]
+version = "0.11"
+features = ["rand_chacha"]
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies.bevy_rand]
+version = "0.11"
+features = ["rand_chacha", "wasm_js"]
 
 [package.metadata.cargo-all-features]
 allowlist = [
