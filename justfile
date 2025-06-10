@@ -22,7 +22,7 @@ example name *extras:
 
 # TODO: use inline module to make this cleaner https://github.com/casey/just/issues/2442
 example_wasm name *extras:
-  RUSTFLAGS=--cfg=web_sys_unstable_apis CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-server-runner cargo run --target wasm32-unknown-unknown --example {{ name }} {{ extras }}
+  RUSTFLAGS="--cfg=web_sys_unstable_apis" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-server-runner cargo run --target wasm32-unknown-unknown --example {{ name }} {{ extras }}
 
 release *extras:
   cargo release --unpublished --sign-tag {{ extras }}
@@ -45,7 +45,7 @@ generate_wasm_example_index example *features:
 
 build_wasm_example example *features:
   just generate_wasm_example_index {{ example }} {{ features }} > index.html
-  trunk build --locked --release --public-url . --example {{ example }}
+  RUSTFLAGS='--cfg getrandom_backend="wasm_js"' trunk build --locked --release --public-url . --example {{ example }}
 
 format_nickels:
   nickel format nickel/*.ncl
