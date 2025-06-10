@@ -116,7 +116,7 @@ deployed_wasm_example = []
 
 [dev-dependencies]
 bevy = "0.16"
-bevy_asset_loader = { version = "0.23.0-rc.3", features = ["2d"] }
+bevy_asset_loader = { version = "0.23", features = ["2d"] }
 colorgrad = "0.7"
 rand = "0.9"
 strum = { version = "0.27", features = ["derive"] }
