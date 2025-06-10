@@ -436,5 +436,5 @@ impl TaskHolder {
 }
 
 fn offset(i: usize, child_block_populations: &[usize]) -> usize {
-    child_block_populations[0..i].iter().copied().sum()
+    child_block_populations[0..i].iter().sum()
 }

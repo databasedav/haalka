@@ -137,7 +137,6 @@ allowlist = [
     "ui",
     "derive",
     "utils",
-    "multicam",
     "debug",
 ]
 

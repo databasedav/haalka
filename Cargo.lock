@@ -1393,9 +1393,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_ui_text_input"
-version = "0.5.0"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ec9b2738ef26622b1c2b2cf87abc7290de55ce12d4e8844cd29856db0d6d12d"
+checksum = "f5d020c0140e054a114f3bacb31c1a57bc9ae6a544025cbf02cc492b4a426510"
 dependencies = [
  "arboard",
  "bevy",

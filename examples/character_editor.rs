@@ -9,10 +9,6 @@
 
 mod utils;
 use bevy_input_focus::InputFocus;
-use bevy_text::{
-    FontWeight,
-    cosmic_text::{self, Family, FamilyOwned},
-};
 use bevy_ui_text_input::{TextInputMode, TextInputPrompt};
 use utils::*;
 
@@ -65,8 +61,8 @@ fn main() {
 const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
 const CLICKED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
-const BUTTON_WIDTH: Val = Val::Px(250.);
-const BUTTON_HEIGHT: Val = Val::Px(50.);
+const BUTTON_WIDTH: f32 = 250.;
+const BUTTON_HEIGHT: f32 = 50.;
 
 #[derive(Clone, Copy, PartialEq, strum::Display, strum::EnumIter)]
 #[strum(serialize_all = "lowercase")]
@@ -119,8 +115,8 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
     };
     El::<Node>::new()
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .width(BUTTON_WIDTH)
-        .height(BUTTON_HEIGHT)
+        .width(Val::Px(BUTTON_WIDTH))
+        .height(Val::Px(BUTTON_HEIGHT))
         .with_node(|mut node| node.border = UiRect::all(Val::Px(5.)))
         .align_content(Align::center())
         .border_color_signal(border_color_signal)
@@ -160,16 +156,17 @@ fn ui_root() -> impl Element {
                             let focused = Mutable::new(false);
                             El::<Node>::new()
                                 .update_raw_el(|raw_el| raw_el.insert(BackgroundColor(NORMAL_BUTTON)))
-                                .height(BUTTON_HEIGHT)
+                                .height(Val::Px(BUTTON_HEIGHT))
                                 .child(
                                     TextInput::new()
                                         .with_node(|mut node| node.left = Val::Px(10.))
                                         .align(Align::new().center_y())
                                         .height(Val::Px(30.))
+                                        .height(Val::Px(BUTTON_HEIGHT - 10. * 2.))
                                         .with_text_input_node(|mut node| {
-                                            node.mode = TextInputMode::TextSingleLine;
-                                            // TODO: swap when https://github.com/ickshonpe/bevy_ui_text_input/issues/10
-                                            // node.alignment = Some(cosmic_text::Align::End)
+                                            node.mode = TextInputMode::SingleLine;
+                                            // TODO: https://github.com/ickshonpe/bevy_ui_text_input/issues/10
+                                            // node.justification = JustifyText::Center;
                                         })
                                         .cursor(CursorIcon::System(SystemCursorIcon::Text))
                                         .text_color(TextColor(Color::WHITE))
@@ -185,9 +182,7 @@ fn ui_root() -> impl Element {
                                                 Shape::iter().enumerate().find(|(_, shape)| shape.to_string() == text)
                                             {
                                                 commands.trigger(SetShape(shape));
-                                                if let Val::Px(height) = BUTTON_HEIGHT {
-                                                    SCROLL_POSITION.set(i as f32 * height);
-                                                }
+                                                SCROLL_POSITION.set(i as f32 * BUTTON_HEIGHT);
                                             }
                                         })
                                         .on_click_outside_with_system(|In(_), mut commands: Commands| {

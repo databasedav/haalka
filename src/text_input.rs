@@ -1,16 +1,15 @@
 //! Reactive text input widget and adjacent utilities, a thin wrapper around [`bevy_cosmic_edit`] integrated with [`Signal`]s.
 
-use std::{ops::{Deref, Not}, pin::Pin, sync::{Arc, OnceLock}};
+use std::{ops::Not, sync::{Arc, OnceLock}};
 
 use bevy_input_focus::InputFocus;
 use bevy_ecs::system::*;
 use bevy_ecs::prelude::*;
-use bevy_ui::{prelude::*, widget::NodeImageMode};
-use bevy_color::prelude::*;
+use bevy_ui::prelude::*;
 use bevy_utils::prelude::*;
 use bevy_app::prelude::*;
 use bevy_picking::prelude::*;
-use bevy_text::{cosmic_text, TextColor, TextFont, DEFAULT_FONT_DATA};
+use bevy_text::{TextColor, TextFont};
 
 use crate::impl_haalka_methods;
 
@@ -20,7 +19,7 @@ use super::{
     raw::{observe, utils::remove_system_holder_on_remove}
 };
 use apply::Apply;
-use bevy_ui_text_input::{text_input_pipeline::TextInputPipeline, *};
+use bevy_ui_text_input::{actions::TextInputAction, text_input_pipeline::TextInputPipeline, *};
 use futures_signals::signal::{Mutable, Signal, SignalExt};
 use paste::paste;
 
@@ -122,8 +121,8 @@ impl TextInput {
     /// Set the text of this input.
     pub fn text(self, text_option: impl Into<Option<String>>) -> Self {
         let text = text_option.into().unwrap_or_default();
-        self.with_buffer(move |mut buffer, _| {
-            buffer.set_text(text);
+        self.with_text_input_queue(move |mut text_input_queue| {
+            queue_set_text_actions(&mut text_input_queue, text);
         })
     }
 
@@ -133,10 +132,13 @@ impl TextInput {
         text_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(text_option_signal) = text_option_signal_option.into() {
-            self = self.on_signal_with_buffer(
+            self = self.on_signal_with_text_input_queue(
                 text_option_signal.map(|text_option| text_option.into()),
-                |mut buffer, _, text_option| {
-                    buffer.set_text(text_option.unwrap_or_default());
+                |mut text_input_queue, text_option| {
+                    queue_set_text_actions(
+                        &mut text_input_queue,
+                        text_option.unwrap_or_default(),
+                    );
                 },
             );
         }
@@ -196,7 +198,7 @@ impl TextInput {
     ) -> Self {
         if let Some(focus_signal) = focus_signal_option.into() {
             self = self.update_raw_el(|raw_el| {
-                raw_el.on_signal_with_system(focus_signal, |In((entity, focus)), mut focused_option: ResMut<InputFocus>, mut commands: Commands| {
+                raw_el.on_signal_with_system(focus_signal, |In((entity, focus)), mut focused_option: ResMut<InputFocus>| {
                     if focus {
                         focused_option.0 = Some(entity);
                     } else if let Some(focused) = focused_option.0 {
@@ -234,6 +236,18 @@ impl TextInput {
     /// Sync a [`Mutable`] with the text of this input.
     pub fn on_change_sync(self, string: Mutable<String>) -> Self {
         self.on_change(move |text| string.set_neq(text))
+    }
+}
+
+fn queue_set_text_actions(
+    text_input_queue: &mut TextInputQueue,
+    text: String,
+) {
+    for action in [
+        TextInputAction::Edit(actions::TextInputEdit::SelectAll),
+        TextInputAction::Edit(actions::TextInputEdit::Paste(text)),
+    ] {
+        text_input_queue.add(action);
     }
 }
 
@@ -286,6 +300,7 @@ impl_haalka_methods! {
         text_input_style: TextInputStyle,
         text_color: TextColor,
         text_input_prompt: TextInputPrompt,
+        text_input_queue: TextInputQueue,
     }
 }
 

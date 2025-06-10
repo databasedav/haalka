@@ -5,17 +5,10 @@
 
 mod utils;
 use bevy_input_focus::InputFocus;
-use bevy_text::{
-    FontWeight,
-    cosmic_text::{Family, FamilyOwned},
-};
 use bevy_ui_text_input::TextInputMode;
 use utils::*;
 
-use std::{
-    ops::{Deref, Not},
-    time::Duration,
-};
+use std::{ops::Not, time::Duration};
 
 use bevy::prelude::*;
 use haalka::{
@@ -50,6 +43,7 @@ fn main() {
 const INPUT_HEIGHT: f32 = 40.;
 const INPUT_WIDTH: f32 = 200.;
 const STARTING_SORTED_BY: KeyValue = KeyValue::Key;
+const PADDING: f32 = 10.;
 static DARK_GRAY: LazyLock<Color> = LazyLock::new(|| Srgba::gray(0.25).into());
 
 static PAIRS: LazyLock<MutableVec<RowData>> = LazyLock::new(|| {
@@ -139,35 +133,42 @@ fn text_input(
     string: Mutable<String>,
     focus: Mutable<bool>,
 ) -> impl Element {
-    TextInput::new()
-        .width(Val::Px(INPUT_WIDTH))
+    El::<Node>::new()
         .height(Val::Px(INPUT_HEIGHT))
-        .with_text_input_node(|mut node| {
-            node.mode = TextInputMode::TextSingleLine;
-            node.alignment = Some(bevy::text::cosmic_text::Align::Center);
-        })
-        .cursor(CursorIcon::System(SystemCursorIcon::Text))
-        .text_color_signal(focus.signal().map_bool(|| Color::BLACK, || Color::WHITE).map(TextColor))
-        .focus_signal(focus.signal())
-        .on_focused_change_with_system(
-            clone!((focus) move |In((_, is_focused)): In<(Entity, bool)>, mut commands: Commands| {
-                if !is_focused {
-                    if let Some(index) = index_option.get() {
-                        commands.trigger(MaybeChanged(index));
-                    }
-                }
-                focus.set_neq(is_focused);
-            }),
-        )
-        .text_signal(string.signal_cloned())
-        .on_change_sync(string)
-        .into_el()
         .background_color_signal(
             focus
                 .signal()
                 .map_bool(|| Color::WHITE, || *DARK_GRAY)
                 .map(BackgroundColor),
         )
+        .child(
+            TextInput::new()
+                .align(Align::new().center_y())
+                .with_node(|mut node| node.left = Val::Px(PADDING))
+                .width(Val::Px(INPUT_WIDTH))
+                .height(Val::Px(INPUT_HEIGHT - PADDING))
+                .with_text_input_node(|mut node| {
+                    node.mode = TextInputMode::SingleLine;
+                    // TODO: https://github.com/ickshonpe/bevy_ui_text_input/issues/10
+                    // node.justification = JustifyText::Center;
+                })
+                .cursor(CursorIcon::System(SystemCursorIcon::Text))
+                .text_color_signal(focus.signal().map_bool(|| Color::BLACK, || Color::WHITE).map(TextColor))
+                .focus_signal(focus.signal())
+                .on_focused_change_with_system(
+                    clone!((focus) move |In((_, is_focused)): In<(Entity, bool)>, mut commands: Commands| {
+                        if !is_focused {
+                            if let Some(index) = index_option.get() {
+                                commands.trigger(MaybeChanged(index));
+                            }
+                        }
+                        focus.set_neq(is_focused);
+                    }),
+                )
+                .text_signal(string.signal_cloned())
+                .on_change_sync(string),
+        )
+
     // TODO: this unfocuses on click for some reason ...
     // .on_click_outside_with_system(|In(_), mut commands: Commands|
     // commands.remove_resource::<FocusedTextInput>())
