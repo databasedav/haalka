@@ -5,6 +5,7 @@
   minimal_nickel_version = "1.12.0",
   description = "github actions ci generation for haalka",
   dependencies = {
-    kaaj = 'Git { url = "..", path = "kaaj" },
+    # kaaj = 'Git { url = "..", path = "kaaj" },
+    kaaj = 'Path "../kaaj",
   }
 } | std.package.Manifest

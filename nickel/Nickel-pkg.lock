@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "kaaj": {
+      "name": "kaaj"
+    }
+  },
+  "packages": {
+    "kaaj": {
+      "precise": "Path",
+      "dependencies": {}
+    }
+  }
+}
