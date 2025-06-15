@@ -9,7 +9,7 @@ use bevy_ui::prelude::*;
 use bevy_utils::prelude::*;
 use bevy_app::prelude::*;
 use bevy_picking::prelude::*;
-use bevy_text::{TextColor, TextFont};
+use bevy_text::{cosmic_text::{Edit, Selection}, TextColor, TextFont};
 
 use crate::impl_haalka_methods;
 
@@ -50,7 +50,7 @@ pub struct TextInputFocusOnDownDisabled;
 
 // TODO: allow managing multiple spans reactively
 impl TextInput {
-    #[allow(missing_docs)]
+    #[allow(missing_docs, clippy::new_without_default)]
     pub fn new() -> Self {
         let el = El::<Node>::new().update_raw_el(|raw_el| {
             raw_el
@@ -132,15 +132,17 @@ impl TextInput {
         text_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(text_option_signal) = text_option_signal_option.into() {
-            self = self.on_signal_with_text_input_queue(
+            self = self.update_raw_el(|raw_el| raw_el.on_signal_with_system(
                 text_option_signal.map(|text_option| text_option.into()),
-                |mut text_input_queue, text_option| {
-                    queue_set_text_actions(
-                        &mut text_input_queue,
-                        text_option.unwrap_or_default(),
-                    );
+                |In((entity, text_option)): In<(Entity, Option<String>)>, text_input_buffers: Query<&TextInputBuffer>, mut text_input_queues: Query<&mut TextInputQueue>| {
+                    if text_input_buffers.get(entity).unwrap().get_text() != text_option.as_deref().unwrap_or_default() {
+                        queue_set_text_actions(
+                            &mut text_input_queues.get_mut(entity).unwrap(),
+                            text_option.unwrap_or_default(),
+                        );
+                    }
                 },
-            );
+            ));
         }
         self
     }
@@ -213,7 +215,7 @@ impl TextInput {
     }
 
     /// When the string in this input changes, run a `handler` [`System`] which takes [`In`](System::In) the [`Entity`] of this input's [`Entity`] and the new [`String`].
-    pub fn on_change_with_system<Marker>(self, handler: impl IntoSystem<In<(Entity, String,)>, (), Marker> + Send + 'static) -> Self {
+    pub fn on_change_with_system<Marker>(self, handler: impl IntoSystem<In<(Entity, String)>, (), Marker> + Send + 'static) -> Self {
         self.update_raw_el(|raw_el| {
             let system_holder = Arc::new(OnceLock::new());
             raw_el.on_spawn(clone!((system_holder) move |world, entity| {
@@ -257,9 +259,11 @@ struct ListenToChanges;
 #[derive(Event)]
 struct TextInputChange(String);
 
+#[allow(clippy::type_complexity)]
 fn on_change(contents: Query<(Entity, &TextInputContents), (Changed<TextInputContents>, With<ListenToChanges>)>, mut commands: Commands) {
     for (entity, contents) in contents.iter() {
         commands.trigger_targets(TextInputChange(contents.get().to_string()), entity);
+        println!("TextInputChange: {}", contents.get());
     }
 }
 
@@ -304,6 +308,29 @@ impl_haalka_methods! {
     }
 }
 
+/// Marker [`Resource`] to prevent clearing selection on focus change.
+#[derive(Resource, Default)]
+pub struct ClearSelectionOnFocusChangeDisabled;
+
+fn clear_selection_on_focus_change(
+    input_focus: Res<InputFocus>,
+    mut text_input_pipeline: ResMut<TextInputPipeline>,
+    mut buffers: Query<&mut TextInputBuffer>,
+    mut previous_input_focus: Local<Option<Entity>>,
+) {
+    if *previous_input_focus != input_focus.0 {
+        if let Some(entity) = *previous_input_focus {
+            if let Ok(mut buffer) = buffers.get_mut(entity) {
+                buffer
+                    .editor
+                    .borrow_with(&mut text_input_pipeline.font_system)
+                    .set_selection(Selection::None);
+            }
+        }
+        *previous_input_focus = input_focus.0;
+    }
+}
+
 pub(super) fn plugin(app: &mut App) {
     app
     .add_plugins(TextInputPlugin)
@@ -311,7 +338,8 @@ pub(super) fn plugin(app: &mut App) {
         Update,
         (
             on_change.run_if(any_with_component::<ListenToChanges>),
-            on_focus_changed.run_if(resource_changed_or_removed::<InputFocus>)
+            on_focus_changed.run_if(resource_changed_or_removed::<InputFocus>),
+            clear_selection_on_focus_change.run_if(not(resource_exists::<ClearSelectionOnFocusChangeDisabled>))
         )
             .run_if(any_with_component::<TextInputNode>),
     );

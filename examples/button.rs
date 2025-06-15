@@ -61,6 +61,7 @@ fn button() -> impl Element {
     El::<Node>::new()
         .width(Val::Px(150.0))
         .height(Val::Px(65.))
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .with_node(|mut node| node.border = UiRect::all(Val::Px(5.0)))
         .align_content(Align::center())
         .border_color_signal(border_color_signal)
@@ -100,6 +101,7 @@ fn ui_root() -> impl Element {
     El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
+        .cursor(CursorIcon::System(SystemCursorIcon::Default))
         .align_content(Align::center())
         .child(button())
 }

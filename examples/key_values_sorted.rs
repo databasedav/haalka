@@ -146,7 +146,7 @@ fn text_input(
                 .align(Align::new().center_y())
                 .with_node(|mut node| node.left = Val::Px(PADDING))
                 .width(Val::Px(INPUT_WIDTH))
-                .height(Val::Px(INPUT_HEIGHT - PADDING))
+                .height(Val::Px(INPUT_HEIGHT - PADDING * 2. + 5.))
                 .with_text_input_node(|mut node| {
                     node.mode = TextInputMode::SingleLine;
                     // TODO: https://github.com/ickshonpe/bevy_ui_text_input/issues/10

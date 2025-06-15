@@ -11,8 +11,7 @@ let BEVY_DEPENDENCIES = [
 in
 let CARGO_CACHE_VERSION = "2" in
 let SETUP_JUST_VERSION = "2" in
-let INSTALL_NIX_ACTION_VERSION = "30" in
-let CACHIX_ACTION_VERSION = "15" in
+let NICKEL_VERSION = "1.12.0" in
 {
   REPO = "https://github.com/databasedav/haalka",
   GITHUB_PAGES_DEPLOY_ACTION_VERSION = "4.7.3",
@@ -61,21 +60,13 @@ let CACHIX_ACTION_VERSION = "15" in
       steps = [
         checkout,
         {
-          name = "install nix",
-          uses = "cachix/install-nix-action@v%{ INSTALL_NIX_ACTION_VERSION }",
-        },
-        {
-          name = "nickel binary cache",
-          uses = "cachix/cachix-action@v%{ CACHIX_ACTION_VERSION }",
-          with = {
-            name = "tweag-nickel",
-          }
-        },
-        {
           name = "install nickel",
           run = m%"
-            nix profile install github:tweag/nickel
-            echo "$HOME/.nix-profile/bin" >> $GITHUB_PATH
+            OUT="$HOME/.local/bin/nickel-pkg"
+            mkdir -p "$(dirname "$OUT")"
+            curl -L "https://github.com/tweag/nickel/releases/download/%{ NICKEL_VERSION }/nickel-pkg-x86_64-linux" -o "$OUT"
+            chmod +x "$OUT"
+            echo "$(dirname "$OUT")" >> "$GITHUB_PATH"
             nickel --version
           "%
         },

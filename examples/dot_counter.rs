@@ -152,6 +152,7 @@ fn incrde_button<T: Component>(step: f32) -> impl Element {
     El::<Node>::new()
         .width(Val::Px(45.0))
         .align_content(Align::center())
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
                 .signal()
@@ -243,6 +244,7 @@ fn ui_root() -> impl Element {
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
+        .cursor(CursorIcon::System(SystemCursorIcon::Default))
         .child(
             Row::<Node>::new()
                 .width(Val::Px(WIDTH))

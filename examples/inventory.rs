@@ -431,15 +431,15 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
 
 fn random_cell_data(rng: &mut impl Rng) -> CellData {
     CellData {
-        index: Mutable::new(rng.gen_range(0..ITEM_NAMES.len())),
-        count: Mutable::new(rng.gen_range(1..=64)),
+        index: Mutable::new(rng.random_range(0..ITEM_NAMES.len())),
+        count: Mutable::new(rng.random_range(1..=64)),
     }
 }
 
 fn bern_cell_data_option(bern: f64) -> Mutable<Option<CellData>> {
     Mutable::new('block: {
         let distribution = Bernoulli::new(bern).unwrap();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         if distribution.sample(&mut rng) {
             break 'block Some(random_cell_data(&mut rng));
         }

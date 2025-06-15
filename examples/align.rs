@@ -66,6 +66,7 @@ fn alignment_button(alignment: Alignment) -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
         .align(Align::center())
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .width(Val::Px(250.))
         .height(Val::Px(80.))
         .background_color_signal(
@@ -97,13 +98,13 @@ fn ui_root() -> impl Element {
         .height(Val::Percent(100.))
         .with_node(|mut node| node.row_gap = Val::Px(15.))
         .align_content(Align::center())
+        .cursor(CursorIcon::System(SystemCursorIcon::Default))
         .align(Align::center())
         .item(
             Row::<Node>::new()
                 .with_node(|mut node| node.column_gap = Val::Px(15.))
                 .item(container("Column", Column::<Node>::new().items(rectangles())))
                 .item(container("El", El::<Node>::new().child(rectangle(1))))
-                // TODO: is this align content behavior buggy?
                 .item(container("Grid", Grid::<Node>::new().cells(rectangles()))),
         )
         .item(
@@ -125,7 +126,6 @@ fn ui_root() -> impl Element {
             Row::<Node>::new()
                 .with_node(|mut node| node.column_gap = Val::Px(15.))
                 .item(container("Row", Row::<Node>::new().items(rectangles())))
-                // TODO: is this align content behavior buggy?
                 .item(container("Stack", Stack::<Node>::new().layers(rectangles()))),
         )
 }
@@ -195,6 +195,7 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
     let (hovered, hovered_signal) = Mutable::new_and_signal(false);
     El::<Node>::new()
         .align(rectangle_alignment.to_align())
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             signal::or(
                 ALIGNMENT

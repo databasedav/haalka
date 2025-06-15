@@ -1,0 +1,24 @@
+{
+  "dependencies": {
+    "kaaj": {
+      "name": "kaaj",
+      "spec": {
+        "url": "..",
+        "ref": "Head",
+        "path": "kaaj"
+      }
+    }
+  },
+  "packages": {
+    "kaaj": {
+      "precise": {
+        "Git": {
+          "url": "..",
+          "id": "2bf23742171a7da5fd8a71385c197e0a822e8dcc",
+          "path": "kaaj"
+        }
+      },
+      "dependencies": {}
+    }
+  }
+}

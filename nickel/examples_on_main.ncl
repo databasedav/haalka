@@ -12,7 +12,7 @@ let { sync_name_field, .. } = import "utils.ncl" in
   jobs =
     {
       # TODO https://github.com/tweag/nickel/issues/747
-      assert_nickels_synced_ = assert_nickels_synced,
+      include assert_nickels_synced,
       get_examples_ = get_examples & { needs = "assert_nickels_synced_" },
       build_examples_ = build_examples & { needs = "get_examples_" },
       deploy_examples_ = deploy_examples "" & { needs = "build_examples_" },
