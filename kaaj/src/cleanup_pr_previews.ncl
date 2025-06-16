@@ -1,6 +1,6 @@
-let { REPO, GITHUB_PAGES_DEPLOY_ACTION_VERSION, GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT, checkout, .. } = import "common.ncl" in
+let { GITHUB_PAGES_DEPLOY_ACTION_VERSION, GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT, checkout, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
-{
+fun repo => {
   name = "cleanup_pr_previews",
 
   permissions = {
@@ -34,7 +34,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
               force = false,
               attempt-limit = GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT,
               target-folder = "pr_previews/${{ env.PR }}",
-              commit-message = "cleaning up pr preview for %{ REPO }/pull/${{ env.PR }}",
+              commit-message = "cleaning up pr preview for %{ repo }/pull/${{ env.PR }}",
             }
           },
         ]

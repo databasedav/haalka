@@ -1,6 +1,6 @@
-let { REPO, GITHUB_PAGES_DEPLOY_ACTION_VERSION, GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT, checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, .. } = import "common.ncl" in
+let { checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
-{
+fun build_wasm_webgpu_features => {
   name = "build_example",
 
   on = {
@@ -40,7 +40,7 @@ let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
           {
             name = "build example",
             "if" = "${{ inputs.api == 'webgpu' }}",
-            run = "just build_wasm_example ${{ inputs.example }} webgpu"
+            run = "just build_wasm_example ${{ inputs.example }} %{ build_wasm_webgpu_features }"
           },
           {
             name = "upload dist",

@@ -1,6 +1,6 @@
-let { REPO, checkout, cargo_build_env, just, get_examples, build_examples, deploy_examples, assert_nickels_synced, .. } = import "common.ncl" in
+let { checkout, cargo_build_env, just, get_examples, build_examples, deploy_examples, assert_nickels_synced, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" in
-{
+fun repo github_pages_url => {
   name = "pr_previews",
 
   on = "pull_request",
@@ -32,7 +32,7 @@ let { sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" 
               name = "links_markdown_list",
               run = m%"
                 examples='${{ needs.get_examples_.outputs.examples }}'
-                base_url="https://databasedav.github.io/haalka/pr_previews/${{ github.event.number }}"
+                base_url="%{ github_pages_url }/pr_previews/${{ github.event.number }}"
                 markdown_list=""
                 for example in $(echo "${examples}" | jq -r '.[]'); do
                   markdown_list="${markdown_list}- $example: [webgl2](${base_url}/webgl2/${example}) [webgpu](${base_url}/webgpu/${example})"$'\n'
@@ -52,7 +52,7 @@ let { sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" 
               uses = "thollander/actions-comment-pull-request@v2",
               with = {
                 message = m%"
-                  **commit:** %{ REPO }/pull/${{ github.event.number }}/commits/${{ github.event.pull_request.head.sha }}
+                  **commit:** %{ repo }/pull/${{ github.event.number }}/commits/${{ github.event.pull_request.head.sha }}
                   **deployed:** ${{ steps.deployment_timestamp.outputs.timestamp }}
                   **previews:**
                   ${{ steps.links_markdown_list.outputs.markdown_list }}

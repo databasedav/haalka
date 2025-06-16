@@ -44,8 +44,8 @@ build_wasm_example example *features:
 format_nickels:
   nickel format nickel/*.ncl
 
-export_nickel nickel:
-  nickel export --format yaml --field {{ nickel }}_ nickel/main.ncl
+export_nickel file:
+  nickel export --format yaml --field {{ file }}_ nickel/main.ncl
 
 # TODO: use https://github.com/rhysd/actionlint after
 sync_nickels:
