@@ -62,7 +62,7 @@ let NICKEL_VERSION = "1.12.0" in
         {
           name = "install nickel",
           run = m%"
-            OUT="$HOME/.local/bin/nickel-pkg"
+            OUT="$HOME/.local/bin/nickel"
             mkdir -p "$(dirname "$OUT")"
             curl -L "https://github.com/tweag/nickel/releases/download/%{ NICKEL_VERSION }/nickel-pkg-x86_64-linux" -o "$OUT"
             chmod +x "$OUT"
