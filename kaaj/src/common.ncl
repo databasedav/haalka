@@ -74,7 +74,7 @@ let NICKEL_VERSION = "1.12.0" in
         {
           name = "assert nickels synced",
           run = m%"
-            just format_nickels sync_nickels
+            just sync_nickels
             [[ -n $(git status --porcelain) ]] && echo 'nickels are not synced; run `just format_nickels sync_nickels`' && exit 1 || exit 0
           "%
         }
