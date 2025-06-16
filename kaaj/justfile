@@ -45,7 +45,7 @@ format_nickels:
   nickel format nickel/*.ncl
 
 export_nickel nickel:
-  nickel export --format yaml --field {{ nickel }}_ nickel/main.ncl
+  nickel export --format yaml --manifest-path nickel/Nickel-pkg.ncl --field {{ nickel }}_ nickel/main.ncl
 
 # TODO: use https://github.com/rhysd/actionlint after
 sync_nickels:
