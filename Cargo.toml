@@ -91,7 +91,7 @@ ui = [
     "bevy_winit",
 ]
 
-## [bevy_cosmic_edit](https://github.com/Dimchikkk/bevy_cosmic_edit) text input widget integrated with signals.
+## [bevy_ui_text_input](https://github.com/ickshonpe/bevy_ui_text_input) text input widget integrated with signals.
 text_input = ["ui", "bevy_color", "bevy_input_focus", "bevy_ui_text_input"]
 
 ## Macro ([`impl_haalka_methods!`](https://docs.rs/haalka/latest/haalka/macro.impl_haalka_methods.html)) for deriving convenience methods for modifying components on custom element structs with static values, functions, or signals.

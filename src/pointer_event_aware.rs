@@ -134,9 +134,8 @@ pub trait PointerEventAware: GlobalEventAware {
 
     /// When a [`Pointer<Click>`] is received outside this [`Element`](super::element::Element)
     /// or its descendents, run a [`System`] that takes [`In`](`System::In`) this element's
-    /// [`Entity`] and the [`Pointer<Click>`]. Requires the [`UiRoot`] [`Resource`] to exist in the
-    /// [`World`] and will panic otherwise. This method can be called repeatedly to register many
-    /// such handlers.
+    /// [`Entity`] and the [`Pointer<Click>`]. Will not function unless this element is a descendant
+    /// of a [`UiRoot`]. This method can be called repeatedly to register many such handlers.
     #[allow(clippy::type_complexity)]
     fn on_click_outside_with_system<Marker>(
         self,
@@ -169,8 +168,8 @@ pub trait PointerEventAware: GlobalEventAware {
     }
 
     /// When a [`Pointer<Click>`] is received outside this [`Element`](super::element::Element)
-    /// or its descendents, run a function. Requires the [`UiRoot`] [`Resource`] to exist in the
-    /// [`World`]. This method can be called repeatedly to register many such handlers.
+    /// or its descendents, run a function. Will not function unless this element is a descendant of
+    /// a [`UiRoot`]. This method can be called repeatedly to register many such handlers.
     fn on_click_outside(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
         self.on_click_outside_with_system(move |In((_, _))| handler())
     }

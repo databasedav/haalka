@@ -134,18 +134,21 @@ fn text_input(
     focus: Mutable<bool>,
 ) -> impl Element {
     El::<Node>::new()
+        .apply(border_radius_style(10.))
         .height(Val::Px(INPUT_HEIGHT))
+        .width(Val::Px(INPUT_WIDTH))
         .background_color_signal(
             focus
                 .signal()
                 .map_bool(|| Color::WHITE, || *DARK_GRAY)
                 .map(BackgroundColor),
-        )
+            )
+        .with_node(|mut node| node.overflow = Overflow::clip())
         .child(
             TextInput::new()
                 .align(Align::new().center_y())
                 .with_node(|mut node| node.left = Val::Px(PADDING))
-                .width(Val::Px(INPUT_WIDTH))
+                .width(Val::Px(INPUT_WIDTH - PADDING * 2.))
                 .height(Val::Px(INPUT_HEIGHT - PADDING * 2. + 5.))
                 .with_text_input_node(|mut node| {
                     node.mode = TextInputMode::SingleLine;
@@ -166,12 +169,13 @@ fn text_input(
                     }),
                 )
                 .text_signal(string.signal_cloned())
-                .on_change_sync(string),
+                .on_change_sync(string)
+                .on_click_outside_with_system(|In((entity, _)), mut input_focus: ResMut<InputFocus>| {
+                    if input_focus.0 == Some(entity) {
+                        input_focus.0 = None;
+                    }
+                })
         )
-
-    // TODO: this unfocuses on click for some reason ...
-    // .on_click_outside_with_system(|In(_), mut commands: Commands|
-    // commands.remove_resource::<FocusedTextInput>())
 }
 
 fn clear_focus() {
@@ -188,6 +192,12 @@ fn sort_by_text_element() -> impl Element {
         .text(Text::new("sort by"))
 }
 
+fn border_radius_style<E: Element>(border_radius: f32) -> impl FnOnce(E) -> E {
+    move |el| {
+        el.update_raw_el(|raw_el| raw_el.insert(BorderRadius::all(Val::Px(border_radius))))
+    }
+}
+
 fn sort_button(sort_by: KeyValue) -> impl Element {
     let hovered = Mutable::new(false);
     let selected = SORT_BY.signal().map(move |cur| cur == sort_by).broadcast();
@@ -197,6 +207,7 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
         .item_signal(selected.signal().map_true(sort_by_text_element))
         .item(
             El::<Node>::new()
+                .apply(border_radius_style(20.))
                 .width(Val::Px(200.))
                 .height(Val::Px(80.))
                 .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
@@ -267,7 +278,7 @@ fn sort_one(maybe_changed: Trigger<MaybeChanged>) {
             let key_lock = key.string.lock_ref();
             if key_lock.is_empty().not() {
                 let (Ok(sorted_i) | Err(sorted_i)) = keys.binary_search_by_key(&key_lock.as_str(), |key| key.as_str());
-                if i != sorted_i && key_lock.as_str() != keys[sorted_i].as_str() {
+                if i != sorted_i && (keys.len() <= sorted_i || key_lock.as_str() != keys[sorted_i].as_str()) {
                     drop((keys, key_lock));
                     let pair = pairs.remove(i);
                     pairs.insert_cloned(sorted_i, pair);
@@ -285,7 +296,7 @@ fn sort_one(maybe_changed: Trigger<MaybeChanged>) {
             if value_lock.is_empty().not() {
                 let (Ok(sorted_i) | Err(sorted_i)) =
                     values.binary_search_by_key(&value_lock.as_str(), |value| value.as_str());
-                if i != sorted_i && value_lock.as_str() != values[sorted_i].as_str() {
+                if i != sorted_i && (values.len() <= sorted_i || value_lock.as_str() != values[sorted_i].as_str()) {
                     drop((values, value_lock));
                     let pair = pairs.remove(i);
                     pairs.insert_cloned(sorted_i, pair);
@@ -346,6 +357,7 @@ fn key_values() -> impl Element + Sizeable {
 fn x_button() -> impl Element + PointerEventAware {
     let hovered = Mutable::new(false);
     El::<Node>::new()
+        .apply(border_radius_style(10.))
         .width(Val::Px(INPUT_HEIGHT))
         .height(Val::Px(INPUT_HEIGHT))
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
@@ -392,6 +404,7 @@ fn ui_root() -> impl Element {
                         .item({
                             let hovered = Mutable::new(false);
                             El::<Node>::new()
+                                .apply(border_radius_style(10.))
                                 .width(Val::Px(INPUT_WIDTH))
                                 .height(Val::Px(INPUT_HEIGHT))
                                 .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
@@ -408,8 +421,7 @@ fn ui_root() -> impl Element {
                                         .text_font(TextFont::from_font_size(30.))
                                         .text(Text::new("+")),
                                 )
-                                .on_click_with_system(|_: In<_>, mut commands: Commands| {
-                                    // commands.remove_resource::<InputFocus>(); // TODO: shouldn't need this, can remove once https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
+                                .on_click_with_system(|_: In<_>| {
                                     clear_focus();
                                     PAIRS.lock_mut().push_cloned(RowData {
                                         key: {
@@ -437,12 +449,11 @@ fn scroll_to_bottom() {
     SCROLL_POSITION.set(f32::MAX);
 }
 
-fn tabber(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
+fn tabber(keys: Res<ButtonInput<KeyCode>>) {
     // TODO: use .pressed instead of .just_pressed to allow for holding down tab, browser seems to
     // require minimum press time before starting to repeat, and repeating seems slower than refresh
     // rate
     if keys.pressed(KeyCode::ShiftLeft) && keys.just_pressed(KeyCode::Tab) {
-        // commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
         let pairs = PAIRS.lock_ref();
         let focused_option = pairs
             .iter()
@@ -463,7 +474,6 @@ fn tabber(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
             last.value.focus.set(true);
         }
     } else if keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::Enter) {
-        // commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
         let pairs = PAIRS.lock_ref();
         let focused_option = pairs
             .iter()
@@ -486,9 +496,8 @@ fn tabber(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
     }
 }
 
-fn escaper(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
+fn escaper(keys: Res<ButtonInput<KeyCode>>) {
     if keys.just_pressed(KeyCode::Escape) {
-        // commands.remove_resource::<FocusedTextInput>(); // TODO: shouldn't need this, but text color doesn't sync otherwise https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
         clear_focus();
     }
 }

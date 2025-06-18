@@ -271,10 +271,7 @@ impl RawHaalkaEl {
         .on_signal(
             signal,
             clone!((system_holder) move |entity, input| {
-                async_world().apply(command::run_system_with(
-                    system_holder.get().copied().unwrap(),
-                    (entity, input),
-                ).handle_error_with(warn))
+                async_world().apply(run_system_with_entity(entity, system_holder.get().copied().unwrap(), input).handle_error_with(warn))
             }),
         )
         .apply(remove_system_holder_on_remove(system_holder))
@@ -687,6 +684,15 @@ impl RawHaalkaEl {
                     .map(|child| child.into_raw().into_node_builder()),
             )
         })
+    }
+}
+
+fn run_system_with_entity<I: Send + 'static>(entity: Entity, id: SystemId<In<(Entity, I)>>, input: I) -> impl Command<Result> {
+    move |world: &mut World| -> Result {
+        if world.get_entity(entity).is_ok() {
+            world.run_system_with(id, (entity, input))?;
+        }
+        Ok(())
     }
 }
 

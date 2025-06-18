@@ -1,4 +1,4 @@
-//! Reactive text input widget and adjacent utilities, a thin wrapper around [`bevy_cosmic_edit`] integrated with [`Signal`]s.
+//! Reactive text input widget and adjacent utilities, a thin wrapper around [`bevy_ui_text_input`] integrated with [`Signal`]s.
 
 use std::{ops::Not, sync::{Arc, OnceLock}};
 
@@ -44,9 +44,10 @@ impl UiRootable for TextInput {}
 impl ViewportMutable for TextInput {}
 impl CursorOnHoverable for TextInput {}
 
-/// Marker [`Component`] for [`TextInput`] to prevent focusing on [`Pointer<Pressed>`] events. Useful when input focus is more conditional.
-#[derive(Component)]
-pub struct TextInputFocusOnDownDisabled;
+/// A component to store the last text value that was successfully applied by `text_signal`.
+/// This is used to prevent echo updates from `on_change_sync` when a two-way binding is active.
+#[derive(Component, Default)]
+struct LastSignalText(String);
 
 // TODO: allow managing multiple spans reactively
 impl TextInput {
@@ -59,7 +60,8 @@ impl TextInput {
                         clear_on_submit: false,
                         ..default()
                     },
-                    Pickable::default()
+                    Pickable::default(),
+                    LastSignalText::default()
                 ))
                 // .on_event_with_system::<Pointer<Pressed>, _>(
                 //     move |In((entity, _)): In<(_, Pointer<Pressed>)>,
@@ -132,17 +134,28 @@ impl TextInput {
         text_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(text_option_signal) = text_option_signal_option.into() {
-            self = self.update_raw_el(|raw_el| raw_el.on_signal_with_system(
-                text_option_signal.map(|text_option| text_option.into()),
-                |In((entity, text_option)): In<(Entity, Option<String>)>, text_input_buffers: Query<&TextInputBuffer>, mut text_input_queues: Query<&mut TextInputQueue>| {
-                    if text_input_buffers.get(entity).unwrap().get_text() != text_option.as_deref().unwrap_or_default() {
-                        queue_set_text_actions(
-                            &mut text_input_queues.get_mut(entity).unwrap(),
-                            text_option.unwrap_or_default(),
-                        );
-                    }
-                },
-            ));
+            self = self.update_raw_el(|raw_el| {
+                raw_el.on_signal_with_system(
+                    text_option_signal.map(|text_option| text_option.into().unwrap_or_default()),
+                    |In((entity, text)): In<(Entity, String)>,
+                     mut last_text_query: Query<&mut LastSignalText>,
+                     mut text_input_queues: Query<&mut TextInputQueue>,
+                     buffers: Query<&TextInputBuffer>| {
+                        if let Ok(mut last_text) = last_text_query.get_mut(entity) {
+                            if last_text.0 != text {
+                                last_text.0 = text.clone();
+                                if let Ok(buffer) = buffers.get(entity) {
+                                    if buffer.get_text() != text {
+                                        if let Ok(mut queue) = text_input_queues.get_mut(entity) {
+                                            queue_set_text_actions(&mut queue, text);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )
+            });
         }
         self
     }
@@ -237,7 +250,14 @@ impl TextInput {
 
     /// Sync a [`Mutable`] with the text of this input.
     pub fn on_change_sync(self, string: Mutable<String>) -> Self {
-        self.on_change(move |text| string.set_neq(text))
+        self.on_change_with_system(
+            move |In((entity, text)): In<(Entity, String)>, mut last_text_query: Query<&mut LastSignalText>| {
+                if let Ok(mut last_text) = last_text_query.get_mut(entity) {
+                    last_text.0 = text.clone();
+                    string.set_neq(text);
+                }
+            },
+        )
     }
 }
 
@@ -263,7 +283,6 @@ struct TextInputChange(String);
 fn on_change(contents: Query<(Entity, &TextInputContents), (Changed<TextInputContents>, With<ListenToChanges>)>, mut commands: Commands) {
     for (entity, contents) in contents.iter() {
         commands.trigger_targets(TextInputChange(contents.get().to_string()), entity);
-        println!("TextInputChange: {}", contents.get());
     }
 }
 
