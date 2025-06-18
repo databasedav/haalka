@@ -35,7 +35,6 @@ fn main() {
                 },
             ),
         )
-        // .add_systems(Update, name_changed)
         .add_observer(
             |event: Trigger<SetShape>,
              character: Single<Entity, With<MeshMaterial3d<StandardMaterial>>>,

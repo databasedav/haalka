@@ -709,16 +709,9 @@ fn on_remove_on_remove(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
 }
 
 #[allow(clippy::type_complexity)]
+#[derive(Component)]
+#[component(on_remove = on_remove_on_remove)]
 struct OnRemove(Vec<Box<dyn FnOnce(&mut DeferredWorld, Entity) + Send + Sync + 'static>>);
-
-impl Component for OnRemove {
-    const STORAGE_TYPE: StorageType = StorageType::Table;
-    type Mutability = Mutable;
-
-    fn on_remove() -> Option<ComponentHook> {
-        Some(on_remove_on_remove)
-    }
-}
 
 /// Marker [`Component`] for filtering `SystemId` `Entity`s managed by haalka.
 #[derive(Component)]

@@ -44,11 +44,6 @@ impl UiRootable for TextInput {}
 impl ViewportMutable for TextInput {}
 impl CursorOnHoverable for TextInput {}
 
-/// A component to store the last text value that was successfully applied by `text_signal`.
-/// This is used to prevent echo updates from `on_change_sync` when a two-way binding is active.
-#[derive(Component, Default)]
-struct LastSignalText(String);
-
 // TODO: allow managing multiple spans reactively
 impl TextInput {
     #[allow(missing_docs, clippy::new_without_default)]
@@ -63,19 +58,6 @@ impl TextInput {
                     Pickable::default(),
                     LastSignalText::default()
                 ))
-                // .on_event_with_system::<Pointer<Pressed>, _>(
-                //     move |In((entity, _)): In<(_, Pointer<Pressed>)>,
-                //             mut focusable_query: Query<(Entity, &mut Focusable), Without<TextInputFocusOnDownDisabled>>,
-                //             mut commands: Commands| {
-                //         // TODO: remove this focusable trigger and uncomment .insert_resource below when https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
-                //         // otherwise cursor position is not instantly correct on `Down`
-                //         if let Ok((entity, mut focusable)) = focusable_query.get_mut(entity) {
-                //             focusable.is_focused = true;
-                //             commands.trigger_targets(FocusedChange(true), entity);
-                //         }
-                //         // commands.insert_resource(CosmicFocusedWidget(cosmic_edit_holder.get()));
-                //     },
-                // )
         });
         Self { el }
     }
@@ -260,6 +242,11 @@ impl TextInput {
         )
     }
 }
+
+/// A component to store the last text value that was successfully applied by [`TextInput::text_signal`].
+/// This is used to prevent echo updates from [`TextInput::on_change_sync`] when a two-way binding is active.
+#[derive(Component, Default)]
+struct LastSignalText(String);
 
 fn queue_set_text_actions(
     text_input_queue: &mut TextInputQueue,

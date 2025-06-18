@@ -1,2 +1,1 @@
-// TODO: signal abstraction over text sections
-
+// TODO: signal abstraction over text spans

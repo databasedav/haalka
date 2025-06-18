@@ -207,11 +207,6 @@ pub trait PointerEventAware: GlobalEventAware {
                 )
                 .apply(remove_system_holder_on_remove(system_holder))
         })
-        // .on_global_event_with_system::<Pointer<Released>, _>(move |pointer_up: Listener<Pointer<Released>>| if
-        // matches!(pointer_up.button, PointerButton::Primary) { down.set_neq(false) }) TODO: this isn't the
-        // desired behavior, press should linger outside and instead `Up` should trigger even outside of element
-        // (like the `.on_global_event_with_system` commented out above), requires being able to register
-        // multiple event listeners per event type
         .on_hovered_change_with_system(|In((entity, hovered)): In<(_, bool)>, world: &mut World| {
             if !hovered {
                 if let Ok(ref mut entity) = world.get_entity_mut(entity) {

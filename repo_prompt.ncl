@@ -1,5 +1,3 @@
-let Output = Dyn in
-let Contract = Dyn in
 let src_align = import "src/align.rs" as 'Text in
 let src_column = import "src/column.rs" as 'Text in
 let src_derive = import "src/derive.rs" as 'Text in
@@ -82,54 +80,52 @@ let repo_structure = {
 } in
 let prompt = import "repo_prompt_input.md" as 'Text in
 
-{
-    output | Output = m%"
-        %{ prompt }
+m%"
+%{ prompt }
 
-        haalka is an ergonomic reactive UI library in rust for the bevy game engine; here is the structure of the haalka repository with the contents of each file:
-        .
-        ├── examples/
-        │   ├── align.rs
-        │   ├── button.rs
-        │   ├── calculator.rs
-        │   ├── challenge07.rs
-        │   ├── character_editor.rs
-        │   ├── counter.rs
-        │   ├── dot_counter.rs
-        │   ├── healthbar.rs
-        │   ├── inventory.rs
-        │   ├── key_values_sorted.rs
-        │   ├── main_menu.rs
-        │   ├── many_buttons.rs
-        │   ├── nested_lists.rs
-        │   ├── responsive_menu.rs
-        │   ├── scroll_grid.rs
-        │   ├── scroll.rs
-        │   ├── snake.rs
-        │   ├── test.rs
-        │   └── utils.rs
-        └── src/
-            ├── align.rs
-            ├── column.rs
-            ├── derive.rs
-            ├── element.rs
-            ├── el.rs
-            ├── global_event_aware.rs
-            ├── grid.rs
-            ├── lib.rs
-            ├── mouse_wheel_scrollable.rs
-            ├── nearby_element_addable.rs
-            ├── node_builder.rs
-            ├── paragraph.rs
-            ├── pointer_event_aware.rs
-            ├── raw.rs
-            ├── row.rs
-            ├── sizeable.rs
-            ├── stack.rs
-            ├── text_input.rs
-            ├── utils.rs
-            └── viewport_mutable.rs
+haalka is an ergonomic reactive UI library in rust for the bevy game engine; here is the structure of the haalka repository with the contents of each file:
+.
+├── examples/
+│   ├── align.rs
+│   ├── button.rs
+│   ├── calculator.rs
+│   ├── challenge07.rs
+│   ├── character_editor.rs
+│   ├── counter.rs
+│   ├── dot_counter.rs
+│   ├── healthbar.rs
+│   ├── inventory.rs
+│   ├── key_values_sorted.rs
+│   ├── main_menu.rs
+│   ├── many_buttons.rs
+│   ├── nested_lists.rs
+│   ├── responsive_menu.rs
+│   ├── scroll_grid.rs
+│   ├── scroll.rs
+│   ├── snake.rs
+│   ├── test.rs
+│   └── utils.rs
+└── src/
+    ├── align.rs
+    ├── column.rs
+    ├── derive.rs
+    ├── element.rs
+    ├── el.rs
+    ├── global_event_aware.rs
+    ├── grid.rs
+    ├── lib.rs
+    ├── mouse_wheel_scrollable.rs
+    ├── nearby_element_addable.rs
+    ├── node_builder.rs
+    ├── paragraph.rs
+    ├── pointer_event_aware.rs
+    ├── raw.rs
+    ├── row.rs
+    ├── sizeable.rs
+    ├── stack.rs
+    ├── text_input.rs
+    ├── utils.rs
+    └── viewport_mutable.rs
 
-        %{ repo_structure |> std.record.map (fun k v => "%{ k }\n```rust\n%{ v }\n```") |> std.record.values |> std.string.join "\n\n" }
-    "%
-}
+%{ repo_structure |> std.record.map (fun k v => "%{ k }\n```rust\n%{ v }\n```") |> std.record.values |> std.string.join "\n\n" }
+"%
