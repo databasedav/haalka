@@ -23,7 +23,7 @@ use bevy_ui_text_input::{actions::TextInputAction, text_input_pipeline::TextInpu
 use futures_signals::signal::{Mutable, Signal, SignalExt};
 use paste::paste;
 
-/// Reactive text input widget, a thin wrapper around [`bevy_cosmic_edit`] integrated with [`Signal`]s.
+/// Reactive text input widget, a thin wrapper around [`bevy_ui_text_input`] integrated with [`Signal`]s.
 pub struct TextInput {
     el: El<Node>,
 }
@@ -62,7 +62,7 @@ impl TextInput {
         Self { el }
     }
 
-    /// Run a function with this input's [`CosmicEditBuffer`] with access to [`ResMut<CosmicFontSystem>`] and [`DefaultAttrs`].
+    /// Run a function with this input's [`TextInputBuffer`] with access to [`ResMut<TextInputPipeline>`].
     pub fn with_buffer(
         self,
         f: impl FnOnce(Mut<TextInputBuffer>, ResMut<TextInputPipeline>) + Send + 'static,
@@ -82,7 +82,7 @@ impl TextInput {
         }))
     }
 
-    /// Reactively run a function with this input's [`CosmicEditBuffer`] and the output of the [`Signal`] with access to [`ResMut<CosmicFontSystem>`] and [`DefaultAttrs`].
+    /// Reactively run a function with this input's [`TextInputBuffer`] and the output of the [`Signal`] with access to [`ResMut<TextInputPipeline>`].
     pub fn on_signal_with_buffer<T: Send + 'static>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,

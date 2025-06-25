@@ -600,7 +600,7 @@ fn inventory() -> impl Element {
                                         )
                                         .to_signal_map(|filleds| filleds.iter().all(Option::is_some))
                                         .for_each_sync(move |all_filled| {
-                                            output.set(all_filled.then(|| random_cell_data(&mut rand::thread_rng())));
+                                            output.set(all_filled.then(|| random_cell_data(&mut rand::rng())));
                                         })
                                         .await;
                                     }));
