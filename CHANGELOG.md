@@ -11,7 +11,7 @@ the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### changed
 
 - upgraded Bevy to `0.16.1`
-- migrated `TextInput` from unmaintained [bevy_cosmic_edit](https://github.com/Dimchikkk/bevy_cosmic_edit) to [bevy_ui_text_input](https://github.com/ickshonpe/bevy_ui_text_input)
+- migrated `TextInput` from [bevy_cosmic_edit](https://github.com/Dimchikkk/bevy_cosmic_edit) to [bevy_ui_text_input](https://github.com/ickshonpe/bevy_ui_text_input)
 - migrated from once-cell to `std::sync::LazyLock`
 
 # 0.4.1 (2025-04-08)

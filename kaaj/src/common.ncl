@@ -11,7 +11,7 @@ let BEVY_DEPENDENCIES = [
 in
 let CARGO_CACHE_VERSION = "2" in
 let SETUP_JUST_VERSION = "2" in
-let NICKEL_VERSION = "1.12.0" in
+let NICKEL_VERSION = "1.12.1" in
 {
   REPO = "https://github.com/databasedav/haalka",
   GITHUB_PAGES_DEPLOY_ACTION_VERSION = "4.7.3",
