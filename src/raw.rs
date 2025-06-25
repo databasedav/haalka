@@ -687,7 +687,11 @@ impl RawHaalkaEl {
     }
 }
 
-fn run_system_with_entity<I: Send + 'static>(entity: Entity, id: SystemId<In<(Entity, I)>>, input: I) -> impl Command<Result> {
+fn run_system_with_entity<I: Send + 'static>(
+    entity: Entity,
+    id: SystemId<In<(Entity, I)>>,
+    input: I,
+) -> impl Command<Result> {
     move |world: &mut World| -> Result {
         if world.get_entity(entity).is_ok() {
             world.run_system_with(id, (entity, input))?;

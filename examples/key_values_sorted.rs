@@ -142,7 +142,7 @@ fn text_input(
                 .signal()
                 .map_bool(|| Color::WHITE, || *DARK_GRAY)
                 .map(BackgroundColor),
-            )
+        )
         .with_node(|mut node| node.overflow = Overflow::clip())
         .child(
             TextInput::new()
@@ -174,7 +174,7 @@ fn text_input(
                     if input_focus.0 == Some(entity) {
                         input_focus.0 = None;
                     }
-                })
+                }),
         )
 }
 
@@ -193,9 +193,7 @@ fn sort_by_text_element() -> impl Element {
 }
 
 fn border_radius_style<E: Element>(border_radius: f32) -> impl FnOnce(E) -> E {
-    move |el| {
-        el.update_raw_el(|raw_el| raw_el.insert(BorderRadius::all(Val::Px(border_radius))))
-    }
+    move |el| el.update_raw_el(|raw_el| raw_el.insert(BorderRadius::all(Val::Px(border_radius))))
 }
 
 fn sort_button(sort_by: KeyValue) -> impl Element {
