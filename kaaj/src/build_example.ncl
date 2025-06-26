@@ -1,4 +1,4 @@
-let { checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, .. } = import "common.ncl" in
+let { checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, install_nickel, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 fun build_wasm_webgpu_features =>
   {
@@ -28,10 +28,11 @@ fun build_wasm_webgpu_features =>
             bevy_dependencies,
             cached_target_populate,
             just,
+            install_nickel,  
             binstall,
             {
               name = "install build dependencies",
-              run = "cargo binstall --no-confirm --continue-on-failure wasm-bindgen-cli wasm-opt nickel-lang-cli trunk",
+              run = "cargo binstall --no-confirm --continue-on-failure wasm-bindgen-cli wasm-opt trunk",
             },
             {
               name = "build example",

@@ -119,11 +119,9 @@ impl NodeBuilder {
                     clone!((existing_child_option, child_block_populations) async move {
                         if let Some(child) = child_option.into() {
                             async_world().apply(move |world: &mut World| {
-                                if let Some(existing_child) = existing_child_option.take() {
-                                    if let Ok(entity) = world.get_entity_mut(existing_child) {
-                                        // need to call like this to avoid type ambiguity
-                                        EntityWorldMut::despawn(entity);  // removes from parent
-                                    }
+                                if let Some(existing_child) = existing_child_option.take() && let Ok(entity) = world.get_entity_mut(existing_child) {
+                                    // need to call like this to avoid type ambiguity
+                                    EntityWorldMut::despawn(entity);  // removes from parent
                                 }
                                 let child_entity = world.spawn_empty().id();
                                 if let Ok(mut parent) = world.get_entity_mut(parent) {
@@ -140,10 +138,8 @@ impl NodeBuilder {
                             }).await;
                         } else {
                             async_world().apply(move |world: &mut World| {
-                                if let Some(existing_child) = existing_child_option.take() {
-                                    if let Ok(entity) = world.get_entity_mut(existing_child) {
-                                        entity.despawn();
-                                    }
+                                if let Some(existing_child) = existing_child_option.take() && let Ok(entity) = world.get_entity_mut(existing_child) {
+                                    entity.despawn();
                                 }
                                 child_block_populations.lock().unwrap()[block] = 0;
                             })
@@ -271,10 +267,8 @@ impl NodeBuilder {
                             }
                             VecDiff::UpdateAt { index, value: node } => {
                                 async_world().apply(move |world: &mut World| {
-                                    if let Some(existing_child) = children_entities.lock_ref().get(index).copied() {
-                                        if let Ok(child) = world.get_entity_mut(existing_child) {
-                                            child.despawn();  // removes from parent
-                                        }
+                                    if let Some(existing_child) = children_entities.lock_ref().get(index).copied() && let Ok(child) = world.get_entity_mut(existing_child) {
+                                        child.despawn();  // removes from parent
                                     }
                                     let child_entity = world.spawn_empty().id();
                                     if let Ok(mut parent) = world.get_entity_mut(parent) {
@@ -296,11 +290,9 @@ impl NodeBuilder {
                                     children_lock.swap(old_index, new_index);
                                     // porting the swap implementation above
                                     fn move_from_to(parent: &mut EntityWorldMut, children_entities: &[Entity], old_index: usize, new_index: usize) {
-                                        if old_index != new_index {
-                                            if let Some(old_entity) = children_entities.get(old_index).copied() {
-                                                parent.remove_children(&[old_entity]);
-                                                parent.insert_children(new_index, &[old_entity]);
-                                            }
+                                        if old_index != new_index && let Some(old_entity) = children_entities.get(old_index).copied() {
+                                            parent.remove_children(&[old_entity]);
+                                            parent.insert_children(new_index, &[old_entity]);
                                         }
                                     }
                                     fn swap(parent: &mut EntityWorldMut, children_entities: &[Entity], a: usize, b: usize) {
@@ -377,13 +369,12 @@ impl NodeBuilder {
             for on_spawn in self.on_spawns {
                 on_spawn(world, id);
             }
-            if !self.task_wrappers.is_empty() {
-                if let Ok(mut entity) = world.get_entity_mut(id) {
-                    if let Some(task_holder) = entity.get_mut::<TaskHolder>() {
-                        for task_wrapper in self.task_wrappers {
-                            task_holder.hold(task_wrapper(id));
-                        }
-                    }
+            if !self.task_wrappers.is_empty()
+                && let Ok(mut entity) = world.get_entity_mut(id)
+                && let Some(task_holder) = entity.get_mut::<TaskHolder>()
+            {
+                for task_wrapper in self.task_wrappers {
+                    task_holder.hold(task_wrapper(id));
                 }
             }
         }

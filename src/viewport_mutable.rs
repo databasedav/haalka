@@ -187,34 +187,33 @@ impl SceneViewport<'_, '_> {
             x: viewport_width,
             y: viewport_height,
         }) = self.logical_rect.get(entity).as_ref().map(Rect::size)
+            && let Ok(&ScrollPosition { offset_x, offset_y }) = self.scroll_positions.get(entity)
         {
-            if let Ok(&ScrollPosition { offset_x, offset_y }) = self.scroll_positions.get(entity) {
-                let mut min = Vec2::MAX;
-                let mut max = Vec2::MIN;
-                for child in self
-                    .childrens
-                    .get(entity)
-                    .ok()
-                    .into_iter()
-                    .flat_map(|children| children.iter())
-                {
-                    if let Some(child_rect) = self.logical_rect.get(child) {
-                        min = min.min(child_rect.min);
-                        max = max.max(child_rect.max);
-                    }
+            let mut min = Vec2::MAX;
+            let mut max = Vec2::MIN;
+            for child in self
+                .childrens
+                .get(entity)
+                .ok()
+                .into_iter()
+                .flat_map(|children| children.iter())
+            {
+                if let Some(child_rect) = self.logical_rect.get(child) {
+                    min = min.min(child_rect.min);
+                    max = max.max(child_rect.max);
                 }
-                let scene = Scene {
-                    width: max.x - min.x,
-                    height: max.y - min.y,
-                };
-                let viewport = Viewport {
-                    offset_x,
-                    offset_y,
-                    width: viewport_width,
-                    height: viewport_height,
-                };
-                return Some((scene, viewport));
             }
+            let scene = Scene {
+                width: max.x - min.x,
+                height: max.y - min.y,
+            };
+            let viewport = Viewport {
+                offset_x,
+                offset_y,
+                width: viewport_width,
+                height: viewport_height,
+            };
+            return Some((scene, viewport));
         }
         None
     }
@@ -255,15 +254,11 @@ fn viewport_location_change_dispatcher(
         dispatch_viewport_location_change(entity, &scene_viewports, &mut commands, &mut checked_viewport_listeners);
     }
     for entity in changed_computed_nodes.iter() {
-        if let Ok(&ChildOf(parent)) = child_ofs.get(entity) {
-            if !checked_viewport_listeners.contains(&parent) && viewport_location_change_listeners.contains(parent) {
-                dispatch_viewport_location_change(
-                    parent,
-                    &scene_viewports,
-                    &mut commands,
-                    &mut checked_viewport_listeners,
-                );
-            }
+        if let Ok(&ChildOf(parent)) = child_ofs.get(entity)
+            && !checked_viewport_listeners.contains(&parent)
+            && viewport_location_change_listeners.contains(parent)
+        {
+            dispatch_viewport_location_change(parent, &scene_viewports, &mut commands, &mut checked_viewport_listeners);
         }
     }
 }

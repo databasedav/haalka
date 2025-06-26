@@ -123,16 +123,10 @@ impl TextInput {
                      mut last_text_query: Query<&mut LastSignalText>,
                      mut text_input_queues: Query<&mut TextInputQueue>,
                      buffers: Query<&TextInputBuffer>| {
-                        if let Ok(mut last_text) = last_text_query.get_mut(entity) {
-                            if last_text.0 != text {
-                                last_text.0 = text.clone();
-                                if let Ok(buffer) = buffers.get(entity) {
-                                    if buffer.get_text() != text {
-                                        if let Ok(mut queue) = text_input_queues.get_mut(entity) {
-                                            queue_set_text_actions(&mut queue, text);
-                                        }
-                                    }
-                                }
+                        if let Ok(mut last_text) = last_text_query.get_mut(entity) && last_text.0 != text {
+                            last_text.0 = text.clone();
+                            if let Ok(buffer) = buffers.get(entity) && buffer.get_text() != text && let Ok(mut queue) = text_input_queues.get_mut(entity) {
+                                queue_set_text_actions(&mut queue, text);
                             }
                         }
                     },
@@ -198,10 +192,8 @@ impl TextInput {
                 raw_el.on_signal_with_system(focus_signal, |In((entity, focus)), mut focused_option: ResMut<InputFocus>| {
                     if focus {
                         focused_option.0 = Some(entity);
-                    } else if let Some(focused) = focused_option.0 {
-                        if focused == entity {
-                            focused_option.0 = None;
-                        }
+                    } else if let Some(focused) = focused_option.0 && focused == entity {
+                        focused_option.0 = None;
                     }
                 })
             })
@@ -325,13 +317,11 @@ fn clear_selection_on_focus_change(
     mut previous_input_focus: Local<Option<Entity>>,
 ) {
     if *previous_input_focus != input_focus.0 {
-        if let Some(entity) = *previous_input_focus {
-            if let Ok(mut buffer) = buffers.get_mut(entity) {
-                buffer
-                    .editor
-                    .borrow_with(&mut text_input_pipeline.font_system)
-                    .set_selection(Selection::None);
-            }
+        if let Some(entity) = *previous_input_focus && let Ok(mut buffer) = buffers.get_mut(entity) {
+            buffer
+                .editor
+                .borrow_with(&mut text_input_pipeline.font_system)
+                .set_selection(Selection::None);
         }
         *previous_input_focus = input_focus.0;
     }

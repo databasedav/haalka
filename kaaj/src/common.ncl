@@ -12,6 +12,17 @@ in
 let CARGO_CACHE_VERSION = "2" in
 let SETUP_JUST_VERSION = "2" in
 let NICKEL_VERSION = "1.12.2" in
+let install_nickel = {
+  name = "install nickel",
+  run = m%"
+    OUT="$HOME/.local/bin/nickel"
+    mkdir -p "$(dirname "$OUT")"
+    curl -L "https://github.com/tweag/nickel/releases/download/%{ NICKEL_VERSION }/nickel-pkg-x86_64-linux" -o "$OUT"
+    chmod +x "$OUT"
+    echo "$(dirname "$OUT")" >> "$GITHUB_PATH"
+    nickel --version
+  "%
+} in
 {
   REPO = "https://github.com/databasedav/haalka",
   GITHUB_PAGES_DEPLOY_ACTION_VERSION = "4.7.3",
@@ -55,21 +66,12 @@ let NICKEL_VERSION = "1.12.2" in
     name = "install binstall",
     uses = "cargo-bins/cargo-binstall@main"
   },
+  install_nickel,
   assert_nickels_synced =
     {
       steps = [
         checkout,
-        {
-          name = "install nickel",
-          run = m%"
-            OUT="$HOME/.local/bin/nickel"
-            mkdir -p "$(dirname "$OUT")"
-            curl -L "https://github.com/tweag/nickel/releases/download/%{ NICKEL_VERSION }/nickel-pkg-x86_64-linux" -o "$OUT"
-            chmod +x "$OUT"
-            echo "$(dirname "$OUT")" >> "$GITHUB_PATH"
-            nickel --version
-          "%
-        },
+        install_nickel,
         just,
         {
           name = "assert nickels synced",

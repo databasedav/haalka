@@ -57,10 +57,10 @@ impl Plugin for FpsOverlayPlugin {
         static FPS: LazyLock<Mutable<f64>> = LazyLock::new(default);
 
         fn update_fps(diagnostic: Res<DiagnosticsStore>) {
-            if let Some(fps_diagnostic) = diagnostic.get(&FrameTimeDiagnosticsPlugin::FPS) {
-                if let Some(cur) = fps_diagnostic.smoothed() {
-                    FPS.set(cur);
-                }
+            if let Some(fps_diagnostic) = diagnostic.get(&FrameTimeDiagnosticsPlugin::FPS)
+                && let Some(cur) = fps_diagnostic.smoothed()
+            {
+                FPS.set(cur);
             }
         }
 
@@ -111,10 +111,10 @@ struct MarkDefaultUiCameraSet;
 
 #[allow(clippy::type_complexity)]
 fn mark_default_ui_camera(cameras: Query<Entity, Or<(With<Camera2d>, With<Camera3d>)>>, mut commands: Commands) {
-    if let Ok(entity) = cameras.single() {
-        if let Ok(mut entity) = commands.get_entity(entity) {
-            entity.try_insert(IsDefaultUiCamera);
-        }
+    if let Ok(entity) = cameras.single()
+        && let Ok(mut entity) = commands.get_entity(entity)
+    {
+        entity.try_insert(IsDefaultUiCamera);
     }
 }
 

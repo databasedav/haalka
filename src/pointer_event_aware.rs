@@ -198,20 +198,16 @@ pub trait PointerEventAware: GlobalEventAware {
                 }))
                 .on_event_with_system::<Pointer<Pressed>, _>(
                     move |In((entity, pointer_down)): In<(Entity, Pointer<Pressed>)>, world: &mut World| {
-                        if matches!(pointer_down.button, PointerButton::Primary) {
-                            if let Ok(mut entity) = world.get_entity_mut(entity) {
-                                entity.insert(Pressable);
-                            }
+                        if matches!(pointer_down.button, PointerButton::Primary) && let Ok(mut entity) = world.get_entity_mut(entity) {
+                            entity.insert(Pressable);
                         }
                     },
                 )
                 .apply(remove_system_holder_on_remove(system_holder))
         })
         .on_hovered_change_with_system(|In((entity, hovered)): In<(_, bool)>, world: &mut World| {
-            if !hovered {
-                if let Ok(ref mut entity) = world.get_entity_mut(entity) {
-                    EntityWorldMut::remove::<Pressable>(entity);
-                }
+            if !hovered && let Ok(ref mut entity) = world.get_entity_mut(entity) {
+                EntityWorldMut::remove::<Pressable>(entity);
             }
         })
     }
@@ -530,10 +526,10 @@ pub trait CursorOnHoverable: PointerEventAware {
                      cursor_overs: Query<&CursorOver>,
                      mut commands: Commands| {
                         let entity = event.target();
-                        if cursor_overs.contains(entity) {
-                            if let Ok(mut entity) = commands.get_entity(entity) {
-                                entity.try_insert(CursorOver);
-                            }
+                        if cursor_overs.contains(entity)
+                            && let Ok(mut entity) = commands.get_entity(entity)
+                        {
+                            entity.try_insert(CursorOver);
                         }
                     },
                 )
@@ -551,8 +547,8 @@ pub trait CursorOnHoverable: PointerEventAware {
                         if let Ok(mut entity) = commands.get_entity(entity) {
                             entity.remove::<CursorOverPropagationStopped>();
                         }
-                        if cursor_over.get(entity).is_ok() {
-                            if let Some(((hover_map, location), &ChildOf(parent))) = hover_map
+                        if cursor_over.get(entity).is_ok()
+                            && let Some(((hover_map, location), &ChildOf(parent))) = hover_map
                                 .get(&PointerId::Mouse)
                                 .zip(
                                     pointer_map
@@ -561,11 +557,9 @@ pub trait CursorOnHoverable: PointerEventAware {
                                         .and_then(|pointer| pointer.location.clone()),
                                 )
                                 .zip(child_ofs.get(entity).ok())
-                            {
-                                if let Some(hit) = hover_map.get(&entity).cloned() {
-                                    pointer_over.write(Pointer::new(PointerId::Mouse, location, parent, Over { hit }));
-                                }
-                            }
+                            && let Some(hit) = hover_map.get(&entity).cloned()
+                        {
+                            pointer_over.write(Pointer::new(PointerId::Mouse, location, parent, Over { hit }));
                         }
                     },
                 )

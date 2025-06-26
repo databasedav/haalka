@@ -115,7 +115,7 @@ fn text_labeled_element(label: &str, element: impl Element) -> impl Element {
     labeled_element(
         El::<Text>::new()
             .text_font(TextFont::from_font_size(FONT_SIZE))
-            .text(Text(format!("{}: ", label))),
+            .text(Text(format!("{label}: "))),
         element,
     )
 }
@@ -180,7 +180,7 @@ fn rate_element<T: Component>(rate: Mutable<f32>) -> impl Element {
         .item(
             El::<Text>::new()
                 .text_font(TextFont::from_font_size(FONT_SIZE))
-                .text_signal(rate.signal().map(|rate| Text(format!("{:.1}", rate)))),
+                .text_signal(rate.signal().map(|rate| Text(format!("{rate:.1}")))),
         )
         .item(incrde_button::<T>(-0.1))
 }
@@ -384,5 +384,5 @@ fn position_to_color(position: Vec3) -> ColorCategory {
             return ColorCategory::Green;
         }
     }
-    panic!("Invalid position: {:?}", position);
+    panic!("Invalid position: {position:?}");
 }

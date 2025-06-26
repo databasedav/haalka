@@ -740,7 +740,7 @@ pub(crate) fn observe<E: Event, B: Bundle, Marker>(
     world: &mut World,
     entity: Entity,
     observer: impl IntoObserverSystem<E, B, Marker>,
-) -> EntityWorldMut {
+) -> EntityWorldMut<'_> {
     world.spawn((Observer::new(observer).with_entity(entity), HaalkaObserver))
 }
 
@@ -820,7 +820,7 @@ pub trait RawElWrapper: Sized {
     /// Process the wrapped [`RawHaalkaEl`] directly.
     fn update_raw_el(mut self, updater: impl FnOnce(RawHaalkaEl) -> RawHaalkaEl) -> Self {
         let raw_el = mem::replace(self.raw_el_mut(), RawHaalkaEl::new_dummy());
-        mem::swap(self.raw_el_mut(), &mut updater(raw_el));
+        *self.raw_el_mut() = updater(raw_el);
         self
     }
 

@@ -65,11 +65,11 @@ fn input_button(symbol: &'static str) -> impl Element {
     let f = move || {
         if symbol == "=" {
             let mut output = OUTPUT.lock_mut();
-            if let Ok(result) = Context::<f64>::default().evaluate(&output) {
-                if let Some(result) = Decimal::from_f64((result * 100.).round() / 100.) {
-                    *output = result.normalize().to_string();
-                    return;
-                }
+            if let Ok(result) = Context::<f64>::default().evaluate(&output)
+                && let Some(result) = Decimal::from_f64((result * 100.).round() / 100.)
+            {
+                *output = result.normalize().to_string();
+                return;
             }
             ERROR.set_neq(true);
         } else {

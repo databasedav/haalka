@@ -340,10 +340,10 @@ fn tick(mut snake: ResMut<Snake>, direction: Res<DirectionResource>, mut command
                         commands.trigger(SpawnFood);
                     }
                     Cell::Empty => {
-                        if let Some((x, y)) = snake.0.pop_back() {
-                            if let Some(cell) = cells_lock.get(&(x, y)) {
-                                cell.set(Cell::Empty);
-                            }
+                        if let Some((x, y)) = snake.0.pop_back()
+                            && let Some(cell) = cells_lock.get(&(x, y))
+                        {
+                            cell.set(Cell::Empty);
                         }
                     }
                     _ => (),

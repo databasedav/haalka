@@ -525,7 +525,7 @@ impl Slider {
                     .item(
                         El::<Text>::new()
                             .text_font(TextFont::from_font_size(FONT_SIZE))
-                            .text_signal(value.signal().map(|value| Text(format!("{:.1}", value)))),
+                            .text_signal(value.signal().map(|value| Text(format!("{value:.1}")))),
                     )
                     .item(
                         Stack::<Node>::new()
@@ -572,7 +572,7 @@ impl Controllable for Slider {
 }
 
 fn options(n: usize) -> Vec<String> {
-    (1..=n).map(|i| format!("option {}", i)).collect()
+    (1..=n).map(|i| format!("option {i}")).collect()
 }
 
 fn only_one_up_flipper(
@@ -1006,10 +1006,8 @@ fn graphics_menu() -> Column<Node> {
                     SUB_MENU_HEIGHT - (l + 1) as f32 * MENU_ITEM_HEIGHT - BASE_PADDING * 2.,
                 ))
                 .on_hovered_change(|is_hovered| {
-                    if is_hovered {
-                        if let Some(hovered) = MENU_ITEM_HOVERED_OPTION.take() {
-                            hovered.set(false);
-                        }
+                    if is_hovered && let Some(hovered) = MENU_ITEM_HOVERED_OPTION.take() {
+                        hovered.set(false);
                     }
                 }),
         )

@@ -274,13 +274,11 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                     clone!((cell_data_option => self_cell_data_option) move |click| {
                         let mut consume = false;
                         if let Some(dragging_cell_data_option) = &*DRAGGING_OPTION.lock_ref() {
-                            if self_cell_data_option.lock_ref().is_none() {
-                                if let Some(dragging_cell_data) = &*dragging_cell_data_option.lock_ref() {
-                                    self_cell_data_option.set(Some(CellData {
-                                        index: Mutable::new(dragging_cell_data.index.get()),
-                                        count: Mutable::new(0),
-                                    }));
-                                }
+                            if self_cell_data_option.lock_ref().is_none() && let Some(dragging_cell_data) = &*dragging_cell_data_option.lock_ref() {
+                                self_cell_data_option.set(Some(CellData {
+                                    index: Mutable::new(dragging_cell_data.index.get()),
+                                    count: Mutable::new(0),
+                                }));
                             }
                             if let Some((dragging_cell_data, self_cell_data)) = dragging_cell_data_option.lock_ref().as_ref().zip(self_cell_data_option.lock_ref().as_ref()) {
                                 if self_cell_data.index.get() == dragging_cell_data.index.get() {
@@ -304,10 +302,8 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                 }
                             }
                         }
-                        if consume {
-                            if let Some(cell_data_option) = DRAGGING_OPTION.take() {
-                                cell_data_option.take();
-                            }
+                        if consume && let Some(cell_data_option) = DRAGGING_OPTION.take() {
+                            cell_data_option.take();
                         }
                     }),
                 );
