@@ -12,7 +12,7 @@ in
 let CARGO_CACHE_VERSION = "2" in
 let SETUP_JUST_VERSION = "2" in
 let NICKEL_VERSION = "1.12.2" in
-let install_nickel = {
+let install_nickel_ = {
   name = "install nickel",
   run = m%"
     OUT="$HOME/.local/bin/nickel"
@@ -66,12 +66,12 @@ let install_nickel = {
     name = "install binstall",
     uses = "cargo-bins/cargo-binstall@main"
   },
-  install_nickel,
+  install_nickel = install_nickel_,
   assert_nickels_synced =
     {
       steps = [
         checkout,
-        install_nickel,
+        install_nickel_,
         just,
         {
           name = "assert nickels synced",
