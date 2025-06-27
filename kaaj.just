@@ -11,7 +11,7 @@ doctest:
 test: doctest
 
 clippy *extras:
-  cargo +nightly clippy --all-features --all-targets --locked -- --deny warnings --no-deps {{ extras }}
+  cargo +nightly clippy --all-features --all-targets --locked --no-deps {{ extras }} -- --deny warnings
 
 # TODO: --all-features flag doesn't work because examples shenanigans
 check_all_features:
@@ -22,7 +22,7 @@ example name *extras:
 
 # TODO: use inline module to make this cleaner https://github.com/casey/just/issues/2442
 example_wasm name *extras:
-  RUSTFLAGS="--cfg=web_sys_unstable_apis" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-server-runner cargo run --target wasm32-unknown-unknown --example {{ name }} {{ extras }}
+  RUSTFLAGS='--cfg=web_sys_unstable_apis --cfg=getrandom_backend="wasm_js"' CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-server-runner cargo run --target wasm32-unknown-unknown --example {{ name }} {{ extras }}
 
 release *extras:
   cargo release --unpublished --sign-tag {{ extras }}
