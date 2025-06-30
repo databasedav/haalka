@@ -12,6 +12,23 @@ in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "
 
 While haalka is primarily targeted at UI and provides high level UI abstractions as such, its [core abstraction](https://docs.rs/haalka/latest/haalka/struct.RawHaalkaEl.html) can be used to manage signals-powered reactivity for any entity, not just [`bevy_ui` nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs).
 
+## assorted features
+
+- signals integration for all entities, components, and children
+    - constant time reactive updates for collections via futures-signals' `MutableVec` and `MutableBTreeMap`
+- simple high-level alignment semantics ported from MoonZoon (see align example below)
+- pointer event handling methods
+    - hovered change methods (including web-style `Enter` and `Leave` events)
+    - click and on-click-outside methods
+    - pressing methods, with throttle-ability
+- cursor-on-hover management
+- global event handling methods
+- mouse wheel scroll handling methods
+- signals-integrated text input, a thin layer on top of [bevy_ui_text_input](https://github.com/ickshonpe/bevy_ui_text_input)
+- viewport mutation handling methods
+- simple grid layout model ported from MoonZoon
+- macro rules for adding signal helper methods to custom element structs
+
 ## considerations
 
 - Reactive updates done by haalka are [**eventually consistent**](https://en.wikipedia.org/wiki/Eventual_consistency), that is, once some ECS world state has been updated, any downstream reactions should not be expected to run in the same frame. This is due to the indirection involved with using an async signals library, which dispatches Bevy commands after polling by the async runtime. The resulting "lag" should not be noticeable in most popular cases, e.g. reacting to hover/click state or synchronizing UI (one can run the examples to evaluate this themselves), but in cases where frame perfect responsiveness is critical, one should simply use Bevy-native systems directly.

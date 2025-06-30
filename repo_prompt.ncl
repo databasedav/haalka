@@ -35,7 +35,6 @@ let examples_responsive_menu = import "examples/responsive_menu.rs" as 'Text in
 let examples_scroll_grid = import "examples/scroll_grid.rs" as 'Text in
 let examples_scroll = import "examples/scroll.rs" as 'Text in
 let examples_snake = import "examples/snake.rs" as 'Text in
-let examples_test = import "examples/test.rs" as 'Text in
 let examples_utils = import "examples/utils.rs" as 'Text in
 let repo_structure = {
   "src/align.rs" = src_align,
@@ -75,7 +74,6 @@ let repo_structure = {
   "examples/scroll_grid.rs" = examples_scroll_grid,
   "examples/scroll.rs" = examples_scroll,
   "examples/snake.rs" = examples_snake,
-  "examples/test.rs" = examples_test,
   "examples/utils.rs" = examples_utils,
 } in
 let prompt = import "repo_prompt_input.md" as 'Text in

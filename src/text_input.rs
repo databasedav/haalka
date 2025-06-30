@@ -121,12 +121,15 @@ impl TextInput {
                     text_option_signal.map(|text_option| text_option.into().unwrap_or_default()),
                     |In((entity, text)): In<(Entity, String)>,
                      mut last_text_query: Query<&mut LastSignalText>,
-                     mut text_input_queues: Query<&mut TextInputQueue>,
-                     buffers: Query<&TextInputBuffer>| {
-                        if let Ok(mut last_text) = last_text_query.get_mut(entity) && last_text.0 != text {
-                            last_text.0 = text.clone();
-                            if let Ok(buffer) = buffers.get(entity) && buffer.get_text() != text && let Ok(mut queue) = text_input_queues.get_mut(entity) {
-                                queue_set_text_actions(&mut queue, text);
+                     mut text_input_queues: Query<&mut TextInputQueue>| {
+                        if let Ok(mut last_text) = last_text_query.get_mut(entity) {
+                            // Only queue an update if the incoming signal value is different
+                            // from the last value we set from a signal. This prevents redundant updates.
+                            if last_text.0 != text {
+                                last_text.0 = text.clone();
+                                if let Ok(mut queue) = text_input_queues.get_mut(entity) {
+                                    queue_set_text_actions(&mut queue, text);
+                                }
                             }
                         }
                     },
@@ -225,10 +228,13 @@ impl TextInput {
     /// Sync a [`Mutable`] with the text of this input.
     pub fn on_change_sync(self, string: Mutable<String>) -> Self {
         self.on_change_with_system(
-            move |In((entity, text)): In<(Entity, String)>, mut last_text_query: Query<&mut LastSignalText>| {
-                if let Ok(mut last_text) = last_text_query.get_mut(entity) {
-                    last_text.0 = text.clone();
-                    string.set_neq(text);
+            move |In((entity, text)): In<(Entity, String)>, last_text_query: Query<&LastSignalText>| {
+                if let Ok(last_text) = last_text_query.get(entity) {
+                    // This is the key: only update the mutable if the change
+                    // is NOT an echo of a value just set by a signal.
+                    if last_text.0 != text {
+                        string.set_neq(text);
+                    }
                 }
             },
         )

@@ -186,6 +186,7 @@ fn ui_root() -> impl Element {
     Stack::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
+        .cursor(CursorIcon::System(SystemCursorIcon::Default))
         .layer(
             Row::<Node>::new()
                 .align(Align::center())
@@ -203,6 +204,7 @@ fn restart_button() -> impl Element {
         .align(Align::center())
         .width(Val::Px(250.))
         .height(Val::Px(80.))
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
                 .signal()
@@ -274,6 +276,7 @@ fn text_button(text_: &str) -> impl Element + PointerEventAware {
     El::<Node>::new()
         .width(Val::Px(45.0))
         .align_content(Align::center())
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
                 .signal()

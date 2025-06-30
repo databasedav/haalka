@@ -8,7 +8,7 @@ use bevy_input_focus::InputFocus;
 use bevy_ui_text_input::TextInputMode;
 use utils::*;
 
-use std::{ops::Not, time::Duration};
+use std::{cmp::Ordering, ops::Not, time::Duration};
 
 use bevy::prelude::*;
 use haalka::{
@@ -255,51 +255,158 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
 #[derive(Clone, Copy, Event)]
 struct MaybeChanged(usize);
 
-// O(log n)
-fn sort_one(maybe_changed: Trigger<MaybeChanged>) {
-    let MaybeChanged(i) = *maybe_changed;
-    let mut pairs = PAIRS.lock_mut();
-    let Some(RowData { key, value }) = pairs.get(i) else {
-        return;
-    };
-    match SORT_BY.get() {
-        // TODO: dry
-        KeyValue::Key => {
-            let keys = pairs
-                .iter()
-                .enumerate()
-                .filter(|&(j, value)| i != j && value.key.string.lock_ref().is_empty().not())
-                .map(|(_, RowData { key, .. })| key.string.lock_ref())
-                .collect::<Vec<_>>();
-            let key_lock = key.string.lock_ref();
-            if key_lock.is_empty().not() {
-                let (Ok(sorted_i) | Err(sorted_i)) = keys.binary_search_by_key(&key_lock.as_str(), |key| key.as_str());
-                if i != sorted_i && (keys.len() <= sorted_i || key_lock.as_str() != keys[sorted_i].as_str()) {
-                    drop((keys, key_lock));
-                    let pair = pairs.remove(i);
-                    pairs.insert_cloned(sorted_i, pair);
-                }
-            }
-        }
-        KeyValue::Value => {
-            let values = pairs
-                .iter()
-                .enumerate()
-                .filter(|&(j, value)| i != j && value.value.string.lock_ref().is_empty().not())
-                .map(|(_, RowData { value, .. })| value.string.lock_ref())
-                .collect::<Vec<_>>();
-            let value_lock = value.string.lock_ref();
-            if value_lock.is_empty().not() {
-                let (Ok(sorted_i) | Err(sorted_i)) =
-                    values.binary_search_by_key(&value_lock.as_str(), |value| value.as_str());
-                if i != sorted_i && (values.len() <= sorted_i || value_lock.as_str() != values[sorted_i].as_str()) {
-                    drop((values, value_lock));
-                    let pair = pairs.remove(i);
-                    pairs.insert_cloned(sorted_i, pair);
-                }
+/// Determines the correct, stable-sorted insertion index for a non-empty string.
+fn get_non_empty_target_index(
+    pairs: &MutableVecLockMut<RowData>,
+    current_index: usize,
+    item_string: &str,
+    get_string: &impl Fn(&RowData) -> String,
+) -> usize {
+    let mut target_index = 0;
+    for (j, p) in pairs.iter().enumerate() {
+        if current_index == j { continue; }
+
+        let other_string = get_string(p);
+        if !other_string.is_empty() {
+            // Count how many non-empty items are strictly smaller.
+            // This finds the first valid slot for `item_string`.
+            if other_string < item_string.to_string() {
+                target_index += 1;
             }
         }
     }
+    target_index
+}
+
+/// Determines if an item is already within its correct sorted group.
+/// For non-empty items, this means it's correctly sorted.
+/// For empty items, this means it's in the block of other empty items.
+fn is_in_correct_group(
+    pairs: &MutableVecLockMut<RowData>,
+    current_index: usize,
+    get_string: &impl Fn(&RowData) -> String,
+) -> bool {
+    let item_string = get_string(&pairs[current_index]);
+    let item_is_empty = item_string.is_empty();
+
+    // Check the item before it
+    if current_index > 0 {
+        let prev_string = get_string(&pairs[current_index - 1]);
+        let prev_is_empty = prev_string.is_empty();
+        match (item_is_empty, prev_is_empty) {
+            (true, false) => {}, // OK: empty after non-empty
+            (false, true) => return false, // WRONG: non-empty after empty
+            (false, false) if item_string < prev_string => return false, // WRONG: unsorted
+            _ => {}
+        }
+    }
+
+    // Check the item after it
+    if current_index < pairs.len() - 1 {
+        let next_string = get_string(&pairs[current_index + 1]);
+        let next_is_empty = next_string.is_empty();
+        match (item_is_empty, next_is_empty) {
+            (false, true) => {}, // OK: non-empty before empty
+            (true, false) => return false, // WRONG: empty before non-empty
+            (false, false) if item_string > next_string => return false, // WRONG: unsorted
+            _ => {}
+        }
+    }
+
+    // If all neighbors are correctly ordered, it's in the right group.
+    true
+}
+
+
+/// Checks if an item at a given index is correctly sorted relative to its direct neighbors.
+/// This is a fast-path check to prevent unnecessary moves and stop stability loops.
+fn is_sorted_at(
+    pairs: &MutableVecLockMut<RowData>,
+    index: usize,
+    get_string: &impl Fn(&RowData) -> String,
+) -> bool {
+    let item_string = get_string(&pairs[index]);
+
+    // Check against the previous item
+    if index > 0 {
+        let prev_string = get_string(&pairs[index - 1]);
+        // The comparison logic: `item` should be >= `prev`.
+        let ordering_correct = match (item_string.is_empty(), prev_string.is_empty()) {
+            (true, false) => true,       // Empty after non-empty is correct.
+            (false, true) => false,      // Non-empty after empty is INCORRECT.
+            _ => item_string >= prev_string, // Otherwise, check lexicographically.
+        };
+        if !ordering_correct {
+            return false;
+        }
+    }
+
+    // Check against the next item
+    if index < pairs.len() - 1 {
+        let next_string = get_string(&pairs[index + 1]);
+        // The comparison logic: `item` should be <= `next`.
+        let ordering_correct = match (item_string.is_empty(), next_string.is_empty()) {
+            (true, false) => false,     // Empty before non-empty is INCORRECT.
+            (false, true) => true,      // Non-empty before empty is correct.
+            _ => item_string <= next_string,
+        };
+        if !ordering_correct {
+            return false;
+        }
+    }
+
+    // If it's sorted relative to both neighbors (or is at an edge), it's considered stable.
+    true
+}
+
+
+fn sort_one(maybe_changed: Trigger<MaybeChanged>) {
+    let MaybeChanged(i) = *maybe_changed;
+    let mut pairs = PAIRS.lock_mut();
+
+    if i >= pairs.len() {
+        return;
+    }
+
+    let get_string = |p: &RowData| -> String {
+        match SORT_BY.get() {
+            KeyValue::Key => p.key.string.get_cloned(),
+            KeyValue::Value => p.value.string.get_cloned(),
+        }
+    };
+
+    // --- STAGE 1: Fast-path stability check ---
+    // If the item is already in a sorted position relative to its neighbors,
+    // do nothing. This completely solves the swapping loop.
+    if is_sorted_at(&pairs, i, &get_string) {
+        return;
+    }
+
+    // --- STAGE 2: The item is out of order, so we must find its true place and move it. ---
+
+    // Temporarily remove the item. This simplifies the search.
+    let pair_to_sort = pairs.remove(i);
+    let item_string = get_string(&pair_to_sort);
+
+    // Find the correct insertion index in the remaining (n-1) list.
+    let mut insertion_index = 0;
+    for other_p in pairs.iter() {
+        let other_string = get_string(other_p);
+
+        // Does `other` come before `item`?
+        let other_comes_first = match (item_string.is_empty(), other_string.is_empty()) {
+            (true, false) => true, // `other` (non-empty) comes before `item` (empty).
+            (false, true) => false, // `item` (non-empty) comes before `other` (empty).
+            _ => other_string < item_string,
+        };
+
+        if other_comes_first {
+            insertion_index += 1;
+        }
+    }
+
+    // Insert the item back into the list at its correct, stable-sorted position.
+    pairs.insert_cloned(insertion_index, pair_to_sort);
 }
 
 static SCROLL_POSITION: LazyLock<Mutable<f32>> = LazyLock::new(default);
