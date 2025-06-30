@@ -138,11 +138,11 @@ pub trait ViewportMutable: RawElWrapper {
                     x_signal,
                     |In((entity, x)): In<(Entity, f32)>,
                      mut query: Query<(&mut ScrollPosition, &mut LastSignalScrollPosition)>| {
-                        if let Ok((mut scroll_pos, mut last_signal_pos)) = query.get_mut(entity) {
-                            if last_signal_pos.x.to_bits() != x.to_bits() {
-                                last_signal_pos.x = x;
-                                scroll_pos.offset_x = x;
-                            }
+                        if let Ok((mut scroll_pos, mut last_signal_pos)) = query.get_mut(entity)
+                            && last_signal_pos.x.to_bits() != x.to_bits()
+                        {
+                            last_signal_pos.x = x;
+                            scroll_pos.offset_x = x;
                         }
                     },
                 )
@@ -164,11 +164,11 @@ pub trait ViewportMutable: RawElWrapper {
                     y_signal,
                     |In((entity, y)): In<(Entity, f32)>,
                      mut query: Query<(&mut ScrollPosition, &mut LastSignalScrollPosition)>| {
-                        if let Ok((mut scroll_pos, mut last_signal_pos)) = query.get_mut(entity) {
-                            if last_signal_pos.y.to_bits() != y.to_bits() {
-                                last_signal_pos.y = y;
-                                scroll_pos.offset_y = y;
-                            }
+                        if let Ok((mut scroll_pos, mut last_signal_pos)) = query.get_mut(entity)
+                            && last_signal_pos.y.to_bits() != y.to_bits()
+                        {
+                            last_signal_pos.y = y;
+                            scroll_pos.offset_y = y;
                         }
                     },
                 )
@@ -182,10 +182,10 @@ pub trait ViewportMutable: RawElWrapper {
         self.on_viewport_location_change_with_system(
             move |In((entity, (_, viewport))): In<(Entity, (Scene, Viewport))>,
                   last_signal_positions: Query<&LastSignalScrollPosition>| {
-                if let Ok(last_signal_pos) = last_signal_positions.get(entity) {
-                    if last_signal_pos.x.to_bits() != viewport.offset_x.to_bits() {
-                        viewport_x.set_neq(viewport.offset_x);
-                    }
+                if let Ok(last_signal_pos) = last_signal_positions.get(entity)
+                    && last_signal_pos.x.to_bits() != viewport.offset_x.to_bits()
+                {
+                    viewport_x.set_neq(viewport.offset_x);
                 }
             },
         )
@@ -196,10 +196,10 @@ pub trait ViewportMutable: RawElWrapper {
         self.on_viewport_location_change_with_system(
             move |In((entity, (_, viewport))): In<(Entity, (Scene, Viewport))>,
                   last_signal_positions: Query<&LastSignalScrollPosition>| {
-                if let Ok(last_signal_pos) = last_signal_positions.get(entity) {
-                    if last_signal_pos.y.to_bits() != viewport.offset_y.to_bits() {
-                        viewport_y.set_neq(viewport.offset_y);
-                    }
+                if let Ok(last_signal_pos) = last_signal_positions.get(entity)
+                    && last_signal_pos.y.to_bits() != viewport.offset_y.to_bits()
+                {
+                    viewport_y.set_neq(viewport.offset_y);
                 }
             },
         )

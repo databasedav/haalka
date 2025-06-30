@@ -8,7 +8,7 @@ use bevy_input_focus::InputFocus;
 use bevy_ui_text_input::TextInputMode;
 use utils::*;
 
-use std::{cmp::Ordering, ops::Not, time::Duration};
+use std::time::Duration;
 
 use bevy::prelude::*;
 use haalka::{
@@ -30,11 +30,7 @@ fn main() {
         )
         .add_systems(
             Update,
-            (
-                tabber,
-                escaper,
-                focus_scroller.run_if(resource_changed::<InputFocus>),
-            ),
+            (tabber, escaper, focus_scroller.run_if(resource_changed::<InputFocus>)),
         )
         .add_observer(sort_one)
         .run();
@@ -146,11 +142,13 @@ fn text_input(
         .with_node(|mut node| node.overflow = Overflow::clip())
         .cursor(CursorIcon::System(SystemCursorIcon::Text))
         .on_click(clone!((focus) move || focus.set_neq(true)))
-        .on_click_outside_with_system(|In((entity, _)), mut input_focus: ResMut<InputFocus>, children: Query<&Children>| {
-            if input_focus.0 == Some(children.get(entity).unwrap().iter().next().unwrap()) {
-                input_focus.0 = None;
-            }
-        })
+        .on_click_outside_with_system(
+            |In((entity, _)), mut input_focus: ResMut<InputFocus>, children: Query<&Children>| {
+                if input_focus.0 == Some(children.get(entity).unwrap().iter().next().unwrap()) {
+                    input_focus.0 = None;
+                }
+            },
+        )
         .child(
             TextInput::new()
                 .align(Align::new().center_y())
@@ -173,7 +171,7 @@ fn text_input(
                     }),
                 )
                 .text_signal(string.signal_cloned())
-                .on_change_sync(string)
+                .on_change_sync(string),
         )
 }
 
@@ -546,7 +544,10 @@ fn focus_scroller(
     logical_rect: LogicalRect,
 ) {
     if let Some(focused_text_input) = focused_text_input_option.0
-        && let Some(text_input_rect) = child_ofs.get(focused_text_input).ok().and_then(|child_of| logical_rect.get(child_of.parent()))
+        && let Some(text_input_rect) = child_ofs
+            .get(focused_text_input)
+            .ok()
+            .and_then(|child_of| logical_rect.get(child_of.parent()))
     {
         for ancestor in child_ofs.iter_ancestors(focused_text_input) {
             if mutable_viewports.contains(ancestor) {
