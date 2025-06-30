@@ -67,6 +67,14 @@ pub enum Axis {
     Both,
 }
 
+/// Sentinel component to store the last scroll position set by a signal.
+/// This is used to break feedback loops in two-way bindings.
+#[derive(Component, Default, Debug)]
+struct LastSignalScrollPosition {
+    x: f32,
+    y: f32,
+}
+
 /// Enables the management of a limited visible window (viewport) onto the body of an element.
 /// CRITICALLY NOTE that methods expecting viewport mutability will not function without calling
 /// [`.mutable_viewport(...)`](ViewportMutable::mutable_viewport).
@@ -124,9 +132,20 @@ pub trait ViewportMutable: RawElWrapper {
     ) -> Self {
         if let Some(x_signal) = x_signal_option.into() {
             self = self.update_raw_el(|raw_el| {
-                raw_el.on_signal_with_component::<_, ScrollPosition>(x_signal, |mut scroll_position, x| {
-                    scroll_position.offset_x = x;
-                })
+                raw_el
+                    .insert(LastSignalScrollPosition::default())
+                    .on_signal_with_system(
+                    x_signal,
+                    |In((entity, x)): In<(Entity, f32)>,
+                     mut query: Query<(&mut ScrollPosition, &mut LastSignalScrollPosition)>| {
+                        if let Ok((mut scroll_pos, mut last_signal_pos)) = query.get_mut(entity) {
+                            if last_signal_pos.x.to_bits() != x.to_bits() {
+                                last_signal_pos.x = x;
+                                scroll_pos.offset_x = x;
+                            }
+                        }
+                    },
+                )
             });
         }
         self
@@ -139,9 +158,20 @@ pub trait ViewportMutable: RawElWrapper {
     ) -> Self {
         if let Some(y_signal) = y_signal_option.into() {
             self = self.update_raw_el(|raw_el| {
-                raw_el.on_signal_with_component::<_, ScrollPosition>(y_signal, |mut scroll_position, y| {
-                    scroll_position.offset_y = y;
-                })
+                raw_el
+                    .insert(LastSignalScrollPosition::default())
+                    .on_signal_with_system(
+                    y_signal,
+                    |In((entity, y)): In<(Entity, f32)>,
+                     mut query: Query<(&mut ScrollPosition, &mut LastSignalScrollPosition)>| {
+                        if let Ok((mut scroll_pos, mut last_signal_pos)) = query.get_mut(entity) {
+                            if last_signal_pos.y.to_bits() != y.to_bits() {
+                                last_signal_pos.y = y;
+                                scroll_pos.offset_y = y;
+                            }
+                        }
+                    },
+                )
             });
         }
         self
@@ -149,12 +179,30 @@ pub trait ViewportMutable: RawElWrapper {
 
     /// Sync a [`Mutable<f32>`] with this element's viewport's x offset.
     fn viewport_x_sync(self, viewport_x: Mutable<f32>) -> Self {
-        self.on_viewport_location_change(move |_, viewport| viewport_x.set_neq(viewport.offset_x))
+        self.on_viewport_location_change_with_system(
+            move |In((entity, (_, viewport))): In<(Entity, (Scene, Viewport))>,
+                  last_signal_positions: Query<&LastSignalScrollPosition>| {
+                if let Ok(last_signal_pos) = last_signal_positions.get(entity) {
+                    if last_signal_pos.x.to_bits() != viewport.offset_x.to_bits() {
+                        viewport_x.set_neq(viewport.offset_x);
+                    }
+                }
+            },
+        )
     }
 
     /// Sync a [`Mutable<f32>`] with this element's viewport's y offset.
     fn viewport_y_sync(self, viewport_y: Mutable<f32>) -> Self {
-        self.on_viewport_location_change(move |_, viewport| viewport_y.set_neq(viewport.offset_y))
+        self.on_viewport_location_change_with_system(
+            move |In((entity, (_, viewport))): In<(Entity, (Scene, Viewport))>,
+                  last_signal_positions: Query<&LastSignalScrollPosition>| {
+                if let Ok(last_signal_pos) = last_signal_positions.get(entity) {
+                    if last_signal_pos.y.to_bits() != viewport.offset_y.to_bits() {
+                        viewport_y.set_neq(viewport.offset_y);
+                    }
+                }
+            },
+        )
     }
 }
 

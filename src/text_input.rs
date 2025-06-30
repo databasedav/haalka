@@ -123,7 +123,7 @@ impl TextInput {
                      mut last_text_query: Query<&mut LastSignalText>,
                      mut text_input_queues: Query<&mut TextInputQueue>| {
                         if let Ok(mut last_text) = last_text_query.get_mut(entity) {
-                            // Only queue an update if the incoming signal value is different
+                            // only queue an update if the incoming signal value is different
                             // from the last value we set from a signal. This prevents redundant updates.
                             if last_text.0 != text {
                                 last_text.0 = text.clone();
@@ -230,8 +230,7 @@ impl TextInput {
         self.on_change_with_system(
             move |In((entity, text)): In<(Entity, String)>, last_text_query: Query<&LastSignalText>| {
                 if let Ok(last_text) = last_text_query.get(entity) {
-                    // This is the key: only update the mutable if the change
-                    // is NOT an echo of a value just set by a signal.
+                    // only update the mutable if the change is NOT an echo of a value just set by a signal.
                     if last_text.0 != text {
                         string.set_neq(text);
                     }

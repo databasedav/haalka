@@ -33,7 +33,7 @@ fn main() {
             (
                 tabber,
                 escaper,
-                focus_scroller.run_if(resource_changed_or_removed::<InputFocus>),
+                focus_scroller.run_if(resource_changed::<InputFocus>),
             ),
         )
         .add_observer(sort_one)
@@ -144,6 +144,13 @@ fn text_input(
                 .map(BackgroundColor),
         )
         .with_node(|mut node| node.overflow = Overflow::clip())
+        .cursor(CursorIcon::System(SystemCursorIcon::Text))
+        .on_click(clone!((focus) move || focus.set_neq(true)))
+        .on_click_outside_with_system(|In((entity, _)), mut input_focus: ResMut<InputFocus>, children: Query<&Children>| {
+            if input_focus.0 == Some(children.get(entity).unwrap().iter().next().unwrap()) {
+                input_focus.0 = None;
+            }
+        })
         .child(
             TextInput::new()
                 .align(Align::new().center_y())
@@ -155,7 +162,6 @@ fn text_input(
                     // TODO: https://github.com/ickshonpe/bevy_ui_text_input/issues/10
                     // node.justification = JustifyText::Center;
                 })
-                .cursor(CursorIcon::System(SystemCursorIcon::Text))
                 .text_color_signal(focus.signal().map_bool(|| Color::BLACK, || Color::WHITE).map(TextColor))
                 .focus_signal(focus.signal())
                 .on_focused_change_with_system(
@@ -168,11 +174,6 @@ fn text_input(
                 )
                 .text_signal(string.signal_cloned())
                 .on_change_sync(string)
-                .on_click_outside_with_system(|In((entity, _)), mut input_focus: ResMut<InputFocus>| {
-                    if input_focus.0 == Some(entity) {
-                        input_focus.0 = None;
-                    }
-                }),
         )
 }
 
@@ -255,76 +256,9 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
 #[derive(Clone, Copy, Event)]
 struct MaybeChanged(usize);
 
-/// Determines the correct, stable-sorted insertion index for a non-empty string.
-fn get_non_empty_target_index(
-    pairs: &MutableVecLockMut<RowData>,
-    current_index: usize,
-    item_string: &str,
-    get_string: &impl Fn(&RowData) -> String,
-) -> usize {
-    let mut target_index = 0;
-    for (j, p) in pairs.iter().enumerate() {
-        if current_index == j { continue; }
-
-        let other_string = get_string(p);
-        if !other_string.is_empty() {
-            // Count how many non-empty items are strictly smaller.
-            // This finds the first valid slot for `item_string`.
-            if other_string < item_string.to_string() {
-                target_index += 1;
-            }
-        }
-    }
-    target_index
-}
-
-/// Determines if an item is already within its correct sorted group.
-/// For non-empty items, this means it's correctly sorted.
-/// For empty items, this means it's in the block of other empty items.
-fn is_in_correct_group(
-    pairs: &MutableVecLockMut<RowData>,
-    current_index: usize,
-    get_string: &impl Fn(&RowData) -> String,
-) -> bool {
-    let item_string = get_string(&pairs[current_index]);
-    let item_is_empty = item_string.is_empty();
-
-    // Check the item before it
-    if current_index > 0 {
-        let prev_string = get_string(&pairs[current_index - 1]);
-        let prev_is_empty = prev_string.is_empty();
-        match (item_is_empty, prev_is_empty) {
-            (true, false) => {}, // OK: empty after non-empty
-            (false, true) => return false, // WRONG: non-empty after empty
-            (false, false) if item_string < prev_string => return false, // WRONG: unsorted
-            _ => {}
-        }
-    }
-
-    // Check the item after it
-    if current_index < pairs.len() - 1 {
-        let next_string = get_string(&pairs[current_index + 1]);
-        let next_is_empty = next_string.is_empty();
-        match (item_is_empty, next_is_empty) {
-            (false, true) => {}, // OK: non-empty before empty
-            (true, false) => return false, // WRONG: empty before non-empty
-            (false, false) if item_string > next_string => return false, // WRONG: unsorted
-            _ => {}
-        }
-    }
-
-    // If all neighbors are correctly ordered, it's in the right group.
-    true
-}
-
-
 /// Checks if an item at a given index is correctly sorted relative to its direct neighbors.
 /// This is a fast-path check to prevent unnecessary moves and stop stability loops.
-fn is_sorted_at(
-    pairs: &MutableVecLockMut<RowData>,
-    index: usize,
-    get_string: &impl Fn(&RowData) -> String,
-) -> bool {
+fn is_sorted_at(pairs: &MutableVecLockMut<RowData>, index: usize, get_string: &impl Fn(&RowData) -> String) -> bool {
     let item_string = get_string(&pairs[index]);
 
     // Check against the previous item
@@ -332,8 +266,8 @@ fn is_sorted_at(
         let prev_string = get_string(&pairs[index - 1]);
         // The comparison logic: `item` should be >= `prev`.
         let ordering_correct = match (item_string.is_empty(), prev_string.is_empty()) {
-            (true, false) => true,       // Empty after non-empty is correct.
-            (false, true) => false,      // Non-empty after empty is INCORRECT.
+            (true, false) => true,           // Empty after non-empty is correct.
+            (false, true) => false,          // Non-empty after empty is INCORRECT.
             _ => item_string >= prev_string, // Otherwise, check lexicographically.
         };
         if !ordering_correct {
@@ -346,8 +280,8 @@ fn is_sorted_at(
         let next_string = get_string(&pairs[index + 1]);
         // The comparison logic: `item` should be <= `next`.
         let ordering_correct = match (item_string.is_empty(), next_string.is_empty()) {
-            (true, false) => false,     // Empty before non-empty is INCORRECT.
-            (false, true) => true,      // Non-empty before empty is correct.
+            (true, false) => false, // Empty before non-empty is INCORRECT.
+            (false, true) => true,  // Non-empty before empty is correct.
             _ => item_string <= next_string,
         };
         if !ordering_correct {
@@ -358,7 +292,6 @@ fn is_sorted_at(
     // If it's sorted relative to both neighbors (or is at an edge), it's considered stable.
     true
 }
-
 
 fn sort_one(maybe_changed: Trigger<MaybeChanged>) {
     let MaybeChanged(i) = *maybe_changed;
@@ -395,7 +328,7 @@ fn sort_one(maybe_changed: Trigger<MaybeChanged>) {
 
         // Does `other` come before `item`?
         let other_comes_first = match (item_string.is_empty(), other_string.is_empty()) {
-            (true, false) => true, // `other` (non-empty) comes before `item` (empty).
+            (true, false) => true,  // `other` (non-empty) comes before `item` (empty).
             (false, true) => false, // `item` (non-empty) comes before `other` (empty).
             _ => other_string < item_string,
         };
@@ -613,7 +546,7 @@ fn focus_scroller(
     logical_rect: LogicalRect,
 ) {
     if let Some(focused_text_input) = focused_text_input_option.0
-        && let Some(text_input_rect) = logical_rect.get(focused_text_input)
+        && let Some(text_input_rect) = child_ofs.get(focused_text_input).ok().and_then(|child_of| logical_rect.get(child_of.parent()))
     {
         for ancestor in child_ofs.iter_ancestors(focused_text_input) {
             if mutable_viewports.contains(ancestor) {
@@ -621,10 +554,12 @@ fn focus_scroller(
                     let d = text_input_rect.min.y - viewport_rect.min.y;
                     if d < 0. {
                         SCROLL_POSITION.update(|sp| sp + d);
+                        return;
                     }
                     let d = text_input_rect.max.y - viewport_rect.max.y;
                     if d > 0. {
                         SCROLL_POSITION.update(|sp| sp + d);
+                        return;
                     }
                 }
                 break;
