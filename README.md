@@ -15,12 +15,12 @@ While haalka is primarily targeted at UI and provides high level UI abstractions
 ## assorted features
 
 - signals integration for all entities, components, and children
-    - constant time reactive updates for collections via futures-signals' `MutableVec` and `MutableBTreeMap`
-- simple high-level alignment semantics ported from MoonZoon (see align example below)
+    - constant time reactive updates for collections via futures-signals' [`MutableVec`](https://docs.rs/futures-signals/latest/futures_signals/signal_vec/struct.MutableVec.html) and [`MutableBTreeMap`](https://docs.rs/futures-signals/latest/futures_signals/signal_map/struct.MutableBTreeMap.html)
+- simple high-level alignment semantics ported from MoonZoon (see [align example](https://databasedav.github.io/haalka/examples/webgl2/align/) below)
 - pointer event handling methods
-    - hovered change methods (including web-style `Enter` and `Leave` events)
-    - click and on-click-outside methods
-    - pressing methods, with throttle-ability
+    - hovered change methods (including web-style [`Enter`](https://docs.rs/haalka/latest/haalka/pointer_event_aware/struct.Enter.html) and [`Leave`](https://docs.rs/haalka/latest/haalka/pointer_event_aware/struct.Leave.html) events)
+    - on click and on-click-outside methods
+    - on pressing methods, with throttle-ability
 - cursor-on-hover management
 - global event handling methods
 - mouse wheel scroll handling methods

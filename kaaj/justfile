@@ -2,7 +2,7 @@ format *extras:
   cargo +nightly fmt {{ extras }}
 
 doc *extras:
-  RUSTFLAGS="--allow mismatched_lifetime_syntaxes" cargo +nightly doc --all-features --no-deps -Zunstable-options -Zrustdoc-scrape-examples --locked {{ extras }}
+  cargo +nightly doc --all-features --no-deps -Zunstable-options -Zrustdoc-scrape-examples --locked {{ extras }}
 
 doctest:
   cargo test --doc --all-features --locked
@@ -11,7 +11,7 @@ doctest:
 test: doctest
 
 clippy *extras:
-  RUSTFLAGS="--allow mismatched_lifetime_syntaxes" cargo +nightly clippy --all-features --all-targets --locked --no-deps {{ extras }} -- --deny warnings
+  cargo +nightly clippy --all-features --all-targets --locked --no-deps {{ extras }} -- --deny warnings
 
 # TODO: --all-features flag doesn't work because examples shenanigans
 check_all_features:

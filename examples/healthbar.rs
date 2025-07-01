@@ -206,6 +206,7 @@ fn respawn_button() -> impl Element {
         .align(Align::center())
         .width(Val::Px(250.))
         .height(Val::Px(80.))
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
                 .signal()
