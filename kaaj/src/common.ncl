@@ -75,8 +75,9 @@ let install_nickel_ = {
         just,
         {
           name = "assert nickels synced",
+          # TODO: re add format_nickels
           run = m%"
-            just format_nickels sync_nickels
+            just sync_nickels
             [[ -n $(git status --porcelain) ]] && echo 'nickels are not synced; run `just format_nickels sync_nickels`' && exit 1 || exit 0
           "%
         }

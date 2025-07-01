@@ -28,7 +28,7 @@ fun build_wasm_webgpu_features =>
             bevy_dependencies,
             cached_target_populate,
             just,
-            install_nickel,  
+            install_nickel,
             binstall,
             {
               name = "install build dependencies",
