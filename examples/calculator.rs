@@ -136,7 +136,7 @@ fn ui_root() -> impl Element {
         .update_raw_el(|raw_el| raw_el.hold_tasks([error_clearer]))
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .cursor(CursorIcon::System(SystemCursorIcon::Default))
+        .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(
             Column::<Node>::new()

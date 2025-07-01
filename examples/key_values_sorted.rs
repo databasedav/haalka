@@ -28,10 +28,7 @@ fn main() {
                 camera,
             ),
         )
-        .add_systems(
-            Update,
-            (tabber, escaper, focus_scroller.run_if(resource_changed::<InputFocus>)),
-        )
+        .add_systems(Update, (tabber, escaper))
         .add_observer(sort_one)
         .run();
 }
@@ -169,6 +166,39 @@ fn text_input(
                         }
                         focus.set_neq(is_focused);
                     }),
+                )
+                // on focus change, check if the focused element is in view, if not, scroll to it
+                .on_focused_change_with_system(
+                    |In((entity, is_focused)),
+                     child_ofs: Query<&ChildOf>,
+                     mutable_viewports: Query<&MutableViewport>,
+                     logical_rect: LogicalRect| {
+                        if is_focused {
+                            if let Some(text_input_rect) = child_ofs
+                                .get(entity)
+                                .ok()
+                                .and_then(|child_of| logical_rect.get(child_of.parent()))
+                            {
+                                for ancestor in child_ofs.iter_ancestors(entity) {
+                                    if mutable_viewports.contains(ancestor) {
+                                        if let Some(viewport_rect) = logical_rect.get(ancestor) {
+                                            let d = text_input_rect.min.y - viewport_rect.min.y;
+                                            if d < 0. {
+                                                SCROLL_POSITION.update(|sp| sp + d);
+                                                return;
+                                            }
+                                            let d = text_input_rect.max.y - viewport_rect.max.y;
+                                            if d > 0. {
+                                                SCROLL_POSITION.update(|sp| sp + d);
+                                                return;
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    },
                 )
                 .text_signal(string.signal_cloned())
                 .on_change_sync(string),
@@ -417,7 +447,7 @@ fn ui_root() -> impl Element {
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
-        .cursor(CursorIcon::System(SystemCursorIcon::Default))
+        .cursor(CursorIcon::default())
         .child(
             Row::<Node>::new()
                 .height(Val::Percent(100.))
@@ -533,39 +563,6 @@ fn tabber(keys: Res<ButtonInput<KeyCode>>) {
 fn escaper(keys: Res<ButtonInput<KeyCode>>) {
     if keys.just_pressed(KeyCode::Escape) {
         clear_focus();
-    }
-}
-
-// on focus change, check if the focused element is in view, if not, scroll to it
-fn focus_scroller(
-    focused_text_input_option: Res<InputFocus>,
-    child_ofs: Query<&ChildOf>,
-    mutable_viewports: Query<&MutableViewport>,
-    logical_rect: LogicalRect,
-) {
-    if let Some(focused_text_input) = focused_text_input_option.0
-        && let Some(text_input_rect) = child_ofs
-            .get(focused_text_input)
-            .ok()
-            .and_then(|child_of| logical_rect.get(child_of.parent()))
-    {
-        for ancestor in child_ofs.iter_ancestors(focused_text_input) {
-            if mutable_viewports.contains(ancestor) {
-                if let Some(viewport_rect) = logical_rect.get(ancestor) {
-                    let d = text_input_rect.min.y - viewport_rect.min.y;
-                    if d < 0. {
-                        SCROLL_POSITION.update(|sp| sp + d);
-                        return;
-                    }
-                    let d = text_input_rect.max.y - viewport_rect.max.y;
-                    if d > 0. {
-                        SCROLL_POSITION.update(|sp| sp + d);
-                        return;
-                    }
-                }
-                break;
-            }
-        }
     }
 }
 

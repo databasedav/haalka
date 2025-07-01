@@ -97,6 +97,7 @@ fn nine_slice_button() -> impl Element {
     .height(Val::Px(50.))
     .hovered_sync(hovered)
     .pressed_sync(pressed)
+    .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
 }
 
 static WIDTH: LazyLock<Mutable<f32>> = LazyLock::new(default);
@@ -155,6 +156,7 @@ fn ui_root() -> impl Element {
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
+        .cursor(CursorIcon::default())
         .child(
             Column::<Node>::new()
                 .with_node(|mut node| node.row_gap = Val::Px(GAP))

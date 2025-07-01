@@ -234,6 +234,7 @@ fn ui_root() -> impl Element {
     El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
+        .cursor(CursorIcon::default())
         .child_signal(
             HEALTH_OPTION_MUTABLE
                 .signal_cloned()

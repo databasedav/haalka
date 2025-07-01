@@ -97,9 +97,9 @@ fn ui_root() -> impl Element {
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .with_node(|mut node| node.row_gap = Val::Px(15.))
-        .align_content(Align::center())
-        .cursor(CursorIcon::System(SystemCursorIcon::Default))
         .align(Align::center())
+        .align_content(Align::center())
+        .cursor(CursorIcon::default())
         .item(
             Row::<Node>::new()
                 .with_node(|mut node| node.column_gap = Val::Px(15.))

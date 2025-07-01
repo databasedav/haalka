@@ -136,7 +136,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
 fn ui_root() -> impl Element {
     El::<Node>::new()
         .ui_root()
-        .cursor(CursorIcon::System(SystemCursorIcon::Default))
+        .cursor(CursorIcon::default())
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())

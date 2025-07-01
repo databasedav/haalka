@@ -244,7 +244,7 @@ fn ui_root() -> impl Element {
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .align_content(Align::center())
-        .cursor(CursorIcon::System(SystemCursorIcon::Default))
+        .cursor(CursorIcon::default())
         .child(
             Row::<Node>::new()
                 .width(Val::Px(WIDTH))

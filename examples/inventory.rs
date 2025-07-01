@@ -351,7 +351,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                     } else if populated {
                         CursorIcon::System(SystemCursorIcon::Grab)
                     } else {
-                        CursorIcon::System(SystemCursorIcon::Default)
+                        CursorIcon::default()
                     }
                 }
             }
@@ -660,7 +660,7 @@ fn is_dragging() -> impl Signal<Item = bool> {
 
 fn ui_root() -> impl Element {
     Stack::<Node>::new()
-        .cursor_disableable_signal(CursorIcon::System(SystemCursorIcon::Default), is_dragging())
+        .cursor_disableable_signal(CursorIcon::default(), is_dragging())
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
         .update_raw_el(|raw_el| {

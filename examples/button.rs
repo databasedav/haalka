@@ -101,7 +101,7 @@ fn ui_root() -> impl Element {
     El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .cursor(CursorIcon::System(SystemCursorIcon::Default))
+        .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(button())
 }

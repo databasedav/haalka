@@ -186,7 +186,7 @@ fn ui_root() -> impl Element {
     Stack::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
-        .cursor(CursorIcon::System(SystemCursorIcon::Default))
+        .cursor(CursorIcon::default())
         .layer(
             Row::<Node>::new()
                 .align(Align::center())

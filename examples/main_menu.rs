@@ -125,6 +125,7 @@ impl Button {
                         node.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH));
                     })
                     .pressed_sync(pressed)
+                    .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
                     .align_content(Align::center())
                     .hovered_sync(hovered.clone())
                     .border_color_signal(border_color_signal)
@@ -1353,6 +1354,7 @@ fn ui_root() -> impl Element {
     El::<Node>::new()
         .width(Val::Percent(100.))
         .height(Val::Percent(100.))
+        .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(menu())
 }
