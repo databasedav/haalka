@@ -24,6 +24,7 @@ use futures_signals::signal::{Mutable, Signal, SignalExt};
 use paste::paste;
 
 /// Reactive text input widget, a thin wrapper around [`bevy_ui_text_input`] integrated with [`Signal`]s.
+#[derive(Default)]
 pub struct TextInput {
     el: El<Node>,
 }
