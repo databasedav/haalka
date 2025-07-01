@@ -159,15 +159,18 @@ fn healthbar(
     let health = health.broadcast();
     let percent_health = health.signal().map(move |h| h as f32 / max as f32).broadcast();
     Stack::<Node>::new()
-        .height(Val::Px(height))
         .with_node(move |mut node| {
+            node.height = Val::Px(height);
             node.border = UiRect::all(Val::Px(height / 12.));
         })
         .border_color(BorderColor(Color::BLACK))
         .layer(
             El::<Node>::new()
-                .height(Val::Percent(100.))
-                .width_signal(percent_health.signal().map(|ph| ph * 100.).map(Val::Percent))
+                .with_node(|mut node| node.height = Val::Percent(100.))
+                .on_signal_with_node(
+                    percent_health.signal().map(|ph| ph * 100.).map(Val::Percent),
+                    |mut node, width| node.width = width,
+                )
                 .background_color_signal(percent_health.signal().map(move |percent_health| {
                     let [r, g, b, ..] = color_gradient.at(percent_health).to_rgba8();
                     BackgroundColor(Color::srgb_u8(r, g, b))
@@ -176,7 +179,7 @@ fn healthbar(
         .layer(
             // TODO: why is this wrapping node required? it wasn't required in 0.14
             El::<Node>::new()
-                .height(Val::Percent(100.))
+                .with_node(|mut node| node.height = Val::Percent(100.))
                 .align_content(Align::new().center_y())
                 .child(
                     El::<Text>::new()
@@ -204,8 +207,8 @@ fn respawn_button() -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
         .align(Align::center())
-        .width(Val::Px(250.))
-        .height(Val::Px(80.))
+        .with_node(|mut node| node.width = Val::Px(250.))
+        .with_node(|mut node| node.height = Val::Px(80.))
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
@@ -232,8 +235,8 @@ fn set_dragging_position(mut node: Mut<Node>, StyleData { left, top, .. }: Style
 fn ui_root() -> impl Element {
     // let starting_distance = CAMERA_POSITION.distance(PLAYER_POSITION);
     El::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
         .cursor(CursorIcon::default())
         .child_signal(
             HEALTH_OPTION_MUTABLE
@@ -247,8 +250,8 @@ fn ui_root() -> impl Element {
                             .map_bool(
                                 move || {
                                     Stack::<Node>::new()
-                                        .width(Val::Percent(100.))
-                                        .height(Val::Percent(100.))
+                                        .with_node(|mut node| node.width = Val::Percent(100.))
+                                        .with_node(|mut node| node.height = Val::Percent(100.))
                                         .with_node(|mut node| node.padding.bottom = Val::Px(10.))
                                         .layer(
                                             Column::<Node>::new()
@@ -278,8 +281,8 @@ fn ui_root() -> impl Element {
                                                             .build::<colorgrad::LinearGradient>()
                                                             .unwrap(),
                                                     )
-                                                    .width(Val::Px(MINI.0))
-                                                    .height(Val::Px(MINI.1)),
+                                                    .with_node(|mut node| node.width = Val::Px(MINI.0))
+                                                    .with_node(|mut node| node.height = Val::Px(MINI.1)),
                                                 ),
                                         )
                                         .layer(
@@ -293,8 +296,8 @@ fn ui_root() -> impl Element {
                                                     .unwrap(),
                                             )
                                             .align(Align::new().bottom().center_x())
-                                            .width(Val::Px(MAXI.0))
-                                            .height(Val::Px(MAXI.1)),
+                                            .with_node(|mut node| node.width = Val::Px(MAXI.0))
+                                            .with_node(|mut node| node.height = Val::Px(MAXI.1)),
                                         )
                                         .type_erase()
                                 },

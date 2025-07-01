@@ -67,8 +67,8 @@ fn alignment_button(alignment: Alignment) -> impl Element {
     El::<Node>::new()
         .align(Align::center())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .width(Val::Px(250.))
-        .height(Val::Px(80.))
+        .with_node(|mut node| node.width = Val::Px(250.))
+        .with_node(|mut node| node.height = Val::Px(80.))
         .background_color_signal(
             signal::or(
                 hovered.signal(),
@@ -94,8 +94,8 @@ fn alignment_button(alignment: Alignment) -> impl Element {
 
 fn ui_root() -> impl Element {
     Column::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
         .with_node(|mut node| node.row_gap = Val::Px(15.))
         .align(Align::center())
         .align_content(Align::center())
@@ -130,17 +130,19 @@ fn ui_root() -> impl Element {
         )
 }
 
-fn container_node<E: RawElWrapper + Sizeable>(el: E) -> E {
-    el.width(Val::Px(278.)).height(Val::Px(200.)).update_raw_el(|raw_el| {
+fn container_node<E: RawElWrapper>(el: E) -> E {
+    el.update_raw_el(|raw_el| {
         raw_el
             .insert(BorderColor(bevy::color::palettes::basic::GRAY.into()))
             .with_component::<Node>(|mut node| {
+                node.height = Val::Px(200.);
+                node.width = Val::Px(278.);
                 node.border = UiRect::all(Val::Px(3.));
             })
     })
 }
 
-fn container(name: &str, element: impl Element + Sizeable) -> impl Element {
+fn container(name: &str, element: impl Element) -> impl Element {
     Column::<Node>::new()
         .item(
             El::<Text>::new()
@@ -167,8 +169,10 @@ fn container(name: &str, element: impl Element + Sizeable) -> impl Element {
 fn rectangle(index: i32) -> impl Element {
     let size = 40;
     El::<Node>::new()
-        .width(Val::Px(size as f32))
-        .height(Val::Px(size as f32))
+        .with_node(move |mut node| {
+            node.width = Val::Px(size as f32);
+            node.height = Val::Px(size as f32)
+        })
         .background_color(BackgroundColor(bevy::color::palettes::css::DARK_GREEN.into()))
         .align_signal(
             ALIGNMENT

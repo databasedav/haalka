@@ -55,8 +55,8 @@ fn buttons() -> [&'static str; 16] {
 
 fn button(symbol: &'static str) -> El<Node> {
     textable_element(always(symbol))
-        .width(Val::Px(BUTTON_SIZE))
-        .height(Val::Px(BUTTON_SIZE))
+        .with_node(|mut node| node.width = Val::Px(BUTTON_SIZE))
+        .with_node(|mut node| node.height = Val::Px(BUTTON_SIZE))
         .align_content(Align::center())
 }
 
@@ -99,8 +99,8 @@ fn display() -> impl Element {
                     .map_true(|| Outline::new(Val::Px(4.0), Val::ZERO, bevy::color::palettes::basic::RED.into())),
             )
         })
-        .width(Val::Px(BUTTON_SIZE * 3. + GAP * 2.))
-        .height(Val::Px(BUTTON_SIZE))
+        .with_node(|mut node| node.width = Val::Px(BUTTON_SIZE * 3. + GAP * 2.))
+        .with_node(|mut node| node.height = Val::Px(BUTTON_SIZE))
         .background_color(BackgroundColor(BLUE))
         .align_content(Align::new().right().center_y())
 }
@@ -134,14 +134,14 @@ fn ui_root() -> impl Element {
     let error_clearer = OUTPUT.signal_ref(|_| ERROR.set_neq(false)).to_future().apply(spawn);
     El::<Node>::new()
         .update_raw_el(|raw_el| raw_el.hold_tasks([error_clearer]))
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
         .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(
             Column::<Node>::new()
-                .height(Val::Px(HEIGHT))
-                .width(Val::Px(WIDTH))
+                .with_node(|mut node| node.height = Val::Px(HEIGHT))
+                .with_node(|mut node| node.width = Val::Px(WIDTH))
                 .background_color(BackgroundColor(PINK))
                 .align(Align::center())
                 .with_node(|mut node| {

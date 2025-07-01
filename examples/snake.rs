@@ -96,8 +96,8 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
         .map(|size| (SIDE as f32 - GRID_TRACK_FLOAT_PRECISION_SLACK) / size as f32)
         .broadcast();
     Grid::<Node>::new()
-        .width(Val::Px(SIDE as f32))
-        .height(Val::Px(SIDE as f32))
+        .with_node(|mut node| node.width = Val::Px(SIDE as f32))
+        .with_node(|mut node| node.height = Val::Px(SIDE as f32))
         .row_wrap_cell_width_signal(cell_size.signal())
         .cells_signal_vec(
             cells
@@ -105,8 +105,10 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
                 .sort_by_cloned(|(left, _), (right, _)| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)))
                 .map(move |(_, cell)| {
                     El::<Node>::new()
-                        .width_signal(cell_size.signal().map(Val::Px))
-                        .height_signal(cell_size.signal().map(Val::Px))
+                        .on_signal_with_node(cell_size.signal().map(Val::Px), |mut node, size| {
+                            node.width = size;
+                            node.height = size;
+                        })
                         .background_color_signal(cell.signal().dedupe().map(Into::<BackgroundColor>::into))
                 }),
         )
@@ -114,7 +116,7 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
 
 fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> impl Element {
     Column::<Node>::new()
-        .width(Val::Px((WIDTH - SIDE) as f32))
+        .with_node(|mut node| node.width = Val::Px((WIDTH - SIDE) as f32))
         .with_node(|mut node| node.row_gap = Val::Px(10.))
         .align_content(Align::center())
         .item(
@@ -184,14 +186,14 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
 
 fn ui_root() -> impl Element {
     Stack::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
         .cursor(CursorIcon::default())
         .layer(
             Row::<Node>::new()
                 .align(Align::center())
-                // .width(Val::Percent(100.))
-                // .height(Val::Percent(100.))
+                // .with_node(|mut node| node.width = Val::Percent(100.))
+                // .with_node(|mut node| node.height = Val::Percent(100.))
                 .item(grid(GRID_SIZE.clone(), CELLS.clone()))
                 .item(hud(SCORE.clone(), GRID_SIZE.clone(), TICK_RATE.clone())),
         )
@@ -202,8 +204,8 @@ fn restart_button() -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
         .align(Align::center())
-        .width(Val::Px(250.))
-        .height(Val::Px(80.))
+        .with_node(|mut node| node.width = Val::Px(250.))
+        .with_node(|mut node| node.height = Val::Px(80.))
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
@@ -274,7 +276,7 @@ fn on_grid_size_change(event: Trigger<GridSizeChange>, mut commands: Commands) {
 fn text_button(text_: &str) -> impl Element + PointerEventAware {
     let hovered = Mutable::new(false);
     El::<Node>::new()
-        .width(Val::Px(45.0))
+        .with_node(|mut node| node.width = Val::Px(45.0))
         .align_content(Align::center())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(

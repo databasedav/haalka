@@ -15,6 +15,10 @@ the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - upgraded to rust 2024 edition
 - migrated from once-cell to `std::sync::LazyLock`
 
+### removed
+
+- `Sizeable` trait (migration: modify the `Node` component directly)
+
 # 0.4.1 (2025-04-08)
 
 ### added

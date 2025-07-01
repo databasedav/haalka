@@ -359,8 +359,8 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
         // TODO: this is more idiomatic and should work, but it doesn't due to various eventual consistency shenanigans, not going to address anytime soon, use the above alternative, or manually manage components/resources to achieve the required strong consistency
         // .cursor_disableable_signal(CursorIcon::System(SystemCursorIcon::Grab), signal::or(cell_data_option.signal_ref(Option::is_none), is_dragging()))
         .hovered_sync(hovered.clone())
-        .width(Val::Px(CELL_WIDTH))
-        .height(Val::Px(CELL_WIDTH))
+        .with_node(|mut node| node.width = Val::Px(CELL_WIDTH))
+        .with_node(|mut node| node.height = Val::Px(CELL_WIDTH))
         .with_node(|mut node| node.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH)))
         .background_color_signal(
             hovered.signal()
@@ -379,7 +379,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                             El::<Node>::new()
                                 // TODO: global transform isn't populated on spawn
                                 // .with_global_transform(clone!((original_position) move |transform| original_position.set(Some(transform.compute_transform().translation.xy()))))
-                                .height(Val::Px(CELL_WIDTH))
+                                .with_node(|mut node| node.height = Val::Px(CELL_WIDTH))
                                 .with_node(|mut node| {
                                     node.position_type = PositionType::Absolute;
                                     node.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
@@ -452,8 +452,8 @@ where
     <I as IntoIterator>::IntoIter: std::marker::Send + 'static,
 {
     Grid::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
         .with_node(|mut node| {
             node.column_gap = Val::Px(CELL_GAP);
             node.row_gap = Val::Px(CELL_GAP);
@@ -516,8 +516,8 @@ fn set_icon_texture_atlas(rpg_icon_sheet: Res<RpgIconSheet>) {
 
 fn dot() -> impl Element {
     El::<Node>::new()
-        .width(Val::Px(CELL_BORDER_WIDTH * 2.))
-        .height(Val::Px(CELL_BORDER_WIDTH * 2.))
+        .with_node(|mut node| node.width = Val::Px(CELL_BORDER_WIDTH * 2.))
+        .with_node(|mut node| node.height = Val::Px(CELL_BORDER_WIDTH * 2.))
         .background_color(BackgroundColor(CELL_BACKGROUND_COLOR))
 }
 
@@ -541,23 +541,23 @@ fn side_column() -> impl Element {
 fn inventory() -> impl Element {
     El::<Node>::new()
         .align(Align::center())
-        .height(Val::Px(INVENTORY_SIZE))
-        .width(Val::Px(INVENTORY_SIZE))
+        .with_node(|mut node| node.height = Val::Px(INVENTORY_SIZE))
+        .with_node(|mut node| node.width = Val::Px(INVENTORY_SIZE))
         .child(
             Column::<Node>::new()
-            .height(Val::Percent(100.))
-            .width(Val::Percent(100.))
+            .with_node(|mut node| node.height = Val::Percent(100.))
+            .with_node(|mut node| node.width = Val::Percent(100.))
                 .with_node(|mut node| node.row_gap = Val::Px(CELL_GAP * 4.))
                 .background_color(BackgroundColor(INVENTORY_BACKGROUND_COLOR))
                 .align_content(Align::center())
                 .item(
                     Row::<Node>::new()
-                    .width(Val::Percent(100.))
+                    .with_node(|mut node| node.width = Val::Percent(100.))
                         .with_node(|mut node| node.column_gap = Val::Px(CELL_GAP))
                         .item(
                             Row::<Node>::new()
                                 .align_content(Align::center())
-                                .width(Val::Percent(60.))
+                                .with_node(|mut node| node.width = Val::Percent(60.))
                                 .with_node(|mut node| {
                                     node.column_gap = Val::Px(CELL_GAP);
                                     node.padding = UiRect::horizontal(Val::Px(CELL_GAP * 3.));
@@ -565,16 +565,16 @@ fn inventory() -> impl Element {
                                 .item(side_column())
                                 .item(
                                     El::<Node>::new()
-                                        .height(Val::Px(CELL_WIDTH * 4. + CELL_GAP * 3.))
-                                        .width(Val::Percent(100.))
+                                        .with_node(|mut node| node.height = Val::Px(CELL_WIDTH * 4. + CELL_GAP * 3.))
+                                        .with_node(|mut node| node.width = Val::Percent(100.))
                                         .background_color(BackgroundColor(Color::BLACK)),
                                 )
                                 .item(side_column())
                         )
                         .item(
                             El::<Node>::new()
-                            .width(Val::Percent(40.))
-                            .height(Val::Percent(100.))
+                            .with_node(|mut node| node.width = Val::Percent(40.))
+                            .with_node(|mut node| node.height = Val::Percent(100.))
                                 .align_content(Align::center())
                                 .child({
                                     let inputs = MutableVec::new_with_values(
@@ -626,7 +626,7 @@ fn inventory() -> impl Element {
                                         .item({
                                             let cell_data_options = inputs.lock_ref().iter().cloned().collect::<Vec<_>>();
                                             El::<Node>::new()
-                                                .width(Val::Px(CELL_WIDTH * 2. + CELL_GAP))
+                                                .with_node(|mut node| node.width = Val::Px(CELL_WIDTH * 2. + CELL_GAP))
                                                 .child(grid(cell_data_options).align_content(Align::new().center_x()))
                                         })
                                 }),
@@ -634,7 +634,7 @@ fn inventory() -> impl Element {
                 )
                 .item(
                     El::<Node>::new()
-                        .width(Val::Percent(100.))
+                        .with_node(|mut node| node.width = Val::Percent(100.))
                         .child(
                             grid((0..27).map(|_| bern_cell_data_option(0.5)))
                                 .align_content(Align::new().center_x()),
@@ -661,8 +661,8 @@ fn is_dragging() -> impl Signal<Item = bool> {
 fn ui_root() -> impl Element {
     Stack::<Node>::new()
         .cursor_disableable_signal(CursorIcon::default(), is_dragging())
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
         .update_raw_el(|raw_el| {
             raw_el
                 .on_event_with_system::<Pointer<Move>, _>(|In((_, move_)): In<(_, Pointer<Move>)>| {
@@ -690,8 +690,8 @@ fn ui_root() -> impl Element {
                             })
                         })
                         .cursor(CursorIcon::System(SystemCursorIcon::Grabbing))
-                        .width(Val::Px(CELL_WIDTH))
-                        .height(Val::Px(CELL_WIDTH))
+                        .with_node(|mut node| node.width = Val::Px(CELL_WIDTH))
+                        .with_node(|mut node| node.height = Val::Px(CELL_WIDTH))
                         .with_node(|mut node| {
                             node.position_type = PositionType::Absolute;
                             let pointer_position = POINTER_POSITION.get();

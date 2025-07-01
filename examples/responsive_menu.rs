@@ -93,8 +93,8 @@ fn nine_slice_button() -> impl Element {
             }
         }
     })
-    .width(Val::Px(100.))
-    .height(Val::Px(50.))
+    .with_node(|mut node| node.width = Val::Px(100.))
+    .with_node(|mut node| node.height = Val::Px(50.))
     .hovered_sync(hovered)
     .pressed_sync(pressed)
     .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
@@ -104,13 +104,13 @@ static WIDTH: LazyLock<Mutable<f32>> = LazyLock::new(default);
 
 fn horizontal() -> impl Element {
     Row::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
         .with_node(|mut node| node.column_gap = Val::Px(GAP))
         .item(
             Column::<Node>::new()
-                .width(Val::Percent(50.))
-                .height(Val::Percent(100.))
+                .with_node(|mut node| node.width = Val::Percent(50.))
+                .with_node(|mut node| node.height = Val::Percent(100.))
                 .with_node(|mut node| node.row_gap = Val::Px(GAP))
                 .align_content(Align::center())
                 .items((0..8).map(|_| nine_slice_button())),
@@ -120,16 +120,16 @@ fn horizontal() -> impl Element {
 
 fn vertical() -> impl Element {
     Column::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
         .with_node(|mut node| node.row_gap = Val::Px(GAP))
         .item(El::<ImageNode>::new().image_node(ImageNode::new(image().clone())))
         .item(
             Row::<Node>::new()
                 .multiline()
                 .align_content(Align::center())
-                .width(Val::Percent(100.))
-                .height(Val::Percent(50.))
+                .with_node(|mut node| node.width = Val::Percent(100.))
+                .with_node(|mut node| node.height = Val::Percent(50.))
                 .with_node(|mut node| node.column_gap = Val::Px(GAP))
                 .items((0..8).map(|_| nine_slice_button())),
         )
@@ -137,11 +137,14 @@ fn vertical() -> impl Element {
 
 fn menu() -> impl Element {
     nine_slice_el(always(3))
-        .height(Val::Px(BASE_SIZE))
+        .with_node(|mut node| node.height = Val::Px(BASE_SIZE))
         .with_node(|mut node| {
             node.padding = UiRect::all(Val::Px(GAP));
         })
-        .width_signal(WIDTH.signal().map(|width| BASE_SIZE.min(width)).dedupe().map(Val::Px))
+        .on_signal_with_node(
+            WIDTH.signal().map(|width| BASE_SIZE.min(width)).dedupe().map(Val::Px),
+            |mut node, width| node.width = width,
+        )
         .child_signal(
             WIDTH
                 .signal()
@@ -153,8 +156,8 @@ fn menu() -> impl Element {
 
 fn ui_root() -> impl Element {
     El::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
         .align_content(Align::center())
         .cursor(CursorIcon::default())
         .child(

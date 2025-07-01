@@ -114,8 +114,8 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
     };
     El::<Node>::new()
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .width(Val::Px(BUTTON_WIDTH))
-        .height(Val::Px(BUTTON_HEIGHT))
+        .with_node(|mut node| node.width = Val::Px(BUTTON_WIDTH))
+        .with_node(|mut node| node.height = Val::Px(BUTTON_HEIGHT))
         .with_node(|mut node| node.border = UiRect::all(Val::Px(5.)))
         .align_content(Align::center())
         .border_color_signal(border_color_signal)
@@ -137,13 +137,13 @@ fn ui_root() -> impl Element {
     El::<Node>::new()
         .ui_root()
         .cursor(CursorIcon::default())
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
         .align_content(Align::center())
         .child(
             Stack::<Node>::new()
-                .width(Val::Percent(100.))
-                .height(Val::Percent(100.))
+                .with_node(|mut node| node.width = Val::Percent(100.))
+                .with_node(|mut node| node.height = Val::Percent(100.))
                 .layer(
                     Column::<Node>::new()
                         .align(Align::new().center_y().right())
@@ -155,13 +155,13 @@ fn ui_root() -> impl Element {
                             let focused = Mutable::new(false);
                             El::<Node>::new()
                                 .update_raw_el(|raw_el| raw_el.insert(BackgroundColor(NORMAL_BUTTON)))
-                                .height(Val::Px(BUTTON_HEIGHT))
+                                .with_node(|mut node| node.height = Val::Px(BUTTON_HEIGHT))
                                 .child(
                                     TextInput::new()
                                         .with_node(|mut node| node.left = Val::Px(10.))
                                         .align(Align::new().center_y())
-                                        .height(Val::Px(30.))
-                                        .height(Val::Px(BUTTON_HEIGHT - 10. * 2.))
+                                        .with_node(|mut node| node.height = Val::Px(30.))
+                                        .with_node(|mut node| node.height = Val::Px(BUTTON_HEIGHT - 10. * 2.))
                                         .with_text_input_node(|mut node| {
                                             node.mode = TextInputMode::SingleLine;
                                             // TODO: https://github.com/ickshonpe/bevy_ui_text_input/issues/10
@@ -194,7 +194,7 @@ fn ui_root() -> impl Element {
                                 (0..Shape::iter().count()).map(|_| Mutable::new(false)).collect(),
                             );
                             Column::<Node>::new()
-                                .height(Val::Px(200.))
+                                .with_node(|mut node| node.height = Val::Px(200.))
                                 .align(Align::new().center_x())
                                 .mutable_viewport(haalka::prelude::Axis::Vertical)
                                 .on_scroll_with_system_on_hover(

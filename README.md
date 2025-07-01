@@ -65,8 +65,8 @@ struct Counter(Mutable<i32>);
 fn ui_root() -> impl Element {
     let counter = Mutable::new(0);
     El::<Node>::new()
-        .height(Val::Percent(100.))
-        .width(Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
         .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(
@@ -86,7 +86,7 @@ fn ui_root() -> impl Element {
 fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
-        .width(Val::Px(45.0))
+        .with_node(|mut node| node.width = Val::Px(45.0))
         .align_content(Align::center())
         .border_radius(BorderRadius::MAX)
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))

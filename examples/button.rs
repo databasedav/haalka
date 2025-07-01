@@ -59,8 +59,8 @@ fn button() -> impl Element {
             .map(BackgroundColor)
     };
     El::<Node>::new()
-        .width(Val::Px(150.0))
-        .height(Val::Px(65.))
+        .with_node(|mut node| node.width = Val::Px(150.0))
+        .with_node(|mut node| node.height = Val::Px(65.))
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .with_node(|mut node| node.border = UiRect::all(Val::Px(5.0)))
         .align_content(Align::center())
@@ -99,8 +99,8 @@ fn camera(mut commands: Commands) {
 
 fn ui_root() -> impl Element {
     El::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
         .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(button())

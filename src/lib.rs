@@ -24,7 +24,6 @@ cfg_if::cfg_if! {
         pub mod global_event_aware;
         mod row;
         pub mod mouse_wheel_scrollable;
-        pub mod sizeable;
         mod stack;
         pub mod viewport_mutable;
 
@@ -90,7 +89,6 @@ pub mod prelude {
                 },
                 pointer_event_aware::{SetCursor, CursorOnHoverDisabled, CursorOnHoverable, PointerEventAware, Enter, Leave},
                 row::Row,
-                sizeable::Sizeable,
                 stack::Stack,
                 viewport_mutable::{Axis, ViewportMutable},
             };

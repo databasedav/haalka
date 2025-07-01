@@ -85,8 +85,8 @@ const FONT_SIZE: f32 = 25.;
 
 fn box_(category: ColorCategory) -> El<Node> {
     El::<Node>::new()
-        .width(Val::Px(BOX_SIZE))
-        .height(Val::Px(BOX_SIZE))
+        .with_node(|mut node| node.width = Val::Px(BOX_SIZE))
+        .with_node(|mut node| node.height = Val::Px(BOX_SIZE))
         .background_color(BackgroundColor(match category {
             ColorCategory::Blue => BLUE,
             ColorCategory::Green => GREEN,
@@ -132,8 +132,8 @@ fn category_count(category: ColorCategory, count: impl Signal<Item = i32> + Send
     labeled_count(
         {
             El::<Node>::new()
-                .width(Val::Px(30.))
-                .height(Val::Px(30.))
+                .with_node(|mut node| node.width = Val::Px(30.))
+                .with_node(|mut node| node.height = Val::Px(30.))
                 .background_color(BackgroundColor(match category {
                     ColorCategory::Blue => BLUE,
                     ColorCategory::Green => GREEN,
@@ -150,7 +150,7 @@ fn category_count(category: ColorCategory, count: impl Signal<Item = i32> + Send
 fn incrde_button<T: Component>(step: f32) -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
-        .width(Val::Px(45.0))
+        .with_node(|mut node| node.width = Val::Px(45.0))
         .align_content(Align::center())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
@@ -241,14 +241,14 @@ fn ui_root() -> impl Element {
         COUNTS.yellow.clone(),
     ]);
     El::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
         .align_content(Align::center())
         .cursor(CursorIcon::default())
         .child(
             Row::<Node>::new()
-                .width(Val::Px(WIDTH))
-                .height(Val::Px(HEIGHT))
+                .with_node(|mut node| node.width = Val::Px(WIDTH))
+                .with_node(|mut node| node.height = Val::Px(HEIGHT))
                 .with_node(|mut node| node.column_gap = Val::Px(50.))
                 .item(
                     Column::<Node>::new()

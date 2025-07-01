@@ -37,7 +37,7 @@ fn letter(letter: String, color: Color) -> impl Element {
 fn letter_column(rotate: usize, color: Color) -> impl Element {
     let hovered = Mutable::new(false);
     Column::<Node>::new()
-        .height(Val::Px(5. * COMPUTED_SIZE))
+        .with_node(|mut node| node.height = Val::Px(5. * COMPUTED_SIZE))
         .mutable_viewport(haalka::prelude::Axis::Vertical)
         .on_scroll_with_system_disableable_signal(
             BasicScrollHandler::new()
@@ -58,8 +58,8 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
 fn ui_root() -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| node.height = Val::Percent(100.))
         .align_content(Align::center())
         .child(
             Row::<Node>::new()
@@ -67,7 +67,7 @@ fn ui_root() -> impl Element {
                     node.column_gap = Val::Px(30.);
                     node.padding = UiRect::horizontal(Val::Px(7.5));
                 })
-                .width(Val::Px(300.))
+                .with_node(|mut node| node.width = Val::Px(300.))
                 .mutable_viewport(haalka::prelude::Axis::Horizontal)
                 .on_scroll_with_system_disableable_signal(
                     BasicScrollHandler::new()

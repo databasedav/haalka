@@ -15,7 +15,7 @@ use crate::impl_haalka_methods;
 
 use super::{
     el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::{PointerEventAware, CursorOnHoverable}, raw::{RawElWrapper, register_system}, mouse_wheel_scrollable::MouseWheelScrollable,
-    sizeable::Sizeable, utils::clone, viewport_mutable::ViewportMutable, global_event_aware::GlobalEventAware,
+    utils::clone, viewport_mutable::ViewportMutable, global_event_aware::GlobalEventAware,
     raw::{observe, utils::remove_system_holder_on_remove}
 };
 use apply::Apply;
@@ -40,7 +40,6 @@ impl GlobalEventAware for TextInput {}
 impl Nameable for TextInput {}
 impl PointerEventAware for TextInput {}
 impl MouseWheelScrollable for TextInput {}
-impl Sizeable for TextInput {}
 impl UiRootable for TextInput {}
 impl ViewportMutable for TextInput {}
 impl CursorOnHoverable for TextInput {}

@@ -163,8 +163,8 @@ pub(crate) fn examples_plugin(app: &mut App) {
                         node.padding.bottom = Val::Px(FPS_PADDING);
                         node.padding.left = Val::Px(FPS_PADDING);
                     })
-                    .height(Val::Percent(100.))
-                    .width(Val::Percent(100.))
+                    .with_node(|mut node| node.height = Val::Percent(100.))
+                    .with_node(|mut node| node.width = Val::Percent(100.))
                     .child(el)
                     .spawn(world);
             },
