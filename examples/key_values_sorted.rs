@@ -173,28 +173,27 @@ fn text_input(
                      child_ofs: Query<&ChildOf>,
                      mutable_viewports: Query<&MutableViewport>,
                      logical_rect: LogicalRect| {
-                        if is_focused {
-                            if let Some(text_input_rect) = child_ofs
+                        if is_focused
+                            && let Some(text_input_rect) = child_ofs
                                 .get(entity)
                                 .ok()
                                 .and_then(|child_of| logical_rect.get(child_of.parent()))
-                            {
-                                for ancestor in child_ofs.iter_ancestors(entity) {
-                                    if mutable_viewports.contains(ancestor) {
-                                        if let Some(viewport_rect) = logical_rect.get(ancestor) {
-                                            let d = text_input_rect.min.y - viewport_rect.min.y;
-                                            if d < 0. {
-                                                SCROLL_POSITION.update(|sp| sp + d);
-                                                return;
-                                            }
-                                            let d = text_input_rect.max.y - viewport_rect.max.y;
-                                            if d > 0. {
-                                                SCROLL_POSITION.update(|sp| sp + d);
-                                                return;
-                                            }
+                        {
+                            for ancestor in child_ofs.iter_ancestors(entity) {
+                                if mutable_viewports.contains(ancestor) {
+                                    if let Some(viewport_rect) = logical_rect.get(ancestor) {
+                                        let d = text_input_rect.min.y - viewport_rect.min.y;
+                                        if d < 0. {
+                                            SCROLL_POSITION.update(|sp| sp + d);
+                                            return;
                                         }
-                                        break;
+                                        let d = text_input_rect.max.y - viewport_rect.max.y;
+                                        if d > 0. {
+                                            SCROLL_POSITION.update(|sp| sp + d);
+                                            return;
+                                        }
                                     }
+                                    break;
                                 }
                             }
                         }
