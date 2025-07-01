@@ -2,7 +2,7 @@ format *extras:
   cargo +nightly fmt {{ extras }}
 
 doc *extras:
-  RUSTFLAGS="--allow mismatched_lifetime_syntaxes" cargo +nightly doc --all-features --no-deps -Zunstable-options -Zrustdoc-scrape-examples --locked {{ extras }}
+  cargo +nightly doc --all-features --no-deps -Zunstable-options -Zrustdoc-scrape-examples --locked {{ extras }}
 
 doctest:
   cargo test --doc --all-features --locked
@@ -11,7 +11,7 @@ doctest:
 test: doctest
 
 clippy *extras:
-  RUSTFLAGS="--allow mismatched_lifetime_syntaxes" cargo +nightly clippy --all-features --all-targets --locked --no-deps {{ extras }} -- --deny warnings
+  cargo +nightly clippy --all-features --all-targets --locked --no-deps {{ extras }} -- --deny warnings
 
 # TODO: --all-features flag doesn't work because examples shenanigans
 check_all_features:
@@ -42,10 +42,10 @@ build_wasm_example example *features:
   RUSTFLAGS='--cfg getrandom_backend="wasm_js"' trunk build --locked --release --public-url . --example {{ example }}
 
 format_nickels:
-  nickel format nickel/*.ncl
+  nickel format --manifest-path nickel/Nickel-pkg.ncl nickel/*.ncl
 
 export_nickel nickel:
-  nickel export --format yaml --manifest-path nickel/Nickel-pkg.ncl --field {{ nickel }}_ nickel/main.ncl
+  nickel export --format yaml --field {{ nickel }}_ nickel/main.ncl
 
 # TODO: use https://github.com/rhysd/actionlint after
 sync_nickels:
