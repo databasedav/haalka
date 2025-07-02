@@ -106,7 +106,6 @@ impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
 /// impl PointerEventAware for MyWidget {}
 /// impl ViewportMutable for MyWidget {}
 /// impl MouseWheelScrollable for MyWidget {}
-/// impl Sizeable for MyWidget {}
 /// ```
 pub trait ElementWrapper: Sized {
     /// The type of the [`Element`] that this wrapper wraps; this can be another [`ElementWrapper`].

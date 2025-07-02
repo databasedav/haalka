@@ -96,8 +96,10 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
         .map(|size| (SIDE as f32 - GRID_TRACK_FLOAT_PRECISION_SLACK) / size as f32)
         .broadcast();
     Grid::<Node>::new()
-        .with_node(|mut node| node.width = Val::Px(SIDE as f32))
-        .with_node(|mut node| node.height = Val::Px(SIDE as f32))
+        .with_node(|mut node| {
+            node.width = Val::Px(SIDE as f32);
+            node.height = Val::Px(SIDE as f32);
+        })
         .row_wrap_cell_width_signal(cell_size.signal())
         .cells_signal_vec(
             cells
