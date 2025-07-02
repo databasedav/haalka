@@ -37,8 +37,10 @@ fn lists_element(lists: Lists) -> Column<Node> {
             .item(
                 El::<Node>::new()
                     .align(Align::new().top())
-                    .with_node(|mut node| node.width = Val::Px(80.))
-                    .with_node(|mut node| node.height = Val::Px(40.))
+                    .with_node(|mut node| {
+                        node.width = Val::Px(80.);
+                        node.height = Val::Px(40.);
+                    })
                     .background_color(BackgroundColor(random_color())),
             )
             .item(
@@ -47,8 +49,10 @@ fn lists_element(lists: Lists) -> Column<Node> {
                     .items_signal_vec(lists.signal_vec_cloned().map(lists_element))
                     .item(
                         El::<Node>::new()
-                            .with_node(|mut node| node.width = Val::Px(30.))
-                            .with_node(|mut node| node.height = Val::Px(30.))
+                            .with_node(|mut node| {
+                                node.width = Val::Px(30.);
+                                node.height = Val::Px(30.);
+                            })
                             .background_color(BackgroundColor(DARK_GRAY.into()))
                             .align_content(Align::center())
                             .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
@@ -68,17 +72,19 @@ fn lists_element(lists: Lists) -> Column<Node> {
 
 fn ui_root() -> impl Element {
     El::<Node>::new()
-        .with_node(|mut node| node.width = Val::Percent(100.))
-        .with_node(|mut node| node.height = Val::Percent(100.))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+        })
         .cursor(CursorIcon::default())
         .align_content(Align::new().top().left())
         .child(
             lists_element(MASTER.clone())
                 .with_node(|mut node| {
+                    node.height = Val::Percent(100.);
                     node.left = Val::Px(20.);
                     node.top = Val::Px(20.);
                 })
-                .with_node(|mut node| node.height = Val::Percent(100.))
                 .mutable_viewport(haalka::prelude::Axis::Vertical)
                 .on_scroll_with_system(BasicScrollHandler::new().pixels(20.).into_system()),
         )

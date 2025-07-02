@@ -58,16 +58,18 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
 fn ui_root() -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
-        .with_node(|mut node| node.width = Val::Percent(100.))
-        .with_node(|mut node| node.height = Val::Percent(100.))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+        })
         .align_content(Align::center())
         .child(
             Row::<Node>::new()
                 .with_node(|mut node| {
+                    node.width = Val::Px(300.);
                     node.column_gap = Val::Px(30.);
                     node.padding = UiRect::horizontal(Val::Px(7.5));
                 })
-                .with_node(|mut node| node.width = Val::Px(300.))
                 .mutable_viewport(haalka::prelude::Axis::Horizontal)
                 .on_scroll_with_system_disableable_signal(
                     BasicScrollHandler::new()

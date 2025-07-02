@@ -128,15 +128,17 @@ fn text_input(
 ) -> impl Element {
     El::<Node>::new()
         .apply(border_radius_style(10.))
-        .with_node(|mut node| node.height = Val::Px(INPUT_HEIGHT))
-        .with_node(|mut node| node.width = Val::Px(INPUT_WIDTH))
+        .with_node(|mut node| {
+            node.height = Val::Px(INPUT_HEIGHT);
+            node.width = Val::Px(INPUT_WIDTH);
+            node.overflow = Overflow::clip();
+        })
         .background_color_signal(
             focus
                 .signal()
                 .map_bool(|| Color::WHITE, || *DARK_GRAY)
                 .map(BackgroundColor),
         )
-        .with_node(|mut node| node.overflow = Overflow::clip())
         .cursor(CursorIcon::System(SystemCursorIcon::Text))
         .on_click(clone!((focus) move || focus.set_neq(true)))
         .on_click_outside_with_system(
@@ -149,9 +151,11 @@ fn text_input(
         .child(
             TextInput::new()
                 .align(Align::new().center_y())
-                .with_node(|mut node| node.left = Val::Px(PADDING))
-                .with_node(|mut node| node.width = Val::Px(INPUT_WIDTH - PADDING * 2.))
-                .with_node(|mut node| node.height = Val::Px(INPUT_HEIGHT - PADDING * 2. + 5.))
+                .with_node(|mut node| {
+                    node.left = Val::Px(PADDING);
+                    node.width = Val::Px(INPUT_WIDTH - PADDING * 2.);
+                    node.height = Val::Px(INPUT_HEIGHT - PADDING * 2. + 5.);
+                })
                 .with_text_input_node(|mut node| {
                     node.mode = TextInputMode::SingleLine;
                     // TODO: https://github.com/ickshonpe/bevy_ui_text_input/issues/10
@@ -232,8 +236,10 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
         .item(
             El::<Node>::new()
                 .apply(border_radius_style(20.))
-                .with_node(|mut node| node.width = Val::Px(200.))
-                .with_node(|mut node| node.height = Val::Px(80.))
+                .with_node(|mut node| {
+                    node.width = Val::Px(200.);
+                    node.height = Val::Px(80.);
+                })
                 .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
                 .background_color_signal(
                     signal::or(hovered.signal(), selected.signal())
@@ -373,8 +379,10 @@ static SCROLL_POSITION: LazyLock<Mutable<f32>> = LazyLock::new(default);
 
 fn key_values() -> Column<Node> {
     Column::<Node>::new()
-        .with_node(|mut node| node.row_gap = Val::Px(10.))
-        .with_node(|mut node| node.height = Val::Percent(90.))
+        .with_node(|mut node| {
+            node.row_gap = Val::Px(10.);
+            node.height = Val::Percent(90.);
+        })
         .mutable_viewport(haalka::prelude::Axis::Vertical)
         .viewport_y_sync(SCROLL_POSITION.clone())
         .on_scroll_with_system_on_hover(
@@ -401,11 +409,13 @@ fn key_values() -> Column<Node> {
                 },
             )| {
                 Row::<Node>::new()
-                    .with_node(|mut node| node.column_gap = Val::Px(10.))
-                    // without registering width up front, layout will take a frame or two to sync to size of children,
-                    // making it look like the elements are expanding into place, try commenting out this line to see
-                    // how it looks
-                    .with_node(|mut node| node.width = Val::Px(INPUT_WIDTH * 2. + INPUT_HEIGHT + 10. * 2.))
+                    .with_node(|mut node| {
+                        node.column_gap = Val::Px(10.);
+                        // without registering width up front, layout will take a frame or two to sync to size of children,
+                        // making it look like the elements are expanding into place, try commenting out this line to see
+                        // how it looks
+                        node.width = Val::Px(INPUT_WIDTH * 2. + INPUT_HEIGHT + 10. * 2.)
+                    })
                     .item(text_input(index_option.clone(), key, key_focus))
                     .item(text_input(index_option.clone(), value, value_focus))
                     .item(x_button().on_click(move || {
@@ -421,8 +431,10 @@ fn x_button() -> impl Element + PointerEventAware {
     let hovered = Mutable::new(false);
     El::<Node>::new()
         .apply(border_radius_style(10.))
-        .with_node(|mut node| node.width = Val::Px(INPUT_HEIGHT))
-        .with_node(|mut node| node.height = Val::Px(INPUT_HEIGHT))
+        .with_node(|mut node| {
+            node.width = Val::Px(INPUT_HEIGHT);
+            node.height = Val::Px(INPUT_HEIGHT);
+        })
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
@@ -443,14 +455,18 @@ fn x_button() -> impl Element + PointerEventAware {
 fn ui_root() -> impl Element {
     El::<Node>::new()
         .ui_root()
-        .with_node(|mut node| node.width = Val::Percent(100.))
-        .with_node(|mut node| node.height = Val::Percent(100.))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+        })
         .align_content(Align::center())
         .cursor(CursorIcon::default())
         .child(
             Row::<Node>::new()
-                .with_node(|mut node| node.height = Val::Percent(100.))
-                .with_node(|mut node| node.column_gap = Val::Px(70.))
+                .with_node(|mut node| {
+                    node.height = Val::Percent(100.);
+                    node.column_gap = Val::Px(70.);
+                })
                 .item(
                     Column::<Node>::new()
                         .with_node(|mut node| node.row_gap = Val::Px(20.))
@@ -459,17 +475,21 @@ fn ui_root() -> impl Element {
                 )
                 .item(
                     Column::<Node>::new()
-                        .with_node(|mut node| node.row_gap = Val::Px(10.))
-                        .with_node(|mut node| node.height = Val::Percent(90.))
-                        .with_node(|mut node| node.width = Val::Px(INPUT_WIDTH * 2. + INPUT_HEIGHT + 10. * 2.))
+                        .with_node(|mut node| {
+                            node.row_gap = Val::Px(10.);
+                            node.height = Val::Percent(90.);
+                            node.width = Val::Px(INPUT_WIDTH * 2. + INPUT_HEIGHT + 10. * 2.);
+                        })
                         .align_content(Align::center())
                         .item(key_values().with_node(|mut node| node.height = Val::Percent(90.)))
                         .item({
                             let hovered = Mutable::new(false);
                             El::<Node>::new()
                                 .apply(border_radius_style(10.))
-                                .with_node(|mut node| node.width = Val::Px(INPUT_WIDTH))
-                                .with_node(|mut node| node.height = Val::Px(INPUT_HEIGHT))
+                                .with_node(|mut node| {
+                                    node.width = Val::Px(INPUT_WIDTH);
+                                    node.height = Val::Px(INPUT_HEIGHT);
+                                })
                                 .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
                                 .background_color_signal(
                                     hovered

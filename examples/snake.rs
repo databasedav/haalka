@@ -118,8 +118,10 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
 
 fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> impl Element {
     Column::<Node>::new()
-        .with_node(|mut node| node.width = Val::Px((WIDTH - SIDE) as f32))
-        .with_node(|mut node| node.row_gap = Val::Px(10.))
+        .with_node(|mut node| {
+            node.width = Val::Px((WIDTH - SIDE) as f32);
+            node.row_gap = Val::Px(10.);
+        })
         .align_content(Align::center())
         .item(
             El::<Text>::new()
@@ -188,14 +190,14 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
 
 fn ui_root() -> impl Element {
     Stack::<Node>::new()
-        .with_node(|mut node| node.width = Val::Percent(100.))
-        .with_node(|mut node| node.height = Val::Percent(100.))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+        })
         .cursor(CursorIcon::default())
         .layer(
             Row::<Node>::new()
                 .align(Align::center())
-                // .with_node(|mut node| node.width = Val::Percent(100.))
-                // .with_node(|mut node| node.height = Val::Percent(100.))
                 .item(grid(GRID_SIZE.clone(), CELLS.clone()))
                 .item(hud(SCORE.clone(), GRID_SIZE.clone(), TICK_RATE.clone())),
         )
@@ -206,8 +208,10 @@ fn restart_button() -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
         .align(Align::center())
-        .with_node(|mut node| node.width = Val::Px(250.))
-        .with_node(|mut node| node.height = Val::Px(80.))
+        .with_node(|mut node| {
+            node.width = Val::Px(250.);
+            node.height = Val::Px(80.);
+        })
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered

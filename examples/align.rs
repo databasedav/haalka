@@ -67,8 +67,10 @@ fn alignment_button(alignment: Alignment) -> impl Element {
     El::<Node>::new()
         .align(Align::center())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .with_node(|mut node| node.width = Val::Px(250.))
-        .with_node(|mut node| node.height = Val::Px(80.))
+        .with_node(|mut node| {
+            node.width = Val::Px(250.);
+            node.height = Val::Px(80.);
+        })
         .background_color_signal(
             signal::or(
                 hovered.signal(),
@@ -94,9 +96,11 @@ fn alignment_button(alignment: Alignment) -> impl Element {
 
 fn ui_root() -> impl Element {
     Column::<Node>::new()
-        .with_node(|mut node| node.width = Val::Percent(100.))
-        .with_node(|mut node| node.height = Val::Percent(100.))
-        .with_node(|mut node| node.row_gap = Val::Px(15.))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+            node.row_gap = Val::Px(15.);
+        })
         .align(Align::center())
         .align_content(Align::center())
         .cursor(CursorIcon::default())

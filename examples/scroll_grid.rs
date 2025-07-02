@@ -127,20 +127,24 @@ static CELLS: LazyLock<Vec<Vec<Mutable<LetterColor>>>> = LazyLock::new(|| {
 
 fn ui_root() -> impl Element {
     El::<Node>::new()
-        .with_node(|mut node| node.width = Val::Percent(100.))
-        .with_node(|mut node| node.height = Val::Percent(100.))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+        })
         .align_content(Align::center())
         .child(
             Grid::<Node>::new()
-                .with_node(|mut node| node.column_gap = Val::Px(15.))
                 .on_hovered_change(move |is_hovered| {
                     if !is_hovered {
                         async_world().remove_resource::<HoveredCell>().apply(spawn).detach()
                     }
                 })
                 .row_wrap_cell_width(48.)
-                .with_node(|mut node| node.width = Val::Px(300.))
-                .with_node(|mut node| node.height = Val::Px(5. * LETTER_SIZE))
+                .with_node(|mut node| {
+                    node.width = Val::Px(300.);
+                    node.height = Val::Px(5. * LETTER_SIZE);
+                    node.column_gap = Val::Px(15.);
+                })
                 .align(Align::center())
                 .cells(CELLS.iter().enumerate().flat_map(|(x, cells)| {
                     cells

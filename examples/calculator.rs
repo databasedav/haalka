@@ -55,8 +55,10 @@ fn buttons() -> [&'static str; 16] {
 
 fn button(symbol: &'static str) -> El<Node> {
     textable_element(always(symbol))
-        .with_node(|mut node| node.width = Val::Px(BUTTON_SIZE))
-        .with_node(|mut node| node.height = Val::Px(BUTTON_SIZE))
+        .with_node(|mut node| {
+            node.width = Val::Px(BUTTON_SIZE);
+            node.height = Val::Px(BUTTON_SIZE);
+        })
         .align_content(Align::center())
 }
 
@@ -88,10 +90,6 @@ static ERROR: LazyLock<Mutable<bool>> = LazyLock::new(default);
 
 fn display() -> impl Element {
     textable_element(OUTPUT.signal_cloned())
-        .with_node(|mut node| {
-            node.padding = UiRect::all(Val::Px(GAP));
-            node.overflow = Overflow::clip();
-        })
         .update_raw_el(|raw_el| {
             raw_el.component_signal::<Outline, _>(
                 ERROR
@@ -99,8 +97,12 @@ fn display() -> impl Element {
                     .map_true(|| Outline::new(Val::Px(4.0), Val::ZERO, bevy::color::palettes::basic::RED.into())),
             )
         })
-        .with_node(|mut node| node.width = Val::Px(BUTTON_SIZE * 3. + GAP * 2.))
-        .with_node(|mut node| node.height = Val::Px(BUTTON_SIZE))
+        .with_node(|mut node| {
+            node.width = Val::Px(BUTTON_SIZE * 3. + GAP * 2.);
+            node.height = Val::Px(BUTTON_SIZE);
+            node.padding = UiRect::all(Val::Px(GAP));
+            node.overflow = Overflow::clip();
+        })
         .background_color(BackgroundColor(BLUE))
         .align_content(Align::new().right().center_y())
 }
@@ -134,17 +136,19 @@ fn ui_root() -> impl Element {
     let error_clearer = OUTPUT.signal_ref(|_| ERROR.set_neq(false)).to_future().apply(spawn);
     El::<Node>::new()
         .update_raw_el(|raw_el| raw_el.hold_tasks([error_clearer]))
-        .with_node(|mut node| node.width = Val::Percent(100.))
-        .with_node(|mut node| node.height = Val::Percent(100.))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+        })
         .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(
             Column::<Node>::new()
-                .with_node(|mut node| node.height = Val::Px(HEIGHT))
-                .with_node(|mut node| node.width = Val::Px(WIDTH))
                 .background_color(BackgroundColor(PINK))
                 .align(Align::center())
                 .with_node(|mut node| {
+                    node.height = Val::Px(HEIGHT);
+                    node.width = Val::Px(WIDTH);
                     node.row_gap = Val::Px(GAP);
                     node.padding = UiRect::all(Val::Px(GAP));
                 })

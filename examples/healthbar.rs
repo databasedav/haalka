@@ -207,8 +207,10 @@ fn respawn_button() -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
         .align(Align::center())
-        .with_node(|mut node| node.width = Val::Px(250.))
-        .with_node(|mut node| node.height = Val::Px(80.))
+        .with_node(|mut node| {
+            node.width = Val::Px(250.);
+            node.height = Val::Px(80.);
+        })
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
@@ -235,8 +237,10 @@ fn set_dragging_position(mut node: Mut<Node>, StyleData { left, top, .. }: Style
 fn ui_root() -> impl Element {
     // let starting_distance = CAMERA_POSITION.distance(PLAYER_POSITION);
     El::<Node>::new()
-        .with_node(|mut node| node.width = Val::Percent(100.))
-        .with_node(|mut node| node.height = Val::Percent(100.))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+        })
         .cursor(CursorIcon::default())
         .child_signal(
             HEALTH_OPTION_MUTABLE
@@ -250,9 +254,11 @@ fn ui_root() -> impl Element {
                             .map_bool(
                                 move || {
                                     Stack::<Node>::new()
-                                        .with_node(|mut node| node.width = Val::Percent(100.))
-                                        .with_node(|mut node| node.height = Val::Percent(100.))
-                                        .with_node(|mut node| node.padding.bottom = Val::Px(10.))
+                                        .with_node(|mut node| {
+                                            node.width = Val::Percent(100.);
+                                            node.height = Val::Percent(100.);
+                                            node.padding.bottom = Val::Px(10.);
+                                        })
                                         .layer(
                                             Column::<Node>::new()
                                                 .on_signal_with_node(STYLE_DATA.signal(), set_dragging_position)
@@ -281,8 +287,10 @@ fn ui_root() -> impl Element {
                                                             .build::<colorgrad::LinearGradient>()
                                                             .unwrap(),
                                                     )
-                                                    .with_node(|mut node| node.width = Val::Px(MINI.0))
-                                                    .with_node(|mut node| node.height = Val::Px(MINI.1)),
+                                                    .with_node(|mut node| {
+                                                        node.width = Val::Px(MINI.0);
+                                                        node.height = Val::Px(MINI.1);
+                                                    })
                                                 ),
                                         )
                                         .layer(
@@ -296,8 +304,10 @@ fn ui_root() -> impl Element {
                                                     .unwrap(),
                                             )
                                             .align(Align::new().bottom().center_x())
-                                            .with_node(|mut node| node.width = Val::Px(MAXI.0))
-                                            .with_node(|mut node| node.height = Val::Px(MAXI.1)),
+                                            .with_node(|mut node| {
+                                                node.width = Val::Px(MAXI.0);
+                                                node.height = Val::Px(MAXI.1);
+                                            })
                                         )
                                         .type_erase()
                                 },

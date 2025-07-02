@@ -160,11 +160,11 @@ pub(crate) fn examples_plugin(app: &mut App) {
                 el = el.item(El::<Text>::new().text(Text::new("press f2 to toggle fps counter")));
                 El::<Node>::new()
                     .with_node(|mut node| {
+                        node.height = Val::Percent(100.);
+                        node.width = Val::Percent(100.);
                         node.padding.bottom = Val::Px(FPS_PADDING);
                         node.padding.left = Val::Px(FPS_PADDING);
                     })
-                    .with_node(|mut node| node.height = Val::Percent(100.))
-                    .with_node(|mut node| node.width = Val::Percent(100.))
                     .child(el)
                     .spawn(world);
             },

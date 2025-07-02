@@ -28,8 +28,10 @@ struct Counter(Mutable<i32>);
 fn ui_root() -> impl Element {
     let counter = Mutable::new(0);
     El::<Node>::new()
-        .with_node(|mut node| node.height = Val::Percent(100.))
-        .with_node(|mut node| node.width = Val::Percent(100.))
+        .with_node(|mut node| {
+            node.height = Val::Percent(100.);
+            node.width = Val::Percent(100.);
+        })
         .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(
