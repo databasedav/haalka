@@ -9,5 +9,5 @@
             "cmd": "cd haalka && just sync_nickels 2> /dev/null",
             "event": "onFileChange"
         }
-    ]
+    ],
 }

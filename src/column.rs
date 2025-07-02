@@ -13,7 +13,6 @@ use super::{
     mouse_wheel_scrollable::MouseWheelScrollable,
     pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
-    sizeable::Sizeable,
     viewport_mutable::ViewportMutable,
 };
 
@@ -33,7 +32,7 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Column<NodeType> {
                     node.display = Display::Flex;
                     node.flex_direction = FlexDirection::Column;
                 })
-                .insert(PickingBehavior::IGNORE),
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
@@ -67,7 +66,6 @@ impl<NodeType: Bundle> GlobalEventAware for Column<NodeType> {}
 impl<NodeType: Bundle> Nameable for Column<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Column<NodeType> {}
 impl<NodeType: Bundle> MouseWheelScrollable for Column<NodeType> {}
-impl<NodeType: Bundle> Sizeable for Column<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Column<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Column<NodeType> {}
 

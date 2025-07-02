@@ -12,11 +12,26 @@ in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "
 
 While haalka is primarily targeted at UI and provides high level UI abstractions as such, its [core abstraction](https://docs.rs/haalka/latest/haalka/struct.RawHaalkaEl.html) can be used to manage signals-powered reactivity for any entity, not just [`bevy_ui` nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs).
 
+## assorted features
+
+- signals integration for all entities, components, and children
+    - constant time reactive updates for collections via futures-signals' [`MutableVec`](https://docs.rs/futures-signals/latest/futures_signals/signal_vec/struct.MutableVec.html) and [`MutableBTreeMap`](https://docs.rs/futures-signals/latest/futures_signals/signal_map/struct.MutableBTreeMap.html)
+- simple high-level alignment semantics ported from MoonZoon (see [align example](https://databasedav.github.io/haalka/examples/webgl2/align/) below)
+- pointer event handling methods
+    - hovered change methods (including web-style [`Enter`](https://docs.rs/haalka/latest/haalka/pointer_event_aware/struct.Enter.html) and [`Leave`](https://docs.rs/haalka/latest/haalka/pointer_event_aware/struct.Leave.html) events)
+    - on click and on-click-outside methods
+    - on pressing methods, with throttle-ability
+- cursor-on-hover management
+- global event handling methods
+- mouse wheel scroll handling methods
+- signals-integrated text input, a thin layer on top of [bevy_ui_text_input](https://github.com/ickshonpe/bevy_ui_text_input)
+- viewport mutation handling methods
+- simple grid layout model ported from MoonZoon
+- macro rules for adding signal helper methods to custom element structs
+
 ## considerations
 
 - Reactive updates done by haalka are [**eventually consistent**](https://en.wikipedia.org/wiki/Eventual_consistency), that is, once some ECS world state has been updated, any downstream reactions should not be expected to run in the same frame. This is due to the indirection involved with using an async signals library, which dispatches Bevy commands after polling by the async runtime. The resulting "lag" should not be noticeable in most popular cases, e.g. reacting to hover/click state or synchronizing UI (one can run the examples to evaluate this themselves), but in cases where frame perfect responsiveness is critical, one should simply use Bevy-native systems directly.
-
-- If one is using the `text_input` feature (enabled by default) and using multiple cameras in the same world, they must enable the `multicam` feature AND add the `bevy_cosmic_edit::CosmicPrimaryCamera` marker component to the primary camera.
 
 ## [feature flags](https://docs.rs/haalka/latest/haalka/#feature-flags-1)
 
@@ -50,8 +65,10 @@ struct Counter(Mutable<i32>);
 fn ui_root() -> impl Element {
     let counter = Mutable::new(0);
     El::<Node>::new()
-        .height(Val::Percent(100.))
-        .width(Val::Percent(100.))
+        .with_node(|mut node| {
+            node.height = Val::Percent(100.);
+            node.width = Val::Percent(100.);
+        })
         .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(
@@ -71,7 +88,7 @@ fn ui_root() -> impl Element {
 fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
-        .width(Val::Px(45.0))
+        .with_node(|mut node| node.width = Val::Px(45.0))
         .align_content(Align::center())
         .border_radius(BorderRadius::MAX)
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
@@ -189,9 +206,9 @@ Or with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 |`0.13`|`0.1`|
 
 ## development
-- include submodules when fetching the repo
+- avoid the gh-pages branch and include submodules when fetching the repo
     ```bash
-    git clone --recurse-submodules https://github.com/databasedav/haalka.git
+    git clone --single-branch --branch main --recurse-submodules https://github.com/databasedav/haalka.git
     ```
 - install [just](https://github.com/casey/just?tab=readme-ov-file#installation)
 - install [nickel](https://github.com/tweag/nickel?tab=readme-ov-file#run) for modifying CI configuration (`nickel` must be in your PATH)

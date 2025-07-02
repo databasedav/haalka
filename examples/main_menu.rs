@@ -79,7 +79,6 @@ impl ElementWrapper for Button {
     }
 }
 
-impl Sizeable for Button {}
 impl GlobalEventAware for Button {}
 impl PointerEventAware for Button {}
 
@@ -120,11 +119,12 @@ impl Button {
         Self {
             el: {
                 El::<Node>::new()
-                    .height(Val::Px(DEFAULT_BUTTON_HEIGHT))
                     .with_node(|mut node| {
+                        node.height = Val::Px(DEFAULT_BUTTON_HEIGHT);
                         node.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH));
                     })
                     .pressed_sync(pressed)
+                    .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
                     .align_content(Align::center())
                     .hovered_sync(hovered.clone())
                     .border_color_signal(border_color_signal)
@@ -163,13 +163,13 @@ fn text_button(
     on_click: impl FnMut() + Send + Sync + 'static,
 ) -> Button {
     Button::new()
-        .width(Val::Px(200.))
         .body(
             El::<Text>::new()
                 .text_font(TextFont::from_font_size(FONT_SIZE))
                 .text_signal(text_signal.map(Text)),
         )
         .on_click(on_click)
+        .update_raw_el(|raw_el| raw_el.with_component::<Node>(|mut node| node.width = Val::Px(200.)))
 }
 
 fn sub_menu_button(sub_menu: SubMenu) -> Button {
@@ -180,15 +180,17 @@ fn sub_menu_button(sub_menu: SubMenu) -> Button {
 
 fn menu_base(width: f32, height: f32, title: &str) -> Column<Node> {
     Column::<Node>::new()
-        .width(Val::Px(width))
-        .height(Val::Px(height))
-        .with_node(|mut node| node.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH)))
+        .with_node(move |mut node| {
+            node.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH));
+            node.width = Val::Px(width);
+            node.height = Val::Px(height);
+        })
         .border_color(BorderColor(Color::BLACK))
         .background_color(BackgroundColor(NORMAL_BUTTON))
         .item(
             El::<Node>::new()
-                .height(Val::Px(MENU_ITEM_HEIGHT))
                 .with_node(|mut node| {
+                    node.height = Val::Px(MENU_ITEM_HEIGHT);
                     node.padding = UiRect::all(Val::Px(BASE_PADDING * 2.));
                 })
                 .child(
@@ -204,12 +206,15 @@ fn menu_base(width: f32, height: f32, title: &str) -> Column<Node> {
 // here, we use a global to keep track of any dropdowns that are dropped down, passing it to
 // `only_one_up_flipper` to ensure only one is dropped down at a time; a mutable for this can be
 // managed more locally, but adds significant unwieldiness
-static DROPDOWN_SHOWING_OPTION: Lazy<Mutable<Option<Mutable<bool>>>> = Lazy::new(default);
+static DROPDOWN_SHOWING_OPTION: LazyLock<Mutable<Option<Mutable<bool>>>> = LazyLock::new(default);
 
 fn lil_baby_button() -> Button {
-    Button::new()
-        .width(Val::Px(LIL_BABY_BUTTON_SIZE))
-        .height(Val::Px(LIL_BABY_BUTTON_SIZE))
+    Button::new().update_raw_el(|raw_el| {
+        raw_el.with_component::<Node>(|mut node| {
+            node.width = Val::Px(LIL_BABY_BUTTON_SIZE);
+            node.height = Val::Px(LIL_BABY_BUTTON_SIZE);
+        })
+    })
 }
 
 trait Controllable: ElementWrapper
@@ -525,13 +530,15 @@ impl Slider {
                     .item(
                         El::<Text>::new()
                             .text_font(TextFont::from_font_size(FONT_SIZE))
-                            .text_signal(value.signal().map(|value| Text(format!("{:.1}", value)))),
+                            .text_signal(value.signal().map(|value| Text(format!("{value:.1}")))),
                     )
                     .item(
                         Stack::<Node>::new()
-                            .width(Val::Px(slider_width))
-                            .height(Val::Px(5.))
-                            .with_node(move |mut node| node.padding = UiRect::horizontal(Val::Px(slider_padding)))
+                            .with_node(move |mut node| {
+                                node.width = Val::Px(slider_width);
+                                node.height = Val::Px(5.);
+                                node.padding = UiRect::horizontal(Val::Px(slider_padding));
+                            })
                             .background_color(BackgroundColor(Color::BLACK))
                             .layer({
                                 let dragging = Mutable::new(false);
@@ -572,7 +579,7 @@ impl Controllable for Slider {
 }
 
 fn options(n: usize) -> Vec<String> {
-    (1..=n).map(|i| format!("option {}", i)).collect()
+    (1..=n).map(|i| format!("option {i}")).collect()
 }
 
 fn only_one_up_flipper(
@@ -592,7 +599,7 @@ fn only_one_up_flipper(
     to_flip.set(!cur);
 }
 
-static MENU_ITEM_HOVERED_OPTION: Lazy<Mutable<Option<Mutable<bool>>>> = Lazy::new(default);
+static MENU_ITEM_HOVERED_OPTION: LazyLock<Mutable<Option<Mutable<bool>>>> = LazyLock::new(default);
 
 fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<Node> {
     Stack::<Node>::new()
@@ -603,9 +610,11 @@ fn menu_item(label: &str, body: impl Element, hovered: Mutable<bool>) -> Stack<N
                 .map(BackgroundColor),
         )
         .on_hovered_change(move |is_hovered| only_one_up_flipper(&hovered, &MENU_ITEM_HOVERED_OPTION, Some(is_hovered)))
-        .width(Val::Percent(100.))
-        .height(Val::Px(MENU_ITEM_HEIGHT))
-        .with_node(|mut node| node.padding = UiRect::axes(Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.)))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Px(MENU_ITEM_HEIGHT);
+            node.padding = UiRect::axes(Val::Px(BASE_PADDING), Val::Px(BASE_PADDING / 2.));
+        })
         .layer(
             El::<Text>::new()
                 .text_font(TextFont::from_font_size(FONT_SIZE))
@@ -717,12 +726,16 @@ impl Dropdown {
             })
             .child(
                 Button::new()
-                .width(Val::Px(300.))
+                .update_raw_el(|raw_el| raw_el.with_component::<Node>(|mut node| {
+                    node.width = Val::Px(300.)
+                }))
                 .hovered_signal(hovered.signal())
                 .body(
                     Stack::<Node>::new()
-                    .width(Val::Percent(100.))
-                    .with_node(|mut node| node.padding = UiRect::horizontal(Val::Px(BASE_PADDING)))
+                    .with_node(|mut node| {
+                        node.width = Val::Percent(100.);
+                        node.padding = UiRect::horizontal(Val::Px(BASE_PADDING));
+                    })
                     .layer(
                         El::<Text>::new()
                         .align(Align::new().left())
@@ -773,8 +786,8 @@ impl Dropdown {
                 show_dropdown.signal()
                 .map_true(clone!((options, show_dropdown, selected) move || {
                     Column::<Node>::new()
-                    .width(Val::Percent(100.))
                     .with_node(|mut node| {
+                        node.width = Val::Percent(100.);
                         node.position_type = PositionType::Absolute;
                         node.top = Val::Percent(100.);
                     })
@@ -798,7 +811,9 @@ impl Dropdown {
                                             flip(&show_dropdown);
                                         })
                                     )
-                                    .width(Val::Percent(100.))
+                                    .update_raw_el(|raw_el| raw_el.with_component::<Node>(|mut node| {
+                                        node.width = Val::Percent(100.)
+                                    }))
                                     .hovered_signal(hovered.signal())
                                     .apply(Some)
                                 } else {
@@ -1002,14 +1017,12 @@ fn graphics_menu() -> Column<Node> {
             // allowing setting Over/Out order at runtime or implementing .on_hovered_outside, i
             // should do both of these
             El::<Node>::new()
-                .height(Val::Px(
-                    SUB_MENU_HEIGHT - (l + 1) as f32 * MENU_ITEM_HEIGHT - BASE_PADDING * 2.,
-                ))
+                .with_node(move |mut node| {
+                    node.height = Val::Px(SUB_MENU_HEIGHT - (l + 1) as f32 * MENU_ITEM_HEIGHT - BASE_PADDING * 2.)
+                })
                 .on_hovered_change(|is_hovered| {
-                    if is_hovered {
-                        if let Some(hovered) = MENU_ITEM_HOVERED_OPTION.take() {
-                            hovered.set(false);
-                        }
+                    if is_hovered && let Some(hovered) = MENU_ITEM_HOVERED_OPTION.take() {
+                        hovered.set(false);
                     }
                 }),
         )
@@ -1036,9 +1049,9 @@ fn x_button(on_click: impl FnMut() + Send + Sync + 'static) -> impl Element {
         )
 }
 
-static SUB_MENU_SELECTED: Lazy<Mutable<Option<SubMenu>>> = Lazy::new(default);
+static SUB_MENU_SELECTED: LazyLock<Mutable<Option<SubMenu>>> = LazyLock::new(default);
 
-static SHOW_SUB_MENU: Lazy<Mutable<Option<SubMenu>>> = Lazy::new(default);
+static SHOW_SUB_MENU: LazyLock<Mutable<Option<SubMenu>>> = LazyLock::new(default);
 
 fn menu() -> impl Element {
     Stack::<Node>::new()
@@ -1097,9 +1110,9 @@ fn menu() -> impl Element {
                 SubMenu::Graphics => graphics_menu(),
             };
             Stack::<Node>::new()
-                .width(Val::Px(SUB_MENU_WIDTH))
-                .height(Val::Px(SUB_MENU_HEIGHT))
                 .with_node(|mut node| {
+                    node.width = Val::Px(SUB_MENU_WIDTH);
+                    node.height = Val::Px(SUB_MENU_HEIGHT);
                     // TODO: without absolute there's some weird bouncing when switching between
                     // menus, perhaps due to the layout system having to figure stuff out ?
                     node.position_type = PositionType::Absolute;
@@ -1133,7 +1146,7 @@ struct AudioSettings {
     voice_volume: Mutable<f32>,
 }
 
-static AUDIO_SETTINGS: Lazy<AudioSettings> = Lazy::new(|| AudioSettings {
+static AUDIO_SETTINGS: LazyLock<AudioSettings> = LazyLock::new(|| AudioSettings {
     master_volume: Mutable::new(100.),
     effect_volume: Mutable::new(50.),
     music_volume: Mutable::new(50.),
@@ -1148,7 +1161,7 @@ struct GraphicsSettings {
     bloom_quality: Mutable<Option<Quality>>,
 }
 
-static GRAPHICS_SETTINGS: Lazy<GraphicsSettings> = Lazy::new(|| GraphicsSettings {
+static GRAPHICS_SETTINGS: LazyLock<GraphicsSettings> = LazyLock::new(|| GraphicsSettings {
     preset_quality: Mutable::new(Some(Quality::Medium)),
     texture_quality: Mutable::new(Some(Quality::Medium)),
     shadow_quality: Mutable::new(Some(Quality::Medium)),
@@ -1163,7 +1176,7 @@ struct MiscDemoSettings {
     iterable_options: Mutable<String>,
 }
 
-static MISC_DEMO_SETTINGS: Lazy<MiscDemoSettings> = Lazy::new(|| MiscDemoSettings {
+static MISC_DEMO_SETTINGS: LazyLock<MiscDemoSettings> = LazyLock::new(|| MiscDemoSettings {
     dropdown: Mutable::new(None),
     radio_group: Mutable::new(None),
     checkbox: Mutable::new(false),
@@ -1182,7 +1195,7 @@ enum MenuInput {
 }
 
 impl Event for MenuInput {
-    type Traversal = &'static Parent;
+    type Traversal = &'static ChildOf;
 
     const AUTO_PROPAGATE: bool = true;
 }
@@ -1353,8 +1366,11 @@ const SLIDER_RATE_LIMIT: f32 = 0.001;
 
 fn ui_root() -> impl Element {
     El::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+        })
+        .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(menu())
 }

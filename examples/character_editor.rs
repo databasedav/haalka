@@ -8,15 +8,12 @@
 //! - On the top of the UI is a text field for the character name.
 
 mod utils;
-use bevy_text::{
-    cosmic_text::{Family, FamilyOwned},
-    FontWeight,
-};
+use bevy_input_focus::InputFocus;
+use bevy_ui_text_input::{TextInputMode, TextInputPrompt};
 use utils::*;
 
 use bevy::prelude::*;
-use bevy_cosmic_edit::{CosmicBackgroundColor, CosmicTextChanged, CosmicWrap, CursorColor, MaxLines};
-use haalka::{prelude::*, text_input::FocusedTextInput};
+use haalka::prelude::*;
 use strum::{self, IntoEnumIterator};
 
 fn main() {
@@ -38,14 +35,13 @@ fn main() {
                 },
             ),
         )
-        .add_systems(Update, name_changed)
         .add_observer(
             |event: Trigger<SetShape>,
              character: Single<Entity, With<MeshMaterial3d<StandardMaterial>>>,
              mut meshes: ResMut<Assets<Mesh>>,
              mut commands: Commands| {
                 let shape = **event;
-                if let Some(mut entity) = commands.get_entity(*character) {
+                if let Ok(mut entity) = commands.get_entity(*character) {
                     entity.insert(Mesh3d(meshes.add(match shape {
                         Shape::Sphere => Sphere::default().mesh().ico(5).unwrap(),
                         Shape::Plane => Plane3d::default().mesh().size(1., 1.).into(),
@@ -64,8 +60,8 @@ fn main() {
 const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
 const CLICKED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
-const BUTTON_WIDTH: Val = Val::Px(250.);
-const BUTTON_HEIGHT: Val = Val::Px(50.);
+const BUTTON_WIDTH: f32 = 250.;
+const BUTTON_HEIGHT: f32 = 50.;
 
 #[derive(Clone, Copy, PartialEq, strum::Display, strum::EnumIter)]
 #[strum(serialize_all = "lowercase")]
@@ -78,8 +74,8 @@ enum Shape {
     Torus,
 }
 
-static SELECTED_SHAPE: Lazy<Mutable<Shape>> = Lazy::new(|| Mutable::new(Shape::Cuboid));
-static SCROLL_POSITION: Lazy<Mutable<f32>> = Lazy::new(default);
+static SELECTED_SHAPE: LazyLock<Mutable<Shape>> = LazyLock::new(|| Mutable::new(Shape::Cuboid));
+static SCROLL_POSITION: LazyLock<Mutable<f32>> = LazyLock::new(default);
 
 fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
     let selected = SELECTED_SHAPE.signal().eq(shape);
@@ -117,9 +113,12 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
             .map(BackgroundColor)
     };
     El::<Node>::new()
-        .width(BUTTON_WIDTH)
-        .height(BUTTON_HEIGHT)
-        .with_node(|mut node| node.border = UiRect::all(Val::Px(5.)))
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
+        .with_node(|mut node| {
+            node.width = Val::Px(BUTTON_WIDTH);
+            node.height = Val::Px(BUTTON_HEIGHT);
+            node.border = UiRect::all(Val::Px(5.));
+        })
         .align_content(Align::center())
         .border_color_signal(border_color_signal)
         .background_color_signal(background_color_signal)
@@ -139,13 +138,18 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
 fn ui_root() -> impl Element {
     El::<Node>::new()
         .ui_root()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .cursor(CursorIcon::default())
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+        })
         .align_content(Align::center())
         .child(
             Stack::<Node>::new()
-                .width(Val::Percent(100.))
-                .height(Val::Percent(100.))
+                .with_node(|mut node| {
+                    node.width = Val::Percent(100.);
+                    node.height = Val::Percent(100.);
+                })
                 .layer(
                     Column::<Node>::new()
                         .align(Align::new().center_y().right())
@@ -155,38 +159,49 @@ fn ui_root() -> impl Element {
                         })
                         .item({
                             let focused = Mutable::new(false);
-                            TextInput::new()
-                                .width(BUTTON_WIDTH)
-                                .height(Val::Px(40.))
-                                .mode(CosmicWrap::InfiniteLine)
-                                .scroll_disabled()
-                                .attrs(
-                                    TextAttrs::new()
-                                        .family(FamilyOwned::new(Family::Name("Fira Mono")))
-                                        .weight(FontWeight::MEDIUM),
+                            El::<Node>::new()
+                                .update_raw_el(|raw_el| raw_el.insert(BackgroundColor(NORMAL_BUTTON)))
+                                .with_node(|mut node| node.height = Val::Px(BUTTON_HEIGHT))
+                                .child(
+                                    TextInput::new()
+                                        .with_node(|mut node| {
+                                            node.left = Val::Px(10.);
+                                            node.height = Val::Px(BUTTON_HEIGHT - 10. * 2.);
+                                        })
+                                        .align(Align::new().center_y())
+                                        .with_text_input_node(|mut node| {
+                                            node.mode = TextInputMode::SingleLine;
+                                            // TODO: https://github.com/ickshonpe/bevy_ui_text_input/issues/10
+                                            // node.justification = JustifyText::Center;
+                                        })
+                                        .cursor(CursorIcon::System(SystemCursorIcon::Text))
+                                        .text_color(TextColor(Color::WHITE))
+                                        .text_input_prompt(TextInputPrompt {
+                                            text: "name".to_string(),
+                                            color: Some(bevy::color::palettes::basic::GRAY.into()),
+                                            ..default()
+                                        })
+                                        .focus_signal(focused.signal())
+                                        .focused_sync(focused)
+                                        .on_change_with_system(|In((_, text)), mut commands: Commands| {
+                                            if let Some((i, shape)) =
+                                                Shape::iter().enumerate().find(|(_, shape)| shape.to_string() == text)
+                                            {
+                                                commands.trigger(SetShape(shape));
+                                                SCROLL_POSITION.set(i as f32 * BUTTON_HEIGHT);
+                                            }
+                                        })
+                                        .on_click_outside_with_system(|In(_), mut commands: Commands| {
+                                            commands.insert_resource(InputFocus(None))
+                                        }),
                                 )
-                                .cursor(CursorIcon::System(SystemCursorIcon::Text))
-                                .cursor_color(CursorColor(Color::WHITE))
-                                .fill_color(CosmicBackgroundColor(NORMAL_BUTTON))
-                                .attrs(TextAttrs::new().color(Color::WHITE))
-                                .max_lines(MaxLines(1))
-                                .placeholder(
-                                    Placeholder::new()
-                                        .text("name")
-                                        .attrs(TextAttrs::new().color(bevy::color::palettes::basic::GRAY)),
-                                )
-                                .focus_signal(focused.signal())
-                                .focused_sync(focused)
-                                .on_click_outside_with_system(|In(_), mut commands: Commands| {
-                                    commands.remove_resource::<FocusedTextInput>()
-                                })
                         })
                         .item({
                             let hovereds = MutableVec::new_with_values(
                                 (0..Shape::iter().count()).map(|_| Mutable::new(false)).collect(),
                             );
                             Column::<Node>::new()
-                                .height(Val::Px(200.))
+                                .with_node(|mut node| node.height = Val::Px(200.))
                                 .align(Align::new().center_x())
                                 .mutable_viewport(haalka::prelude::Axis::Vertical)
                                 .on_scroll_with_system_on_hover(
@@ -205,17 +220,6 @@ fn ui_root() -> impl Element {
                         }),
                 ),
         )
-}
-
-fn name_changed(mut changed_events: EventReader<CosmicTextChanged>, mut commands: Commands) {
-    for CosmicTextChanged((_, text)) in changed_events.read() {
-        if let Some((i, shape)) = Shape::iter().enumerate().find(|(_, shape)| &shape.to_string() == text) {
-            commands.trigger(SetShape(shape));
-            if let Val::Px(height) = BUTTON_HEIGHT {
-                SCROLL_POSITION.set(i as f32 * height);
-            }
-        }
-    }
 }
 
 #[derive(Event, Deref)]

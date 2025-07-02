@@ -66,13 +66,12 @@ cfg_if::cfg_if! {
         use bevy_input::prelude::*;
         use bevy_app::prelude::*;
         use bevy_ui::prelude::*;
-        use bevy_dev_tools::ui_debug_overlay;
 
         const OVERLAY_TOGGLE_KEY: KeyCode = KeyCode::F1;
 
         fn toggle_overlay(
             input: Res<ButtonInput<KeyCode>>,
-            mut options: ResMut<ui_debug_overlay::UiDebugOptions>,
+            mut options: ResMut<UiDebugOptions>,
         ) {
             if input.just_pressed(OVERLAY_TOGGLE_KEY) {
                 options.toggle();
@@ -81,44 +80,13 @@ cfg_if::cfg_if! {
 
         pub struct DebugUiPlugin;
 
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "text_input")] {
-                use bevy_log::prelude::*;
-                use bevy_cosmic_edit;
-
-                #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-                pub struct CosmicMulticamHandlerSet;
-
-                fn handle_cosmic_multicam(default_cameras: Query<Entity, With<IsDefaultUiCamera>>, mut commands: Commands) {
-                    if let Ok(entity) = default_cameras.get_single() {
-                        if let Some(mut entity) = commands.get_entity(entity) {
-                            entity.try_insert(bevy_cosmic_edit::CosmicPrimaryCamera);
-                            commands.remove_resource::<bevy_cosmic_edit::CursorPluginDisabled>();
-                        }
-                    } else {
-                        warn!("DebugUiPlugin won't function without a camera with an IsDefaultUiCamera component");
-                    }
-                }
-            }
-        }
-
         impl Plugin for DebugUiPlugin {
             fn build(&self, app: &mut App) {
                 cfg_if::cfg_if! {
                     if #[cfg(feature = "ui")] {
-                        cfg_if::cfg_if! {
-                            if #[cfg(feature = "text_input")] {
-                                app
-                                .insert_resource(bevy_cosmic_edit::CursorPluginDisabled)
-                                .add_systems(PostStartup, handle_cosmic_multicam.in_set(CosmicMulticamHandlerSet))
-                                .add_systems(Update, toggle_overlay.run_if(any_with_component::<IsDefaultUiCamera>.and(any_with_component::<bevy_cosmic_edit::CosmicPrimaryCamera>)));
-                            } else {
-                                app.add_systems(Update, toggle_overlay.run_if(any_with_component::<IsDefaultUiCamera>));
-                            }
-                        }
+                        app.add_systems(Update, toggle_overlay.run_if(any_with_component::<IsDefaultUiCamera>));
                     }
                 }
-                app.add_plugins(ui_debug_overlay::DebugUiPlugin);
             }
         }
     }

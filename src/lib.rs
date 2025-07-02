@@ -24,7 +24,6 @@ cfg_if::cfg_if! {
         pub mod global_event_aware;
         mod row;
         pub mod mouse_wheel_scrollable;
-        pub mod sizeable;
         mod stack;
         pub mod viewport_mutable;
 
@@ -67,9 +66,9 @@ impl Plugin for HaalkaPlugin {
 pub mod prelude {
     #[doc(inline)]
     pub use crate::{
+        HaalkaPlugin,
         node_builder::async_world,
         raw::{RawElWrapper, RawElement, RawHaalkaEl, Spawnable},
-        HaalkaPlugin,
     };
 
     #[doc(no_inline)]
@@ -90,7 +89,6 @@ pub mod prelude {
                 },
                 pointer_event_aware::{SetCursor, CursorOnHoverDisabled, CursorOnHoverable, PointerEventAware, Enter, Leave},
                 row::Row,
-                sizeable::Sizeable,
                 stack::Stack,
                 viewport_mutable::{Axis, ViewportMutable},
             };
@@ -101,8 +99,8 @@ pub mod prelude {
             cfg_if::cfg_if! {
                 if #[cfg(feature = "text_input")] {
                     #[doc(inline)]
-                    pub use super::text_input::{Placeholder, TextAttrs, TextInput};
-                    pub use bevy_cosmic_edit;
+                    pub use super::text_input::TextInput;
+                    pub use bevy_ui_text_input;
                 }
             }
         }
@@ -121,8 +119,7 @@ pub mod prelude {
             pub use crate::utils::*;
             #[doc(no_inline)]
             pub use apply::{Also, Apply};
-            #[doc(no_inline)]
-            pub use once_cell::sync::Lazy;
+            pub use std::sync::LazyLock;
         }
     }
 }

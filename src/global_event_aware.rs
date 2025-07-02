@@ -4,12 +4,11 @@ use std::sync::{Arc, OnceLock};
 
 use super::{
     element::UiRoot,
-    raw::{observe, register_system, utils::remove_system_holder_on_remove, RawElWrapper},
+    raw::{RawElWrapper, observe, register_system, utils::remove_system_holder_on_remove},
     utils::clone,
 };
 use apply::Apply;
 use bevy_ecs::prelude::*;
-use bevy_hierarchy::prelude::*;
 
 /// Enables registering "global" event listeners on the [`UiRoot`] node. The [`UiRoot`] must be
 /// manually registered with [`UiRootable::ui_root`](super::element::UiRootable::ui_root) for this
@@ -30,12 +29,12 @@ pub trait GlobalEventAware: RawElWrapper {
                     let _ = system_holder.set(register_system(world, handler));
                 }))
                 .apply(remove_system_holder_on_remove(system_holder.clone()))
-                .on_spawn_with_system(clone!((observer_holder, system_holder) move |In(entity), parents: Query<&Parent>, ui_roots: Query<&UiRoot>, mut commands: Commands| {
-                    for ancestor in parents.iter_ancestors(entity) {
+                .on_spawn_with_system(clone!((observer_holder, system_holder) move |In(entity), child_ofs: Query<&ChildOf>, ui_roots: Query<&UiRoot>, mut commands: Commands| {
+                    for ancestor in child_ofs.iter_ancestors(entity) {
                         if ui_roots.contains(ancestor) {
                             commands.queue(clone!((system_holder, observer_holder) move |world: &mut World| {
                                 let observer = observe(world, ancestor, clone!((system_holder) move |event: Trigger<E>, mut commands: Commands| {
-                                    commands.run_system_with_input(system_holder.get().copied().unwrap(), (entity, (*event).clone()));
+                                    commands.run_system_with(system_holder.get().copied().unwrap(), (entity, (*event).clone()));
                                 })).id();
                                 let _ = observer_holder.set(observer);
                             }));
@@ -46,7 +45,7 @@ pub trait GlobalEventAware: RawElWrapper {
                 .on_remove(move |world, _| {
                     if let Some(&observer) = observer_holder.get() {
                         world.commands().queue(move |world: &mut World| {
-                            world.try_despawn(observer);
+                            let _ = world.try_despawn(observer);
                         })
                     }
                 })

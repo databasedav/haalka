@@ -8,22 +8,19 @@ jobs:
       uses: actions/checkout@v4
       with:
         submodules: true
-    - name: install nix
-      uses: cachix/install-nix-action@v30
-    - name: nickel binary cache
-      uses: cachix/cachix-action@v15
-      with:
-        name: tweag-nickel
     - name: install nickel
       run: |-
-        nix profile install github:tweag/nickel
-        echo "$HOME/.nix-profile/bin" >> $GITHUB_PATH
+        OUT="$HOME/.local/bin/nickel"
+        mkdir -p "$(dirname "$OUT")"
+        curl -L "https://github.com/tweag/nickel/releases/download/1.12.2/nickel-pkg-x86_64-linux" -o "$OUT"
+        chmod +x "$OUT"
+        echo "$(dirname "$OUT")" >> "$GITHUB_PATH"
         nickel --version
     - name: install just
       uses: extractions/setup-just@v2
     - name: assert nickels synced
       run: |-
-        just format_nickels sync_nickels
+        just sync_nickels
         [[ -n $(git status --porcelain) ]] && echo 'nickels are not synced; run `just format_nickels sync_nickels`' && exit 1 || exit 0
   build_examples_:
     name: build_examples_

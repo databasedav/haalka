@@ -4,6 +4,21 @@ the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## unreleased
 
+### added
+
+- ability to disable clearing previous text input selections on focus change
+
+### changed
+
+- upgraded Bevy to `0.16.1`
+- migrated `TextInput` from [bevy_cosmic_edit](https://github.com/Dimchikkk/bevy_cosmic_edit) to [bevy_ui_text_input](https://github.com/ickshonpe/bevy_ui_text_input)
+- upgraded to rust 2024 edition
+- migrated from once-cell to `std::sync::LazyLock`
+
+### removed
+
+- `Sizeable` trait (migration: modify the `Node` component directly)
+
 # 0.4.1 (2025-04-08)
 
 ### added

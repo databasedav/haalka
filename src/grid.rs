@@ -16,7 +16,6 @@ use super::{
     mouse_wheel_scrollable::MouseWheelScrollable,
     pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
-    sizeable::Sizeable,
     stack::Stack,
     viewport_mutable::ViewportMutable,
 };
@@ -36,7 +35,7 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Grid<NodeType> {
                 .with_component::<Node>(|mut node| {
                     node.display = Display::Grid;
                 })
-                .insert(PickingBehavior::IGNORE),
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
@@ -79,7 +78,6 @@ impl<NodeType: Bundle> GlobalEventAware for Grid<NodeType> {}
 impl<NodeType: Bundle> Nameable for Grid<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Grid<NodeType> {}
 impl<NodeType: Bundle> MouseWheelScrollable for Grid<NodeType> {}
-impl<NodeType: Bundle> Sizeable for Grid<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Grid<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Grid<NodeType> {}
 

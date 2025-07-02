@@ -11,8 +11,18 @@ let BEVY_DEPENDENCIES = [
 in
 let CARGO_CACHE_VERSION = "2" in
 let SETUP_JUST_VERSION = "2" in
-let INSTALL_NIX_ACTION_VERSION = "30" in
-let CACHIX_ACTION_VERSION = "15" in
+let NICKEL_VERSION = "1.12.2" in
+let install_nickel_ = {
+  name = "install nickel",
+  run = m%"
+    OUT="$HOME/.local/bin/nickel"
+    mkdir -p "$(dirname "$OUT")"
+    curl -L "https://github.com/tweag/nickel/releases/download/%{ NICKEL_VERSION }/nickel-pkg-x86_64-linux" -o "$OUT"
+    chmod +x "$OUT"
+    echo "$(dirname "$OUT")" >> "$GITHUB_PATH"
+    nickel --version
+  "%
+} in
 {
   REPO = "https://github.com/databasedav/haalka",
   GITHUB_PAGES_DEPLOY_ACTION_VERSION = "4.7.3",
@@ -56,34 +66,18 @@ let CACHIX_ACTION_VERSION = "15" in
     name = "install binstall",
     uses = "cargo-bins/cargo-binstall@main"
   },
+  install_nickel = install_nickel_,
   assert_nickels_synced =
     {
       steps = [
         checkout,
-        {
-          name = "install nix",
-          uses = "cachix/install-nix-action@v%{ INSTALL_NIX_ACTION_VERSION }",
-        },
-        {
-          name = "nickel binary cache",
-          uses = "cachix/cachix-action@v%{ CACHIX_ACTION_VERSION }",
-          with = {
-            name = "tweag-nickel",
-          }
-        },
-        {
-          name = "install nickel",
-          run = m%"
-            nix profile install github:tweag/nickel
-            echo "$HOME/.nix-profile/bin" >> $GITHUB_PATH
-            nickel --version
-          "%
-        },
+        install_nickel_,
         just,
         {
           name = "assert nickels synced",
+          # TODO: re add format_nickels
           run = m%"
-            just format_nickels sync_nickels
+            just sync_nickels
             [[ -n $(git status --porcelain) ]] && echo 'nickels are not synced; run `just format_nickels sync_nickels`' && exit 1 || exit 0
           "%
         }

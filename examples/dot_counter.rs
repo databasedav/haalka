@@ -1,6 +1,7 @@
 //! Demonstrates how to forward ECS changes to UI.
 
 mod utils;
+use bevy_ecs::component::HookContext;
 use bevy_render::view::RenderLayers;
 use utils::*;
 
@@ -38,7 +39,7 @@ fn main() {
              mut meshes: ResMut<Assets<Mesh>>,
              mut materials: ResMut<Assets<ColorMaterial>>,
              mut commands: Commands| {
-                let translation = Vec3::new(rng.gen::<f32>() * HEIGHT, rng.gen::<f32>() * HEIGHT, 0.)
+                let translation = Vec3::new(rng.random::<f32>() * HEIGHT, rng.random::<f32>() * HEIGHT, 0.)
                     - Vec3::new(WIDTH / 2., HEIGHT / 2., -1.);
                 let color = position_to_color(translation);
                 commands.spawn((
@@ -56,11 +57,10 @@ fn main() {
              mut rng: GlobalEntropy<ChaCha8Rng>,
              mut commands: Commands| {
                 if let Some(dot) = dots.iter().choose(rng.as_mut()) {
-                    commands.entity(dot).despawn_recursive();
+                    commands.entity(dot).despawn();
                 }
             },
         )
-        .insert_resource(bevy_cosmic_edit::CursorPluginDisabled)
         .run();
 }
 
@@ -85,8 +85,10 @@ const FONT_SIZE: f32 = 25.;
 
 fn box_(category: ColorCategory) -> El<Node> {
     El::<Node>::new()
-        .width(Val::Px(BOX_SIZE))
-        .height(Val::Px(BOX_SIZE))
+        .with_node(|mut node| {
+            node.width = Val::Px(BOX_SIZE);
+            node.height = Val::Px(BOX_SIZE);
+        })
         .background_color(BackgroundColor(match category {
             ColorCategory::Blue => BLUE,
             ColorCategory::Green => GREEN,
@@ -115,7 +117,7 @@ fn text_labeled_element(label: &str, element: impl Element) -> impl Element {
     labeled_element(
         El::<Text>::new()
             .text_font(TextFont::from_font_size(FONT_SIZE))
-            .text(Text(format!("{}: ", label))),
+            .text(Text(format!("{label}: "))),
         element,
     )
 }
@@ -132,8 +134,10 @@ fn category_count(category: ColorCategory, count: impl Signal<Item = i32> + Send
     labeled_count(
         {
             El::<Node>::new()
-                .width(Val::Px(30.))
-                .height(Val::Px(30.))
+                .with_node(|mut node| {
+                    node.width = Val::Px(30.);
+                    node.height = Val::Px(30.);
+                })
                 .background_color(BackgroundColor(match category {
                     ColorCategory::Blue => BLUE,
                     ColorCategory::Green => GREEN,
@@ -150,8 +154,9 @@ fn category_count(category: ColorCategory, count: impl Signal<Item = i32> + Send
 fn incrde_button<T: Component>(step: f32) -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
-        .width(Val::Px(45.0))
+        .with_node(|mut node| node.width = Val::Px(45.0))
         .align_content(Align::center())
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
                 .signal()
@@ -179,7 +184,7 @@ fn rate_element<T: Component>(rate: Mutable<f32>) -> impl Element {
         .item(
             El::<Text>::new()
                 .text_font(TextFont::from_font_size(FONT_SIZE))
-                .text_signal(rate.signal().map(|rate| Text(format!("{:.1}", rate)))),
+                .text_signal(rate.signal().map(|rate| Text(format!("{rate:.1}")))),
         )
         .item(incrde_button::<T>(-0.1))
 }
@@ -228,9 +233,9 @@ struct Counts {
 const STARTING_SPAWN_RATE: f32 = 1.5;
 const STARTING_DESPAWN_RATE: f32 = 1.;
 
-static SPAWN_RATE: Lazy<Mutable<f32>> = Lazy::new(|| Mutable::new(STARTING_SPAWN_RATE));
-static DESPAWN_RATE: Lazy<Mutable<f32>> = Lazy::new(|| Mutable::new(STARTING_DESPAWN_RATE));
-static COUNTS: Lazy<Counts> = Lazy::new(default);
+static SPAWN_RATE: LazyLock<Mutable<f32>> = LazyLock::new(|| Mutable::new(STARTING_SPAWN_RATE));
+static DESPAWN_RATE: LazyLock<Mutable<f32>> = LazyLock::new(|| Mutable::new(STARTING_DESPAWN_RATE));
+static COUNTS: LazyLock<Counts> = LazyLock::new(default);
 
 fn ui_root() -> impl Element {
     let counts = MutableVec::new_with_values(vec![
@@ -240,14 +245,19 @@ fn ui_root() -> impl Element {
         COUNTS.yellow.clone(),
     ]);
     El::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+        })
         .align_content(Align::center())
+        .cursor(CursorIcon::default())
         .child(
             Row::<Node>::new()
-                .width(Val::Px(WIDTH))
-                .height(Val::Px(HEIGHT))
-                .with_node(|mut node| node.column_gap = Val::Px(50.))
+                .with_node(|mut node| {
+                    node.width = Val::Px(WIDTH);
+                    node.height = Val::Px(HEIGHT);
+                    node.column_gap = Val::Px(50.);
+                })
                 .item(
                     Column::<Node>::new()
                         .with_node(|mut node| node.width = Val::Px(2. * BOX_SIZE))
@@ -342,13 +352,13 @@ fn update_color_count(color: ColorCategory, step: i32) {
     count.update(|count| count + step);
 }
 
-fn incr_color_count(world: bevy::ecs::world::DeferredWorld, entity: Entity, _: bevy::ecs::component::ComponentId) {
+fn incr_color_count(world: bevy::ecs::world::DeferredWorld, HookContext { entity, .. }: HookContext) {
     if let Some(Dot(color)) = world.get::<Dot>(entity).copied() {
         update_color_count(color, 1);
     }
 }
 
-fn decr_color_count(world: bevy::ecs::world::DeferredWorld, entity: Entity, _: bevy::ecs::component::ComponentId) {
+fn decr_color_count(world: bevy::ecs::world::DeferredWorld, HookContext { entity, .. }: HookContext) {
     if let Some(Dot(color)) = world.get::<Dot>(entity).copied() {
         update_color_count(color, -1);
     }
@@ -382,5 +392,5 @@ fn position_to_color(position: Vec3) -> ColorCategory {
             return ColorCategory::Green;
         }
     }
-    panic!("Invalid position: {:?}", position);
+    panic!("Invalid position: {position:?}");
 }

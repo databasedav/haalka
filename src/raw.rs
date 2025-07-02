@@ -12,11 +12,11 @@ use std::{
 };
 
 use super::{
-    node_builder::{async_world, NodeBuilder, TaskHolder},
+    node_builder::{NodeBuilder, TaskHolder, async_world},
     raw::utils::remove_system_holder_on_remove,
 };
 use apply::Apply;
-use bevy_ecs::{component::*, prelude::*, system::*, world::*};
+use bevy_ecs::{component::*, error::*, prelude::*, system::*, world::*};
 use bevy_log::error;
 use bevy_tasks::Task;
 use bevy_utils::prelude::*;
@@ -135,7 +135,7 @@ impl RawHaalkaEl {
         system: T,
     ) -> Self {
         self.on_spawn(|world, entity| {
-            if let Err(error) = world.run_system_once_with(entity, system) {
+            if let Err(error) = world.run_system_once_with(system, entity) {
                 error!("failed to run system on spawn: {}", error);
             }
         })
@@ -183,7 +183,7 @@ impl RawHaalkaEl {
 
     /// Run a function with mutable access (via [`Mut`]) to this element's `C` [`Component`] if it
     /// exists.
-    pub fn with_component<C: Component>(self, f: impl FnOnce(Mut<C>) + Send + 'static) -> Self {
+    pub fn with_component<C: Component<Mutability = Mutable>>(self, f: impl FnOnce(Mut<C>) + Send + 'static) -> Self {
         self.with_entity(|mut entity| {
             if let Some(component) = entity.get_mut::<C>() {
                 f(component);
@@ -193,7 +193,7 @@ impl RawHaalkaEl {
 
     /// If the `forwarder` points to [`Some`] [`Entity`], run a function with mutable access (via
     /// [`Mut`]) to that [`Entity`]'s `C` [`Component`] if it exists.
-    pub fn with_component_forwarded<C: Component>(
+    pub fn with_component_forwarded<C: Component<Mutability = Mutable>>(
         self,
         forwarder: impl FnOnce(&mut EntityWorldMut) -> Option<Entity> + Send + 'static,
         f: impl FnOnce(Mut<C>) + Send + 'static,
@@ -271,10 +271,7 @@ impl RawHaalkaEl {
         .on_signal(
             signal,
             clone!((system_holder) move |entity, input| {
-                async_world().apply(RunSystemWithInput::new_with_input(
-                    system_holder.get().copied().unwrap(),
-                    (entity, input),
-                ))
+                async_world().apply(run_system_with_entity(entity, system_holder.get().copied().unwrap(), input).handle_error_with(warn))
             }),
         )
         .apply(remove_system_holder_on_remove(system_holder))
@@ -299,8 +296,8 @@ impl RawHaalkaEl {
             signal,
             clone!((forwarder_system_holder, handler_system_holder) move |In((entity, input)): In<(Entity, T)>, mut commands: Commands| {
                 commands.queue(clone!((forwarder_system_holder, handler_system_holder) move |world: &mut World| {
-                    if let Ok(Some(forwardee)) = world.run_system_with_input(forwarder_system_holder.get().copied().unwrap(), entity) {
-                        let _ = world.run_system_with_input(handler_system_holder.get().copied().unwrap(), (forwardee, input));
+                    if let Ok(Some(forwardee)) = world.run_system_with(forwarder_system_holder.get().copied().unwrap(), entity) {
+                        let _ = world.run_system_with(handler_system_holder.get().copied().unwrap(), (forwardee, input));
                     }
                 }))
             }),
@@ -347,7 +344,7 @@ impl RawHaalkaEl {
 
     /// Reactively run a function with mutable access (via [`Mut`]) to this element's `C`
     /// [`Component`] if it exists and the output of the [`Signal`].
-    pub fn on_signal_with_component<T: Send + 'static, C: Component>(
+    pub fn on_signal_with_component<T: Send + 'static, C: Component<Mutability = Mutable>>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
         mut f: impl FnMut(Mut<C>, T) + Send + Sync + 'static,
@@ -364,7 +361,7 @@ impl RawHaalkaEl {
 
     /// Reactively run a function, if the `forwarder` points to [`Some`] [`Entity`], with mutable
     /// access (via [`Mut`]) to that [`Entity`]'s `C` [`Component`] if it exists.
-    pub fn on_signal_with_component_forwarded<T: Send + 'static, C: Component, Marker>(
+    pub fn on_signal_with_component_forwarded<T: Send + 'static, C: Component<Mutability = Mutable>, Marker>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
         forwarder: impl IntoSystem<In<Entity>, Option<Entity>, Marker> + Send + 'static,
@@ -457,7 +454,7 @@ impl RawHaalkaEl {
                 let _ = system_holder.set(handler);
                 observe(world, entity, move |mut event: Trigger<E>, disabled: Query<&Disabled>, propagation_stopped: Query<&PropagationStopped>, mut commands: Commands| {
                     if !disabled.contains(entity) {
-                        commands.run_system_with_input(handler, (entity, (*event).clone()));
+                        commands.run_system_with(handler, (entity, (*event).clone()));
                         if propagation_stopped.contains(entity) {
                             event.propagate(false);
                         }
@@ -690,21 +687,35 @@ impl RawHaalkaEl {
     }
 }
 
-#[allow(clippy::type_complexity)]
-struct OnRemove(Vec<Box<dyn FnOnce(&mut DeferredWorld, Entity) + Send + Sync + 'static>>);
-
-impl Component for OnRemove {
-    const STORAGE_TYPE: StorageType = StorageType::Table;
-
-    fn register_component_hooks(hooks: &mut ComponentHooks) {
-        hooks.on_remove(|mut world, entity, _| {
-            let fs = world.get_mut::<Self>(entity).unwrap().0.drain(..).collect::<Vec<_>>();
-            for f in fs {
-                f(&mut world, entity);
-            }
-        });
+fn run_system_with_entity<I: Send + 'static>(
+    entity: Entity,
+    id: SystemId<In<(Entity, I)>>,
+    input: I,
+) -> impl Command<Result> {
+    move |world: &mut World| -> Result {
+        if world.get_entity(entity).is_ok() {
+            world.run_system_with(id, (entity, input))?;
+        }
+        Ok(())
     }
 }
+
+fn on_remove_on_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    let fs = world
+        .get_mut::<OnRemove>(entity)
+        .unwrap()
+        .0
+        .drain(..)
+        .collect::<Vec<_>>();
+    for f in fs {
+        f(&mut world, entity);
+    }
+}
+
+#[allow(clippy::type_complexity)]
+#[derive(Component)]
+#[component(on_remove = on_remove_on_remove)]
+struct OnRemove(Vec<Box<dyn FnOnce(&mut DeferredWorld, Entity) + Send + Sync + 'static>>);
 
 /// Marker [`Component`] for filtering `SystemId` `Entity`s managed by haalka.
 #[derive(Component)]
@@ -729,7 +740,7 @@ pub(crate) fn observe<E: Event, B: Bundle, Marker>(
     world: &mut World,
     entity: Entity,
     observer: impl IntoObserverSystem<E, B, Marker>,
-) -> EntityWorldMut {
+) -> EntityWorldMut<'_> {
     world.spawn((Observer::new(observer).with_entity(entity), HaalkaObserver))
 }
 
@@ -809,7 +820,7 @@ pub trait RawElWrapper: Sized {
     /// Process the wrapped [`RawHaalkaEl`] directly.
     fn update_raw_el(mut self, updater: impl FnOnce(RawHaalkaEl) -> RawHaalkaEl) -> Self {
         let raw_el = mem::replace(self.raw_el_mut(), RawHaalkaEl::new_dummy());
-        mem::swap(self.raw_el_mut(), &mut updater(raw_el));
+        *self.raw_el_mut() = updater(raw_el);
         self
     }
 

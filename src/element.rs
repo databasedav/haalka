@@ -6,9 +6,7 @@ use super::{
     align::{AlignabilityFacade, Alignable, Aligner, ChildAlignable},
     raw::{RawElWrapper, RawElement, RawHaalkaEl},
 };
-use bevy_core::prelude::*;
-use bevy_ecs::{component::ComponentId, prelude::*, system::RunSystemOnce, world::DeferredWorld};
-use bevy_hierarchy::prelude::*;
+use bevy_ecs::{component::*, prelude::*, system::RunSystemOnce, world::DeferredWorld};
 use bevy_log::warn;
 use bevy_picking::prelude::*;
 use futures_signals::signal::{Signal, SignalExt};
@@ -108,7 +106,6 @@ impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
 /// impl PointerEventAware for MyWidget {}
 /// impl ViewportMutable for MyWidget {}
 /// impl MouseWheelScrollable for MyWidget {}
-/// impl Sizeable for MyWidget {}
 /// ```
 pub trait ElementWrapper: Sized {
     /// The type of the [`Element`] that this wrapper wraps; this can be another [`ElementWrapper`].
@@ -164,10 +161,10 @@ impl<T: Alignable> TypeEraseable for T {
     }
 }
 
-fn warn_non_orphan_ui_root(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
+fn warn_non_orphan_ui_root(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
     world.commands().queue(move |world: &mut World| {
-        let _ = world.run_system_once(move |parents: Query<&Parent>| {
-            if parents.iter_ancestors(entity).count() > 0 {
+        let _ = world.run_system_once(move |child_ofs: Query<&ChildOf>| {
+            if child_ofs.iter_ancestors(entity).count() > 0 {
                 warn!(
                     "entity {:?} is registered as a UiRoot but is not an orphan (has a parent); this may lead to unexpected behavior",
                     entity
@@ -189,7 +186,7 @@ pub struct UiRoot;
 pub trait UiRootable: RawElWrapper {
     /// Mark this node as the root of the UI tree.
     fn ui_root(self) -> Self {
-        self.update_raw_el(|raw_el| raw_el.insert(UiRoot).insert(PickingBehavior::default()))
+        self.update_raw_el(|raw_el| raw_el.insert(UiRoot).insert(Pickable::default()))
     }
 }
 

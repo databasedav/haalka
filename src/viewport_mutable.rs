@@ -1,20 +1,21 @@
 //! Semantics for managing elements whose contents can be partially visible, see
 //! [`ViewportMutable`].
 
-use std::sync::{Arc, OnceLock};
+use std::{
+    collections::HashSet,
+    sync::{Arc, OnceLock},
+};
 
 use super::{
-    raw::{observe, register_system, utils::remove_system_holder_on_remove, RawElWrapper},
+    raw::{RawElWrapper, observe, register_system, utils::remove_system_holder_on_remove},
     utils::clone,
 };
 use apply::Apply;
 use bevy_app::prelude::*;
 use bevy_ecs::{prelude::*, system::SystemParam};
-use bevy_hierarchy::prelude::*;
 use bevy_math::prelude::*;
 use bevy_transform::prelude::*;
 use bevy_ui::prelude::*;
-use bevy_utils::hashbrown::HashSet;
 use futures_signals::signal::{Mutable, Signal};
 
 /// Dimensions of an element's "scene", which contains both its visible (via its [`Viewport`]) and
@@ -44,7 +45,7 @@ pub struct Viewport {
 /// [`Component`] for holding the [`Scene`] and [`Viewport`]. Also an [`Event`] which is
 /// [`Trigger`]ed when the [`Viewport`] or [`Scene`] of a [`MutableViewport`] changes; only entities
 /// with the [`OnViewportLocationChange`] component receive this event.
-#[derive(Event, Default)]
+#[derive(Component, Event, Default)]
 pub struct MutableViewport {
     #[allow(missing_docs)]
     pub scene: Scene,
@@ -64,6 +65,14 @@ pub enum Axis {
     Vertical,
     #[allow(missing_docs)]
     Both,
+}
+
+/// Sentinel component to store the last scroll position set by a signal.
+/// This is used to break feedback loops in two-way bindings.
+#[derive(Component, Default, Debug)]
+struct LastSignalScrollPosition {
+    x: f32,
+    y: f32,
 }
 
 /// Enables the management of a limited visible window (viewport) onto the body of an element.
@@ -103,7 +112,7 @@ pub trait ViewportMutable: RawElWrapper {
                 let _ = system_holder.set(system);
                 observe(world, entity, move |viewport_location_change: Trigger<MutableViewport>, mut commands: Commands| {
                     let &MutableViewport { scene, viewport } = viewport_location_change.event();
-                    commands.run_system_with_input(system, (entity, (scene, viewport)));
+                    commands.run_system_with(system, (entity, (scene, viewport)));
                 });
             }))
             .apply(remove_system_holder_on_remove(system_holder))
@@ -123,9 +132,20 @@ pub trait ViewportMutable: RawElWrapper {
     ) -> Self {
         if let Some(x_signal) = x_signal_option.into() {
             self = self.update_raw_el(|raw_el| {
-                raw_el.on_signal_with_component::<_, ScrollPosition>(x_signal, |mut scroll_position, x| {
-                    scroll_position.offset_x = x;
-                })
+                raw_el
+                    .insert(LastSignalScrollPosition::default())
+                    .on_signal_with_system(
+                    x_signal,
+                    |In((entity, x)): In<(Entity, f32)>,
+                     mut query: Query<(&mut ScrollPosition, &mut LastSignalScrollPosition)>| {
+                        if let Ok((mut scroll_pos, mut last_signal_pos)) = query.get_mut(entity)
+                            && last_signal_pos.x.to_bits() != x.to_bits()
+                        {
+                            last_signal_pos.x = x;
+                            scroll_pos.offset_x = x;
+                        }
+                    },
+                )
             });
         }
         self
@@ -138,9 +158,20 @@ pub trait ViewportMutable: RawElWrapper {
     ) -> Self {
         if let Some(y_signal) = y_signal_option.into() {
             self = self.update_raw_el(|raw_el| {
-                raw_el.on_signal_with_component::<_, ScrollPosition>(y_signal, |mut scroll_position, y| {
-                    scroll_position.offset_y = y;
-                })
+                raw_el
+                    .insert(LastSignalScrollPosition::default())
+                    .on_signal_with_system(
+                    y_signal,
+                    |In((entity, y)): In<(Entity, f32)>,
+                     mut query: Query<(&mut ScrollPosition, &mut LastSignalScrollPosition)>| {
+                        if let Ok((mut scroll_pos, mut last_signal_pos)) = query.get_mut(entity)
+                            && last_signal_pos.y.to_bits() != y.to_bits()
+                        {
+                            last_signal_pos.y = y;
+                            scroll_pos.offset_y = y;
+                        }
+                    },
+                )
             });
         }
         self
@@ -148,12 +179,30 @@ pub trait ViewportMutable: RawElWrapper {
 
     /// Sync a [`Mutable<f32>`] with this element's viewport's x offset.
     fn viewport_x_sync(self, viewport_x: Mutable<f32>) -> Self {
-        self.on_viewport_location_change(move |_, viewport| viewport_x.set_neq(viewport.offset_x))
+        self.on_viewport_location_change_with_system(
+            move |In((entity, (_, viewport))): In<(Entity, (Scene, Viewport))>,
+                  last_signal_positions: Query<&LastSignalScrollPosition>| {
+                if let Ok(last_signal_pos) = last_signal_positions.get(entity)
+                    && last_signal_pos.x.to_bits() != viewport.offset_x.to_bits()
+                {
+                    viewport_x.set_neq(viewport.offset_x);
+                }
+            },
+        )
     }
 
     /// Sync a [`Mutable<f32>`] with this element's viewport's y offset.
     fn viewport_y_sync(self, viewport_y: Mutable<f32>) -> Self {
-        self.on_viewport_location_change(move |_, viewport| viewport_y.set_neq(viewport.offset_y))
+        self.on_viewport_location_change_with_system(
+            move |In((entity, (_, viewport))): In<(Entity, (Scene, Viewport))>,
+                  last_signal_positions: Query<&LastSignalScrollPosition>| {
+                if let Ok(last_signal_pos) = last_signal_positions.get(entity)
+                    && last_signal_pos.y.to_bits() != viewport.offset_y.to_bits()
+                {
+                    viewport_y.set_neq(viewport.offset_y);
+                }
+            },
+        )
     }
 }
 
@@ -186,34 +235,33 @@ impl SceneViewport<'_, '_> {
             x: viewport_width,
             y: viewport_height,
         }) = self.logical_rect.get(entity).as_ref().map(Rect::size)
+            && let Ok(&ScrollPosition { offset_x, offset_y }) = self.scroll_positions.get(entity)
         {
-            if let Ok(&ScrollPosition { offset_x, offset_y }) = self.scroll_positions.get(entity) {
-                let mut min = Vec2::MAX;
-                let mut max = Vec2::MIN;
-                for child in self
-                    .childrens
-                    .get(entity)
-                    .ok()
-                    .into_iter()
-                    .flat_map(|children| children.iter())
-                {
-                    if let Some(child_rect) = self.logical_rect.get(*child) {
-                        min = min.min(child_rect.min);
-                        max = max.max(child_rect.max);
-                    }
+            let mut min = Vec2::MAX;
+            let mut max = Vec2::MIN;
+            for child in self
+                .childrens
+                .get(entity)
+                .ok()
+                .into_iter()
+                .flat_map(|children| children.iter())
+            {
+                if let Some(child_rect) = self.logical_rect.get(child) {
+                    min = min.min(child_rect.min);
+                    max = max.max(child_rect.max);
                 }
-                let scene = Scene {
-                    width: max.x - min.x,
-                    height: max.y - min.y,
-                };
-                let viewport = Viewport {
-                    offset_x,
-                    offset_y,
-                    width: viewport_width,
-                    height: viewport_height,
-                };
-                return Some((scene, viewport));
             }
+            let scene = Scene {
+                width: max.x - min.x,
+                height: max.y - min.y,
+            };
+            let viewport = Viewport {
+                offset_x,
+                offset_y,
+                width: viewport_width,
+                height: viewport_height,
+            };
+            return Some((scene, viewport));
         }
         None
     }
@@ -226,7 +274,7 @@ fn dispatch_viewport_location_change(
     checked_viewport_listeners: &mut HashSet<Entity>,
 ) {
     if let Some((scene, viewport)) = scene_viewports.get(entity) {
-        if let Some(mut entity) = commands.get_entity(entity) {
+        if let Ok(mut entity) = commands.get_entity(entity) {
             entity.insert(MutableViewport { scene, viewport });
         }
         commands.trigger_targets(MutableViewport { scene, viewport }, entity);
@@ -245,7 +293,7 @@ fn viewport_location_change_dispatcher(
     >,
     changed_computed_nodes: Query<Entity, Changed<ComputedNode>>,
     viewport_location_change_listeners: Query<Entity, With<OnViewportLocationChange>>,
-    parents: Query<&Parent>,
+    child_ofs: Query<&ChildOf>,
     scene_viewports: SceneViewport,
     mut commands: Commands,
 ) {
@@ -254,16 +302,11 @@ fn viewport_location_change_dispatcher(
         dispatch_viewport_location_change(entity, &scene_viewports, &mut commands, &mut checked_viewport_listeners);
     }
     for entity in changed_computed_nodes.iter() {
-        if let Ok(parent) = parents.get(entity) {
-            let parent = parent.get();
-            if !checked_viewport_listeners.contains(&parent) && viewport_location_change_listeners.contains(parent) {
-                dispatch_viewport_location_change(
-                    parent,
-                    &scene_viewports,
-                    &mut commands,
-                    &mut checked_viewport_listeners,
-                );
-            }
+        if let Ok(&ChildOf(parent)) = child_ofs.get(entity)
+            && !checked_viewport_listeners.contains(&parent)
+            && viewport_location_change_listeners.contains(parent)
+        {
+            dispatch_viewport_location_change(parent, &scene_viewports, &mut commands, &mut checked_viewport_listeners);
         }
     }
 }

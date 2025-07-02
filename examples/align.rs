@@ -58,16 +58,19 @@ enum Alignment {
     Content,
 }
 
-static ALIGNMENT: Lazy<Mutable<Alignment>> = Lazy::new(|| Mutable::new(Alignment::Self_));
-static RECTANGLE_SELF_ALIGNMENT: Lazy<Mutable<Option<RectangleAlignment>>> = Lazy::new(default);
-static RECTANGLE_CONTENT_ALIGNMENT: Lazy<Mutable<Option<RectangleAlignment>>> = Lazy::new(default);
+static ALIGNMENT: LazyLock<Mutable<Alignment>> = LazyLock::new(|| Mutable::new(Alignment::Self_));
+static RECTANGLE_SELF_ALIGNMENT: LazyLock<Mutable<Option<RectangleAlignment>>> = LazyLock::new(default);
+static RECTANGLE_CONTENT_ALIGNMENT: LazyLock<Mutable<Option<RectangleAlignment>>> = LazyLock::new(default);
 
 fn alignment_button(alignment: Alignment) -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
         .align(Align::center())
-        .width(Val::Px(250.))
-        .height(Val::Px(80.))
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
+        .with_node(|mut node| {
+            node.width = Val::Px(250.);
+            node.height = Val::Px(80.);
+        })
         .background_color_signal(
             signal::or(
                 hovered.signal(),
@@ -93,17 +96,19 @@ fn alignment_button(alignment: Alignment) -> impl Element {
 
 fn ui_root() -> impl Element {
     Column::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
-        .with_node(|mut node| node.row_gap = Val::Px(15.))
-        .align_content(Align::center())
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+            node.row_gap = Val::Px(15.);
+        })
         .align(Align::center())
+        .align_content(Align::center())
+        .cursor(CursorIcon::default())
         .item(
             Row::<Node>::new()
                 .with_node(|mut node| node.column_gap = Val::Px(15.))
                 .item(container("Column", Column::<Node>::new().items(rectangles())))
                 .item(container("El", El::<Node>::new().child(rectangle(1))))
-                // TODO: is this align content behavior buggy?
                 .item(container("Grid", Grid::<Node>::new().cells(rectangles()))),
         )
         .item(
@@ -125,22 +130,23 @@ fn ui_root() -> impl Element {
             Row::<Node>::new()
                 .with_node(|mut node| node.column_gap = Val::Px(15.))
                 .item(container("Row", Row::<Node>::new().items(rectangles())))
-                // TODO: is this align content behavior buggy?
                 .item(container("Stack", Stack::<Node>::new().layers(rectangles()))),
         )
 }
 
-fn container_node<E: RawElWrapper + Sizeable>(el: E) -> E {
-    el.width(Val::Px(278.)).height(Val::Px(200.)).update_raw_el(|raw_el| {
+fn container_node<E: RawElWrapper>(el: E) -> E {
+    el.update_raw_el(|raw_el| {
         raw_el
             .insert(BorderColor(bevy::color::palettes::basic::GRAY.into()))
             .with_component::<Node>(|mut node| {
+                node.height = Val::Px(200.);
+                node.width = Val::Px(278.);
                 node.border = UiRect::all(Val::Px(3.));
             })
     })
 }
 
-fn container(name: &str, element: impl Element + Sizeable) -> impl Element {
+fn container(name: &str, element: impl Element) -> impl Element {
     Column::<Node>::new()
         .item(
             El::<Text>::new()
@@ -167,8 +173,10 @@ fn container(name: &str, element: impl Element + Sizeable) -> impl Element {
 fn rectangle(index: i32) -> impl Element {
     let size = 40;
     El::<Node>::new()
-        .width(Val::Px(size as f32))
-        .height(Val::Px(size as f32))
+        .with_node(move |mut node| {
+            node.width = Val::Px(size as f32);
+            node.height = Val::Px(size as f32)
+        })
         .background_color(BackgroundColor(bevy::color::palettes::css::DARK_GREEN.into()))
         .align_signal(
             ALIGNMENT
@@ -195,6 +203,7 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
     let (hovered, hovered_signal) = Mutable::new_and_signal(false);
     El::<Node>::new()
         .align(rectangle_alignment.to_align())
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             signal::or(
                 ALIGNMENT

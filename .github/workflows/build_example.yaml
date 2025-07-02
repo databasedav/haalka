@@ -22,10 +22,18 @@ jobs:
         sweep-cache: true
     - name: install just
       uses: extractions/setup-just@v2
+    - name: install nickel
+      run: |-
+        OUT="$HOME/.local/bin/nickel"
+        mkdir -p "$(dirname "$OUT")"
+        curl -L "https://github.com/tweag/nickel/releases/download/1.12.2/nickel-pkg-x86_64-linux" -o "$OUT"
+        chmod +x "$OUT"
+        echo "$(dirname "$OUT")" >> "$GITHUB_PATH"
+        nickel --version
     - name: install binstall
       uses: cargo-bins/cargo-binstall@main
     - name: install build dependencies
-      run: cargo binstall --no-confirm --continue-on-failure wasm-bindgen-cli wasm-opt nickel-lang-cli trunk
+      run: cargo binstall --no-confirm --continue-on-failure wasm-bindgen-cli wasm-opt trunk
     - if: ${{ inputs.api == 'webgl2' }}
       name: build example
       run: just build_wasm_example ${{ inputs.example }}

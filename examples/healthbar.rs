@@ -71,7 +71,7 @@ struct StyleData {
     scale: f32,
 }
 
-static STYLE_DATA: Lazy<Mutable<StyleData>> = Lazy::new(default);
+static STYLE_DATA: LazyLock<Mutable<StyleData>> = LazyLock::new(default);
 
 #[derive(Component)]
 struct Health(u32);
@@ -79,10 +79,9 @@ struct Health(u32);
 #[derive(Component)]
 struct HealthMutable(Mutable<u32>);
 
-fn sync_health_mutable(health_query: Query<(&Health, &HealthMutable), Changed<Health>>) {
-    if let Ok((health, health_mutable)) = health_query.get_single() {
-        health_mutable.0.set(health.0);
-    }
+fn sync_health_mutable(health_query: Single<(&Health, &HealthMutable), Changed<Health>>) {
+    let (health, health_mutable) = *health_query;
+    health_mutable.0.set(health.0);
 }
 
 #[derive(Component)]
@@ -111,13 +110,11 @@ fn setup(mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<Standard
 
 fn movement(
     keys: Res<ButtonInput<KeyCode>>,
-    camera: Query<&Transform, (With<Camera3d>, Without<Player>)>,
-    mut player: Query<&mut Transform, With<Player>>,
+    camera: Single<&Transform, (With<Camera3d>, Without<Player>)>,
+    mut player: Single<&mut Transform, With<Player>>,
     time: Res<Time>,
 ) {
     let mut direction = Vec3::ZERO;
-    let mut player = player.single_mut();
-    let camera = camera.single();
     if keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) {
         direction += Vec3::from(camera.forward());
     }
@@ -137,12 +134,11 @@ fn movement(
 
 #[allow(clippy::type_complexity)]
 fn sync_tracking_healthbar_position(
-    player: Query<&Transform, (With<Player>, Changed<Transform>)>,
-    camera: Query<(&Camera, &Transform), (With<Camera3d>, Without<Player>)>,
+    player_transform: Single<&Transform, (With<Player>, Changed<Transform>)>,
+    camera_data: Single<(&Camera, &Transform), (With<Camera3d>, Without<Player>)>,
     // mut ui_scale: ResMut<UiScale>,  // wanted more local ui scaling
 ) {
-    let (camera, camera_transform) = camera.single();
-    let player_transform = player.single();
+    let (camera, camera_transform) = *camera_data;
     let scale = camera_transform.translation.distance(player_transform.translation);
     if let Ok((left, top)) = camera
         .world_to_viewport(&GlobalTransform::from(*camera_transform), player_transform.translation)
@@ -158,29 +154,32 @@ fn healthbar(
     max: u32,
     health: impl Signal<Item = u32> + Send + Sync + 'static,
     height: f32,
-    color_gradient: Gradient,
+    color_gradient: impl Gradient + Send + Sync + 'static,
 ) -> Stack<Node> {
     let health = health.broadcast();
     let percent_health = health.signal().map(move |h| h as f32 / max as f32).broadcast();
     Stack::<Node>::new()
-        .height(Val::Px(height))
         .with_node(move |mut node| {
+            node.height = Val::Px(height);
             node.border = UiRect::all(Val::Px(height / 12.));
         })
         .border_color(BorderColor(Color::BLACK))
         .layer(
             El::<Node>::new()
-                .height(Val::Percent(100.))
-                .width_signal(percent_health.signal().map(|ph| ph * 100.).map(Val::Percent))
+                .with_node(|mut node| node.height = Val::Percent(100.))
+                .on_signal_with_node(
+                    percent_health.signal().map(|ph| ph * 100.).map(Val::Percent),
+                    |mut node, width| node.width = width,
+                )
                 .background_color_signal(percent_health.signal().map(move |percent_health| {
-                    let [r, g, b, ..] = color_gradient.at(percent_health as f64).to_rgba8();
+                    let [r, g, b, ..] = color_gradient.at(percent_health).to_rgba8();
                     BackgroundColor(Color::srgb_u8(r, g, b))
                 })),
         )
         .layer(
             // TODO: why is this wrapping node required? it wasn't required in 0.14
             El::<Node>::new()
-                .height(Val::Percent(100.))
+                .with_node(|mut node| node.height = Val::Percent(100.))
                 .align_content(Align::new().center_y())
                 .child(
                     El::<Text>::new()
@@ -199,7 +198,7 @@ fn healthbar(
         )
 }
 
-static HEALTH_OPTION_MUTABLE: Lazy<Mutable<Option<Mutable<u32>>>> = Lazy::new(default);
+static HEALTH_OPTION_MUTABLE: LazyLock<Mutable<Option<Mutable<u32>>>> = LazyLock::new(default);
 
 #[derive(Event)]
 struct SpawnPlayer;
@@ -208,8 +207,11 @@ fn respawn_button() -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
         .align(Align::center())
-        .width(Val::Px(250.))
-        .height(Val::Px(80.))
+        .with_node(|mut node| {
+            node.width = Val::Px(250.);
+            node.height = Val::Px(80.);
+        })
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
                 .signal()
@@ -235,8 +237,11 @@ fn set_dragging_position(mut node: Mut<Node>, StyleData { left, top, .. }: Style
 fn ui_root() -> impl Element {
     // let starting_distance = CAMERA_POSITION.distance(PLAYER_POSITION);
     El::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+        })
+        .cursor(CursorIcon::default())
         .child_signal(
             HEALTH_OPTION_MUTABLE
                 .signal_cloned()
@@ -249,9 +254,11 @@ fn ui_root() -> impl Element {
                             .map_bool(
                                 move || {
                                     Stack::<Node>::new()
-                                        .width(Val::Percent(100.))
-                                        .height(Val::Percent(100.))
-                                        .with_node(|mut node| node.padding.bottom = Val::Px(10.))
+                                        .with_node(|mut node| {
+                                            node.width = Val::Percent(100.);
+                                            node.height = Val::Percent(100.);
+                                            node.padding.bottom = Val::Px(10.);
+                                        })
                                         .layer(
                                             Column::<Node>::new()
                                                 .on_signal_with_node(STYLE_DATA.signal(), set_dragging_position)
@@ -275,13 +282,17 @@ fn ui_root() -> impl Element {
                                                         PLAYER_HEALTH,
                                                         health.signal(),
                                                         MINI.1,
-                                                        colorgrad::CustomGradient::new()
+                                                        colorgrad::GradientBuilder::new()
                                                             .html_colors(&["purple", "yellow"])
-                                                            .build()
+                                                            .build::<colorgrad::LinearGradient>()
                                                             .unwrap(),
                                                     )
-                                                    .width(Val::Px(MINI.0))
-                                                    .height(Val::Px(MINI.1)),
+                                                    .with_node(
+                                                        |mut node| {
+                                                            node.width = Val::Px(MINI.0);
+                                                            node.height = Val::Px(MINI.1);
+                                                        },
+                                                    ),
                                                 ),
                                         )
                                         .layer(
@@ -289,14 +300,16 @@ fn ui_root() -> impl Element {
                                                 PLAYER_HEALTH,
                                                 health.signal(),
                                                 MAXI.1,
-                                                colorgrad::CustomGradient::new()
+                                                colorgrad::GradientBuilder::new()
                                                     .html_colors(&["red", "green"])
-                                                    .build()
+                                                    .build::<colorgrad::LinearGradient>()
                                                     .unwrap(),
                                             )
                                             .align(Align::new().bottom().center_x())
-                                            .width(Val::Px(MAXI.0))
-                                            .height(Val::Px(MAXI.1)),
+                                            .with_node(|mut node| {
+                                                node.width = Val::Px(MAXI.0);
+                                                node.height = Val::Px(MAXI.1);
+                                            }),
                                         )
                                         .type_erase()
                                 },
@@ -313,17 +326,15 @@ fn ui_root() -> impl Element {
 #[derive(Resource)]
 struct HealthTickTimer(Timer);
 
-fn decay(mut health: Query<&mut Health>, mut health_tick_timer: ResMut<HealthTickTimer>, time: Res<Time>) {
+fn decay(mut health: Single<&mut Health>, mut health_tick_timer: ResMut<HealthTickTimer>, time: Res<Time>) {
     if health_tick_timer.0.tick(time.delta()).finished() {
-        let mut health = health.single_mut();
         health.0 = health.0.saturating_sub(1);
     }
 }
 
-fn despawn_when_dead(mut commands: Commands, query: Query<(Entity, &Health), Changed<Health>>) {
-    if let Ok((entity, health)) = query.get_single() {
-        if health.0 == 0 {
-            commands.entity(entity).despawn_recursive();
-        }
+fn despawn_when_dead(mut commands: Commands, query: Single<(Entity, &Health), Changed<Health>>) {
+    let (entity, health) = *query;
+    if health.0 == 0 {
+        commands.entity(entity).despawn();
     }
 }

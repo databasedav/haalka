@@ -1,3 +1,4 @@
+# TODO: only release if ci passes
 let { checkout, rust_toolchain, bevy_dependencies, cached_target_populate, cargo_build_env, .. } = import "common.ncl" in
 let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 let RELEASE_PLZ_ACTION_VERSION = "0.5" in

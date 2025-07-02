@@ -12,11 +12,10 @@ use apply::Apply;
 use bevy_app::prelude::*;
 use bevy_derive::*;
 use bevy_ecs::prelude::*;
-use bevy_hierarchy::prelude::*;
 use bevy_log::prelude::*;
 use bevy_picking::{
     backend::prelude::*,
-    focus::{HoverMap, PickingInteraction},
+    hover::{HoverMap, PickingInteraction},
     pointer::PointerMap,
     prelude::*,
 };
@@ -25,7 +24,7 @@ use bevy_utils::prelude::*;
 use bevy_window::{prelude::*, *};
 use bevy_winit::cursor::CursorIcon;
 use enclose::enclose as clone;
-use futures_signals::signal::{always, channel, Mutable, Signal, SignalExt};
+use futures_signals::signal::{Mutable, Signal, SignalExt, always, channel};
 use haalka_futures_signals_ext::SignalExtBool;
 
 use super::{
@@ -47,18 +46,18 @@ pub trait PointerEventAware: GlobalEventAware {
         self.update_raw_el(|raw_el| {
             let system_holder = Arc::new(OnceLock::new());
             raw_el
-                .insert(PickingBehavior::default())
+                .insert(Pickable::default())
                 .insert(Hovered(false))
                 .on_spawn(clone!((system_holder) move |world, entity| {
                     let system = register_system(world, handler);
                     let _ = system_holder.set(system);
                     observe(world, entity, move |mut enter: Trigger<Pointer<Enter>>, mut commands: Commands| {
                         enter.propagate(false);
-                        commands.run_system_with_input(system, (enter.entity(), true));
+                        commands.run_system_with(system, (enter.target(), true));
                     });
                     observe(world, entity, move |mut leave: Trigger<Pointer<Leave>>, mut commands: Commands| {
                         leave.propagate(false);
-                        commands.run_system_with_input(system, (leave.entity(), false));
+                        commands.run_system_with(system, (leave.target(), false));
                     });
                 }))
                 .apply(remove_system_holder_on_remove(system_holder))
@@ -83,7 +82,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ) -> Self {
         self.update_raw_el(|raw_el| {
             raw_el
-                .insert(PickingBehavior::default())
+                .insert(Pickable::default())
                 .on_event_with_system::<Pointer<Click>, _>(handler)
         })
     }
@@ -106,7 +105,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ) -> Self {
         self.update_raw_el(|raw_el| {
             raw_el
-                .insert(PickingBehavior::default())
+                .insert(Pickable::default())
                 .on_event_propagation_stoppable_signal::<Pointer<Click>>(
                     move |click| {
                         if matches!(click.button, PointerButton::Primary) {
@@ -135,9 +134,8 @@ pub trait PointerEventAware: GlobalEventAware {
 
     /// When a [`Pointer<Click>`] is received outside this [`Element`](super::element::Element)
     /// or its descendents, run a [`System`] that takes [`In`](`System::In`) this element's
-    /// [`Entity`] and the [`Pointer<Click>`]. Requires the [`UiRoot`] [`Resource`] to exist in the
-    /// [`World`] and will panic otherwise. This method can be called repeatedly to register many
-    /// such handlers.
+    /// [`Entity`] and the [`Pointer<Click>`]. Will not function unless this element is a descendant
+    /// of a [`UiRoot`]. This method can be called repeatedly to register many such handlers.
     #[allow(clippy::type_complexity)]
     fn on_click_outside_with_system<Marker>(
         self,
@@ -154,13 +152,13 @@ pub trait PointerEventAware: GlobalEventAware {
         .on_global_event_with_system::<Pointer<Click>, _>(
             move |In((entity, click)): In<(Entity, Pointer<Click>)>,
                   children: Query<&Children>,
-                  parent: Query<&Parent>,
+                  child_ofs: Query<&ChildOf>,
                   ui_roots: Query<&UiRoot>,
                   mut commands: Commands| {
-                for ancestor in parent.iter_ancestors(entity) {
+                for ancestor in child_ofs.iter_ancestors(entity) {
                     if ui_roots.contains(ancestor) {
                         if !is_inside_or_removed_from_dom(entity, &click, ancestor, &children) {
-                            commands.run_system_with_input(system_holder.get().copied().unwrap(), (entity, click));
+                            commands.run_system_with(system_holder.get().copied().unwrap(), (entity, click));
                         }
                         break;
                     }
@@ -170,8 +168,8 @@ pub trait PointerEventAware: GlobalEventAware {
     }
 
     /// When a [`Pointer<Click>`] is received outside this [`Element`](super::element::Element)
-    /// or its descendents, run a function. Requires the [`UiRoot`] [`Resource`] to exist in the
-    /// [`World`]. This method can be called repeatedly to register many such handlers.
+    /// or its descendents, run a function. Will not function unless this element is a descendant of
+    /// a [`UiRoot`]. This method can be called repeatedly to register many such handlers.
     fn on_click_outside(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
         self.on_click_outside_with_system(move |In((_, _))| handler())
     }
@@ -187,38 +185,29 @@ pub trait PointerEventAware: GlobalEventAware {
         self.update_raw_el(|raw_el| {
             let system_holder = Arc::new(OnceLock::new());
             raw_el
-                .insert(PickingBehavior::default())
+                .insert(Pickable::default())
                 .on_spawn(clone!((system_holder) move |world, entity| {
                     let system = register_system(world, handler);
                     let _ = system_holder.set(system);
                     observe(world, entity, move |press: Trigger<Press>, blocked: Query<&Blocked>, mut commands: Commands| {
-                        let entity = press.entity();
+                        let entity = press.target();
                         if !blocked.contains(entity) {
-                            commands.run_system_with_input(system, (entity, **press.event()));
+                            commands.run_system_with(system, (entity, **press.event()));
                         }
                     });
                 }))
-                .on_event_with_system::<Pointer<Down>, _>(
-                    move |In((entity, pointer_down)): In<(Entity, Pointer<Down>)>, world: &mut World| {
-                        if matches!(pointer_down.button, PointerButton::Primary) {
-                            if let Ok(mut entity) = world.get_entity_mut(entity) {
-                                entity.insert(Pressable);
-                            }
+                .on_event_with_system::<Pointer<Pressed>, _>(
+                    move |In((entity, pointer_down)): In<(Entity, Pointer<Pressed>)>, world: &mut World| {
+                        if matches!(pointer_down.button, PointerButton::Primary) && let Ok(mut entity) = world.get_entity_mut(entity) {
+                            entity.insert(Pressable);
                         }
                     },
                 )
                 .apply(remove_system_holder_on_remove(system_holder))
         })
-        // .on_global_event_with_system::<Pointer<Up>, _>(move |pointer_up: Listener<Pointer<Up>>| if
-        // matches!(pointer_up.button, PointerButton::Primary) { down.set_neq(false) }) TODO: this isn't the
-        // desired behavior, press should linger outside and instead `Up` should trigger even outside of element
-        // (like the `.on_global_event_with_system` commented out above), requires being able to register
-        // multiple event listeners per event type
         .on_hovered_change_with_system(|In((entity, hovered)): In<(_, bool)>, world: &mut World| {
-            if !hovered {
-                if let Ok(ref mut entity) = world.get_entity_mut(entity) {
-                    EntityWorldMut::remove::<Pressable>(entity);
-                }
+            if !hovered && let Ok(ref mut entity) = world.get_entity_mut(entity) {
+                EntityWorldMut::remove::<Pressable>(entity);
             }
         })
     }
@@ -244,7 +233,7 @@ pub trait PointerEventAware: GlobalEventAware {
             move |In((entity, cur)), mut pressed: Local<bool>, mut commands: Commands| {
                 if cur != *pressed {
                     *pressed = cur;
-                    commands.run_system_with_input(system_holder.get().copied().unwrap(), (entity, cur));
+                    commands.run_system_with(system_holder.get().copied().unwrap(), (entity, cur));
                 }
             },
         )
@@ -275,7 +264,7 @@ pub trait PointerEventAware: GlobalEventAware {
         .on_pressed_with_system_blockable::<_, Blocked>(
             move |In((entity, pressed)), mut commands: Commands| {
                 if pressed {
-                    commands.run_system_with_input(system_holder.get().copied().unwrap(), entity);
+                    commands.run_system_with(system_holder.get().copied().unwrap(), entity);
                 }
             },
         )
@@ -324,8 +313,8 @@ pub trait PointerEventAware: GlobalEventAware {
         .on_pressed_with_system_blockable::<_, PressHandlingBlocked>(
             move |In((entity, pressed)), mut commands: Commands| {
                 if pressed {
-                    commands.run_system_with_input(system_holder.get().copied().unwrap(), entity);
-                    if let Some(mut entity) = commands.get_entity(entity) {
+                    commands.run_system_with(system_holder.get().copied().unwrap(), entity);
+                    if let Ok(mut entity) = commands.get_entity(entity) {
                         entity.try_insert(PressHandlingBlocked);
                     }
                 }
@@ -395,7 +384,7 @@ fn update_hover_states(
     pointers: Query<&PointerLocation>,
     hover_map: Res<HoverMap>,
     mut hovereds: Query<(Entity, &mut Hovered)>,
-    parent_query: Query<&Parent>,
+    child_ofs: Query<&ChildOf>,
     mut commands: Commands,
 ) {
     let pointer_id = PointerId::Mouse;
@@ -404,7 +393,7 @@ fn update_hover_states(
         let hit_data_option = match hover_set {
             Some(map) => map
                 .iter()
-                .find(|(ha, _)| **ha == entity || parent_query.iter_ancestors(**ha).any(|e| e == entity))
+                .find(|(ha, _)| **ha == entity || child_ofs.iter_ancestors(**ha).any(|e| e == entity))
                 .map(|(_, hit_data)| hit_data),
             None => None,
         };
@@ -424,7 +413,7 @@ fn update_hover_states(
                 continue;
             };
             if let Some(hit) = hit_data_option.cloned() {
-                commands.trigger_targets(Pointer::new(entity, pointer_id, location, Enter { hit }), entity);
+                commands.trigger_targets(Pointer::new(pointer_id, location, entity, Enter { hit }), entity);
             } else {
                 // TODO: children `Leave`s don't trigger with this condition, e.g. in an aalo inspector row
                 // if let Some(hit) = previous_hover_map
@@ -432,7 +421,7 @@ fn update_hover_states(
                 // .and_then(|map| map.get(&entity).cloned())
                 // {
                 // commands.trigger_targets(Pointer::new(pointer_id, location, entity, Leave { hit }), entity);
-                commands.trigger_targets(Pointer::new(entity, pointer_id, location, Leave {}), entity);
+                commands.trigger_targets(Pointer::new(pointer_id, location, entity, Leave {}), entity);
                 // }
             }
         }
@@ -513,14 +502,14 @@ pub trait CursorOnHoverable: PointerEventAware {
         let cursor_option = cursor_option.into();
         self.update_raw_el(|raw_el| {
             raw_el
-                .insert((PickingBehavior::default(), CursorOverPropagationStopped))
+                .insert((Pickable::default(), CursorOverPropagationStopped))
                 .observe(
                     |event: Trigger<OnInsert, CursorOver>,
                      cursor_on_hovers: Query<&CursorOnHover>,
                      disabled: Query<&Disabled>,
                      cursor_over_disabled_option: Option<Res<CursorOnHoverDisabled>>,
                      mut commands: Commands| {
-                        let entity = event.entity();
+                        let entity = event.target();
                         if let Ok(CursorOnHover(cursor_option)) = cursor_on_hovers.get(entity).cloned() {
                             if cursor_over_disabled_option.is_none() {
                                 if disabled.contains(entity).not() {
@@ -536,11 +525,11 @@ pub trait CursorOnHoverable: PointerEventAware {
                     |event: Trigger<OnInsert, CursorOnHover>,
                      cursor_overs: Query<&CursorOver>,
                      mut commands: Commands| {
-                        let entity = event.entity();
-                        if cursor_overs.contains(entity) {
-                            if let Some(mut entity) = commands.get_entity(entity) {
-                                entity.try_insert(CursorOver);
-                            }
+                        let entity = event.target();
+                        if cursor_overs.contains(entity)
+                            && let Ok(mut entity) = commands.get_entity(entity)
+                        {
+                            entity.try_insert(CursorOver);
                         }
                     },
                 )
@@ -552,14 +541,14 @@ pub trait CursorOnHoverable: PointerEventAware {
                           pointers: Query<&PointerLocation>,
                           hover_map: Res<HoverMap>,
                           mut pointer_over: EventWriter<Pointer<Over>>,
-                          parents: Query<&Parent>,
+                          child_ofs: Query<&ChildOf>,
                           mut commands: Commands| {
-                        let entity = event.entity();
-                        if let Some(mut entity) = commands.get_entity(entity) {
+                        let entity = event.target();
+                        if let Ok(mut entity) = commands.get_entity(entity) {
                             entity.remove::<CursorOverPropagationStopped>();
                         }
-                        if cursor_over.get(entity).is_ok() {
-                            if let Some(((hover_map, location), parent)) = hover_map
+                        if cursor_over.get(entity).is_ok()
+                            && let Some(((hover_map, location), &ChildOf(parent))) = hover_map
                                 .get(&PointerId::Mouse)
                                 .zip(
                                     pointer_map
@@ -567,17 +556,10 @@ pub trait CursorOnHoverable: PointerEventAware {
                                         .and_then(|entity| pointers.get(entity).ok())
                                         .and_then(|pointer| pointer.location.clone()),
                                 )
-                                .zip(parents.get(entity).ok())
-                            {
-                                if let Some(hit) = hover_map.get(&entity).cloned() {
-                                    pointer_over.send(Pointer::new(
-                                        parent.get(),
-                                        PointerId::Mouse,
-                                        location,
-                                        Over { hit },
-                                    ));
-                                }
-                            }
+                                .zip(child_ofs.get(entity).ok())
+                            && let Some(hit) = hover_map.get(&entity).cloned()
+                        {
+                            pointer_over.write(Pointer::new(PointerId::Mouse, location, parent, Over { hit }));
                         }
                     },
                 )
@@ -585,8 +567,8 @@ pub trait CursorOnHoverable: PointerEventAware {
                     move |event: Trigger<OnRemove, Disabled>,
                           cursor_over: Query<&CursorOver>,
                           mut commands: Commands| {
-                        let entity = event.entity();
-                        if let Some(mut entity_commands) = commands.get_entity(entity) {
+                        let entity = event.target();
+                        if let Ok(mut entity_commands) = commands.get_entity(entity) {
                             entity_commands.try_insert(CursorOverPropagationStopped);
                             if cursor_over.get(entity).is_ok() {
                                 entity_commands.try_insert(CursorOver);
@@ -596,13 +578,13 @@ pub trait CursorOnHoverable: PointerEventAware {
                 )
                 .on_event_with_system_propagation_stoppable::<Pointer<Over>, CursorOverPropagationStopped, _>(
                     |In((entity, _)), mut commands: Commands| {
-                        if let Some(mut entity) = commands.get_entity(entity) {
+                        if let Ok(mut entity) = commands.get_entity(entity) {
                             entity.try_insert(CursorOver);
                         }
                     },
                 )
                 .on_event_with_system_stop_propagation::<Pointer<Out>, _>(|In((entity, _)), mut commands: Commands| {
-                    if let Some(mut entity) = commands.get_entity(entity) {
+                    if let Ok(mut entity) = commands.get_entity(entity) {
                         entity.remove::<CursorOver>();
                     }
                 })
@@ -702,10 +684,10 @@ fn on_set_cursor(
     mut windows: Query<(Entity, &mut Window), With<PrimaryWindow>>,
     mut commands: Commands,
 ) {
-    if let Ok((entity, mut window)) = windows.get_single_mut() {
+    if let Ok((entity, mut window)) = windows.single_mut() {
         let SetCursor(icon_option) = event.event();
         if let Some(icon) = icon_option.clone() {
-            if let Some(mut window) = commands.get_entity(entity) {
+            if let Ok(mut window) = commands.get_entity(entity) {
                 window.try_insert(icon);
             }
             window.cursor_options.visible = true;

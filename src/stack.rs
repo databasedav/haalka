@@ -14,7 +14,6 @@ use super::{
     pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
     row::Row,
-    sizeable::Sizeable,
     viewport_mutable::ViewportMutable,
 };
 
@@ -37,7 +36,7 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Stack<NodeType> {
                     node.grid_auto_rows =
                         GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
                 })
-                .insert(PickingBehavior::IGNORE),
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
@@ -71,7 +70,6 @@ impl<NodeType: Bundle> GlobalEventAware for Stack<NodeType> {}
 impl<NodeType: Bundle> Nameable for Stack<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Stack<NodeType> {}
 impl<NodeType: Bundle> MouseWheelScrollable for Stack<NodeType> {}
-impl<NodeType: Bundle> Sizeable for Stack<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Stack<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Stack<NodeType> {}
 

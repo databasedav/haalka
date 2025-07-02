@@ -25,9 +25,9 @@ fn main() {
 const LETTER_SIZE: f32 = 54.167; // 65 / 1.2
 const COMPUTED_SIZE: f32 = 66.; // TODO: how/y tho ?
 
-static SHIFTED: Lazy<Mutable<bool>> = Lazy::new(default);
+static SHIFTED: LazyLock<Mutable<bool>> = LazyLock::new(default);
 
-fn letter(letter: &str, color: Color) -> impl Element {
+fn letter(letter: String, color: Color) -> impl Element {
     El::<Text>::new()
         .text_font(TextFont::from_font_size(LETTER_SIZE))
         .text_color(TextColor(color))
@@ -37,7 +37,7 @@ fn letter(letter: &str, color: Color) -> impl Element {
 fn letter_column(rotate: usize, color: Color) -> impl Element {
     let hovered = Mutable::new(false);
     Column::<Node>::new()
-        .height(Val::Px(5. * COMPUTED_SIZE))
+        .with_node(|mut node| node.height = Val::Px(5. * COMPUTED_SIZE))
         .mutable_viewport(haalka::prelude::Axis::Vertical)
         .on_scroll_with_system_disableable_signal(
             BasicScrollHandler::new()
@@ -51,23 +51,25 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
         .items(
             "abcdefghijklmnopqrstuvwxyz"
                 .chars()
-                .map(move |c| letter(&c.to_string(), color)),
+                .map(move |c| letter(c.to_string(), color)),
         )
 }
 
 fn ui_root() -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+        })
         .align_content(Align::center())
         .child(
             Row::<Node>::new()
                 .with_node(|mut node| {
+                    node.width = Val::Px(300.);
                     node.column_gap = Val::Px(30.);
                     node.padding = UiRect::horizontal(Val::Px(7.5));
                 })
-                .width(Val::Px(300.))
                 .mutable_viewport(haalka::prelude::Axis::Horizontal)
                 .on_scroll_with_system_disableable_signal(
                     BasicScrollHandler::new()

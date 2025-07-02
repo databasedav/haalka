@@ -1,4 +1,4 @@
-//! Experimental port of https://github.com/aevyrie/bevy_mod_picking/blob/main/examples/many_buttons.rs.
+//! Experimental port of <https://github.com/aevyrie/bevy_mod_picking/blob/main/examples/many_buttons.rs>.
 
 use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
@@ -11,7 +11,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             HaalkaPlugin,
-            FrameTimeDiagnosticsPlugin,
+            FrameTimeDiagnosticsPlugin::default(),
             LogDiagnosticsPlugin::default(),
         ))
         .add_systems(Startup, (setup, spawn_ui_root))

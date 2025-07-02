@@ -74,15 +74,15 @@ impl From<Cell> for BackgroundColor {
     }
 }
 
-static TICK_RATE: Lazy<Mutable<u32>> = Lazy::new(|| Mutable::new(STARTING_TICKS_PER_SECOND));
+static TICK_RATE: LazyLock<Mutable<u32>> = LazyLock::new(|| Mutable::new(STARTING_TICKS_PER_SECOND));
 
-static SCORE: Lazy<Mutable<u32>> = Lazy::new(default);
+static SCORE: LazyLock<Mutable<u32>> = LazyLock::new(default);
 
-static GRID_SIZE: Lazy<Mutable<usize>> = Lazy::new(|| Mutable::new(STARTING_SIZE));
+static GRID_SIZE: LazyLock<Mutable<usize>> = LazyLock::new(|| Mutable::new(STARTING_SIZE));
 
 type CellsType = MutableBTreeMap<(usize, usize), Mutable<Cell>>;
 
-static CELLS: Lazy<CellsType> = Lazy::new(|| {
+static CELLS: LazyLock<CellsType> = LazyLock::new(|| {
     (0..STARTING_SIZE)
         .flat_map(|x| (0..STARTING_SIZE).map(move |y| ((x, y), Mutable::new(Cell::Empty))))
         .collect::<BTreeMap<_, _>>()
@@ -96,8 +96,10 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
         .map(|size| (SIDE as f32 - GRID_TRACK_FLOAT_PRECISION_SLACK) / size as f32)
         .broadcast();
     Grid::<Node>::new()
-        .width(Val::Px(SIDE as f32))
-        .height(Val::Px(SIDE as f32))
+        .with_node(|mut node| {
+            node.width = Val::Px(SIDE as f32);
+            node.height = Val::Px(SIDE as f32);
+        })
         .row_wrap_cell_width_signal(cell_size.signal())
         .cells_signal_vec(
             cells
@@ -105,8 +107,10 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
                 .sort_by_cloned(|(left, _), (right, _)| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)))
                 .map(move |(_, cell)| {
                     El::<Node>::new()
-                        .width_signal(cell_size.signal().map(Val::Px))
-                        .height_signal(cell_size.signal().map(Val::Px))
+                        .on_signal_with_node(cell_size.signal().map(Val::Px), |mut node, size| {
+                            node.width = size;
+                            node.height = size;
+                        })
                         .background_color_signal(cell.signal().dedupe().map(Into::<BackgroundColor>::into))
                 }),
         )
@@ -114,8 +118,10 @@ fn grid(size: Mutable<usize>, cells: CellsType) -> impl Element {
 
 fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> impl Element {
     Column::<Node>::new()
-        .width(Val::Px((WIDTH - SIDE) as f32))
-        .with_node(|mut node| node.row_gap = Val::Px(10.))
+        .with_node(|mut node| {
+            node.width = Val::Px((WIDTH - SIDE) as f32);
+            node.row_gap = Val::Px(10.);
+        })
         .align_content(Align::center())
         .item(
             El::<Text>::new()
@@ -184,13 +190,14 @@ fn hud(score: Mutable<u32>, size: Mutable<usize>, tick_rate: Mutable<u32>) -> im
 
 fn ui_root() -> impl Element {
     Stack::<Node>::new()
-        .width(Val::Percent(100.))
-        .height(Val::Percent(100.))
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+        })
+        .cursor(CursorIcon::default())
         .layer(
             Row::<Node>::new()
                 .align(Align::center())
-                // .width(Val::Percent(100.))
-                // .height(Val::Percent(100.))
                 .item(grid(GRID_SIZE.clone(), CELLS.clone()))
                 .item(hud(SCORE.clone(), GRID_SIZE.clone(), TICK_RATE.clone())),
         )
@@ -201,8 +208,11 @@ fn restart_button() -> impl Element {
     let hovered = Mutable::new(false);
     El::<Node>::new()
         .align(Align::center())
-        .width(Val::Px(250.))
-        .height(Val::Px(80.))
+        .with_node(|mut node| {
+            node.width = Val::Px(250.);
+            node.height = Val::Px(80.);
+        })
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
                 .signal()
@@ -272,8 +282,9 @@ fn on_grid_size_change(event: Trigger<GridSizeChange>, mut commands: Commands) {
 fn text_button(text_: &str) -> impl Element + PointerEventAware {
     let hovered = Mutable::new(false);
     El::<Node>::new()
-        .width(Val::Px(45.0))
+        .with_node(|mut node| node.width = Val::Px(45.0))
         .align_content(Align::center())
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             hovered
                 .signal()
@@ -292,7 +303,7 @@ fn text_button(text_: &str) -> impl Element + PointerEventAware {
 #[derive(Resource)]
 struct Snake(VecDeque<(usize, usize)>);
 
-static GAME_OVER: Lazy<Mutable<bool>> = Lazy::new(default);
+static GAME_OVER: LazyLock<Mutable<bool>> = LazyLock::new(default);
 
 #[derive(Clone, Copy, EnumIter, PartialEq, Debug)]
 enum Direction {
@@ -340,10 +351,10 @@ fn tick(mut snake: ResMut<Snake>, direction: Res<DirectionResource>, mut command
                         commands.trigger(SpawnFood);
                     }
                     Cell::Empty => {
-                        if let Some((x, y)) = snake.0.pop_back() {
-                            if let Some(cell) = cells_lock.get(&(x, y)) {
-                                cell.set(Cell::Empty);
-                            }
+                        if let Some((x, y)) = snake.0.pop_back()
+                            && let Some(cell) = cells_lock.get(&(x, y))
+                        {
+                            cell.set(Cell::Empty);
                         }
                     }
                     _ => (),

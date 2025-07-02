@@ -13,7 +13,6 @@ use super::{
     mouse_wheel_scrollable::MouseWheelScrollable,
     pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
-    sizeable::Sizeable,
     viewport_mutable::ViewportMutable,
 };
 
@@ -34,7 +33,7 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Row<NodeType> {
                     node.flex_direction = FlexDirection::Row;
                     node.align_items = AlignItems::Center;
                 })
-                .insert(PickingBehavior::IGNORE),
+                .insert(Pickable::IGNORE),
             align: None,
             _node_type: std::marker::PhantomData,
         }
@@ -68,7 +67,6 @@ impl<NodeType: Bundle> GlobalEventAware for Row<NodeType> {}
 impl<NodeType: Bundle> Nameable for Row<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Row<NodeType> {}
 impl<NodeType: Bundle> MouseWheelScrollable for Row<NodeType> {}
-impl<NodeType: Bundle> Sizeable for Row<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Row<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Row<NodeType> {}
 
