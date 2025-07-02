@@ -2759,7 +2759,7 @@ dependencies = [
 
 [[package]]
 name = "haalka"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "apply",
  "async-io",
@@ -2809,7 +2809,7 @@ dependencies = [
 
 [[package]]
 name = "haalka_futures_signals_ext"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "futures-signals",
  "haalka_futures_util_ext",

@@ -2,7 +2,7 @@ format *extras:
   cargo +nightly fmt {{ extras }}
 
 doc *extras:
-  cargo +nightly doc --all-features --no-deps -Zunstable-options -Zrustdoc-scrape-examples --locked {{ extras }}
+  cargo +nightly doc --all-features -Zunstable-options -Zrustdoc-scrape-examples --locked {{ extras }}
 
 doctest:
   cargo test --doc --all-features --locked

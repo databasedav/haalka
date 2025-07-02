@@ -4,6 +4,8 @@ the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## unreleased
 
+# 0.5.0 (2025-07-02)
+
 ### added
 
 - ability to disable clearing previous text input selections on focus change
