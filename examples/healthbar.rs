@@ -287,10 +287,12 @@ fn ui_root() -> impl Element {
                                                             .build::<colorgrad::LinearGradient>()
                                                             .unwrap(),
                                                     )
-                                                    .with_node(|mut node| {
-                                                        node.width = Val::Px(MINI.0);
-                                                        node.height = Val::Px(MINI.1);
-                                                    })
+                                                    .with_node(
+                                                        |mut node| {
+                                                            node.width = Val::Px(MINI.0);
+                                                            node.height = Val::Px(MINI.1);
+                                                        },
+                                                    ),
                                                 ),
                                         )
                                         .layer(
@@ -307,7 +309,7 @@ fn ui_root() -> impl Element {
                                             .with_node(|mut node| {
                                                 node.width = Val::Px(MAXI.0);
                                                 node.height = Val::Px(MAXI.1);
-                                            })
+                                            }),
                                         )
                                         .type_erase()
                                 },
