@@ -56,14 +56,14 @@ fn lists_element(lists: Lists) -> Column<Node> {
                             .background_color(BackgroundColor(DARK_GRAY.into()))
                             .align_content(Align::center())
                             .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
+                            .on_click(move || {
+                                lists.lock_mut().push_cloned(default());
+                            })
                             .child(
                                 El::<Text>::new()
                                     .text_font(TextFont::from_font_size(30.))
                                     .text_color(TextColor(Color::WHITE))
-                                    .text(Text::from("+"))
-                                    .on_click(move || {
-                                        lists.lock_mut().push_cloned(default());
-                                    }),
+                                    .text(Text::from("+")),
                             ),
                     ),
             ),
