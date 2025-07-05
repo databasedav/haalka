@@ -46,7 +46,11 @@ fn lists_element(
                         node.height = Val::Px(40.);
                     })
                     .background_color(BackgroundColor(random_color()))
-                    .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
+                    .cursor(if parent_lists_option.is_some() {
+                        CursorIcon::System(SystemCursorIcon::Pointer)
+                    } else {
+                        CursorIcon::default()
+                    })
                     .child(
                         parent_lists_option.as_ref().map(|_| {
                             El::<Text>::new()
