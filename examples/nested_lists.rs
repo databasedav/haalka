@@ -29,8 +29,12 @@ struct Lists {
 
 static MASTER: LazyLock<Lists> = LazyLock::new(default);
 
-fn lists_element(lists: Lists) -> Column<Node> {
-    let Lists { lists } = lists;
+fn lists_element(
+    i: ReadOnlyMutable<Option<usize>>,
+    child_lists: Lists,
+    parent_lists_option: Option<Lists>,
+) -> Column<Node> {
+    let Lists { lists: child_lists } = child_lists;
     Column::<Node>::new().item(
         Row::<Node>::new()
             .with_node(|mut node| node.column_gap = Val::Px(10.))
@@ -41,12 +45,31 @@ fn lists_element(lists: Lists) -> Column<Node> {
                         node.width = Val::Px(80.);
                         node.height = Val::Px(40.);
                     })
-                    .background_color(BackgroundColor(random_color())),
+                    .background_color(BackgroundColor(random_color()))
+                    .cursor(if parent_lists_option.is_some() {
+                        CursorIcon::System(SystemCursorIcon::Pointer)
+                    } else {
+                        CursorIcon::default()
+                    })
+                    .child(
+                        parent_lists_option.as_ref().map(|_| {
+                            El::<Text>::new()
+                                .align(Align::center())
+                                .text_font(TextFont::from_font_size(30.))
+                                .text_color(TextColor(Color::WHITE))
+                                .text(Text::from("-"))
+                        })
+                    )
+                    .on_click(move || {
+                        if let Some(parent_lists) = &parent_lists_option {
+                            parent_lists.lists.lock_mut().remove(i.get().unwrap_or_default());
+                        }
+                    })
             )
             .item(
                 Column::<Node>::new()
                     .with_node(|mut node| node.row_gap = Val::Px(10.))
-                    .items_signal_vec(lists.signal_vec_cloned().map(lists_element))
+                    .items_signal_vec(child_lists.signal_vec_cloned().enumerate().map(clone!((child_lists) move |(i, lists)| lists_element(i, lists, Some(Lists { lists: child_lists.clone() })))))
                     .item(
                         El::<Node>::new()
                             .with_node(|mut node| {
@@ -57,7 +80,7 @@ fn lists_element(lists: Lists) -> Column<Node> {
                             .align_content(Align::center())
                             .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
                             .on_click(move || {
-                                lists.lock_mut().push_cloned(default());
+                                child_lists.lock_mut().push_cloned(default());
                             })
                             .child(
                                 El::<Text>::new()
@@ -79,7 +102,7 @@ fn ui_root() -> impl Element {
         .cursor(CursorIcon::default())
         .align_content(Align::new().top().left())
         .child(
-            lists_element(MASTER.clone())
+            lists_element(Mutable::new(None).read_only(), MASTER.clone(), None)
                 .with_node(|mut node| {
                     node.height = Val::Percent(100.);
                     node.left = Val::Px(20.);
