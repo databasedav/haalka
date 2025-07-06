@@ -228,10 +228,11 @@ impl TextInput {
     /// Sync a [`Mutable`] with the text of this input.
     pub fn on_change_sync(self, string: Mutable<String>) -> Self {
         self.on_change_with_system(
-            move |In((entity, text)): In<(Entity, String)>, last_text_query: Query<&LastSignalText>| {
-                if let Ok(last_text) = last_text_query.get(entity) {
+            move |In((entity, text)): In<(Entity, String)>, mut last_text_query: Query<&mut LastSignalText>| {
+                if let Ok(mut last_text) = last_text_query.get_mut(entity) {
                     // only update the mutable if the change is NOT an echo of a value just set by a signal.
                     if last_text.0 != text {
+                        last_text.0 = text.clone();
                         string.set_neq(text);
                     }
                 }
