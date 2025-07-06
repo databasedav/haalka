@@ -4,6 +4,12 @@ the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## unreleased
 
+# 0.5.1 (2025-07-05)
+
+### fixed
+
+- text input race bug
+
 # 0.5.0 (2025-07-02)
 
 ### added
