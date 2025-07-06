@@ -13,7 +13,6 @@ let src_paragraph = import "src/paragraph.rs" as 'Text in
 let src_pointer_event_aware = import "src/pointer_event_aware.rs" as 'Text in
 let src_raw = import "src/raw.rs" as 'Text in
 let src_row = import "src/row.rs" as 'Text in
-let src_sizeable = import "src/sizeable.rs" as 'Text in
 let src_stack = import "src/stack.rs" as 'Text in
 let src_text_input = import "src/text_input.rs" as 'Text in
 let src_utils = import "src/utils.rs" as 'Text in
@@ -52,7 +51,6 @@ let repo_structure = {
   "src/pointer_event_aware.rs" = src_pointer_event_aware,
   "src/raw.rs" = src_raw,
   "src/row.rs" = src_row,
-  "src/sizeable.rs" = src_sizeable,
   "src/stack.rs" = src_stack,
   "src/text_input.rs" = src_text_input,
   "src/utils.rs" = src_utils,
@@ -119,7 +117,6 @@ haalka is an ergonomic reactive UI library in rust for the bevy game engine; her
     ├── pointer_event_aware.rs
     ├── raw.rs
     ├── row.rs
-    ├── sizeable.rs
     ├── stack.rs
     ├── text_input.rs
     ├── utils.rs
