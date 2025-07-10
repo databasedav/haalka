@@ -69,6 +69,7 @@ jobs:
         commit-message: https://github.com/databasedav/haalka/commit/${{ github.sha }}
         folder: pages
         force: false
+        single-commit: true
         target-folder: examples
   get_examples_:
     name: get_examples_
