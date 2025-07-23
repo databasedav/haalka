@@ -24,7 +24,6 @@ let install_nickel_ = {
   "%
 } in
 {
-  REPO = "https://github.com/databasedav/haalka",
   GITHUB_PAGES_DEPLOY_ACTION_VERSION = "4.7.3",
   GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT = 100,
   checkout = {
@@ -117,7 +116,7 @@ let install_nickel_ = {
       example = "${{ matrix.example }}",
     },
   },
-  deploy_examples = fun pr =>
+  deploy_examples = fun repo pr =>
     {
       permissions = {
         contents = "write",
@@ -156,7 +155,7 @@ let install_nickel_ = {
             force = false,
             attempt-limit = GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT,
             target-folder = if pr != "" then "pr_previews/%{ pr }" else "examples",
-            commit-message = if pr != "" then "%{ REPO }/pull/%{ pr }/commits/${{ github.event.pull_request.head.sha }}" else "%{ REPO }/commit/${{ github.sha }}",
+            commit-message = if pr != "" then "%{ repo }/pull/%{ pr }/commits/${{ github.event.pull_request.head.sha }}" else "%{ repo }/commit/${{ github.sha }}",
             single-commit = true,
           }
         },

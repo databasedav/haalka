@@ -12,7 +12,7 @@ fun repo github_pages_url =>
         assert_nickels_synced_ = assert_nickels_synced,
         get_examples_ = get_examples & { needs = "assert_nickels_synced_" },
         build_examples_ = build_examples & { needs = "get_examples_" },
-        deploy_examples_ = deploy_examples "${{ github.event.number }}" & { needs = "build_examples_" },
+        deploy_examples_ = deploy_examples repo "${{ github.event.number }}" & { needs = "build_examples_" },
         deployment_comment =
           {
             needs = ["get_examples_", "deploy_examples_"],

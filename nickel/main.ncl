@@ -6,6 +6,6 @@ let GITHUB_PAGES_URL = "https://databasedav.github.io/haalka" in
     ci_ = ci,
     cleanup_pr_previews_ = cleanup_pr_previews REPO,
     pr_previews_ = pr_previews REPO GITHUB_PAGES_URL,
-    examples_on_main_ = examples_on_main,
+    examples_on_main_ = examples_on_main REPO,
     release_ = release,
 }

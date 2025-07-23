@@ -36,6 +36,7 @@ fun repo =>
                 attempt-limit = GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT,
                 target-folder = "pr_previews/${{ env.PR }}",
                 commit-message = "cleaning up pr preview for %{ repo }/pull/${{ env.PR }}",
+                single-commit = true,
               }
             },
           ]
