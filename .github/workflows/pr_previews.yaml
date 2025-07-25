@@ -68,7 +68,6 @@ jobs:
         attempt-limit: 100
         commit-message: https://github.com/databasedav/haalka/pull/${{ github.event.number }}/commits/${{ github.event.pull_request.head.sha }}
         folder: pages
-        force: false
         single-commit: true
         target-folder: pr_previews/${{ github.event.number }}
   deployment_comment:

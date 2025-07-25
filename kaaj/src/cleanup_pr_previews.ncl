@@ -32,7 +32,6 @@ fun repo =>
               uses = "JamesIves/github-pages-deploy-action@v%{ GITHUB_PAGES_DEPLOY_ACTION_VERSION }",
               with = {
                 folder = "empty_dir",
-                force = false,
                 attempt-limit = GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT,
                 target-folder = "pr_previews/${{ env.PR }}",
                 commit-message = "cleaning up pr preview for %{ repo }/pull/${{ env.PR }}",

@@ -152,7 +152,6 @@ let install_nickel_ = {
           uses = "JamesIves/github-pages-deploy-action@v%{ GITHUB_PAGES_DEPLOY_ACTION_VERSION }",
           with = {
             folder = "pages",
-            force = false,
             attempt-limit = GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT,
             target-folder = if pr != "" then "pr_previews/%{ pr }" else "examples",
             commit-message = if pr != "" then "%{ repo }/pull/%{ pr }/commits/${{ github.event.pull_request.head.sha }}" else "%{ repo }/commit/${{ github.sha }}",
