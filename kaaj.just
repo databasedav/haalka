@@ -35,7 +35,7 @@ list_examples:
   @cargo metadata --no-deps --format-version 1 | jq -c --argjson exclude '[{{ exclude_examples }}]' '[.packages[].targets[] | select(.kind[] == "example" and (.name as $name | $exclude | index($name) | not)) | .name]'
 
 generate_wasm_example_index library example has_assets *features:
-  echo '(import kaaj).wasm_example_index_template' | nickel eval --field index_html --manifest-path nickel/Nickel-pkg.ncl -- 'library="{{ library }}"' 'example="{{ example }}"' --override 'features=["{{ features }}"]' | sed 's/^"//; s/"$//; s/\\"/"/g; s/\\n/\n/g'
+  echo '(import kaaj).wasm_example_index_template' | nickel eval --field index_html --manifest-path nickel/Nickel-pkg.ncl -- 'library="{{ library }}"' 'example="{{ example }}"' --override 'features=["{{ features }}"]' --override 'has_assets="{{ has_assets }}"' | sed 's/^"//; s/"$//; s/\\"/"/g; s/\\n/\n/g'
 
 build_wasm_example library example has_assets *features:
   just generate_wasm_example_index {{ library }} {{ example }} {{ has_assets }} {{ features }} > index.html
