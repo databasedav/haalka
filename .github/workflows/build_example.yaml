@@ -36,10 +36,10 @@ jobs:
       run: cargo binstall --no-confirm --continue-on-failure wasm-bindgen-cli wasm-opt trunk
     - if: ${{ inputs.api == 'webgl2' }}
       name: build example
-      run: just build_wasm_example ${{ inputs.example }}
+      run: just build_wasm_example haalka ${{ inputs.example }} true
     - if: ${{ inputs.api == 'webgpu' }}
       name: build example
-      run: just build_wasm_example ${{ inputs.example }} webgpu
+      run: just build_wasm_example haalka ${{ inputs.example }} true bevy/webgpu
     - name: upload dist
       uses: actions/upload-artifact@v4
       with:

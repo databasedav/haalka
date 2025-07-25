@@ -1,6 +1,6 @@
 let { checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just, binstall, install_nickel, .. } = import "common.ncl" in
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
-fun build_wasm_webgpu_features =>
+fun library has_assets build_wasm_webgpu_features =>
   {
     name = "build_example",
 
@@ -37,12 +37,12 @@ fun build_wasm_webgpu_features =>
             {
               name = "build example",
               "if" = "${{ inputs.api == 'webgl2' }}",
-              run = "just build_wasm_example ${{ inputs.example }}"
+              run = "just build_wasm_example %{ library } ${{ inputs.example }} %{ has_assets }"
             },
             {
               name = "build example",
               "if" = "${{ inputs.api == 'webgpu' }}",
-              run = "just build_wasm_example ${{ inputs.example }} %{ build_wasm_webgpu_features }"
+              run = "just build_wasm_example %{ library } ${{ inputs.example }} %{ has_assets } %{ build_wasm_webgpu_features }"
             },
             {
               name = "upload dist",

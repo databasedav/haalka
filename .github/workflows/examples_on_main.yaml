@@ -68,7 +68,6 @@ jobs:
         attempt-limit: 100
         commit-message: https://github.com/databasedav/haalka/commit/${{ github.sha }}
         folder: pages
-        force: false
         single-commit: true
         target-folder: examples
   get_examples_:

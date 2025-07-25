@@ -18,7 +18,7 @@ jobs:
         attempt-limit: 100
         commit-message: cleaning up pr preview for https://github.com/databasedav/haalka/pull/${{ env.PR }}
         folder: empty_dir
-        force: false
+        single-commit: true
         target-folder: pr_previews/${{ env.PR }}
 name: cleanup_pr_previews
 on:
