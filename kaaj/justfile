@@ -38,7 +38,7 @@ generate_wasm_example_index example has_assets *features:
   echo '(import kaaj).wasm_example_index_template' | nickel eval --field index_html --manifest-path nickel/Nickel-pkg.ncl -- 'example="{{ example }}"' --override 'features=["{{ features }}"]' | sed 's/^"//; s/"$//; s/\\"/"/g; s/\\n/\n/g'
 
 build_wasm_example example has_assets *features:
-  just generate_wasm_example_index {{ example }} {{ features }} > index.html
+  just generate_wasm_example_index {{ example }} {{ has_assets }} {{ features }} > index.html
   RUSTFLAGS='--cfg getrandom_backend="wasm_js"' trunk build --locked --release --public-url . --example {{ example }}
 
 format_nickels:
