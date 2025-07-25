@@ -142,8 +142,7 @@ pub(crate) fn examples_plugin(app: &mut App) {
     .add_systems(
         PostStartup,
         (
-            mark_default_ui_camera
-                .run_if(not(any_with_component::<IsDefaultUiCamera>)),
+            mark_default_ui_camera.run_if(not(any_with_component::<IsDefaultUiCamera>)),
             |world: &mut World| {
                 let mut el = Column::<Node>::new()
                     .align(Align::new().bottom().left())
