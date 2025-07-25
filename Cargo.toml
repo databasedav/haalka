@@ -14,14 +14,6 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/databasedav/haalka"
 documentation = "https://docs.rs/haalka"
 
-[lints.rust]
-missing_docs = "warn"
-unsafe_code = "deny"
-
-[package.metadata.docs.rs]
-cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-all-features = true
-
 [dependencies]
 bevy_app = { version = "0.16", default-features = false }
 bevy_color = { version = "0.16", optional = true, default-features = false }
@@ -103,15 +95,6 @@ utils = []
 ## `DebugUiPlugin` which enables toggling [`bevy_dev_tools::ui_debug_overlay::DebugUiPlugin`](https://docs.rs/bevy/latest/bevy/dev_tools/ui_debug_overlay/struct.DebugUiPlugin.html) with the `F1` key; requires a camera to be marked with the [`IsDefaultCamera`](https://docs.rs/bevy/latest/bevy/prelude/struct.IsDefaultUiCamera.html#) component.
 debug = ["ui", "bevy_ui/bevy_ui_debug"]
 
-## Pass-through for optionally enabling webgpu for examples.
-webgpu = [
-    "bevy_render?/webgpu",
-    "bevy_core_pipeline?/webgpu",
-    "bevy_pbr?/webgpu",
-    "bevy_gizmos?/webgpu",
-    "bevy_sprite?/webgpu",
-]
-
 deployed_wasm_example = []
 
 [dev-dependencies]
@@ -139,6 +122,14 @@ allowlist = [
     "utils",
     "debug",
 ]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+all-features = true
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "deny"
 
 [[example]]
 name = "align"

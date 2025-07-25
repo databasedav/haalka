@@ -108,9 +108,6 @@ impl Plugin for FpsOverlayPlugin {
     }
 }
 
-#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-struct MarkDefaultUiCameraSet;
-
 #[allow(clippy::type_complexity)]
 fn mark_default_ui_camera(cameras: Query<Entity, Or<(With<Camera2d>, With<Camera3d>)>>, mut commands: Commands) {
     if let Ok(entity) = cameras.single()
@@ -146,7 +143,6 @@ pub(crate) fn examples_plugin(app: &mut App) {
         PostStartup,
         (
             mark_default_ui_camera
-                .in_set(MarkDefaultUiCameraSet)
                 .run_if(not(any_with_component::<IsDefaultUiCamera>)),
             |world: &mut World| {
                 let mut el = Column::<Node>::new()

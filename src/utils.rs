@@ -61,7 +61,7 @@ where
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "debug")] {
+    if #[cfg(all(feature = "debug", feature = "ui"))] {
         use bevy_ecs::prelude::*;
         use bevy_input::prelude::*;
         use bevy_app::prelude::*;
@@ -82,11 +82,7 @@ cfg_if::cfg_if! {
 
         impl Plugin for DebugUiPlugin {
             fn build(&self, app: &mut App) {
-                cfg_if::cfg_if! {
-                    if #[cfg(feature = "ui")] {
-                        app.add_systems(Update, toggle_overlay.run_if(any_with_component::<IsDefaultUiCamera>));
-                    }
-                }
+                app.add_systems(Update, toggle_overlay.run_if(any_with_component::<IsDefaultUiCamera>));
             }
         }
     }
