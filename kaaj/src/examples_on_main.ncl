@@ -1,6 +1,6 @@
 let { get_examples, build_examples, deploy_examples, assert_nickels_synced, .. } = import "common.ncl" in
 let { sync_name_field, .. } = import "utils.ncl" in
-{
+fun repo => {
   name = "examples_on_main",
 
   on = {
@@ -15,7 +15,7 @@ let { sync_name_field, .. } = import "utils.ncl" in
       assert_nickels_synced_ = assert_nickels_synced,
       get_examples_ = get_examples & { needs = "assert_nickels_synced_" },
       build_examples_ = build_examples & { needs = "get_examples_" },
-      deploy_examples_ = deploy_examples "" & { needs = "build_examples_" },
+      deploy_examples_ = deploy_examples repo "" & { needs = "build_examples_" },
     }
     |> sync_name_field
 }
