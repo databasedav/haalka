@@ -15,7 +15,7 @@ clippy *extras:
 
 # TODO: --all-features flag doesn't work because examples shenanigans
 check_all_features:
-  cargo check-all-features --locked
+  cargo all-features check --locked
 
 example name *extras:
   cargo run --example {{ name }} {{ extras }}
