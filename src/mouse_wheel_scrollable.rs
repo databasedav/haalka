@@ -41,21 +41,22 @@ pub trait MouseWheelScrollable: ViewportMutable {
             let system_holder = Arc::new(OnceLock::new());
             raw_el
                 .insert(ScrollEnabled)
-                .observe(|event: Trigger<OnAdd, Disabled>, mut commands: Commands| {
-                    if let Ok(mut entity) = commands.get_entity(event.target()) {
+                .observe(|event: On<Add, Disabled>, mut commands: Commands| {
+                    if let Ok(mut entity) = commands.get_entity(event.event().entity) {
                         entity.remove::<ScrollEnabled>();
                     }
                 })
-                .observe(move |event: Trigger<OnRemove, Disabled>, mut commands: Commands| {
-                    if let Ok(mut entity) = commands.get_entity(event.target()) {
+                .observe(move |event: On<Remove, Disabled>, mut commands: Commands| {
+                    if let Ok(mut entity) = commands.get_entity(event.event().entity) {
                         entity.try_insert(ScrollEnabled);
                     }
                 })
                 .on_spawn(clone!((system_holder) move |world, entity| {
                     let system = register_system(world, handler);
                     let _ = system_holder.set(system);
-                    observe(world, entity, move |mouse_wheel: Trigger<MouseWheel>, mut commands: Commands| {
-                        commands.run_system_with(system, (mouse_wheel.target(), *mouse_wheel.event()));
+                    observe(world, entity, move |mouse_wheel: On<MouseWheelEntityEvent>, mut commands: Commands| {
+                        let MouseWheelEntityEvent { entity, mouse_wheel } = *mouse_wheel.event();
+                        commands.run_system_with(system, (entity, mouse_wheel));
                     });
                 }))
                 .apply(remove_system_holder_on_remove(system_holder))
@@ -146,14 +147,22 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
 
 impl<T: PointerEventAware + MouseWheelScrollable> OnHoverMouseWheelScrollable for T {}
 
+#[derive(EntityEvent)]
+struct MouseWheelEntityEvent {
+    entity: Entity,
+    mouse_wheel: MouseWheel,
+}
+
 fn scroll_system(
-    mut mouse_wheel_events: EventReader<MouseWheel>,
+    mut mouse_wheel_events: MessageReader<MouseWheel>,
     scroll_listeners: Query<Entity, With<ScrollEnabled>>,
     mut commands: Commands,
 ) {
     let listeners = scroll_listeners.iter().collect::<Vec<_>>();
     for &event in mouse_wheel_events.read() {
-        commands.trigger_targets(event, listeners.clone());
+        for &entity in &listeners {
+            commands.trigger(MouseWheelEntityEvent { entity, mouse_wheel: event });
+        }
     }
 }
 
@@ -274,12 +283,12 @@ impl BasicScrollHandler {
                     || matches!(direction, ScrollDirection::Both)
                         && !(keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight))
                 {
-                    scroll_position.offset_y -= dy;
+                    scroll_position.y -= dy;
                 } else if matches!(direction, ScrollDirection::Horizontal)
                     || matches!(direction, ScrollDirection::Both)
                         && (keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight))
                 {
-                    scroll_position.offset_x -= dy;
+                    scroll_position.x -= dy;
                 }
             }
         };

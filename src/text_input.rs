@@ -9,7 +9,8 @@ use bevy_ui::prelude::*;
 use bevy_utils::prelude::*;
 use bevy_app::prelude::*;
 use bevy_picking::prelude::*;
-use bevy_text::{cosmic_text::{Edit, Selection}, TextColor, TextFont};
+use bevy_text::{TextColor, TextFont};
+use cosmic_text::{Edit, Selection};
 
 use crate::impl_haalka_methods;
 
@@ -152,8 +153,8 @@ impl TextInput {
             .on_spawn(clone!((system_holder) move |world, entity| {
                 let system = register_system(world, handler);
                 let _ = system_holder.set(system);
-                observe(world, entity, move |event: Trigger<FocusedChange>, mut commands: Commands| {
-                    commands.run_system_with(system, (entity, event.event().0))
+                observe(world, entity, move |event: On<FocusedChange>, mut commands: Commands| {
+                    commands.run_system_with(system, (entity, event.event().focused))
                 });
             }))
             .apply(remove_system_holder_on_remove(system_holder.clone()))
@@ -211,8 +212,9 @@ impl TextInput {
             raw_el.on_spawn(clone!((system_holder) move |world, entity| {
                 let system = register_system(world, handler);
                 let _ = system_holder.set(system);
-                observe(world, entity, move |change: Trigger<TextInputChange>, mut commands: Commands| {
-                    commands.run_system_with(system, (change.target(), change.event().0.clone()));
+                observe(world, entity, move |change: On<TextInputChange>, mut commands: Commands| {
+                    let TextInputChange { entity, text } = change.event();
+                    commands.run_system_with(system, (*entity, text.clone()));
                 });
             }))
             .with_entity(|mut entity| { entity.insert_if_new((ListenToChanges, TextInputContents::default())); })
@@ -261,18 +263,18 @@ fn queue_set_text_actions(
 #[derive(Component)]
 struct ListenToChanges;
 
-#[derive(Event)]
-struct TextInputChange(String);
+#[derive(EntityEvent)]
+struct TextInputChange { entity: Entity, text: String }
 
 #[allow(clippy::type_complexity)]
 fn on_change(contents: Query<(Entity, &TextInputContents), (Changed<TextInputContents>, With<ListenToChanges>)>, mut commands: Commands) {
     for (entity, contents) in contents.iter() {
-        commands.trigger_targets(TextInputChange(contents.get().to_string()), entity);
+        commands.trigger(TextInputChange { entity, text: contents.get().to_string() });
     }
 }
 
-#[derive(Event)]
-struct FocusedChange(bool);
+#[derive(EntityEvent)]
+struct FocusedChange { entity: Entity, focused: bool }
 
 #[derive(Component)]
 struct Focusable {
@@ -289,11 +291,11 @@ fn on_focus_changed(
             // TODO: remove condition when https://github.com/Dimchikkk/bevy_cosmic_edit/issues/145
             if focusable.is_focused.not() {
                 focusable.is_focused = true;
-                commands.trigger_targets(FocusedChange(true), entity);
+                commands.trigger(FocusedChange { entity, focused: true });
             }
         } else if focusable.is_focused {
             focusable.is_focused = false;
-            commands.trigger_targets(FocusedChange(false), entity);
+            commands.trigger(FocusedChange { entity, focused: false });
         }
     }
 }

@@ -1,20 +1,18 @@
 //! Demonstrates how to forward ECS changes to UI.
 
 mod utils;
-use bevy_ecs::component::HookContext;
-use bevy_render::view::RenderLayers;
 use utils::*;
 
 use std::time::Duration;
 
-use bevy::prelude::*;
+use bevy::{camera::visibility::RenderLayers, ecs::lifecycle::HookContext, prelude::*};
 use bevy_rand::prelude::*;
 use haalka::prelude::*;
 use rand::prelude::{IteratorRandom, Rng};
 
 fn main() {
     App::new()
-        .add_plugins((examples_plugin, EntropyPlugin::<ChaCha8Rng>::default()))
+        .add_plugins((examples_plugin, EntropyPlugin::<WyRand>::default()))
         .add_systems(
             Startup,
             (
@@ -34,8 +32,8 @@ fn main() {
             (tick_emitter::<Spawner, SpawnDot>, tick_emitter::<Despawner, DespawnDot>),
         )
         .add_observer(
-            |_: Trigger<SpawnDot>,
-             mut rng: GlobalEntropy<ChaCha8Rng>,
+            |_: On<SpawnDot>,
+             mut rng: Single<&mut WyRand, With<GlobalRng>>,
              mut meshes: ResMut<Assets<Mesh>>,
              mut materials: ResMut<Assets<ColorMaterial>>,
              mut commands: Commands| {
@@ -52,9 +50,9 @@ fn main() {
             },
         )
         .add_observer(
-            |_: Trigger<DespawnDot>,
+            |_: On<DespawnDot>,
              dots: Query<Entity, With<Dot>>,
-             mut rng: GlobalEntropy<ChaCha8Rng>,
+             mut rng: Single<&mut WyRand, With<GlobalRng>>,
              mut commands: Commands| {
                 if let Some(dot) = dots.iter().choose(rng.as_mut()) {
                     commands.entity(dot).despawn();
@@ -364,12 +362,14 @@ fn decr_color_count(world: bevy::ecs::world::DeferredWorld, HookContext { entity
     }
 }
 
-fn tick_emitter<T: Component, E: Event + Default>(
+fn tick_emitter<'a, T: Component, E: Event + Default>(
     mut spawner: Single<&mut MutableTimer, With<T>>,
     time: Res<Time>,
     mut commands: Commands,
-) {
-    if spawner.timer.tick(time.delta()).finished() {
+) where
+    <E as bevy::prelude::Event>::Trigger<'a>: std::default::Default,
+{
+    if spawner.timer.tick(time.delta()).is_finished() {
         commands.trigger(E::default());
         spawner.timer.reset();
     }

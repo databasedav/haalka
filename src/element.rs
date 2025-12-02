@@ -6,7 +6,7 @@ use super::{
     align::{AlignabilityFacade, Alignable, Aligner, ChildAlignable},
     raw::{RawElWrapper, RawElement, RawHaalkaEl},
 };
-use bevy_ecs::{component::*, prelude::*, system::RunSystemOnce, world::DeferredWorld};
+use bevy_ecs::{component::*, lifecycle::HookContext, prelude::*, system::RunSystemOnce, world::DeferredWorld};
 use bevy_log::warn;
 use bevy_picking::prelude::*;
 use futures_signals::signal::{Signal, SignalExt};

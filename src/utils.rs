@@ -66,6 +66,7 @@ cfg_if::cfg_if! {
         use bevy_input::prelude::*;
         use bevy_app::prelude::*;
         use bevy_ui::prelude::*;
+        use bevy_ui_render::prelude::*;
 
         const OVERLAY_TOGGLE_KEY: KeyCode = KeyCode::F1;
 

@@ -93,8 +93,7 @@ pub mod prelude {
                 viewport_mutable::{Axis, ViewportMutable},
             };
 
-            pub use bevy_window::SystemCursorIcon;
-            pub use bevy_winit::cursor::CursorIcon;
+            pub use bevy_window::{SystemCursorIcon, CursorIcon};
 
             cfg_if::cfg_if! {
                 if #[cfg(feature = "text_input")] {

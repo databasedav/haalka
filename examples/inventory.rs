@@ -269,7 +269,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             if insertable {
                 raw_el = raw_el
                 .insert(Pickable::default())
-                .on_event_disableable::<Pointer<Click>, BlockClick>(
+                .on_event_disableable::<Pointer<Click>, PointerTraversal, BlockClick>(
                     clone!((cell_data_option => self_cell_data_option) move |click| {
                         let mut consume = false;
                         if let Some(dragging_cell_data_option) = &*DRAGGING_OPTION.lock_ref() {
@@ -310,9 +310,9 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             raw_el
             // we don't want the click listener to trigger if we've just grabbed some of
             // the stack as it would immediately drop one down, so we track the `Down` state
-            .on_event_with_system::<Pointer<Pressed>, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).insert(BlockClick); })
-            .on_event_with_system::<Pointer<Released>, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).remove::<BlockClick>(); })
-            .on_event_disableable_signal::<Pointer<Pressed>>(
+            .on_event_with_system::<Pointer<Press>, _, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).insert(BlockClick); })
+            .on_event_with_system::<Pointer<Release>, _, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).remove::<BlockClick>(); })
+            .on_event_disableable_signal::<Pointer<Press>, _>(
                 clone!((cell_data_option, down) move |pointer_down| {
                     let to_drag_option = {
                         if pointer_down.button == PointerButton::Secondary {
@@ -367,7 +367,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             hovered.signal()
                 .map_bool(|| CELL_HIGHLIGHT_COLOR, || CELL_BACKGROUND_COLOR).map(BackgroundColor),
         )
-        .border_color(BorderColor(CELL_DARK_BORDER_COLOR))
+        .border_color(BorderColor::all(CELL_DARK_BORDER_COLOR))
         .child_signal(
             cell_data_option
                 .signal_cloned()
@@ -409,7 +409,7 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                                 }))
                                 .global_z_index(GlobalZIndex(1))
                                 .background_color(BackgroundColor(CELL_BACKGROUND_COLOR))
-                                .border_color(BorderColor(CELL_DARK_BORDER_COLOR))
+                                .border_color(BorderColor::all(CELL_DARK_BORDER_COLOR))
                                 .child(
                                     El::<Text>::new()
                                     .align(Align::center())
@@ -625,7 +625,7 @@ fn inventory() -> impl Element {
                                             .child(cell(output.clone(), false).align(Align::center()))
                                             .update_raw_el(clone!((inputs) move |raw_el| {
                                                 raw_el
-                                                .on_event_disableable_signal::<Pointer<Pressed>>(
+                                                .on_event_disableable_signal::<Pointer<Press>, _>(
                                                     clone!((inputs) move |_| {
                                                         for input in inputs.lock_ref().iter() {
                                                             input.take();
@@ -680,7 +680,7 @@ fn ui_root() -> impl Element {
         })
         .update_raw_el(|raw_el| {
             raw_el
-                .on_event_with_system::<Pointer<Move>, _>(|In((_, move_)): In<(_, Pointer<Move>)>| {
+                .on_event_with_system::<Pointer<Move>, PointerTraversal, _>(|In((_, move_)): In<(_, Pointer<Move>)>| {
                     POINTER_POSITION.set(move_.pointer_location.position.into());
                 })
                 .component_signal::<Pickable, _>(is_dragging().map_true(default))

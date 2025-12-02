@@ -33,7 +33,7 @@ pub trait GlobalEventAware: RawElWrapper {
                     for ancestor in child_ofs.iter_ancestors(entity) {
                         if ui_roots.contains(ancestor) {
                             commands.queue(clone!((system_holder, observer_holder) move |world: &mut World| {
-                                let observer = observe(world, ancestor, clone!((system_holder) move |event: Trigger<E>, mut commands: Commands| {
+                                let observer = observe(world, ancestor, clone!((system_holder) move |event: On<E>, mut commands: Commands| {
                                     commands.run_system_with(system_holder.get().copied().unwrap(), (entity, (*event).clone()));
                                 })).id();
                                 let _ = observer_holder.set(observer);

@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 use bevy::{
     app::prelude::*,
     color::{palettes::css::*, prelude::*},
-    core_pipeline::prelude::*,
+    camera::prelude::*,
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
     ecs::prelude::*,
     input::prelude::*,
@@ -117,8 +117,8 @@ fn mark_default_ui_camera(cameras: Query<Entity, Or<(With<Camera2d>, With<Camera
     }
 }
 
-pub(crate) const WINDOW_WIDTH: f32 = 1400.;
-pub(crate) const WINDOW_HEIGHT: f32 = 900.;
+pub(crate) const WINDOW_WIDTH: u32 = 1400;
+pub(crate) const WINDOW_HEIGHT: u32 = 900;
 
 pub(crate) fn examples_plugin(app: &mut App) {
     app.add_plugins((

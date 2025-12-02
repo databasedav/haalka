@@ -1,5 +1,6 @@
 #[allow(unused_imports)]
 use bevy_ecs::prelude::*;
+use bevy_camera::visibility::*;
 #[allow(unused_imports)]
 use futures_signals::signal::Signal;
 #[allow(unused_imports)]
@@ -96,7 +97,6 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "ui")] {
         use super::{column::Column, el::El, grid::Grid, raw::RawElWrapper, row::Row, stack::Stack};
         use bevy_ui::{prelude::*, widget::*, *};
-        use bevy_render::prelude::*;
         use bevy_text::prelude::*;
         use bevy_transform::prelude::*;
 

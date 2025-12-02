@@ -34,7 +34,7 @@ const HEIGHT: f32 = BUTTON_SIZE * 5. + GAP * 6.;
 fn textable_element(text_signal: impl Signal<Item = impl Into<String> + 'static> + Send + 'static) -> El<Node> {
     El::<Node>::new()
         .with_node(|mut node| node.border = UiRect::all(Val::Px(2.0)))
-        .border_color(BorderColor(Color::WHITE))
+        .border_color(BorderColor::all(Color::WHITE))
         .child(
             El::<Text>::new()
                 .text_font(TextFont::from_font_size(FONT_SIZE))
@@ -67,7 +67,7 @@ fn input_button(symbol: &'static str) -> impl Element {
     let f = move || {
         if symbol == "=" {
             let mut output = OUTPUT.lock_mut();
-            if let Ok(result) = Context::<f64>::default().evaluate(&output)
+            if let Some(result) = Context::default().evaluate(&output).ok().and_then(|value| TryInto::<f64>::try_into(value).ok())
                 && let Some(result) = Decimal::from_f64((result * 100.).round() / 100.)
             {
                 *output = result.normalize().to_string();

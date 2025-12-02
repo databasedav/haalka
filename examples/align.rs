@@ -137,7 +137,7 @@ fn ui_root() -> impl Element {
 fn container_node<E: RawElWrapper>(el: E) -> E {
     el.update_raw_el(|raw_el| {
         raw_el
-            .insert(BorderColor(bevy::color::palettes::basic::GRAY.into()))
+            .insert(BorderColor::all(bevy::color::palettes::basic::GRAY))
             .with_component::<Node>(|mut node| {
                 node.height = Val::Px(200.);
                 node.width = Val::Px(278.);
