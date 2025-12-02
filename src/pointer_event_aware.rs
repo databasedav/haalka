@@ -197,7 +197,9 @@ pub trait PointerEventAware: GlobalEventAware {
                 }))
                 .on_event_with_system::<Pointer<Press>, PointerTraversal, _>(
                     move |In((entity, pointer_down)): In<(Entity, Pointer<Press>)>, world: &mut World| {
-                        if matches!(pointer_down.button, PointerButton::Primary) && let Ok(mut entity) = world.get_entity_mut(entity) {
+                        if matches!(pointer_down.button, PointerButton::Primary)
+                            && let Ok(mut entity) = world.get_entity_mut(entity)
+                        {
                             entity.insert(Pressable);
                         }
                     },
@@ -432,7 +434,10 @@ struct Pressable;
 
 // TODO: migrate to bevy's Pressed
 #[derive(EntityEvent)]
-struct Pressed { entity: Entity, pressed: bool }
+struct Pressed {
+    entity: Entity,
+    pressed: bool,
+}
 
 #[allow(clippy::type_complexity)]
 fn pressable_system(
@@ -440,7 +445,10 @@ fn pressable_system(
     mut commands: Commands,
 ) {
     for (entity, interaction) in &mut interaction_query {
-        commands.trigger(Pressed { entity, pressed: matches!(interaction, PickingInteraction::Pressed) });
+        commands.trigger(Pressed {
+            entity,
+            pressed: matches!(interaction, PickingInteraction::Pressed),
+        });
     }
 }
 

@@ -6,8 +6,8 @@ use std::sync::LazyLock;
 
 use bevy::{
     app::prelude::*,
-    color::{palettes::css::*, prelude::*},
     camera::prelude::*,
+    color::{palettes::css::*, prelude::*},
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
     ecs::prelude::*,
     input::prelude::*,

@@ -161,7 +161,10 @@ fn scroll_system(
     let listeners = scroll_listeners.iter().collect::<Vec<_>>();
     for &event in mouse_wheel_events.read() {
         for &entity in &listeners {
-            commands.trigger(MouseWheelEntityEvent { entity, mouse_wheel: event });
+            commands.trigger(MouseWheelEntityEvent {
+                entity,
+                mouse_wheel: event,
+            });
         }
     }
 }

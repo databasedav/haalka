@@ -1,6 +1,6 @@
+use bevy_camera::visibility::*;
 #[allow(unused_imports)]
 use bevy_ecs::prelude::*;
-use bevy_camera::visibility::*;
 #[allow(unused_imports)]
 use futures_signals::signal::Signal;
 #[allow(unused_imports)]

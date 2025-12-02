@@ -12,7 +12,7 @@ use std::{
 };
 
 use super::{
-    node_builder::{async_world, NodeBuilder, TaskHolder},
+    node_builder::{NodeBuilder, TaskHolder, async_world},
     raw::utils::remove_system_holder_on_remove,
 };
 use apply::Apply;

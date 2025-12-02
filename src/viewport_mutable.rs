@@ -241,7 +241,10 @@ impl SceneViewport<'_, '_> {
             x: viewport_width,
             y: viewport_height,
         }) = self.logical_rect.get(entity).as_ref().map(Rect::size)
-            && let Ok(&ScrollPosition(Vec2 { x: offset_x, y: offset_y })) = self.scroll_positions.get(entity)
+            && let Ok(&ScrollPosition(Vec2 {
+                x: offset_x,
+                y: offset_y,
+            })) = self.scroll_positions.get(entity)
         {
             let mut min = Vec2::MAX;
             let mut max = Vec2::MIN;
@@ -283,7 +286,10 @@ fn dispatch_viewport_location_change(
         if let Ok(mut entity) = commands.get_entity(entity) {
             entity.insert(MutableViewport { scene, viewport });
         }
-        commands.trigger(MutableViewportEvent { entity, mutable_viewport: MutableViewport { scene, viewport } });
+        commands.trigger(MutableViewportEvent {
+            entity,
+            mutable_viewport: MutableViewport { scene, viewport },
+        });
         checked_viewport_listeners.insert(entity);
     }
 }
