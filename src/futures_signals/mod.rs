@@ -1,58 +1,85 @@
-#![doc = include_str!("../README.md")]
-//! ## feature flags
-#![cfg_attr(
-    feature = "document-features",
-    doc = document_features::document_features!()
+//! Deprecated futures-signals based reactive primitives.
+//!
+//! This module contains the original futures-signals based implementation of haalka's
+//! reactive system. It is deprecated and will be removed in the next major Bevy version.
+//!
+//! For new code, use jonmo-based reactivity instead.
+
+#![deprecated(
+    since = "0.6.0",
+    note = "futures-signals backend is deprecated. Use jonmo-based reactivity instead. This module will be removed in the next major Bevy version."
 )]
 
-use bevy_app::prelude::*;
-use bevy_async_ecs::AsyncEcsPlugin;
-
 pub mod node_builder;
-use node_builder::init_async_world;
+pub use node_builder::{async_world, NodeBuilder, TaskHolder};
+pub(crate) use node_builder::init_async_world;
 
 pub mod raw;
+pub use raw::{
+    DeferredUpdaterAppendDirection, HaalkaObserver, HaalkaOneShotSystem, IntoOptionRawElement,
+    IntoRawElement, RawElWrapper, RawElement, RawHaalkaEl, Spawnable,
+};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "ui")] {
         pub mod align;
-        mod column;
-        mod el;
+        pub mod column;
+        pub mod el;
         pub mod element;
         pub mod grid;
         pub mod pointer_event_aware;
         pub mod global_event_aware;
-        mod row;
+        pub mod row;
         pub mod mouse_wheel_scrollable;
-        mod stack;
+        pub mod stack;
         pub mod viewport_mutable;
+
+        pub use align::{Align, Alignable, AlignX, AlignY, Alignment, ContentAlignment, LayoutDirection};
+        pub use column::Column;
+        pub use el::El;
+        pub use element::{
+            AlignabilityFacade, Element, ElementWrapper, IntoElement, IntoOptionElement, Nameable,
+            TypeEraseable, UiRoot, UiRootable,
+        };
+        pub use global_event_aware::GlobalEventAware;
+        pub use grid::{Grid, GRID_TRACK_FLOAT_PRECISION_SLACK};
+        pub use mouse_wheel_scrollable::{
+            BasicScrollHandler, MouseWheelScrollable, OnHoverMouseWheelScrollable, ScrollDirection,
+            ScrollDisabled,
+        };
+        pub use pointer_event_aware::{
+            CursorOnHover, CursorOnHoverDisabled, CursorOnHoverable, Enter, Leave, PointerEventAware,
+            SetCursor, UpdateHoverStatesDisabled,
+        };
+        pub use row::Row;
+        pub use stack::{Stack, StackChild};
+        pub use viewport_mutable::{
+            Axis, LogicalRect, MutableViewport, OnViewportLocationChange, Scene, Viewport, ViewportMutable,
+        };
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "text_input")] {
                 pub mod text_input;
+                pub use text_input::{ClearSelectionOnFocusChangeDisabled, TextInput};
             }
         }
     }
 }
 
 #[cfg(feature = "derive")]
-mod derive;
+pub mod derive;
 
-#[allow(missing_docs)]
 pub mod utils;
 
-/// Deprecated futures-signals based reactive primitives.
-/// Use jonmo-based reactivity instead for new code.
-#[cfg(feature = "futures_signals")]
-#[allow(deprecated)]
-pub mod futures_signals;
+/// Plugin that adds the futures-signals based systems.
+pub struct FuturesSignalsPlugin;
 
-/// Includes the plugins and systems required for [haalka](crate) to function.
-pub struct HaalkaPlugin;
-
-impl Plugin for HaalkaPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_plugins(AsyncEcsPlugin);
+impl bevy_app::Plugin for FuturesSignalsPlugin {
+    fn build(&self, app: &mut bevy_app::App) {
+        use bevy_app::prelude::*;
+        
+        app.add_plugins(bevy_async_ecs::AsyncEcsPlugin);
+        
         #[cfg(feature = "ui")]
         {
             app.add_plugins((
@@ -62,6 +89,7 @@ impl Plugin for HaalkaPlugin {
                 viewport_mutable::plugin,
             ));
         }
+        
         #[cfg(feature = "text_input")]
         app.add_plugins(text_input::plugin);
 
@@ -69,11 +97,11 @@ impl Plugin for HaalkaPlugin {
     }
 }
 
-/// `use haalka::prelude::*;` imports everything one needs to use start using [haalka](crate).
+/// Prelude for deprecated futures-signals based API.
 pub mod prelude {
     #[doc(inline)]
-    pub use crate::{
-        HaalkaPlugin,
+    pub use super::{
+        FuturesSignalsPlugin,
         node_builder::async_world,
         raw::{RawElWrapper, RawElement, RawHaalkaEl, Spawnable},
     };
@@ -84,7 +112,7 @@ pub mod prelude {
     cfg_if::cfg_if! {
         if #[cfg(feature = "ui")] {
             #[doc(inline)]
-            pub use crate::{
+            pub use super::{
                 align::{Align, Alignable},
                 column::Column,
                 el::El,
@@ -122,7 +150,7 @@ pub mod prelude {
     cfg_if::cfg_if! {
         if #[cfg(feature = "utils")] {
             #[doc(inline)]
-            pub use crate::utils::*;
+            pub use super::utils::*;
             #[doc(no_inline)]
             pub use apply::{Also, Apply};
             pub use std::sync::LazyLock;

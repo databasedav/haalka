@@ -39,7 +39,7 @@ use paste::paste;
 ///     }
 /// }
 ///
-/// impl_haalka_methods! {
+/// impl_haalka_methods_futures_signals! {
 ///     MyEl {
 ///        my_component_a: MyComponentA,
 ///        some_other_component_idk: MyComponentB,
@@ -53,7 +53,7 @@ use paste::paste;
 /// .on_signal_with_some_other_component_idk(always(4), |mut some_other_component_idk, data| some_other_component_idk.data = data);
 /// ```
 #[macro_export]
-macro_rules! impl_haalka_methods {
+macro_rules! impl_haalka_methods_futures_signals {
     ($el_type:ty {$($field:ident: $field_type:ty),* $(,)?}) => {
         impl $el_type {
             $(
@@ -104,7 +104,7 @@ cfg_if::cfg_if! {
             ($($el_type:ty),* $(,)?) => {
                 $(
                     paste! {
-                        impl_haalka_methods! {
+                        impl_haalka_methods_futures_signals! {
                             $el_type<Node> {
                                 node: Node,
                                 computed_node: ComputedNode,
@@ -123,7 +123,7 @@ cfg_if::cfg_if! {
                                 global_z_index: GlobalZIndex,
                             }
                         }
-                        impl_haalka_methods! {
+                        impl_haalka_methods_futures_signals! {
                             $el_type<ImageNode> {
                                 image_node: ImageNode,
                                 image_node_size: ImageNodeSize,
@@ -145,7 +145,7 @@ cfg_if::cfg_if! {
                                 global_z_index: GlobalZIndex,
                             }
                         }
-                        impl_haalka_methods! {
+                        impl_haalka_methods_futures_signals! {
                             $el_type<Text> {
                                 text: Text,
                                 text_layout: TextLayout,
@@ -170,7 +170,7 @@ cfg_if::cfg_if! {
                                 global_z_index: GlobalZIndex,
                             }
                         }
-                        impl_haalka_methods! {
+                        impl_haalka_methods_futures_signals! {
                             $el_type<Button> {
                                 interaction: Interaction,
                                 node: Node,
