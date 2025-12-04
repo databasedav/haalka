@@ -46,7 +46,7 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
                 .into_system(),
             signal::or(signal::not(hovered.signal()), SHIFTED.signal()),
         )
-        .with_scroll_position(move |mut scroll_position| scroll_position.offset_y = COMPUTED_SIZE * rotate as f32)
+        .with_scroll_position(move |mut scroll_position| scroll_position.y = COMPUTED_SIZE * rotate as f32)
         .hovered_sync(hovered)
         .items(
             "abcdefghijklmnopqrstuvwxyz"

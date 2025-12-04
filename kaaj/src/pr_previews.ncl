@@ -16,6 +16,7 @@ fun repo github_pages_url =>
         deployment_comment =
           {
             needs = ["get_examples_", "deploy_examples_"],
+            "if" = "github.event.pull_request.state == 'open'",
             permissions = {
               pull-requests = "write",
             },

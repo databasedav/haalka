@@ -16,7 +16,7 @@ use strum::{EnumIter, IntoEnumIterator};
 
 fn main() {
     App::new()
-        .add_plugins((examples_plugin, EntropyPlugin::<ChaCha8Rng>::default()))
+        .add_plugins((examples_plugin, EntropyPlugin::<WyRand>::default()))
         .add_systems(
             Startup,
             (
@@ -236,7 +236,7 @@ enum GridSizeChange {
     Decr,
 }
 
-fn on_grid_size_change(event: Trigger<GridSizeChange>, mut commands: Commands) {
+fn on_grid_size_change(event: On<GridSizeChange>, mut commands: Commands) {
     let event = *event;
     let cur_size = GRID_SIZE.get();
     match event {
@@ -367,7 +367,7 @@ fn tick(mut snake: ResMut<Snake>, direction: Res<DirectionResource>, mut command
 #[derive(Event, Default)]
 struct SpawnFood;
 
-fn on_spawn_food(_: Trigger<SpawnFood>, mut rng: GlobalEntropy<ChaCha8Rng>) {
+fn on_spawn_food(_: On<SpawnFood>, mut rng: Single<&mut WyRand, With<GlobalRng>>) {
     let cells_lock = CELLS.lock_ref();
     let empty_cells = cells_lock
         .iter()
@@ -381,7 +381,7 @@ fn on_spawn_food(_: Trigger<SpawnFood>, mut rng: GlobalEntropy<ChaCha8Rng>) {
 #[derive(Event, Default)]
 struct Restart;
 
-fn on_restart(_: Trigger<Restart>, mut commands: Commands) {
+fn on_restart(_: On<Restart>, mut commands: Commands) {
     for (_, cell) in CELLS.lock_ref().iter() {
         cell.set(Cell::Empty);
     }

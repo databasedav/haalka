@@ -36,7 +36,7 @@ fn main() {
             ),
         )
         .add_observer(
-            |event: Trigger<SetShape>,
+            |event: On<SetShape>,
              character: Single<Entity, With<MeshMaterial3d<StandardMaterial>>>,
              mut meshes: ResMut<Assets<Mesh>>,
              mut commands: Commands| {
@@ -96,7 +96,7 @@ fn button(shape: Shape, hovered: Mutable<bool>) -> impl Element {
                     Color::BLACK
                 }
             })
-            .map(BorderColor)
+            .map(BorderColor::all)
     };
     let background_color_signal = {
         selected_hovered_broadcaster

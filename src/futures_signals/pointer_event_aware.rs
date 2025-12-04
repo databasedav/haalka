@@ -2,6 +2,7 @@
 //! hover, click, and press, see [`PointerEventAware`].
 
 use std::{
+    future::Future,
     ops::Not,
     sync::{Arc, OnceLock},
     time::Duration,
@@ -19,22 +20,18 @@ use bevy_picking::{
     prelude::*,
 };
 use bevy_reflect::prelude::*;
-use bevy_time::{Time, Timer, TimerMode};
+use bevy_utils::prelude::*;
 use bevy_window::*;
-use jonmo::signal::{Signal, SignalExt};
+use enclose::enclose as clone;
+use futures_signals::signal::{Mutable, Signal, SignalExt, always, channel};
+use haalka_futures_signals_ext::SignalExtBool;
 
 use super::{
     element::UiRoot,
     global_event_aware::GlobalEventAware,
-    utils::{clone, observe, register_system, remove_system_holder_on_remove},
+    raw::{observe, register_system, utils::remove_system_holder_on_remove},
+    utils::sleep,
 };
-
-/// Helper to create a signal that always outputs a constant value.
-fn constant_signal<T: Clone + Send + Sync + 'static>(value: T) -> impl Signal<Item = T> + Send + Sync + 'static {
-    SignalBuilder::from_system(move |_: In<()>| Some(value.clone()))
-}
-
-use jonmo::signal::SignalBuilder;
 
 /// Enables reacting to pointer events like hover, click, and press. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`PointerEventAware`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/ability/pointer_event_aware.rs).
 pub trait PointerEventAware: GlobalEventAware {
@@ -43,11 +40,11 @@ pub trait PointerEventAware: GlobalEventAware {
     /// can be called repeatedly to register many such handlers.
     fn on_hovered_change_with_system<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + 'static,
     ) -> Self {
-        self.with_builder(|builder| {
+        self.update_raw_el(|raw_el| {
             let system_holder = Arc::new(OnceLock::new());
-            builder
+            raw_el
                 .insert(Pickable::default())
                 .insert(Hovered(false))
                 .on_spawn(clone!((system_holder) move |world, entity| {
@@ -72,14 +69,19 @@ pub trait PointerEventAware: GlobalEventAware {
         self.on_hovered_change_with_system(move |In((_, is_hovered))| handler(is_hovered))
     }
 
+    /// Sync a [`Mutable<bool>`] with this element's hovered state.
+    fn hovered_sync(self, hovered: Mutable<bool>) -> Self {
+        self.on_hovered_change(move |is_hovered| hovered.set_neq(is_hovered))
+    }
+
     /// Run a [`System`] when this element is clicked.
     fn on_click_with_system<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + 'static,
     ) -> Self {
-        self.with_builder(|builder| {
+        self.update_raw_el(|raw_el| {
             let system_holder = Arc::new(OnceLock::new());
-            builder
+            raw_el
                 .insert(Pickable::default())
                 .on_spawn(clone!((system_holder) move |world, entity| {
                     let system = register_system(world, handler);
@@ -108,11 +110,11 @@ pub trait PointerEventAware: GlobalEventAware {
         mut handler: impl FnMut() + Send + Sync + 'static,
         propagation_stopped: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.with_builder(|builder| {
-            builder
+        self.update_raw_el(|raw_el| {
+            raw_el
                 .insert(Pickable::default())
                 .component_signal::<ClickPropagationStopped, _>(
-                    propagation_stopped.map_true(|_: In<()>| ClickPropagationStopped),
+                    propagation_stopped.map_true(|| ClickPropagationStopped),
                 )
                 .observe(
                     move |mut click: On<Pointer<Click>>, propagation_stopped: Query<&ClickPropagationStopped>| {
@@ -130,14 +132,7 @@ pub trait PointerEventAware: GlobalEventAware {
     /// Run a function when this element is left clicked, stopping the click from bubbling up the
     /// hierarchy.
     fn on_click_stop_propagation(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.with_builder(|builder| {
-            builder.insert((Pickable::default(), ClickPropagationStopped)).observe(
-                move |mut click: On<Pointer<Click>>| {
-                    click.propagate(false);
-                },
-            )
-        })
-        .on_click(handler)
+        self.on_click_propagation_stoppable(handler, always(true))
     }
 
     /// Run a function when this element is right clicked.
@@ -156,11 +151,11 @@ pub trait PointerEventAware: GlobalEventAware {
     #[allow(clippy::type_complexity)]
     fn on_click_outside_with_system<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
-        self.with_builder(|builder| {
-            builder
+        self.update_raw_el(|raw_el| {
+            raw_el
                 .on_spawn(clone!((system_holder) move |world, _| {
                     let _ = system_holder.set(register_system(world, handler));
                 }))
@@ -197,11 +192,11 @@ pub trait PointerEventAware: GlobalEventAware {
     /// many such handlers.
     fn on_pressed_with_system_blockable<Marker, Blocked: Component>(
         self,
-        handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + 'static,
     ) -> Self {
-        self.with_builder(|builder| {
+        self.update_raw_el(|raw_el| {
             let system_holder = Arc::new(OnceLock::new());
-            builder
+            raw_el
                 .insert(Pickable::default())
                 .on_spawn(clone!((system_holder) move |world, entity| {
                     let system = register_system(world, handler);
@@ -235,17 +230,17 @@ pub trait PointerEventAware: GlobalEventAware {
     #[allow(clippy::type_complexity)]
     fn on_pressed_change_with_system<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
-        self.with_builder(clone!(
-            (system_holder) | builder | {
-                builder.on_spawn(clone!((system_holder) move |world, _| {
+        self.update_raw_el(clone!(
+            (system_holder) | raw_el | {
+                raw_el.on_spawn(clone!((system_holder) move |world, _| {
                     let _ = system_holder.set(register_system(world, handler));
                 }))
             }
         ))
-        .with_builder(remove_system_holder_on_remove(system_holder.clone()))
+        .update_raw_el(remove_system_holder_on_remove(system_holder.clone()))
         .on_pressed_with_system_blockable::<_, PressHandlingBlocked>(
             move |In((entity, cur)), mut pressed: Local<bool>, mut commands: Commands| {
                 if cur != *pressed {
@@ -266,12 +261,12 @@ pub trait PointerEventAware: GlobalEventAware {
     /// [`Entity`]. This method can be called repeatedly to register many such handlers.
     fn on_pressing_with_system_blockable<Marker, Blocked: Component>(
         self,
-        handler: impl IntoSystem<In<Entity>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<Entity>, (), Marker> + Send + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
-        self.with_builder(clone!(
-            (system_holder) | builder | {
-                builder
+        self.update_raw_el(clone!(
+            (system_holder) | raw_el | {
+                raw_el
                     .on_spawn(clone!((system_holder) move |world, _| {
                         let _ = system_holder.set(register_system(world, handler));
                     }))
@@ -299,12 +294,8 @@ pub trait PointerEventAware: GlobalEventAware {
         handler: impl FnMut() + Send + Sync + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.with_builder(|builder| {
-            builder.component_signal::<PressHandlingBlocked, _>(
-                blocked.map_true(|_: In<()>| PressHandlingBlocked::default()),
-            )
-        })
-        .on_pressing_blockable::<PressHandlingBlocked>(handler)
+        self.update_raw_el(|raw_el| raw_el.component_signal::<PressHandlingBlocked, _>(blocked.map_true(default)))
+            .on_pressing_blockable::<PressHandlingBlocked>(handler)
     }
 
     /// When this element is being pressed, run a function.
@@ -313,51 +304,76 @@ pub trait PointerEventAware: GlobalEventAware {
     }
 
     /// When this element is being pressed, run a [`System`] which takes [`In`](`System::In`) this
-    /// element's [`Entity`], throttled by `duration` before the `handler` can run again.
-    fn on_pressing_with_system_throttled<Marker>(
+    /// element's [`Entity`], waiting for the [`Future`] returned by `throttle` to complete
+    /// before running the `handler` again.
+    fn on_pressing_with_system_throttled<Fut: Future<Output = ()> + Send + 'static, Marker>(
         self,
-        handler: impl IntoSystem<In<Entity>, (), Marker> + Send + Sync + 'static,
-        duration: Duration,
+        handler: impl IntoSystem<In<Entity>, (), Marker> + Send + 'static,
+        mut throttle: impl FnMut() -> Fut + Send + 'static,
     ) -> Self {
+        let (sender, receiver) = channel(());
         let system_holder = Arc::new(OnceLock::new());
-        self.with_builder(|builder| {
-            builder
-                .insert(PressThrottleTimer(Timer::new(duration, TimerMode::Once)))
+        self.update_raw_el(|raw_el| {
+            raw_el
+                .component_signal::<PressHandlingBlocked, _>(receiver.map_future(move |_| throttle()).map(|_| None))
+                .observe(move |_: On<Add, PressHandlingBlocked>| sender.send(()).unwrap())
                 .on_spawn(
                     clone!((system_holder) move |world, _| { let _ = system_holder.set(register_system(world, handler)); }),
                 )
                 .apply(remove_system_holder_on_remove(system_holder.clone()))
             })
         .on_pressed_with_system_blockable::<_, PressHandlingBlocked>(
-            move |In((entity, pressed)), mut commands: Commands, time: Res<Time>, mut timers: Query<&mut PressThrottleTimer>| {
+            move |In((entity, pressed)), mut commands: Commands| {
                 if pressed {
-                    if let Ok(mut timer) = timers.get_mut(entity) {
-                        timer.0.tick(time.delta());
-                        if timer.0.is_finished() {
-                            commands.run_system_with(system_holder.get().copied().unwrap(), entity);
-                            timer.0.reset();
-                        }
+                    commands.run_system_with(system_holder.get().copied().unwrap(), entity);
+                    if let Ok(mut entity) = commands.get_entity(entity) {
+                        entity.try_insert(PressHandlingBlocked);
                     }
                 }
             },
         )
     }
 
-    /// When this element is being pressed, run a function, throttled by `duration` before the
-    /// `handler` can run again.
-    fn on_pressing_throttled(self, mut handler: impl FnMut() + Send + Sync + 'static, duration: Duration) -> Self {
-        self.on_pressing_with_system_throttled(move |_: In<_>| handler(), duration)
+    /// When this element is being pressed, run a [`System`] which takes [`In`](`System::In`) this
+    /// element's [`Entity`], waiting for `duration` before running the `handler` again.
+    fn on_pressing_with_system_with_sleep_throttle<Marker>(
+        self,
+        handler: impl IntoSystem<In<Entity>, (), Marker> + Send + 'static,
+        duration: Duration,
+    ) -> Self {
+        self.on_pressing_with_system_throttled(handler, move || sleep(duration))
+    }
+
+    /// When this element is being pressed, run a function, waiting for the [`Future`] returned by
+    /// `throttle` to complete before running the `handler` again.
+    fn on_pressing_throttled<Fut: Future<Output = ()> + Send + 'static>(
+        self,
+        mut handler: impl FnMut() + Send + Sync + 'static,
+        throttle: impl FnMut() -> Fut + Send + 'static,
+    ) -> Self {
+        self.on_pressing_with_system_throttled(move |_: In<_>| handler(), throttle)
+    }
+
+    /// When this element is being pressed, run a function, waiting for `duration` before running
+    /// the `handler` again.
+    fn on_pressing_with_sleep_throttle(
+        self,
+        handler: impl FnMut() + Send + Sync + 'static,
+        duration: Duration,
+    ) -> Self {
+        self.on_pressing_throttled(handler, move || sleep(duration))
+    }
+
+    /// Sync a [`Mutable`] with this element's pressed state.
+    fn pressed_sync(self, pressed: Mutable<bool>) -> Self {
+        self.on_pressed_change(move |cur| pressed.set_neq(cur))
     }
 }
-
-/// Timer component for throttling press events.
-#[derive(Component, Deref, DerefMut)]
-struct PressThrottleTimer(Timer);
 
 #[derive(Component, Deref, DerefMut)]
 struct Hovered(bool);
 
-#[derive(Component, Default, Clone)]
+#[derive(Component, Default)]
 struct PressHandlingBlocked;
 
 /// Fires when a the pointer crosses into the bounds of the `target` entity, ignoring children.
@@ -424,7 +440,7 @@ fn update_hover_states(
     }
 }
 
-#[derive(Component, Clone)]
+#[derive(Component)]
 struct ClickPropagationStopped;
 
 #[derive(Component)]
@@ -477,7 +493,7 @@ fn is_inside_or_removed_from_dom(
 #[derive(Component)]
 struct CursorOver;
 
-#[derive(Component, Default, Clone)]
+#[derive(Component, Default)]
 struct CursorDisabled;
 
 /// When this [`Resource`] exists in the [`World`], [`CursorOnHoverable`]
@@ -509,8 +525,8 @@ pub trait CursorOnHoverable: PointerEventAware {
     /// [`Element`]: super::element::Element
     fn cursor_disableable<Disabled: Component>(self, cursor_option: impl Into<Option<CursorIcon>>) -> Self {
         let cursor_option = cursor_option.into();
-        self.with_builder(|builder| {
-            builder
+        self.update_raw_el(|raw_el| {
+            raw_el
                 .insert((Pickable::default(), CursorOverPropagationStopped))
                 .observe(
                     |event: On<Insert, CursorOver>,
@@ -622,8 +638,8 @@ pub trait CursorOnHoverable: PointerEventAware {
         self,
         cursor_option_signal: impl Signal<Item = impl Into<Option<CursorIcon>> + 'static> + Send + Sync + 'static,
     ) -> Self {
-        self.with_builder(|builder| {
-            builder.component_signal::<CursorOnHover, _>(cursor_option_signal.map_in(|x| Some(CursorOnHover(x.into()))))
+        self.update_raw_el(|raw_el| {
+            raw_el.component_signal::<CursorOnHover, _>(cursor_option_signal.map(Into::into).map(CursorOnHover))
         })
         .cursor_disableable::<Disabled>(None)
     }
@@ -640,10 +656,8 @@ pub trait CursorOnHoverable: PointerEventAware {
         cursor_option_signal: impl Signal<Item = impl Into<Option<CursorIcon>> + 'static> + Send + Sync + 'static,
         disabled: impl Signal<Item = bool> + Send + Sync + 'static,
     ) -> Self {
-        self.with_builder(|builder| {
-            builder.component_signal::<CursorDisabled, _>(disabled.map_true(|_: In<()>| CursorDisabled::default()))
-        })
-        .cursor_signal_disableable::<CursorDisabled>(cursor_option_signal)
+        self.update_raw_el(|raw_el| raw_el.component_signal::<CursorDisabled, _>(disabled.map_true(default)))
+            .cursor_signal_disableable::<CursorDisabled>(cursor_option_signal)
     }
 
     /// When this [`Element`](super::element::Element) receives a [`Pointer<Over>`] event, set the
@@ -671,7 +685,7 @@ pub trait CursorOnHoverable: PointerEventAware {
         cursor_option: impl Into<Option<CursorIcon>>,
         disabled: impl Signal<Item = bool> + Send + Sync + 'static,
     ) -> Self {
-        self.cursor_signal_disableable_signal(constant_signal(cursor_option.into()), disabled)
+        self.cursor_signal_disableable_signal(always(cursor_option.into()), disabled)
     }
 }
 

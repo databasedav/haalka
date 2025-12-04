@@ -210,7 +210,7 @@ fn setup(
     commands.spawn(Camera2d);
 }
 
-fn on_resize(mut resize_events: EventReader<WindowResized>) {
+fn on_resize(mut resize_events: MessageReader<WindowResized>) {
     for event in resize_events.read() {
         WIDTH.set(event.width)
     }

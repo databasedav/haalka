@@ -326,7 +326,7 @@ fn is_sorted_at(pairs: &MutableVecLockMut<RowData>, index: usize, get_string: &i
     true
 }
 
-fn sort_one(maybe_changed: Trigger<MaybeChanged>) {
+fn sort_one(maybe_changed: On<MaybeChanged>) {
     let MaybeChanged(i) = *maybe_changed;
     let mut pairs = PAIRS.lock_mut();
 

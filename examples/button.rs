@@ -42,7 +42,7 @@ fn button() -> impl Element {
                     Color::BLACK
                 }
             })
-            .map(BorderColor)
+            .map(BorderColor::all)
     };
     let background_color_signal = {
         pressed_hovered_broadcaster

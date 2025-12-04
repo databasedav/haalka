@@ -71,6 +71,7 @@ jobs:
         single-commit: true
         target-folder: pr_previews/${{ github.event.number }}
   deployment_comment:
+    if: github.event.pull_request.state == 'open'
     name: deployment_comment
     needs:
     - get_examples_

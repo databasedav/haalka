@@ -1,17 +1,15 @@
 use bevy_ecs::prelude::*;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
-use jonmo::{
-    builder::JonmoBuilder,
-    signal::{Signal, SignalExt},
-};
+use futures_signals::signal::{Signal, SignalExt};
 
 use super::{
     align::{Alignable, LayoutDirection},
-    element::{BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
+    element::{IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
     pointer_event_aware::{CursorOnHoverable, PointerEventAware},
+    raw::{RawElWrapper, RawHaalkaEl},
     viewport_mutable::ViewportMutable,
 };
 
@@ -24,14 +22,14 @@ use super::{
 /// [MoonZoon's implementation](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/el.rs#L41-L69) and should not be relied on.
 #[derive(Default)]
 pub struct El<NodeType> {
-    builder: JonmoBuilder,
+    raw_el: RawHaalkaEl,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType: Bundle> From<JonmoBuilder> for El<NodeType> {
-    fn from(builder: JonmoBuilder) -> Self {
+impl<NodeType: Bundle> From<RawHaalkaEl> for El<NodeType> {
+    fn from(value: RawHaalkaEl) -> Self {
         Self {
-            builder: builder
+            raw_el: value
                 .with_component::<Node>(|mut node| {
                     node.display = Display::Flex;
                     node.flex_direction = FlexDirection::Column;
@@ -43,27 +41,25 @@ impl<NodeType: Bundle> From<JonmoBuilder> for El<NodeType> {
     }
 }
 
+impl<NodeType: Bundle> From<NodeType> for El<NodeType> {
+    fn from(node_bundle: NodeType) -> Self {
+        RawHaalkaEl::from(node_bundle).into()
+    }
+}
+
 impl<NodeType: Bundle + Default> El<NodeType> {
     /// Construct a new [`El`] from a [`Bundle`] with a [`Default`] implementation.
     ///
     /// # Notes
     /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
-        Self::from(JonmoBuilder::from(NodeType::default()))
-    }
-
-    /// Construct a new [`El`] from a [`Bundle`].
-    ///
-    /// # Notes
-    /// [`Bundle`]s without the [`Node`] component will not behave as expected.
-    pub fn from_bundle(node_bundle: NodeType) -> Self {
-        Self::from(JonmoBuilder::from(node_bundle))
+        Self::from(NodeType::default())
     }
 }
 
-impl<NodeType> BuilderWrapper for El<NodeType> {
-    fn builder_mut(&mut self) -> &mut JonmoBuilder {
-        &mut self.builder
+impl<NodeType> RawElWrapper for El<NodeType> {
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
+        &mut self.raw_el
     }
 }
 
@@ -77,31 +73,22 @@ impl<NodeType: Bundle> ViewportMutable for El<NodeType> {}
 
 impl<NodeType: Bundle> El<NodeType> {
     /// Declare a static child.
-    pub fn child<IOE: IntoOptionElement>(self, child_option: IOE) -> Self {
-        if let Some(child) = child_option.into_option_element() {
-            self.with_builder(|builder| builder.child(child.into_builder()))
-        } else {
-            self
-        }
+    pub fn child<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self {
+        self.raw_el = self.raw_el.child(child_option.into_option_element());
+        self
     }
 
     /// Declare a reactive child. When the [`Signal`] outputs [`None`], the child is removed.
-    pub fn child_signal<IOE, S>(self, child_option_signal_option: impl Into<Option<S>>) -> Self
-    where
-        IOE: IntoOptionElement + 'static,
-        S: Signal<Item = IOE> + Send + Sync + 'static,
-    {
+    pub fn child_signal<IOE: IntoOptionElement + 'static, S: Signal<Item = IOE> + Send + 'static>(
+        mut self,
+        child_option_signal_option: impl Into<Option<S>>,
+    ) -> Self {
         if let Some(child_option_signal) = child_option_signal_option.into() {
-            self.with_builder(|builder| {
-                builder.child_signal(
-                    child_option_signal.map_in(move |child_option: IOE| {
-                        child_option.into_option_element().map(|el| el.into_builder())
-                    }),
-                )
-            })
-        } else {
-            self
+            self.raw_el = self
+                .raw_el
+                .child_signal(child_option_signal.map(move |child_option| child_option.into_option_element()));
         }
+        self
     }
 }
 

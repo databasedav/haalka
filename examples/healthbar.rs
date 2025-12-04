@@ -31,7 +31,7 @@ fn main() {
                 .run_if(any_with_component::<Player>),
         )
         .add_observer(
-            |_: Trigger<SpawnPlayer>,
+            |_: On<SpawnPlayer>,
              mut meshes: ResMut<Assets<Mesh>>,
              mut materials: ResMut<Assets<StandardMaterial>>,
              mut commands: Commands| {
@@ -163,7 +163,7 @@ fn healthbar(
             node.height = Val::Px(height);
             node.border = UiRect::all(Val::Px(height / 12.));
         })
-        .border_color(BorderColor(Color::BLACK))
+        .border_color(BorderColor::all(Color::BLACK))
         .layer(
             El::<Node>::new()
                 .with_node(|mut node| node.height = Val::Percent(100.))
@@ -327,7 +327,7 @@ fn ui_root() -> impl Element {
 struct HealthTickTimer(Timer);
 
 fn decay(mut health: Single<&mut Health>, mut health_tick_timer: ResMut<HealthTickTimer>, time: Res<Time>) {
-    if health_tick_timer.0.tick(time.delta()).finished() {
+    if health_tick_timer.0.tick(time.delta()).is_finished() {
         health.0 = health.0.saturating_sub(1);
     }
 }

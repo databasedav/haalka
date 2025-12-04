@@ -103,11 +103,9 @@ fn square(i: usize) -> impl Element {
                         }
                     },
                 )
-                .on_event_with_system::<Pointer<Released>, _>(
-                    |In(_): In<_>, mut dragging: ResMut<Dragging>| {
-                        dragging.0 = None;
-                    },
-                )
+                .on_event_with_system::<Pointer<Released>, _>(|In(_): In<_>, mut dragging: ResMut<Dragging>| {
+                    dragging.0 = None;
+                })
                 .on_signal_with_entity(POINTER_POSITION.signal(), |mut entity, pos| {
                     let this_entity_id = entity.id();
                     if let Some(dragging_entity) = entity.world().resource::<Dragging>().0

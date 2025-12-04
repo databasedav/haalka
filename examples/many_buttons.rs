@@ -53,7 +53,7 @@ fn button(i: usize, j: usize) -> RawHaalkaEl {
             node.border = UiRect::all(Val::Percent(10. / total));
         })
         .component_signal(background_color_signal)
-        .insert(BorderColor(as_rainbow(i % j.max(1))))
+        .insert(BorderColor::all(as_rainbow(i % j.max(1))))
         // .hovered_sync(hovered)
         // .pressed_sync(pressed)
         .child(RawHaalkaEl::new().insert((

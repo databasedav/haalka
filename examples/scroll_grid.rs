@@ -156,7 +156,7 @@ fn ui_root() -> impl Element {
 }
 
 fn scroller(
-    mut mouse_wheel_events: EventReader<MouseWheel>,
+    mut mouse_wheel_events: MessageReader<MouseWheel>,
     hovered_cell: Res<HoveredCell>,
     mut rails: ResMut<Rails>,
     shifted: Res<Shifted>,

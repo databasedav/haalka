@@ -396,7 +396,7 @@ struct TaskWrapper {
 
 /// Used to tie async reactivity tasks to the lifetime of an [`Entity`].
 #[derive(Component, Default)]
-pub(crate) struct TaskHolder(Arc<Mutex<Vec<TaskWrapper>>>);
+pub struct TaskHolder(Arc<Mutex<Vec<TaskWrapper>>>);
 
 impl TaskHolder {
     fn new() -> Self {
