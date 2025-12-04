@@ -99,12 +99,15 @@ utils = []
 ## `DebugUiPlugin` which enables toggling [`bevy_dev_tools::ui_debug_overlay::DebugUiPlugin`](https://docs.rs/bevy/latest/bevy/dev_tools/ui_debug_overlay/struct.DebugUiPlugin.html) with the `F1` key; requires a camera to be marked with the [`IsDefaultCamera`](https://docs.rs/bevy/latest/bevy/prelude/struct.IsDefaultUiCamera.html#) component.
 debug = ["ui", "bevy_ui_render/bevy_ui_debug"]
 
+## Deprecated futures-signals based reactive primitives. Use jonmo-based reactivity instead for new code.
+futures_signals = []
+
 deployed_wasm_example = []
 
 [dev-dependencies]
 bevy = "0.17"
-// TODO: https://github.com/NiklasEi/bevy_asset_loader/pull/259
-// bevy_asset_loader = { version = "0.23", features = ["2d"] }
+# TODO: https://github.com/NiklasEi/bevy_asset_loader/pull/259
+# bevy_asset_loader = { version = "0.23", features = ["2d"] }
 colorgrad = "0.8"
 rand = "0.9"
 strum = { version = "0.27", features = ["derive"] }
