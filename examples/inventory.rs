@@ -260,6 +260,12 @@ struct CellData {
 #[derive(Component)]
 struct BlockClick;
 
+#[derive(Component)]
+struct PressHandlingDisabled;
+
+#[derive(Component)]
+struct OutputPressDisabled;
+
 fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl Element {
     let hovered = Mutable::new(false);
     let original_position: Mutable<Option<Vec2>> = Mutable::new(None);
@@ -269,8 +275,11 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             if insertable {
                 raw_el = raw_el
                 .insert(Pickable::default())
-                .on_event_disableable::<Pointer<Click>, PointerTraversal, BlockClick>(
-                    clone!((cell_data_option => self_cell_data_option) move |click| {
+                .observe(
+                    clone!((cell_data_option => self_cell_data_option) move |click: On<Pointer<Click>>, blocked: Query<&BlockClick>| {
+                        if blocked.contains(click.entity) {
+                            return;
+                        }
                         let mut consume = false;
                         if let Some(dragging_cell_data_option) = &*DRAGGING_OPTION.lock_ref() {
                             if self_cell_data_option.lock_ref().is_none() && let Some(dragging_cell_data) = &*dragging_cell_data_option.lock_ref() {
@@ -310,10 +319,14 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
             raw_el
             // we don't want the click listener to trigger if we've just grabbed some of
             // the stack as it would immediately drop one down, so we track the `Down` state
-            .on_event_with_system::<Pointer<Press>, _, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).insert(BlockClick); })
-            .on_event_with_system::<Pointer<Release>, _, _>(|In((entity, _)), mut commands: Commands| { commands.entity(entity).remove::<BlockClick>(); })
-            .on_event_disableable_signal::<Pointer<Press>, _>(
-                clone!((cell_data_option, down) move |pointer_down| {
+            .observe(|press: On<Pointer<Press>>, mut commands: Commands| { commands.entity(press.entity).insert(BlockClick); })
+            .observe(|release: On<Pointer<Release>>, mut commands: Commands| { commands.entity(release.entity).remove::<BlockClick>(); })
+            .component_signal::<PressHandlingDisabled, _>(signal::or(is_dragging(), cell_data_option.signal_ref(Option::is_none)).dedupe().map_true(|| PressHandlingDisabled))
+            .observe(
+                clone!((cell_data_option, down) move |pointer_down: On<Pointer<Press>>, disabled: Query<&PressHandlingDisabled>| {
+                    if disabled.contains(pointer_down.entity) {
+                        return;
+                    }
                     let to_drag_option = {
                         if pointer_down.button == PointerButton::Secondary {
                             if let Some(cell_data) = &*cell_data_option.lock_ref() {
@@ -337,7 +350,6 @@ fn cell(cell_data_option: Mutable<Option<CellData>>, insertable: bool) -> impl E
                     POINTER_POSITION.set(pointer_down.pointer_location.position.into());
                     down.set_neq(true);
                 }),
-                signal::or(is_dragging(), cell_data_option.signal_ref(Option::is_none)).dedupe()
             )
         }))
         // alternative to disabling this element's cursor like what's commented out below, which may seem more intuitive, but is harder to manage due to the eventual consistency of signals
@@ -625,13 +637,16 @@ fn inventory() -> impl Element {
                                             .child(cell(output.clone(), false).align(Align::center()))
                                             .update_raw_el(clone!((inputs) move |raw_el| {
                                                 raw_el
-                                                .on_event_disableable_signal::<Pointer<Press>, _>(
-                                                    clone!((inputs) move |_| {
+                                                .component_signal::<OutputPressDisabled, _>(signal::not(signal::and(DRAGGING_OPTION.signal_ref(Option::is_none), output.signal_ref(Option::is_some))).dedupe().map_true(|| OutputPressDisabled))
+                                                .observe(
+                                                    clone!((inputs) move |press: On<Pointer<Press>>, disabled: Query<&OutputPressDisabled>| {
+                                                        if disabled.contains(press.entity) {
+                                                            return;
+                                                        }
                                                         for input in inputs.lock_ref().iter() {
                                                             input.take();
                                                         }
                                                     }),
-                                                    signal::not(signal::and(DRAGGING_OPTION.signal_ref(Option::is_none), output.signal_ref(Option::is_some))).dedupe()
                                                 )
                                             }))
                                         )
@@ -680,7 +695,7 @@ fn ui_root() -> impl Element {
         })
         .update_raw_el(|raw_el| {
             raw_el
-                .on_event_with_system::<Pointer<Move>, PointerTraversal, _>(|In((_, move_)): In<(_, Pointer<Move>)>| {
+                .observe(|move_: On<Pointer<Move>>| {
                     POINTER_POSITION.set(move_.pointer_location.position.into());
                 })
                 .component_signal::<Pickable, _>(is_dragging().map_true(default))

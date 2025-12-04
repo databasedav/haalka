@@ -6,7 +6,6 @@
 
 use std::{
     future::Future,
-    marker::PhantomData,
     mem,
     sync::{Arc, OnceLock},
 };
@@ -17,8 +16,8 @@ use super::{
 };
 use apply::Apply;
 use bevy_ecs::{
-    component::*, error::*, event::PropagateEntityTrigger, lifecycle::HookContext, prelude::*, system::*,
-    traversal::Traversal, world::*,
+    component::*, error::*, lifecycle::HookContext, prelude::*, system::*,
+    world::*,
 };
 use bevy_log::error;
 use bevy_tasks::Task;
@@ -28,7 +27,6 @@ use futures_signals::{
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
-use haalka_futures_signals_ext::SignalExtBool;
 
 /// A thin layer over a [`NodeBuilder`] that exposes higher level ECS related methods.
 /// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`RawHtmlElement`](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/raw_el/raw_html_el.rs).
@@ -437,263 +435,6 @@ impl RawHaalkaEl {
         })
     }
 
-    /// When this element receives an `E` [`Event`] and does not have a `Disabled`
-    /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`]
-    /// and the [`Event`]; if the element has a `PropagationStopped` [`Component`], the
-    /// event will not bubble up the hierarchy. If propagation is conditional on logic within the
-    /// body of the `handler`, use [.observe](`Self::observe`) instead to access the mutable
-    /// [`Trigger<E>`] directly.
-    pub fn on_event_with_system_disableable_propagation_stoppable<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-        Disabled: Component,
-        PropagationStopped: Component,
-        Marker,
-    >(
-        self,
-        handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
-    ) -> Self {
-        let system_holder = Arc::new(OnceLock::new());
-        self
-            .on_spawn(clone!((system_holder) move |world, entity| {
-                let handler = register_system(world, handler);
-                let _ = system_holder.set(handler);
-                observe(world, entity, move |mut event: On<E>, disabled: Query<&Disabled>, propagation_stopped: Query<&PropagationStopped>, mut commands: Commands| {
-                    if !disabled.contains(entity) {
-                        commands.run_system_with(handler, (entity, (*event).clone()));
-                        if propagation_stopped.contains(entity) {
-                            event.propagate(false);
-                        }
-                    }
-                });
-            }))
-            .apply(remove_system_holder_on_remove(system_holder))
-    }
-
-    /// When this element receives an `E` [`Event`], run a [`System`] which takes
-    /// [`In`](`System::In`) this element's [`Entity`] and the [`Event`].
-    pub fn on_event_with_system<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-        Marker,
-    >(
-        self,
-        handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
-    ) -> Self {
-        self.on_event_with_system_disableable_propagation_stoppable::<E, T, EventHandlingDisabled<E>, EventPropagationStopped<E>, _>(
-            handler,
-        )
-    }
-
-    /// When this element receives an `E` [`Event`] and does not have a `Disabled`
-    /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's
-    /// [`Entity`] and the [`Event`].
-    pub fn on_event_with_system_disableable<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-        Disabled: Component,
-        Marker,
-    >(
-        self,
-        handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
-    ) -> Self {
-        self.on_event_with_system_disableable_propagation_stoppable::<E, T, Disabled, EventPropagationStopped<E>, _>(
-            handler,
-        )
-    }
-
-    /// When this element receives an `E` [`Event`], run a [`System`] which takes
-    /// [`In`](`System::In`) this element's [`Entity`] and the [`Event`], reactively
-    /// controlling whether this handling is disabled with a [`Signal`]. Critically
-    /// note that this disabling is not frame perfect, e.g. one should not expect the handler to
-    /// be disabled the same frame that the [`Signal`] outputs `true`. If one needs frame
-    /// perfect disabling, use
-    /// [`.on_event_with_system_disableable`](Self::on_event_with_system_disableable).
-    pub fn on_event_with_system_disableable_signal<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-        Marker,
-    >(
-        self,
-        handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        self.component_signal::<EventHandlingDisabled<E>, _>(disabled.map_true(|| EventHandlingDisabled(PhantomData)))
-            .on_event_with_system_disableable::<E, T, EventHandlingDisabled<E>, _>(handler)
-    }
-
-    /// When this element receives an `E` [`Event`], run a [`System`] which takes
-    /// [`In`](`System::In`) this element's [`Entity`] and the [`Event`]; if the element has a
-    /// `PropagationStopped` [`Component`], the event will not bubble up the hierarchy. If
-    /// propagation is conditional on logic within the body of the `handler`, use
-    /// [.observe](`Self::observe`) instead to access the mutable [`Trigger<E>`] directly.
-    pub fn on_event_with_system_propagation_stoppable<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-        PropagationStopped: Component,
-        Marker,
-    >(
-        self,
-        handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
-    ) -> Self {
-        self.on_event_with_system_disableable_propagation_stoppable::<E, T, EventHandlingDisabled<E>, PropagationStopped, _>(
-            handler,
-        )
-    }
-
-    /// When this element receives an `E` [`Event`], run a [`System`] which takes
-    /// [`In`](`System::In`) this element's [`Entity`] and the [`Event`], reactively
-    /// controlling whether this handling is disabled with a [`Signal`]. Critically
-    /// note that this propagation stopping is not frame perfect, e.g. one should not expect the
-    /// handler to stop propagation the same frame that the [`Signal`] outputs `true`. If one
-    /// needs frame perfect propagation stopping, use
-    /// [`.on_event_with_system_propagation_stoppable`](Self::on_event_with_system_propagation_stoppable).
-    /// If propagation is conditional on logic within the body of the `handler`, use
-    /// [.observe](`Self::observe`) instead to access the mutable [`Trigger<E>`] directly.
-    pub fn on_event_with_system_propagation_stoppable_signal<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-        Marker,
-    >(
-        self,
-        handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
-        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        self.component_signal::<EventPropagationStopped<E>, _>(
-            propagation_stopped.map_true(|| EventPropagationStopped(PhantomData)),
-        )
-        .on_event_with_system_propagation_stoppable::<E, T, EventPropagationStopped<E>, _>(handler)
-    }
-
-    /// When this element receives an `E` [`Event`], run a function with the [`Event`],
-    /// stopping the event from bubbling up the hierarchy.
-    pub fn on_event_with_system_stop_propagation<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-        Marker,
-    >(
-        self,
-        handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
-    ) -> Self {
-        self.insert(EventPropagationStopped::<E>(PhantomData))
-            .on_event_with_system_propagation_stoppable::<E, T, EventPropagationStopped<E>, _>(handler)
-    }
-
-    /// When this element receives an `E` [`Event`], run a function with the [`Event`].
-    pub fn on_event<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-    >(
-        self,
-        mut handler: impl FnMut(E) + Send + Sync + 'static,
-    ) -> Self {
-        self.on_event_with_system::<E, T, _>(move |In((_, event))| handler(event))
-    }
-
-    /// When this element receives an `E` [`Event`] and does not have a `Disabled`
-    /// [`Component`], run a function with the [`Event`].
-    pub fn on_event_disableable<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-        Disabled: Component,
-    >(
-        self,
-        mut handler: impl FnMut(E) + Send + Sync + 'static,
-    ) -> Self {
-        self.on_event_with_system_disableable::<E, T, Disabled, _>(move |In((_, event))| handler(event))
-    }
-
-    /// When this element receives an `E` [`Event`], run a with the [`Event`],
-    /// reactively controlling whether this handling is disabled with a [`Signal`].
-    /// Critically note that this disabling is not frame perfect, e.g. one should not expect the
-    /// handler to be disabled the same frame that the [`Signal`] outputs `true`. If one needs
-    /// frame perfect disabling, use
-    /// [`.on_event_disableable`](Self::on_event_disableable)
-    pub fn on_event_disableable_signal<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-    >(
-        self,
-        mut handler: impl FnMut(E) + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        self.on_event_with_system_disableable_signal::<E, T, _>(move |In((_, event))| handler(event), disabled)
-    }
-
-    /// When this element receives an `E` [`Event`], run a function with the [`Event`];
-    /// if the element has a `PropagationStopped` [`Component`], the event will not bubble up
-    /// the hierarchy. If propagation is conditional on logic within the body of the `handler`,
-    /// use [.observe](`Self::observe`) instead to access the mutable [`Trigger<E>`] directly.
-    pub fn on_event_propagation_stoppable<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-        Marker,
-        PropagationStopped: Component,
-    >(
-        self,
-        mut handler: impl FnMut(E) + Send + Sync + 'static,
-    ) -> Self {
-        self.on_event_with_system_propagation_stoppable::<E, T, PropagationStopped, _>(move |In((_, event))| {
-            handler(event)
-        })
-    }
-
-    /// When this element receives an `E` [`Event`], run a function with the [`Event`],
-    /// reactively controlling whether the event bubbles up the hierarchy with a [`Signal`].
-    /// If propagation is conditional on logic within the  body of the `handler`, use
-    /// [.observe](`Self::observe`) instead to access the mutable [`Trigger<E>`] directly.
-    pub fn on_event_propagation_stoppable_signal<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-    >(
-        self,
-        mut handler: impl FnMut(E) + Send + Sync + 'static,
-        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        self.on_event_with_system_propagation_stoppable_signal(
-            move |In((_, event))| handler(event),
-            propagation_stopped,
-        )
-    }
-
-    /// When this element receives an `E` [`Event`], run a function with the [`Event`],
-    /// stopping the event from bubbling up the hierarchy.
-    pub fn on_event_stop_propagation<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-    >(
-        self,
-        mut handler: impl FnMut(E) + Send + Sync + 'static,
-    ) -> Self {
-        self.on_event_with_system_stop_propagation::<E, T, _>(move |In((_, event))| handler(event))
-    }
-
-    /// When this element receives an `E` [`Event`], run a function run a function with the
-    /// [`Event`], reactively controlling whether the event bubbles up the hierarchy and
-    /// reactively disabling this handling. Critically note that this disabling and propagation
-    /// stopping is not frame perfect, e.g. one should not expect the handler to be disabled or
-    /// stop propagation the same frame that the respective [`Signal`] outputs `true`. If one needs
-    /// frame perfect disabling and propagation stopping, use
-    /// [`.on_event_with_system_disableable_propagation_stoppable`](Self::on_event_with_system_disableable_propagation_stoppable).
-    /// If propagation is conditional on logic within the body of the `handler`, use
-    /// [.observe](`Self::observe`) instead to access the mutable [`Trigger<E>`] directly.
-    pub fn on_event_disableable_propagation_stoppable_signal<
-        E: for<'a> EntityEvent<Trigger<'a> = PropagateEntityTrigger<true, E, T>> + Clone,
-        T: Traversal<E> + 'static,
-    >(
-        self,
-        mut handler: impl FnMut(E) + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
-        propagation_stopped: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        self
-        .component_signal::<EventHandlingDisabled<E>, _>(disabled.map_true(|| EventHandlingDisabled(PhantomData)))
-        .component_signal::<EventPropagationStopped<E>, _>(propagation_stopped.map_true(|| EventPropagationStopped(PhantomData)))
-        .on_event_with_system_disableable_propagation_stoppable::<E, T, EventHandlingDisabled<E>, EventPropagationStopped<E>, _>(
-            move |In((_, event))| handler(event),
-        )
-    }
-
     /// Declare a static child.
     pub fn child<IORE: IntoOptionRawElement>(self, child_option: IORE) -> Self {
         if let Some(child) = child_option.into_option_element() {
@@ -802,12 +543,6 @@ pub(crate) fn observe<E: Event, B: Bundle, Marker>(
 ) -> EntityWorldMut<'_> {
     world.spawn((Observer::new(observer).with_entity(entity), HaalkaObserver))
 }
-
-#[derive(Component)]
-struct EventHandlingDisabled<E: Event>(PhantomData<E>);
-
-#[derive(Component)]
-struct EventPropagationStopped<E: Event>(PhantomData<E>);
 
 /// Thin wrapper trait around [`RawHaalkaEl`] to allow consumers to target custom types when
 /// composing [`RawHaalkaEl`]s.

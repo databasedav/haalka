@@ -80,9 +80,17 @@ pub trait PointerEventAware: GlobalEventAware {
         handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + 'static,
     ) -> Self {
         self.update_raw_el(|raw_el| {
+            let system_holder = Arc::new(OnceLock::new());
             raw_el
                 .insert(Pickable::default())
-                .on_event_with_system::<Pointer<Click>, PointerTraversal, _>(handler)
+                .on_spawn(clone!((system_holder) move |world, entity| {
+                    let system = register_system(world, handler);
+                    let _ = system_holder.set(system);
+                    observe(world, entity, move |click: On<Pointer<Click>>, mut commands: Commands| {
+                        commands.run_system_with(system, (click.entity, (*click).clone()));
+                    });
+                }))
+                .apply(remove_system_holder_on_remove(system_holder))
         })
     }
 
@@ -105,13 +113,16 @@ pub trait PointerEventAware: GlobalEventAware {
         self.update_raw_el(|raw_el| {
             raw_el
                 .insert(Pickable::default())
-                .on_event_propagation_stoppable_signal::<Pointer<Click>, PointerTraversal>(
-                    move |click| {
+                .component_signal::<ClickPropagationStopped, _>(propagation_stopped.map_true(|| ClickPropagationStopped))
+                .observe(
+                    move |mut click: On<Pointer<Click>>, propagation_stopped: Query<&ClickPropagationStopped>| {
+                        if propagation_stopped.contains(click.entity) {
+                            click.propagate(false);
+                        }
                         if matches!(click.button, PointerButton::Primary) {
                             handler()
                         }
                     },
-                    propagation_stopped,
                 )
         })
     }
@@ -194,16 +205,14 @@ pub trait PointerEventAware: GlobalEventAware {
                             commands.run_system_with(system, (entity, press.event().pressed));
                         }
                     });
-                }))
-                .on_event_with_system::<Pointer<Press>, PointerTraversal, _>(
-                    move |In((entity, pointer_down)): In<(Entity, Pointer<Press>)>, world: &mut World| {
-                        if matches!(pointer_down.button, PointerButton::Primary)
-                            && let Ok(mut entity) = world.get_entity_mut(entity)
-                        {
-                            entity.insert(Pressable);
+                    observe(world, entity, move |pointer_press: On<Pointer<Press>>, mut commands: Commands| {
+                        if matches!(pointer_press.button, PointerButton::Primary) {
+                            if let Ok(mut entity) = commands.get_entity(pointer_press.entity) {
+                                entity.insert(Pressable);
+                            }
                         }
-                    },
-                )
+                    });
+                }))
                 .apply(remove_system_holder_on_remove(system_holder))
         })
         .on_hovered_change_with_system(|In((entity, hovered)): In<(_, bool)>, world: &mut World| {
@@ -430,6 +439,12 @@ fn update_hover_states(
 }
 
 #[derive(Component)]
+struct ClickPropagationStopped;
+
+#[derive(Component)]
+struct OutPropagationStopped;
+
+#[derive(Component)]
 struct Pressable;
 
 // TODO: migrate to bevy's Pressed
@@ -584,15 +599,21 @@ pub trait CursorOnHoverable: PointerEventAware {
                         }
                     },
                 )
-                .on_event_with_system_propagation_stoppable::<Pointer<Over>, PointerTraversal, CursorOverPropagationStopped, _>(
-                    |In((entity, _)), mut commands: Commands| {
+                .observe(
+                    |mut over: On<Pointer<Over>>, propagation_stopped: Query<&CursorOverPropagationStopped>, mut commands: Commands| {
+                        let entity = over.entity;
+                        if propagation_stopped.contains(entity) {
+                            over.propagate(false);
+                        }
                         if let Ok(mut entity) = commands.get_entity(entity) {
                             entity.try_insert(CursorOver);
                         }
                     },
                 )
-                .on_event_with_system_stop_propagation::<Pointer<Out>, PointerTraversal, _>(|In((entity, _)), mut commands: Commands| {
-                    if let Ok(mut entity) = commands.get_entity(entity) {
+                .insert(OutPropagationStopped)
+                .observe(|mut out: On<Pointer<Out>>, mut commands: Commands| {
+                    out.propagate(false);
+                    if let Ok(mut entity) = commands.get_entity(out.entity) {
                         entity.remove::<CursorOver>();
                     }
                 })
