@@ -1,4 +1,4 @@
-//! Simple dragging
+//! Dragging with z-index stacking
 
 mod utils;
 use utils::*;
