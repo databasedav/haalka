@@ -211,8 +211,8 @@ path = "examples/nested_lists.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "simple_dragging"
-path = "examples/simple_dragging.rs"
+name = "dragging"
+path = "examples/dragging.rs"
 doc-scrape-examples = true
 
 [[example]]
