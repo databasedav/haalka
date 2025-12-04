@@ -243,7 +243,7 @@ impl Checkbox {
                 lil_baby_button()
                     .apply(|element| focus_on_signal(element, controlling.signal()))
                     .update_raw_el(clone!((checked) move |raw_el| {
-                        raw_el.on_event_disableable_signal::<MenuInputEntityEvent, _>(
+                        raw_el.on_event_disableable_signal::<MenuInputEvent, _>(
                             move |event| {
                                 match event.input {
                                     MenuInput::Select => {
@@ -303,7 +303,7 @@ impl RadioGroup {
                 Row::<Node>::new()
                 .apply(|element| focus_on_signal(element, controlling.signal()))
                 .update_raw_el(|raw_el| {
-                    raw_el.on_event_disableable_signal::<MenuInputEntityEvent, _>(
+                    raw_el.on_event_disableable_signal::<MenuInputEvent, _>(
                         clone!((options, selected) move |event| {
                             match event.input {
                                 MenuInput::Left | MenuInput::Right => {
@@ -408,7 +408,7 @@ impl IterableOptions {
                     // TODO: only allowing one flasher like this doesn't prevent desyncing either ...
                     let left_flasher = Mutable::new(None);
                     let right_flasher = Mutable::new(None);
-                    raw_el.on_event_disableable_signal::<MenuInputEntityEvent, _>(
+                    raw_el.on_event_disableable_signal::<MenuInputEvent, _>(
                         clone!((options, selected, left_pressed, right_pressed) move |event| {
                             match event.input {
                                 MenuInput::Left | MenuInput::Right => {
@@ -512,7 +512,7 @@ impl Slider {
                     .update_raw_el(|raw_el| raw_el.insert(SliderTag))
                     .apply(|element| focus_on_signal(element, controlling.signal()))
                     .update_raw_el(|raw_el| {
-                        raw_el.on_event_disableable_signal::<MenuInputEntityEvent, _>(
+                        raw_el.on_event_disableable_signal::<MenuInputEvent, _>(
                             clone!((left) move |event| {
                                 match event.input {
                                     MenuInput::Left | MenuInput::Right => {
@@ -659,8 +659,8 @@ impl Dropdown {
             El::<Node>::new()
             .apply(|element| focus_on_signal(element, controlling.signal()))
             .update_raw_el(|raw_el| {
-                raw_el.observe::<MenuInputEntityEvent, _, _>(
-                    clone!((controlling, show_dropdown, hovered, options, options_hovered, selected) move |mut event: On<MenuInputEntityEvent>| {
+                raw_el.observe::<MenuInputEvent, _, _>(
+                    clone!((controlling, show_dropdown, hovered, options, options_hovered, selected) move |mut event: On<MenuInputEvent>| {
                         // TODO: this is cringe, but the component driven alternative is equally cringe ? (need to use .observe here directly since we need to stop propagation conditionally within the body of the callback)
                         if controlling.get() {
                             match event.input {
@@ -858,7 +858,7 @@ fn focus_on_no_child_hovered<E: Element>(
 fn sub_menu_child_hover_manager<E: Element>(element: E, hovereds: MutableVec<Mutable<bool>>) -> E {
     let l = hovereds.lock_ref().len();
     element.update_raw_el(|raw_el| {
-        raw_el.on_event::<MenuInputEntityEvent, _>(clone!((hovereds) move |event| {
+        raw_el.on_event::<MenuInputEvent, _>(clone!((hovereds) move |event| {
             let hovereds_lock = hovereds.lock_ref();
             match event.input {
                 MenuInput::Up | MenuInput::Down => {
@@ -1059,7 +1059,7 @@ fn menu() -> impl Element {
             menu_base(MAIN_MENU_SIDES, MAIN_MENU_SIDES, "main menu")
                 .apply(|element| focus_on_signal(element, SHOW_SUB_MENU.signal_ref(Option::is_none)))
                 .update_raw_el(|raw_el| {
-                    raw_el.on_event_disableable_signal::<MenuInputEntityEvent, _>(
+                    raw_el.on_event_disableable_signal::<MenuInputEvent, _>(
                         move |event| match event.input {
                             MenuInput::Up | MenuInput::Down => {
                                 if let Some(cur_sub_menu) = SUB_MENU_SELECTED.get() {
@@ -1196,7 +1196,7 @@ enum MenuInput {
 
 #[derive(EntityEvent, Clone)]
 #[entity_event(propagate, auto_propagate)]
-struct MenuInputEntityEvent {
+struct MenuInputEvent {
     entity: Entity,
     input: MenuInput,
 }
@@ -1224,13 +1224,13 @@ fn rate_limited_menu_input(
     match pressed_type {
         PressedType::Pressed => {
             if rate_limiter.tick(time.delta()).is_finished() {
-                commands.trigger(MenuInputEntityEvent { entity, input });
+                commands.trigger(MenuInputEvent { entity, input });
                 rate_limiter.reset();
             }
             true
         }
         PressedType::JustPressed => {
-            commands.trigger(MenuInputEntityEvent { entity, input });
+            commands.trigger(MenuInputEvent { entity, input });
             rate_limiter.reset();
             true
         }

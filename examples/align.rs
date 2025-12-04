@@ -231,11 +231,17 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
         )
         .hovered_sync(hovered)
         .on_click(move || {
-            match ALIGNMENT.get() {
+            (match ALIGNMENT.get() {
                 Alignment::Self_ => &RECTANGLE_SELF_ALIGNMENT,
                 Alignment::Content => &RECTANGLE_CONTENT_ALIGNMENT,
-            }
-            .set(Some(rectangle_alignment));
+            })
+            .replace_with(|current| {
+                if *current == Some(rectangle_alignment) {
+                    None
+                } else {
+                    Some(rectangle_alignment)
+                }
+            });
         })
 }
 

@@ -4,8 +4,7 @@ use bevy_ui::prelude::*;
 use futures_signals::signal::{Signal, SignalExt};
 
 use super::{
-    align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
-    column::Column,
+    align::{Alignable, LayoutDirection},
     element::{IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
@@ -24,7 +23,6 @@ use super::{
 #[derive(Default)]
 pub struct El<NodeType> {
     raw_el: RawHaalkaEl,
-    align: Option<AlignHolder>,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
@@ -36,8 +34,8 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for El<NodeType> {
                     node.display = Display::Flex;
                     node.flex_direction = FlexDirection::Column;
                 })
-                .insert(Pickable::IGNORE),
-            align: None,
+                .insert(Pickable::IGNORE)
+                .insert(LayoutDirection::Column),
             _node_type: std::marker::PhantomData,
         }
     }
@@ -76,12 +74,7 @@ impl<NodeType: Bundle> ViewportMutable for El<NodeType> {}
 impl<NodeType: Bundle> El<NodeType> {
     /// Declare a static child.
     pub fn child<IOE: IntoOptionElement>(mut self, child_option: IOE) -> Self {
-        let apply_alignment = self.apply_alignment_wrapper();
-        self.raw_el = self.raw_el.child(
-            child_option
-                .into_option_element()
-                .map(|child| Self::align_child(child, apply_alignment)),
-        );
+        self.raw_el = self.raw_el.child(child_option.into_option_element());
         self
     }
 
@@ -91,11 +84,8 @@ impl<NodeType: Bundle> El<NodeType> {
         child_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(child_option_signal) = child_option_signal_option.into() {
-            let apply_alignment = self.apply_alignment_wrapper();
             self.raw_el = self.raw_el.child_signal(child_option_signal.map(move |child_option| {
-                child_option
-                    .into_option_element()
-                    .map(|child| Self::align_child(child, apply_alignment))
+                child_option.into_option_element()
             }));
         }
         self
@@ -103,58 +93,8 @@ impl<NodeType: Bundle> El<NodeType> {
 }
 
 impl<NodeType: Bundle> Alignable for El<NodeType> {
-    fn aligner(&mut self) -> Option<Aligner> {
-        Some(Aligner::El)
-    }
-
-    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
-        &mut self.align
-    }
-
-    fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
-        match alignment {
-            Alignment::Top => {
-                node.justify_content = match action {
-                    AddRemove::Add => JustifyContent::Start,
-                    AddRemove::Remove => JustifyContent::DEFAULT,
-                }
-            }
-            Alignment::Bottom => {
-                node.justify_content = match action {
-                    AddRemove::Add => JustifyContent::End,
-                    AddRemove::Remove => JustifyContent::DEFAULT,
-                }
-            }
-            Alignment::Left => {
-                node.align_items = match action {
-                    AddRemove::Add => AlignItems::Start,
-                    AddRemove::Remove => AlignItems::DEFAULT,
-                }
-            }
-            Alignment::Right => {
-                node.align_items = match action {
-                    AddRemove::Add => AlignItems::End,
-                    AddRemove::Remove => AlignItems::DEFAULT,
-                }
-            }
-            Alignment::CenterX => {
-                node.align_items = match action {
-                    AddRemove::Add => AlignItems::Center,
-                    AddRemove::Remove => AlignItems::DEFAULT,
-                }
-            }
-            Alignment::CenterY => {
-                node.justify_content = match action {
-                    AddRemove::Add => JustifyContent::Center,
-                    AddRemove::Remove => JustifyContent::DEFAULT,
-                }
-            }
-        }
+    fn layout_direction() -> LayoutDirection {
+        LayoutDirection::Column
     }
 }
 
-impl<NodeType: Bundle> ChildAlignable for El<NodeType> {
-    fn apply_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
-        Column::<NodeType>::apply_alignment(node, alignment, action);
-    }
-}

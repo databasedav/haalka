@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 
 use super::{
-    align::{AlignabilityFacade, Alignable, Aligner, ChildAlignable},
+    align::Alignable,
     raw::{RawElWrapper, RawElement, RawHaalkaEl},
 };
 use bevy_ecs::{component::*, lifecycle::HookContext, prelude::*, system::RunSystemOnce, world::DeferredWorld};
@@ -17,9 +17,9 @@ use futures_signals::signal::{Signal, SignalExt};
 /// awareness](super::pointer_event_aware::PointerEventAware), [viewport
 /// mutability](super::viewport_mutable::ViewportMutable),
 /// [scrollability](super::mouse_wheel_scrollable::MouseWheelScrollable), etc.
-pub trait Element: RawElement + Alignable + ChildAlignable {}
+pub trait Element: RawElement + Alignable {}
 
-impl<E: RawElement + Alignable + ChildAlignable> Element for E {}
+impl<E: RawElement + Alignable> Element for E {}
 
 /// Allows consumers to pass non-[`ElementWrapper`] types to the child methods of all alignable
 /// types.
@@ -138,26 +138,53 @@ impl<EW: ElementWrapper> RawElWrapper for EW {
     }
 }
 
+impl<EW: ElementWrapper> Alignable for EW {
+    fn layout_direction() -> super::align::LayoutDirection {
+        EW::EL::layout_direction()
+    }
+}
+
 /// Enables mixing of different types of [`Element`]s.
 ///
 /// Since [`Element`]s or [`ElementWrapper::EL`]s can be of different concrete types (e.g.
 /// `El<Node>`, `El<ImageBundle>`, `Column<Node>`, etc.), one will run into unfortunate
-/// type issues when doing things like returning differnt [`ElementWrapper`]s (read: widgets) from
+/// type issues when doing things like returning different [`ElementWrapper`]s (read: widgets) from
 /// diverging branches of logic, or creating a collection of [`ElementWrapper`]s of different types.
-/// Since we have an exhaustive list of the possible [`Aligner`]s, we can use a bit of type
-/// indirection via [`AlignabilityFacade`] to collapse all [`Element`]s and [`ElementWrapper`]s into
-/// a single "type erased" type.
+/// This trait allows collapsing all [`Element`]s and [`ElementWrapper`]s into a single
+/// "type erased" [`AlignabilityFacade`] type that still implements [`Element`].
 pub trait TypeEraseable {
     /// Convert this type into an [`AlignabilityFacade`], allowing it to mix with other types of
     /// [`Element`]s and [`ElementWrapper`]s.
     fn type_erase(self) -> AlignabilityFacade;
 }
 
-impl<T: Alignable> TypeEraseable for T {
-    fn type_erase(mut self) -> AlignabilityFacade {
-        let aligner = self.aligner().unwrap_or(Aligner::El);
-        let (align_option, raw_el) = (self.align_mut().take(), self.into_raw());
-        AlignabilityFacade::new(raw_el, align_option, aligner)
+impl<T: RawElWrapper> TypeEraseable for T {
+    fn type_erase(self) -> AlignabilityFacade {
+        AlignabilityFacade(self.into_raw_el())
+    }
+}
+
+/// A type-erased [`Element`] that provides a facade of alignability.
+///
+/// Created via [`TypeEraseable::type_erase`]. The underlying [`LayoutDirection`] component
+/// is preserved from the original element, so alignment behavior works correctly.
+/// Alignment methods should be called *before* type erasure, not after.
+///
+/// [`LayoutDirection`]: super::align::LayoutDirection
+pub struct AlignabilityFacade(RawHaalkaEl);
+
+impl RawElWrapper for AlignabilityFacade {
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
+        &mut self.0
+    }
+}
+
+impl Alignable for AlignabilityFacade {
+    fn layout_direction() -> super::align::LayoutDirection {
+        panic!(
+            "AlignabilityFacade::layout_direction() should never be called. \
+             Alignment methods should be called before type erasure, not after."
+        )
     }
 }
 

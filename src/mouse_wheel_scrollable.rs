@@ -54,8 +54,8 @@ pub trait MouseWheelScrollable: ViewportMutable {
                 .on_spawn(clone!((system_holder) move |world, entity| {
                     let system = register_system(world, handler);
                     let _ = system_holder.set(system);
-                    observe(world, entity, move |mouse_wheel: On<MouseWheelEntityEvent>, mut commands: Commands| {
-                        let MouseWheelEntityEvent { entity, mouse_wheel } = *mouse_wheel.event();
+                    observe(world, entity, move |mouse_wheel: On<MouseWheelEvent>, mut commands: Commands| {
+                        let MouseWheelEvent { entity, mouse_wheel } = *mouse_wheel.event();
                         commands.run_system_with(system, (entity, mouse_wheel));
                     });
                 }))
@@ -148,7 +148,7 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
 impl<T: PointerEventAware + MouseWheelScrollable> OnHoverMouseWheelScrollable for T {}
 
 #[derive(EntityEvent)]
-struct MouseWheelEntityEvent {
+pub struct MouseWheelEvent {
     entity: Entity,
     mouse_wheel: MouseWheel,
 }
@@ -161,7 +161,7 @@ fn scroll_system(
     let listeners = scroll_listeners.iter().collect::<Vec<_>>();
     for &event in mouse_wheel_events.read() {
         for &entity in &listeners {
-            commands.trigger(MouseWheelEntityEvent {
+            commands.trigger(MouseWheelEvent {
                 entity,
                 mouse_wheel: event,
             });

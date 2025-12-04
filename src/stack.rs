@@ -7,13 +7,12 @@ use futures_signals::{
 };
 
 use super::{
-    align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
+    align::{Alignable, LayoutDirection},
     element::{IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
     pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
-    row::Row,
     viewport_mutable::ViewportMutable,
 };
 
@@ -21,7 +20,6 @@ use super::{
 #[derive(Default)]
 pub struct Stack<NodeType> {
     raw_el: RawHaalkaEl,
-    align: Option<AlignHolder>,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
@@ -36,8 +34,8 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Stack<NodeType> {
                     node.grid_auto_rows =
                         GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
                 })
-                .insert(Pickable::IGNORE),
-            align: None,
+                .insert(Pickable::IGNORE)
+                .insert(LayoutDirection::Grid),
             _node_type: std::marker::PhantomData,
         }
     }
@@ -73,15 +71,18 @@ impl<NodeType: Bundle> MouseWheelScrollable for Stack<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Stack<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Stack<NodeType> {}
 
+/// Marker component for Stack children to place them in the same grid cell.
+#[derive(Component, Clone, Copy, Default)]
+pub struct StackChild;
+
 impl<NodeType: Bundle> Stack<NodeType> {
     /// Declare a static z-axis stacked child, e.g. subsequent calls to [`.layer`][Stack::layer]s
     /// will be stacked on top of this one.
     pub fn layer<IOE: IntoOptionElement>(mut self, layer_option: IOE) -> Self {
-        let apply_alignment = self.apply_alignment_wrapper();
         self.raw_el = self.raw_el.child(
             layer_option
                 .into_option_element()
-                .map(|layer| Self::align_child(layer, apply_alignment)),
+                .map(|layer| layer.update_raw_el(Self::setup_stack_child)),
         );
         self
     }
@@ -93,11 +94,10 @@ impl<NodeType: Bundle> Stack<NodeType> {
         layer_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(layer_option_signal) = layer_option_signal_option.into() {
-            let apply_alignment = self.apply_alignment_wrapper();
             self.raw_el = self.raw_el.child_signal(layer_option_signal.map(move |layer_option| {
                 layer_option
                     .into_option_element()
-                    .map(|layer| Self::align_child(layer, apply_alignment))
+                    .map(|layer| layer.update_raw_el(Self::setup_stack_child))
             }));
         }
         self
@@ -112,13 +112,12 @@ impl<NodeType: Bundle> Stack<NodeType> {
         I::IntoIter: Send + 'static,
     {
         if let Some(layers_options) = layers_options_option.into() {
-            let apply_alignment = self.apply_alignment_wrapper();
             self.raw_el = self
                 .raw_el
                 .children(layers_options.into_iter().map(move |layer_option| {
                     layer_option
                         .into_option_element()
-                        .map(|layer| Self::align_child(layer, apply_alignment))
+                        .map(|layer| layer.update_raw_el(Self::setup_stack_child))
                 }));
         }
         self
@@ -130,77 +129,31 @@ impl<NodeType: Bundle> Stack<NodeType> {
         layers_options_signal_vec_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(layers_options_signal_vec) = layers_options_signal_vec_option.into() {
-            let apply_alignment = self.apply_alignment_wrapper();
             self.raw_el = self
                 .raw_el
                 .children_signal_vec(layers_options_signal_vec.map(move |layer_option| {
                     layer_option
                         .into_option_element()
-                        .map(|layer| Self::align_child(layer, apply_alignment))
+                        .map(|layer| layer.update_raw_el(Self::setup_stack_child))
                 }));
         }
         self
     }
+
+    /// Set up a child to be placed in the stack's single grid cell.
+    fn setup_stack_child(raw_el: RawHaalkaEl) -> RawHaalkaEl {
+        raw_el
+            .with_component::<Node>(|mut node| {
+                node.grid_column = GridPlacement::start_end(1, 1);
+                node.grid_row = GridPlacement::start_end(1, 1);
+            })
+            .insert(StackChild)
+    }
 }
 
 impl<NodeType: Bundle> Alignable for Stack<NodeType> {
-    fn aligner(&mut self) -> Option<Aligner> {
-        Some(Aligner::Stack)
-    }
-
-    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
-        &mut self.align
-    }
-
-    fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
-        Row::<NodeType>::apply_content_alignment(node, alignment, action)
+    fn layout_direction() -> LayoutDirection {
+        LayoutDirection::Grid
     }
 }
 
-impl<NodeType: Bundle> ChildAlignable for Stack<NodeType> {
-    fn update_node(mut node: Mut<Node>) {
-        node.grid_column = GridPlacement::start_end(1, 1);
-        node.grid_row = GridPlacement::start_end(1, 1);
-    }
-
-    fn apply_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
-        match alignment {
-            Alignment::Top => {
-                node.align_self = match action {
-                    AddRemove::Add => AlignSelf::Start,
-                    AddRemove::Remove => AlignSelf::DEFAULT,
-                }
-            }
-            Alignment::Bottom => {
-                node.align_self = match action {
-                    AddRemove::Add => AlignSelf::End,
-                    AddRemove::Remove => AlignSelf::DEFAULT,
-                }
-            }
-            Alignment::Left => {
-                node.justify_self = match action {
-                    AddRemove::Add => JustifySelf::Start,
-                    AddRemove::Remove => JustifySelf::DEFAULT,
-                }
-            }
-            Alignment::Right => {
-                node.justify_self = match action {
-                    AddRemove::Add => JustifySelf::End,
-                    AddRemove::Remove => JustifySelf::DEFAULT,
-                }
-            }
-            Alignment::CenterX => {
-                node.justify_self = match action {
-                    AddRemove::Add => JustifySelf::Center,
-                    AddRemove::Remove => JustifySelf::DEFAULT,
-                }
-            }
-            Alignment::CenterY => {
-                node.align_self = match action {
-                    AddRemove::Add => AlignSelf::Center,
-                    AddRemove::Remove => AlignSelf::DEFAULT,
-                }
-            }
-        }
-    }
-}

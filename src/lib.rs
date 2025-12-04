@@ -50,6 +50,7 @@ impl Plugin for HaalkaPlugin {
         #[cfg(feature = "ui")]
         {
             app.add_plugins((
+                align::plugin,
                 pointer_event_aware::plugin,
                 mouse_wheel_scrollable::plugin,
                 viewport_mutable::plugin,
@@ -81,7 +82,7 @@ pub mod prelude {
                 align::{Align, Alignable},
                 column::Column,
                 el::El,
-                element::{Element, ElementWrapper, Nameable, TypeEraseable, UiRoot, UiRootable},
+                element::{AlignabilityFacade, Element, ElementWrapper, Nameable, TypeEraseable, UiRoot, UiRootable},
                 global_event_aware::GlobalEventAware,
                 grid::Grid,
                 mouse_wheel_scrollable::{

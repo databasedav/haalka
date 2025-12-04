@@ -10,13 +10,12 @@ use futures_signals::{
 };
 
 use super::{
-    align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
+    align::{Alignable, LayoutDirection},
     element::{IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
     pointer_event_aware::{CursorOnHoverable, PointerEventAware},
     raw::{RawElWrapper, RawHaalkaEl},
-    stack::Stack,
     viewport_mutable::ViewportMutable,
 };
 
@@ -24,7 +23,6 @@ use super::{
 #[derive(Default)]
 pub struct Grid<NodeType> {
     raw_el: RawHaalkaEl,
-    align: Option<AlignHolder>,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
@@ -35,8 +33,8 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Grid<NodeType> {
                 .with_component::<Node>(|mut node| {
                     node.display = Display::Grid;
                 })
-                .insert(Pickable::IGNORE),
-            align: None,
+                .insert(Pickable::IGNORE)
+                .insert(LayoutDirection::Grid),
             _node_type: std::marker::PhantomData,
         }
     }
@@ -144,12 +142,7 @@ impl<NodeType: Bundle> Grid<NodeType> {
 
     /// Declare a static grid child.
     pub fn cell<IOE: IntoOptionElement>(mut self, cell_option: IOE) -> Self {
-        let apply_alignment = self.apply_alignment_wrapper();
-        self.raw_el = self.raw_el.child(
-            cell_option
-                .into_option_element()
-                .map(|cell| Self::align_child(cell, apply_alignment)),
-        );
+        self.raw_el = self.raw_el.child(cell_option.into_option_element());
         self
     }
 
@@ -160,11 +153,8 @@ impl<NodeType: Bundle> Grid<NodeType> {
         cell_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(cell_option_signal) = cell_option_signal_option.into() {
-            let apply_alignment = self.apply_alignment_wrapper();
             self.raw_el = self.raw_el.child_signal(cell_option_signal.map(move |cell_option| {
-                cell_option
-                    .into_option_element()
-                    .map(|cell| Self::align_child(cell, apply_alignment))
+                cell_option.into_option_element()
             }));
         }
         self
@@ -179,11 +169,8 @@ impl<NodeType: Bundle> Grid<NodeType> {
         I::IntoIter: Send + 'static,
     {
         if let Some(cells_options) = cells_options_option.into() {
-            let apply_alignment = self.apply_alignment_wrapper();
             self.raw_el = self.raw_el.children(cells_options.into_iter().map(move |cell_option| {
-                cell_option
-                    .into_option_element()
-                    .map(|cell| Self::align_child(cell, apply_alignment))
+                cell_option.into_option_element()
             }));
         }
         self
@@ -195,13 +182,10 @@ impl<NodeType: Bundle> Grid<NodeType> {
         cells_options_signal_vec_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(cells_options_signal_vec) = cells_options_signal_vec_option.into() {
-            let apply_alignment = self.apply_alignment_wrapper();
             self.raw_el = self
                 .raw_el
                 .children_signal_vec(cells_options_signal_vec.map(move |cell_option| {
-                    cell_option
-                        .into_option_element()
-                        .map(|cell| Self::align_child(cell, apply_alignment))
+                    cell_option.into_option_element()
                 }));
         }
         self
@@ -209,25 +193,8 @@ impl<NodeType: Bundle> Grid<NodeType> {
 }
 
 impl<NodeType: Bundle> Alignable for Grid<NodeType> {
-    fn aligner(&mut self) -> Option<Aligner> {
-        Some(Aligner::Grid)
-    }
-
-    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
-        &mut self.align
-    }
-
-    fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
-        Stack::<NodeType>::apply_content_alignment(node, alignment, action);
+    fn layout_direction() -> LayoutDirection {
+        LayoutDirection::Grid
     }
 }
 
-impl<NodeType: Bundle> ChildAlignable for Grid<NodeType> {
-    fn update_node(mut node: Mut<Node>) {
-        node.display = Display::Grid;
-    }
-
-    fn apply_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
-        Stack::<NodeType>::apply_alignment(node, alignment, action);
-    }
-}
