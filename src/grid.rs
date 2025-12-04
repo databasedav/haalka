@@ -4,32 +4,32 @@ use bevy_ecs::prelude::*;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use bevy_utils::prelude::*;
-use futures_signals::{
+use jonmo::{
+    builder::JonmoBuilder,
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
 
 use super::{
     align::{Alignable, LayoutDirection},
-    element::{IntoOptionElement, Nameable, UiRootable},
+    element::{BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
     pointer_event_aware::{CursorOnHoverable, PointerEventAware},
-    raw::{RawElWrapper, RawHaalkaEl},
     viewport_mutable::ViewportMutable,
 };
 
 /// [`Element`](super::element::Element) with children aligned in a grid using a simple [`.row_wrap_cell_width`](Grid::row_wrap_cell_width) grid layout model. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Grid`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/grid.rs).
 #[derive(Default)]
 pub struct Grid<NodeType> {
-    raw_el: RawHaalkaEl,
+    builder: JonmoBuilder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType: Bundle> From<RawHaalkaEl> for Grid<NodeType> {
-    fn from(value: RawHaalkaEl) -> Self {
+impl<NodeType: Bundle> From<JonmoBuilder> for Grid<NodeType> {
+    fn from(builder: JonmoBuilder) -> Self {
         Self {
-            raw_el: value
+            builder: builder
                 .with_component::<Node>(|mut node| {
                     node.display = Display::Grid;
                 })
@@ -40,9 +40,10 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Grid<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> From<NodeType> for Grid<NodeType> {
-    fn from(node_bundle: NodeType) -> Self {
-        RawHaalkaEl::from(node_bundle).into()
+impl<NodeType: Bundle> Grid<NodeType> {
+    /// Construct a new [`Grid`] from a bundle.
+    pub fn from_bundle(node_bundle: NodeType) -> Self {
+        JonmoBuilder::from(node_bundle).into()
     }
 }
 
@@ -52,22 +53,23 @@ impl<NodeType: Bundle + Default> Grid<NodeType> {
     /// # Notes
     /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
-        Self::from(NodeType::default())
+        Self::from_bundle(NodeType::default())
     }
 }
 
-impl<NodeType: Bundle> RawElWrapper for Grid<NodeType> {
-    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
-        &mut self.raw_el
+impl<NodeType> BuilderWrapper for Grid<NodeType> {
+    fn builder_mut(&mut self) -> &mut JonmoBuilder {
+        &mut self.builder
     }
 
-    fn into_raw_el(self) -> RawHaalkaEl {
+    fn into_builder(mut self) -> JonmoBuilder {
         // TODO: why won't grid_template_columns work without a grid wrapper ?
-        RawHaalkaEl::from(Node {
+        let inner = std::mem::take(&mut self.builder);
+        JonmoBuilder::from(Node {
             display: Display::Grid,
             ..default()
         })
-        .child(self.raw_el)
+        .child(inner)
     }
 }
 
@@ -116,79 +118,93 @@ impl<NodeType: Bundle> Grid<NodeType> {
     /// While this grid layout definition is not nearly as rich as the [CSS grid layout](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout),
     /// it may suffice for one's needs. If not, one can always use bevy_ui's CSS grid API directly
     /// by modifiying the appropriate fields on any UI node's [`Node`] [`Component`].
-    pub fn row_wrap_cell_width(mut self, cell_width_option: impl Into<Option<f32>>) -> Self {
+    pub fn row_wrap_cell_width(self, cell_width_option: impl Into<Option<f32>>) -> Self {
         if let Some(cell_width) = cell_width_option.into() {
-            self.raw_el = self.raw_el.with_component::<Node>(move |mut node| {
-                node.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width);
-            });
+            self.with_builder(|builder| {
+                builder.with_component::<Node>(move |mut node| {
+                    node.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width);
+                })
+            })
+        } else {
+            self
         }
-        self
     }
 
     /// Reactively set the [`row_wrap_cell_width`](Self::row_wrap_cell_width).
-    pub fn row_wrap_cell_width_signal<S: Signal<Item = f32> + Send + 'static>(
-        mut self,
+    pub fn row_wrap_cell_width_signal<S: Signal<Item = f32> + Send + Sync + 'static>(
+        self,
         cell_width_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(cell_width_signal) = cell_width_signal_option.into() {
-            self.raw_el =
-                self.raw_el
-                    .on_signal_with_component::<f32, Node>(cell_width_signal, |mut node, cell_width| {
-                        node.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width)
-                    });
+            self.with_builder(|builder| {
+                builder.on_signal_with_component::<Node, _, _, _>(cell_width_signal, |mut node, cell_width| {
+                    node.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width)
+                })
+            })
+        } else {
+            self
         }
-        self
     }
 
     /// Declare a static grid child.
-    pub fn cell<IOE: IntoOptionElement>(mut self, cell_option: IOE) -> Self {
-        self.raw_el = self.raw_el.child(cell_option.into_option_element());
-        self
+    pub fn cell<IOE: IntoOptionElement>(self, cell_option: IOE) -> Self {
+        if let Some(cell) = cell_option.into_option_element() {
+            self.with_builder(|builder| builder.child(cell.into_builder()))
+        } else {
+            self
+        }
     }
 
     /// Declare a reactive grid child. When the [`Signal`] outputs [`None`], the child is
     /// removed.
-    pub fn cell_signal<IOE: IntoOptionElement + 'static, S: Signal<Item = IOE> + Send + 'static>(
-        mut self,
+    pub fn cell_signal<IOE: IntoOptionElement + 'static, S: Signal<Item = IOE> + Send + Sync + 'static>(
+        self,
         cell_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(cell_option_signal) = cell_option_signal_option.into() {
-            self.raw_el = self.raw_el.child_signal(cell_option_signal.map(move |cell_option| {
-                cell_option.into_option_element()
-            }));
+            self.with_builder(|builder| {
+                builder.child_signal(cell_option_signal.map_in(move |cell_option: IOE| {
+                    cell_option.into_option_element().map(|el| el.into_builder())
+                }))
+            })
+        } else {
+            self
         }
-        self
     }
 
     /// Declare static grid children.
     pub fn cells<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(
-        mut self,
+        self,
         cells_options_option: impl Into<Option<I>>,
     ) -> Self
     where
         I::IntoIter: Send + 'static,
     {
         if let Some(cells_options) = cells_options_option.into() {
-            self.raw_el = self.raw_el.children(cells_options.into_iter().map(move |cell_option| {
-                cell_option.into_option_element()
-            }));
+            self.with_builder(|builder| {
+                builder.children(cells_options.into_iter().filter_map(move |cell_option| {
+                    cell_option.into_option_element().map(|el| el.into_builder())
+                }))
+            })
+        } else {
+            self
         }
-        self
     }
 
     /// Declare reactive grid children.
-    pub fn cells_signal_vec<IOE: IntoOptionElement + 'static, S: SignalVec<Item = IOE> + Send + 'static>(
-        mut self,
+    pub fn cells_signal_vec<IOE: IntoOptionElement + Clone + 'static, S: SignalVec<Item = IOE> + Send + Sync + 'static>(
+        self,
         cells_options_signal_vec_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(cells_options_signal_vec) = cells_options_signal_vec_option.into() {
-            self.raw_el = self
-                .raw_el
-                .children_signal_vec(cells_options_signal_vec.map(move |cell_option| {
-                    cell_option.into_option_element()
-                }));
+            self.with_builder(|builder| {
+                builder.children_signal_vec(cells_options_signal_vec.filter_map(move |In(cell_option): In<IOE>| {
+                    cell_option.into_option_element().map(|el| el.into_builder())
+                }))
+            })
+        } else {
+            self
         }
-        self
     }
 }
 

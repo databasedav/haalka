@@ -7,8 +7,8 @@ use std::{
 };
 
 use super::{
-    raw::{RawElWrapper, observe, register_system, utils::remove_system_holder_on_remove},
-    utils::clone,
+    element::BuilderWrapper,
+    utils::{clone, observe, register_system, remove_system_holder_on_remove},
 };
 use apply::Apply;
 use bevy_app::prelude::*;
@@ -16,7 +16,7 @@ use bevy_ecs::{prelude::*, system::SystemParam};
 use bevy_math::prelude::*;
 use bevy_transform::prelude::*;
 use bevy_ui::prelude::*;
-use futures_signals::signal::{Mutable, Signal};
+use jonmo::signal::Signal;
 
 /// Dimensions of an element's "scene", which contains both its visible (via its [`Viewport`]) and
 /// hidden parts.
@@ -84,13 +84,13 @@ struct LastSignalScrollPosition {
 /// Enables the management of a limited visible window (viewport) onto the body of an element.
 /// CRITICALLY NOTE that methods expecting viewport mutability will not function without calling
 /// [`.mutable_viewport(...)`](ViewportMutable::mutable_viewport).
-pub trait ViewportMutable: RawElWrapper {
+pub trait ViewportMutable: BuilderWrapper {
     /// CRITICALLY NOTE, methods expecting viewport mutability will not function without calling
     /// this method. I could not find a way to enforce this at compile time; please let me know if
     /// you can.
     fn mutable_viewport(self, axis: Axis) -> Self {
-        self.update_raw_el(move |raw_el| {
-            raw_el
+        self.with_builder(move |builder| {
+            builder
                 .insert(MutableViewport::default())
                 .with_component::<Node>(move |mut node| {
                     node.overflow = match axis {
@@ -107,11 +107,11 @@ pub trait ViewportMutable: RawElWrapper {
     /// can be called repeatedly to register many such handlers.
     fn on_viewport_location_change_with_system<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, (Scene, Viewport))>, (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, (Scene, Viewport))>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
-        self.update_raw_el(|raw_el| {
+        self.with_builder(|builder| {
             let system_holder = Arc::new(OnceLock::new());
-            raw_el
+            builder
             .insert(OnViewportLocationChange)
             .on_spawn(clone!((system_holder) move |world, entity| {
                 let system = register_system(world, handler);
@@ -137,10 +137,10 @@ pub trait ViewportMutable: RawElWrapper {
         x_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(x_signal) = x_signal_option.into() {
-            self = self.update_raw_el(|raw_el| {
-                raw_el
+            self = self.with_builder(|builder| {
+                builder
                     .insert(LastSignalScrollPosition::default())
-                    .on_signal_with_system(
+                    .on_signal(
                     x_signal,
                     |In((entity, x)): In<(Entity, f32)>,
                      mut query: Query<(&mut ScrollPosition, &mut LastSignalScrollPosition)>| {
@@ -163,10 +163,10 @@ pub trait ViewportMutable: RawElWrapper {
         y_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(y_signal) = y_signal_option.into() {
-            self = self.update_raw_el(|raw_el| {
-                raw_el
+            self = self.with_builder(|builder| {
+                builder
                     .insert(LastSignalScrollPosition::default())
-                    .on_signal_with_system(
+                    .on_signal(
                     y_signal,
                     |In((entity, y)): In<(Entity, f32)>,
                      mut query: Query<(&mut ScrollPosition, &mut LastSignalScrollPosition)>| {
@@ -181,34 +181,6 @@ pub trait ViewportMutable: RawElWrapper {
             });
         }
         self
-    }
-
-    /// Sync a [`Mutable<f32>`] with this element's viewport's x offset.
-    fn viewport_x_sync(self, viewport_x: Mutable<f32>) -> Self {
-        self.on_viewport_location_change_with_system(
-            move |In((entity, (_, viewport))): In<(Entity, (Scene, Viewport))>,
-                  last_signal_positions: Query<&LastSignalScrollPosition>| {
-                if let Ok(last_signal_pos) = last_signal_positions.get(entity)
-                    && last_signal_pos.x.to_bits() != viewport.offset_x.to_bits()
-                {
-                    viewport_x.set_neq(viewport.offset_x);
-                }
-            },
-        )
-    }
-
-    /// Sync a [`Mutable<f32>`] with this element's viewport's y offset.
-    fn viewport_y_sync(self, viewport_y: Mutable<f32>) -> Self {
-        self.on_viewport_location_change_with_system(
-            move |In((entity, (_, viewport))): In<(Entity, (Scene, Viewport))>,
-                  last_signal_positions: Query<&LastSignalScrollPosition>| {
-                if let Ok(last_signal_pos) = last_signal_positions.get(entity)
-                    && last_signal_pos.y.to_bits() != viewport.offset_y.to_bits()
-                {
-                    viewport_y.set_neq(viewport.offset_y);
-                }
-            },
-        )
     }
 }
 

@@ -15,13 +15,12 @@ use cosmic_text::{Edit, Selection};
 use crate::impl_haalka_methods;
 
 use super::{
-    el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::{PointerEventAware, CursorOnHoverable}, raw::{RawElWrapper, register_system}, mouse_wheel_scrollable::MouseWheelScrollable,
-    utils::clone, viewport_mutable::ViewportMutable, global_event_aware::GlobalEventAware,
-    raw::{observe, utils::remove_system_holder_on_remove}
+    el::El, element::{BuilderWrapper, ElementWrapper, Nameable, UiRootable}, pointer_event_aware::{PointerEventAware, CursorOnHoverable}, mouse_wheel_scrollable::MouseWheelScrollable,
+    utils::{clone, observe, register_system, remove_system_holder_on_remove}, viewport_mutable::ViewportMutable, global_event_aware::GlobalEventAware,
 };
 use apply::Apply;
 use bevy_ui_text_input::{actions::TextInputAction, text_input_pipeline::TextInputPipeline, *};
-use futures_signals::signal::{Mutable, Signal, SignalExt};
+use jonmo::signal::{Signal, SignalExt};
 use paste::paste;
 
 /// Reactive text input widget, a thin wrapper around [`bevy_ui_text_input`] integrated with [`Signal`]s.
@@ -49,8 +48,8 @@ impl CursorOnHoverable for TextInput {}
 impl TextInput {
     #[allow(missing_docs, clippy::new_without_default)]
     pub fn new() -> Self {
-        let el = El::<Node>::new().update_raw_el(|raw_el| {
-            raw_el
+        let el = El::<Node>::new().with_builder(|builder| {
+            builder
                 .insert((
                     TextInputNode {
                         clear_on_submit: false,
@@ -66,10 +65,10 @@ impl TextInput {
     /// Run a function with this input's [`TextInputBuffer`] with access to [`ResMut<TextInputPipeline>`].
     pub fn with_buffer(
         self,
-        f: impl FnOnce(Mut<TextInputBuffer>, ResMut<TextInputPipeline>) + Send + 'static,
+        f: impl FnOnce(Mut<TextInputBuffer>, ResMut<TextInputPipeline>) + Send + Sync + 'static,
     ) -> Self {
         // .on_spawn_with_system doesn't work because it requires FnMut
-        self.update_raw_el(|raw_el| raw_el.on_spawn(move |world, entity| {
+        self.with_builder(|builder| builder.on_spawn(move |world, entity| {
             // TODO: is this stuff repeated for every call ?
             #[allow(clippy::type_complexity)]
             let mut system_state: SystemState<(
@@ -84,13 +83,13 @@ impl TextInput {
     }
 
     /// Reactively run a function with this input's [`TextInputBuffer`] and the output of the [`Signal`] with access to [`ResMut<TextInputPipeline>`].
-    pub fn on_signal_with_buffer<T: Send + 'static>(
+    pub fn on_signal_with_buffer<T: Clone + Send + 'static>(
         self,
         signal: impl Signal<Item = T> + Send + 'static,
         mut f: impl FnMut(Mut<TextInputBuffer>, ResMut<TextInputPipeline>, T) + Send + Sync + 'static,
     ) -> Self {
-        self.update_raw_el(move |raw_el| {
-            raw_el.on_signal_with_system(
+        self.with_builder(move |builder| {
+            builder.on_signal(
                 signal,
                 move |In((entity, value)): In<(Entity, T)>,
                     mut buffers: Query<&mut TextInputBuffer>,
@@ -112,14 +111,14 @@ impl TextInput {
     }
 
     /// Reactively set the text of this input. If the signal outputs [`None`] the text is set to an empty string.
-    pub fn text_signal<S: Signal<Item = impl Into<Option<String>>> + Send + 'static>(
+    pub fn text_signal<T: Into<Option<String>> + Clone + Send + Sync + 'static, S: Signal<Item = T> + Send + 'static>(
         mut self,
         text_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(text_option_signal) = text_option_signal_option.into() {
-            self = self.update_raw_el(|raw_el| {
-                raw_el.on_signal_with_system(
-                    text_option_signal.map(|text_option| text_option.into().unwrap_or_default()),
+            self = self.with_builder(|builder| {
+                builder.on_signal(
+                    text_option_signal.map_in(|text_option: T| text_option.into().unwrap_or_default()),
                     |In((entity, text)): In<(Entity, String)>,
                      mut last_text_query: Query<&mut LastSignalText>,
                      mut text_input_queues: Query<&mut TextInputQueue>| {
@@ -144,11 +143,11 @@ impl TextInput {
     /// this input's [`Entity`] and its current focused state.
     pub fn on_focused_change_with_system<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, bool,)>, (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, bool,)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
-        self.update_raw_el(|raw_el| {
+        self.with_builder(|builder| {
             let system_holder = Arc::new(OnceLock::new());
-            raw_el
+            builder
             .with_entity(|mut entity| { entity.insert(Focusable { is_focused: false }); })
             .on_spawn(clone!((system_holder) move |world, entity| {
                 let system = register_system(world, handler);
@@ -166,15 +165,10 @@ impl TextInput {
         self.on_focused_change_with_system(move |In((_, is_focused))| handler(is_focused))
     }
 
-    /// Sync a [`Mutable`] with this input's focused state.
-    pub fn focused_sync(self, focused: Mutable<bool>) -> Self {
-        self.on_focused_change(move |is_focused| focused.set_neq(is_focused))
-    }
-
     /// Set the focused state of this input.
     pub fn focus_option(mut self, focus_option: impl Into<Option<bool>>) -> Self {
         if Into::<Option<bool>>::into(focus_option).unwrap_or(false) {
-            self = self.update_raw_el(|raw_el| raw_el.on_spawn_with_system(|In(entity), mut commands: Commands| {
+            self = self.with_builder(|builder| builder.on_spawn_with_system(|In(entity), mut commands: Commands| {
                 commands.insert_resource(InputFocus(Some(entity)));
             }));
         }
@@ -192,8 +186,8 @@ impl TextInput {
         focus_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(focus_signal) = focus_signal_option.into() {
-            self = self.update_raw_el(|raw_el| {
-                raw_el.on_signal_with_system(focus_signal, |In((entity, focus)), mut focused_option: ResMut<InputFocus>| {
+            self = self.with_builder(|builder| {
+                builder.on_signal(focus_signal, |In((entity, focus)), mut focused_option: ResMut<InputFocus>| {
                     if focus {
                         focused_option.0 = Some(entity);
                     } else if let Some(focused) = focused_option.0 && focused == entity {
@@ -206,10 +200,10 @@ impl TextInput {
     }
 
     /// When the string in this input changes, run a `handler` [`System`] which takes [`In`](System::In) the [`Entity`] of this input's [`Entity`] and the new [`String`].
-    pub fn on_change_with_system<Marker>(self, handler: impl IntoSystem<In<(Entity, String)>, (), Marker> + Send + 'static) -> Self {
-        self.update_raw_el(|raw_el| {
+    pub fn on_change_with_system<Marker>(self, handler: impl IntoSystem<In<(Entity, String)>, (), Marker> + Send + Sync + 'static) -> Self {
+        self.with_builder(|builder| {
             let system_holder = Arc::new(OnceLock::new());
-            raw_el.on_spawn(clone!((system_holder) move |world, entity| {
+            builder.on_spawn(clone!((system_holder) move |world, entity| {
                 let system = register_system(world, handler);
                 let _ = system_holder.set(system);
                 observe(world, entity, move |change: On<TextInputChange>, mut commands: Commands| {
@@ -225,21 +219,6 @@ impl TextInput {
     /// When the text of this input changes, run a function with the new text.
     pub fn on_change(self, mut handler: impl FnMut(String) + Send + Sync + 'static) -> Self {
         self.on_change_with_system(move |In((_, text))| handler(text))
-    }
-
-    /// Sync a [`Mutable`] with the text of this input.
-    pub fn on_change_sync(self, string: Mutable<String>) -> Self {
-        self.on_change_with_system(
-            move |In((entity, text)): In<(Entity, String)>, mut last_text_query: Query<&mut LastSignalText>| {
-                if let Ok(mut last_text) = last_text_query.get_mut(entity) {
-                    // only update the mutable if the change is NOT an echo of a value just set by a signal.
-                    if last_text.0 != text {
-                        last_text.0 = text.clone();
-                        string.set_neq(text);
-                    }
-                }
-            },
-        )
     }
 }
 
@@ -304,12 +283,14 @@ impl_haalka_methods! {
     TextInput {
         node: Node,
         text_input_node: TextInputNode,
+        #[skip_signal]
         text_input_buffer: TextInputBuffer,
         text_font: TextFont,
         text_input_layout_info: TextInputLayoutInfo,
         text_input_style: TextInputStyle,
         text_color: TextColor,
         text_input_prompt: TextInputPrompt,
+        #[skip_signal]
         text_input_queue: TextInputQueue,
     }
 }

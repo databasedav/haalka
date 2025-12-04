@@ -304,12 +304,14 @@ impl_haalka_methods! {
     TextInput {
         node: Node,
         text_input_node: TextInputNode,
+        #[skip_signal]
         text_input_buffer: TextInputBuffer,
         text_font: TextFont,
         text_input_layout_info: TextInputLayoutInfo,
         text_input_style: TextInputStyle,
         text_color: TextColor,
         text_input_prompt: TextInputPrompt,
+        #[skip_signal]
         text_input_queue: TextInputQueue,
     }
 }

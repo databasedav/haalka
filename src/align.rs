@@ -20,9 +20,9 @@
 use bevy_app::prelude::*;
 use bevy_ecs::{lifecycle::HookContext, prelude::*, world::DeferredWorld};
 use bevy_ui::{prelude::*, JustifyItems};
-use futures_signals::signal::{Signal, SignalExt};
+use jonmo::signal::{Signal, SignalExt};
 
-use super::raw::RawElWrapper;
+use super::element::BuilderWrapper;
 
 /// Horizontal alignment axis.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug, Hash)]
@@ -153,7 +153,7 @@ impl Align {
 }
 
 /// Trait for elements that can be aligned and can align their content.
-pub trait Alignable: RawElWrapper + Sized {
+pub trait Alignable: BuilderWrapper + Sized {
     /// Get the layout direction for this element type.
     fn layout_direction() -> LayoutDirection;
 
@@ -161,22 +161,20 @@ pub trait Alignable: RawElWrapper + Sized {
     fn align(self, align_option: impl Into<Option<Align>>) -> Self {
         if let Some(align) = align_option.into() {
             let alignment = align.to_alignment();
-            self.update_raw_el(|raw_el| raw_el.insert(alignment))
+            self.with_builder(|builder| builder.insert(alignment))
         } else {
             self
         }
     }
 
     /// Reactively align this element within its parent.
-    fn align_signal<S: Signal<Item = Option<Align>> + Send + 'static>(
-        self,
-        align_option_signal_option: impl Into<Option<S>>,
-    ) -> Self {
+    fn align_signal<S>(self, align_option_signal_option: impl Into<Option<S>>) -> Self
+    where
+        S: Signal<Item = Option<Align>> + Send + Sync + 'static,
+    {
         if let Some(align_option_signal) = align_option_signal_option.into() {
-            self.update_raw_el(|raw_el| {
-                raw_el.component_signal::<Alignment, _>(
-                    align_option_signal.map(|opt| opt.map(|a| a.to_alignment())),
-                )
+            self.with_builder(|builder| {
+                builder.component_signal(align_option_signal.map_in(|opt: Option<Align>| opt.map(|a| a.to_alignment())))
             })
         } else {
             self
@@ -187,22 +185,21 @@ pub trait Alignable: RawElWrapper + Sized {
     fn align_content(self, align_option: impl Into<Option<Align>>) -> Self {
         if let Some(align) = align_option.into() {
             let content_alignment = align.to_content_alignment();
-            self.update_raw_el(|raw_el| raw_el.insert(content_alignment))
+            self.with_builder(|builder| builder.insert(content_alignment))
         } else {
             self
         }
     }
 
     /// Reactively align the children of this element.
-    fn align_content_signal<S: Signal<Item = Option<Align>> + Send + 'static>(
-        self,
-        align_option_signal_option: impl Into<Option<S>>,
-    ) -> Self {
+    fn align_content_signal<S>(self, align_option_signal_option: impl Into<Option<S>>) -> Self
+    where
+        S: Signal<Item = Option<Align>> + Send + Sync + 'static,
+    {
         if let Some(align_option_signal) = align_option_signal_option.into() {
-            self.update_raw_el(|raw_el| {
-                raw_el.component_signal::<ContentAlignment, _>(
-                    align_option_signal.map(|opt| opt.map(|a| a.to_content_alignment())),
-                )
+            self.with_builder(|builder| {
+                builder
+                    .component_signal(align_option_signal.map_in(|opt: Option<Align>| opt.map(|a| a.to_content_alignment())))
             })
         } else {
             self

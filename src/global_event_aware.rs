@@ -3,9 +3,8 @@
 use std::sync::{Arc, OnceLock};
 
 use super::{
-    element::UiRoot,
-    raw::{RawElWrapper, observe, register_system, utils::remove_system_holder_on_remove},
-    utils::clone,
+    element::{BuilderWrapper, UiRoot},
+    utils::{clone, observe, register_system, remove_system_holder_on_remove},
 };
 use apply::Apply;
 use bevy_ecs::prelude::*;
@@ -13,18 +12,18 @@ use bevy_ecs::prelude::*;
 /// Enables registering "global" event listeners on the [`UiRoot`] node. The [`UiRoot`] must be
 /// manually registered with [`UiRootable::ui_root`](super::element::UiRootable::ui_root) for this
 /// to work as expected.
-pub trait GlobalEventAware: RawElWrapper {
+pub trait GlobalEventAware: BuilderWrapper {
     /// When an `E` [`Event`] propagates to the [`UiRoot`] node, run a [`System`] which takes
     /// [`In`](`System::In`) this element's [`Entity`] (not the [`UiRoot`]'s) and the [`Event`].
     #[allow(clippy::type_complexity)]
     fn on_global_event_with_system<E: Event + Clone, Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
-        self.update_raw_el(|raw_el| {
+        self.with_builder(|builder| {
             let system_holder = Arc::new(OnceLock::new());
             let observer_holder = Arc::new(OnceLock::new());
-            raw_el
+            builder
                 .on_spawn(clone!((system_holder) move |world, _| {
                     let _ = system_holder.set(register_system(world, handler));
                 }))
@@ -42,11 +41,9 @@ pub trait GlobalEventAware: RawElWrapper {
                         }
                     }
                 }))
-                .on_remove(move |world, _| {
+                .observe(move |_: On<Remove, ()>, world: &mut World| {
                     if let Some(&observer) = observer_holder.get() {
-                        world.commands().queue(move |world: &mut World| {
-                            let _ = world.try_despawn(observer);
-                        })
+                        let _ = world.try_despawn(observer);
                     }
                 })
         })

@@ -3,8 +3,7 @@
 
 use super::{
     pointer_event_aware::PointerEventAware,
-    raw::{observe, register_system, utils::remove_system_holder_on_remove},
-    utils::{clone, spawn},
+    utils::{clone, observe, register_system, remove_system_holder_on_remove},
     viewport_mutable::ViewportMutable,
 };
 use apply::Apply;
@@ -12,16 +11,11 @@ use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use bevy_input::{mouse::*, prelude::*};
 use bevy_ui::prelude::*;
-use bevy_utils::prelude::*;
-use futures_signals::signal::{BoxSignal, Mutable, Signal, SignalExt, always};
-use haalka_futures_signals_ext::{SignalExtBool, SignalExtExt};
-use std::{
-    convert::Into,
-    sync::{Arc, OnceLock},
-};
+use jonmo::signal::{Signal, SignalExt};
+use std::sync::{Arc, OnceLock};
 
 /// Marker [`Component`] that disables an element's viewport from reacting to mouse wheel events.
-#[derive(Component, Default)]
+#[derive(Component, Default, Clone)]
 pub struct ScrollDisabled;
 
 #[derive(Component)]
@@ -35,11 +29,11 @@ pub trait MouseWheelScrollable: ViewportMutable {
     /// handlers.
     fn on_scroll_with_system_disableable<Disabled: Component, Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
-        self.update_raw_el(|raw_el| {
+        self.with_builder(|builder| {
             let system_holder = Arc::new(OnceLock::new());
-            raw_el
+            builder
                 .insert(ScrollEnabled)
                 .observe(|event: On<Add, Disabled>, mut commands: Commands| {
                     if let Ok(mut entity) = commands.get_entity(event.event().entity) {
@@ -68,7 +62,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
     /// be called repeatedly to register many such handlers.
     fn on_scroll_with_system<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
         self.on_scroll_with_system_disableable::<ScrollDisabled, Marker>(handler)
     }
@@ -79,10 +73,10 @@ pub trait MouseWheelScrollable: ViewportMutable {
     /// called repeatedly to register many such handlers.
     fn on_scroll_with_system_disableable_signal<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.update_raw_el(|raw_el| raw_el.component_signal::<ScrollDisabled, _>(blocked.map_true(default)))
+        self.with_builder(|builder| builder.component_signal::<ScrollDisabled, _>(blocked.map_true(|_: In<()>| ScrollDisabled::default())))
             .on_scroll_with_system_disableable::<ScrollDisabled, _>(handler)
     }
 
@@ -110,7 +104,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
         handler: impl FnMut(MouseWheel) + Send + Sync + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.update_raw_el(|raw_el| raw_el.component_signal::<ScrollDisabled, _>(blocked.map_true(default)))
+        self.with_builder(|builder| builder.component_signal::<ScrollDisabled, _>(blocked.map_true(|_: In<()>| ScrollDisabled::default())))
             .on_scroll_disableable::<ScrollDisabled>(handler)
     }
 }
@@ -123,7 +117,7 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
     /// register many such handlers.
     fn on_scroll_with_system_on_hover<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
         self.on_hovered_change_with_system(|In((entity, hovered)), mut commands: Commands| {
             if let Ok(mut entity) = commands.get_entity(entity) {
@@ -135,7 +129,7 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
             }
         })
         .on_scroll_with_system_disableable::<ScrollDisabled, _>(handler)
-        .update_raw_el(|raw_el| raw_el.insert(ScrollDisabled))
+        .with_builder(|builder| builder.insert(ScrollDisabled))
     }
 
     /// When this element receives a [`MouseWheel`] event while it is hovered, run a function with
@@ -147,6 +141,7 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
 
 impl<T: PointerEventAware + MouseWheelScrollable> OnHoverMouseWheelScrollable for T {}
 
+/// Event triggered when a mouse wheel event occurs on a scrollable element.
 #[derive(EntityEvent)]
 pub struct MouseWheelEvent {
     entity: Entity,
@@ -170,19 +165,30 @@ fn scroll_system(
 }
 
 #[allow(missing_docs)]
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Component)]
 pub enum ScrollDirection {
     Horizontal,
     Vertical,
     Both,
 }
 
-/// Allows setting the direction and magnitude (in pixels) of viewport movement in response to mouse
-/// wheel events. These settings can be either static or reactive via [`Signal`]s.
+impl Default for ScrollDirection {
+    fn default() -> Self {
+        DEFAULT_SCROLL_DIRECTION
+    }
+}
+
+/// Component for storing the scroll magnitude (pixels per scroll event).
+#[derive(Component, Clone, Copy, Default)]
+pub struct ScrollMagnitude(pub f32);
+
+/// Configuration for basic scroll handling. Use with [`BasicScrollHandler::into_system`] to create
+/// a scroll handler, or use the component-based approach by inserting [`ScrollDirection`] and
+/// [`ScrollMagnitude`] components directly.
 #[derive(Default)]
 pub struct BasicScrollHandler {
-    direction: Option<BoxSignal<'static, ScrollDirection>>,
-    magnitude: Option<BoxSignal<'static, f32>>,
+    direction: ScrollDirection,
+    magnitude: f32,
 }
 
 const DEFAULT_SCROLL_DIRECTION: ScrollDirection = ScrollDirection::Vertical;
@@ -199,46 +205,21 @@ pub fn scroll_normalizer(unit: MouseScrollUnit, scroll: f32, magnitude: f32) -> 
 impl BasicScrollHandler {
     #[allow(missing_docs)]
     pub fn new() -> Self {
-        default()
-    }
-
-    /// Reactively set the [`ScrollDirection`] of viewport movement in response to mouse wheel
-    /// events.
-    pub fn direction_signal<S: Signal<Item = ScrollDirection> + Send + 'static>(
-        mut self,
-        direction_signal_option: impl Into<Option<S>>,
-    ) -> Self {
-        if let Some(direction_signal) = direction_signal_option.into() {
-            self.direction = Some(direction_signal.boxed());
+        Self {
+            direction: DEFAULT_SCROLL_DIRECTION,
+            magnitude: DEFAULT_SCROLL_MAGNITUDE,
         }
-        self
     }
 
     /// Set the [`ScrollDirection`] of viewport movement in response to mouse wheel events.
-    pub fn direction(mut self, direction_option: impl Into<Option<ScrollDirection>>) -> Self {
-        if let Some(direction) = direction_option.into() {
-            self = self.direction_signal(always(direction));
-        }
-        self
-    }
-
-    /// Reactively set the magnitude (in pixels) of viewport movement in response to mouse wheel
-    /// events.
-    pub fn pixels_signal<S: Signal<Item = f32> + Send + 'static>(
-        mut self,
-        pixels_signal_option: impl Into<Option<S>>,
-    ) -> Self {
-        if let Some(pixels_signal) = pixels_signal_option.into() {
-            self.magnitude = Some(pixels_signal.boxed());
-        }
+    pub fn direction(mut self, direction: ScrollDirection) -> Self {
+        self.direction = direction;
         self
     }
 
     /// Set the magnitude (in pixels) of viewport movement in response to mouse wheel events.
-    pub fn pixels(mut self, pixels_option: impl Into<Option<f32>>) -> Self {
-        if let Some(pixels) = pixels_option.into() {
-            self = self.pixels_signal(always(pixels));
-        }
+    pub fn pixels(mut self, pixels: f32) -> Self {
+        self.magnitude = pixels;
         self
     }
 
@@ -254,33 +235,11 @@ impl BasicScrollHandler {
             + Sync
             + 'static,
     > {
-        let BasicScrollHandler {
-            direction: direction_signal_option,
-            magnitude: magnitude_signal_option,
-        } = self;
-        let direction = Mutable::new(DEFAULT_SCROLL_DIRECTION);
-        let magnitude = Mutable::new(DEFAULT_SCROLL_MAGNITUDE);
-        if let Some(direction_signal) = direction_signal_option {
-            // TODO: these "leak" for as long as the source mutable is alive, is this an issue? revert to less
-            // ergonomic task collection strat if so
-            direction_signal
-                .for_each_sync(clone!((direction) move |d| direction.set_neq(d)))
-                .apply(spawn)
-                .detach()
-        }
-        if let Some(magnitude_signal) = magnitude_signal_option {
-            // TODO: these "leak" for as long as the source mutable is alive, is this an issue? revert to less
-            // ergonomic task collection strat if so
-            magnitude_signal
-                .for_each_sync(clone!((magnitude) move |m| magnitude.set_neq(m)))
-                .apply(spawn)
-                .detach()
-        }
+        let BasicScrollHandler { direction, magnitude } = self;
         let f = move |In((entity, mouse_wheel)): In<(Entity, MouseWheel)>,
                       keys: Res<ButtonInput<KeyCode>>,
                       mut scroll_positions: Query<&mut ScrollPosition>| {
-            let dy = scroll_normalizer(mouse_wheel.unit, mouse_wheel.y, magnitude.get());
-            let direction = direction.get();
+            let dy = scroll_normalizer(mouse_wheel.unit, mouse_wheel.y, magnitude);
             if let Ok(mut scroll_position) = scroll_positions.get_mut(entity) {
                 if matches!(direction, ScrollDirection::Vertical)
                     || matches!(direction, ScrollDirection::Both)
@@ -296,6 +255,43 @@ impl BasicScrollHandler {
             }
         };
         Box::new(f)
+    }
+
+    /// Convert this [`BasicScrollHandler`] into a system that reads scroll settings from
+    /// [`ScrollDirection`] and [`ScrollMagnitude`] components, allowing reactive updates.
+    /// If the components are not present, default values are used.
+    #[allow(clippy::type_complexity)]
+    pub fn component_based_system() -> impl FnMut(
+        In<(Entity, MouseWheel)>,
+        Res<ButtonInput<KeyCode>>,
+        Query<&mut ScrollPosition>,
+        Query<&ScrollDirection>,
+        Query<&ScrollMagnitude>,
+    ) + Send
+           + Sync
+           + 'static {
+        move |In((entity, mouse_wheel)): In<(Entity, MouseWheel)>,
+              keys: Res<ButtonInput<KeyCode>>,
+              mut scroll_positions: Query<&mut ScrollPosition>,
+              directions: Query<&ScrollDirection>,
+              magnitudes: Query<&ScrollMagnitude>| {
+            let direction = directions.get(entity).copied().unwrap_or(DEFAULT_SCROLL_DIRECTION);
+            let magnitude = magnitudes.get(entity).map(|m| m.0).unwrap_or(DEFAULT_SCROLL_MAGNITUDE);
+            let dy = scroll_normalizer(mouse_wheel.unit, mouse_wheel.y, magnitude);
+            if let Ok(mut scroll_position) = scroll_positions.get_mut(entity) {
+                if matches!(direction, ScrollDirection::Vertical)
+                    || matches!(direction, ScrollDirection::Both)
+                        && !(keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight))
+                {
+                    scroll_position.y -= dy;
+                } else if matches!(direction, ScrollDirection::Horizontal)
+                    || matches!(direction, ScrollDirection::Both)
+                        && (keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight))
+                {
+                    scroll_position.x -= dy;
+                }
+            }
+        }
     }
 }
 
