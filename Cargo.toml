@@ -211,6 +211,11 @@ path = "examples/nested_lists.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "dragging"
+path = "examples/dragging.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "utils"
 path = "examples/utils.rs"
 doc-scrape-examples = true

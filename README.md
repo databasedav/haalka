@@ -144,6 +144,10 @@ All examples are compiled to wasm for both webgl2 and webgpu (check [compatibili
 
     forward ecs changes to the ui, throttled button presses
 
+- [**`dragging`**](https://github.com/databasedav/haalka/blob/main/examples/dragging.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/dragging/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/dragging/)
+
+    dragging with z-index stacking
+
 - [**`key_values_sorted`**](https://github.com/databasedav/haalka/blob/main/examples/key_values_sorted.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/key_values_sorted/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/key_values_sorted/)
 
     text inputs, scrolling/viewport control, and reactive lists; promises made promises kept! <https://discord.com/channels/691052431525675048/1192585689460658348/1193431789465776198> (yes I take requests)
