@@ -84,9 +84,9 @@ impl<NodeType: Bundle> El<NodeType> {
         child_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(child_option_signal) = child_option_signal_option.into() {
-            self.raw_el = self.raw_el.child_signal(child_option_signal.map(move |child_option| {
-                child_option.into_option_element()
-            }));
+            self.raw_el = self
+                .raw_el
+                .child_signal(child_option_signal.map(move |child_option| child_option.into_option_element()));
         }
         self
     }
@@ -97,4 +97,3 @@ impl<NodeType: Bundle> Alignable for El<NodeType> {
         LayoutDirection::Column
     }
 }
-

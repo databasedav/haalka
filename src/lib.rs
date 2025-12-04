@@ -7,6 +7,7 @@
 
 use bevy_app::prelude::*;
 
+use bevy_ecs::schedule::IntoScheduleConfigs;
 // Re-export jonmo for direct access
 pub use jonmo;
 
@@ -14,11 +15,11 @@ pub mod align;
 mod column;
 mod el;
 pub mod element;
-pub mod grid;
-pub mod pointer_event_aware;
 pub mod global_event_aware;
-mod row;
+pub mod grid;
 pub mod mouse_wheel_scrollable;
+pub mod pointer_event_aware;
+mod row;
 mod stack;
 pub mod viewport_mutable;
 
@@ -42,13 +43,17 @@ pub struct HaalkaPlugin;
 
 impl Plugin for HaalkaPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(jonmo::JonmoPlugin::default());
+        app.add_plugins(jonmo::JonmoPlugin::new().in_schedule(PostUpdate));
         app.add_plugins((
             align::plugin,
             pointer_event_aware::plugin,
             mouse_wheel_scrollable::plugin,
             viewport_mutable::plugin,
         ));
+        app.configure_sets(
+            PostUpdate,
+            (jonmo::SignalProcessing, bevy_ui::UiSystems::Prepare).chain(),
+        );
         #[cfg(feature = "text_input")]
         app.add_plugins(text_input::plugin);
     }
@@ -72,19 +77,22 @@ pub mod prelude {
         align::{Align, Alignable},
         column::Column,
         el::El,
-        element::{AlignabilityFacade, Element, ElementWrapper, Nameable, TypeEraseable, UiRoot, UiRootable, BuilderWrapper, Spawnable},
+        element::{
+            AlignabilityFacade, BuilderWrapper, Element, ElementWrapper, Nameable, Spawnable, TypeEraseable, UiRoot,
+            UiRootable,
+        },
         global_event_aware::GlobalEventAware,
         grid::Grid,
         mouse_wheel_scrollable::{
             BasicScrollHandler, MouseWheelScrollable, OnHoverMouseWheelScrollable, ScrollDirection,
         },
-        pointer_event_aware::{SetCursor, CursorOnHoverDisabled, CursorOnHoverable, PointerEventAware, Enter, Leave},
+        pointer_event_aware::{CursorOnHoverDisabled, CursorOnHoverable, Enter, Leave, PointerEventAware, SetCursor},
         row::Row,
         stack::Stack,
         viewport_mutable::{Axis, ViewportMutable},
     };
 
-    pub use bevy_window::{SystemCursorIcon, CursorIcon};
+    pub use bevy_window::{CursorIcon, SystemCursorIcon};
 
     #[cfg(feature = "text_input")]
     #[doc(inline)]

@@ -111,7 +111,9 @@ pub trait PointerEventAware: GlobalEventAware {
         self.with_builder(|builder| {
             builder
                 .insert(Pickable::default())
-                .component_signal::<ClickPropagationStopped, _>(propagation_stopped.map_true(|_: In<()>| ClickPropagationStopped))
+                .component_signal::<ClickPropagationStopped, _>(
+                    propagation_stopped.map_true(|_: In<()>| ClickPropagationStopped),
+                )
                 .observe(
                     move |mut click: On<Pointer<Click>>, propagation_stopped: Query<&ClickPropagationStopped>| {
                         if propagation_stopped.contains(click.entity) {
@@ -129,13 +131,11 @@ pub trait PointerEventAware: GlobalEventAware {
     /// hierarchy.
     fn on_click_stop_propagation(self, handler: impl FnMut() + Send + Sync + 'static) -> Self {
         self.with_builder(|builder| {
-            builder
-                .insert((Pickable::default(), ClickPropagationStopped))
-                .observe(
-                    move |mut click: On<Pointer<Click>>| {
-                        click.propagate(false);
-                    },
-                )
+            builder.insert((Pickable::default(), ClickPropagationStopped)).observe(
+                move |mut click: On<Pointer<Click>>| {
+                    click.propagate(false);
+                },
+            )
         })
         .on_click(handler)
     }
@@ -299,8 +299,12 @@ pub trait PointerEventAware: GlobalEventAware {
         handler: impl FnMut() + Send + Sync + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.with_builder(|builder| builder.component_signal::<PressHandlingBlocked, _>(blocked.map_true(|_: In<()>| PressHandlingBlocked::default())))
-            .on_pressing_blockable::<PressHandlingBlocked>(handler)
+        self.with_builder(|builder| {
+            builder.component_signal::<PressHandlingBlocked, _>(
+                blocked.map_true(|_: In<()>| PressHandlingBlocked::default()),
+            )
+        })
+        .on_pressing_blockable::<PressHandlingBlocked>(handler)
     }
 
     /// When this element is being pressed, run a function.
@@ -341,11 +345,7 @@ pub trait PointerEventAware: GlobalEventAware {
 
     /// When this element is being pressed, run a function, throttled by `duration` before the
     /// `handler` can run again.
-    fn on_pressing_throttled(
-        self,
-        mut handler: impl FnMut() + Send + Sync + 'static,
-        duration: Duration,
-    ) -> Self {
+    fn on_pressing_throttled(self, mut handler: impl FnMut() + Send + Sync + 'static, duration: Duration) -> Self {
         self.on_pressing_with_system_throttled(move |_: In<_>| handler(), duration)
     }
 }
@@ -531,9 +531,7 @@ pub trait CursorOnHoverable: PointerEventAware {
                     },
                 )
                 .observe(
-                    |event: On<Insert, CursorOnHover>,
-                     cursor_overs: Query<&CursorOver>,
-                     mut commands: Commands| {
+                    |event: On<Insert, CursorOnHover>, cursor_overs: Query<&CursorOver>, mut commands: Commands| {
                         let entity = event.entity;
                         if cursor_overs.contains(entity)
                             && let Ok(mut entity) = commands.get_entity(entity)
@@ -573,9 +571,7 @@ pub trait CursorOnHoverable: PointerEventAware {
                     },
                 )
                 .observe(
-                    move |event: On<Remove, Disabled>,
-                          cursor_over: Query<&CursorOver>,
-                          mut commands: Commands| {
+                    move |event: On<Remove, Disabled>, cursor_over: Query<&CursorOver>, mut commands: Commands| {
                         let entity = event.event().entity;
                         if let Ok(mut entity_commands) = commands.get_entity(entity) {
                             entity_commands.try_insert(CursorOverPropagationStopped);
@@ -586,7 +582,9 @@ pub trait CursorOnHoverable: PointerEventAware {
                     },
                 )
                 .observe(
-                    |mut over: On<Pointer<Over>>, propagation_stopped: Query<&CursorOverPropagationStopped>, mut commands: Commands| {
+                    |mut over: On<Pointer<Over>>,
+                     propagation_stopped: Query<&CursorOverPropagationStopped>,
+                     mut commands: Commands| {
                         let entity = over.entity;
                         if propagation_stopped.contains(entity) {
                             over.propagate(false);
@@ -642,8 +640,10 @@ pub trait CursorOnHoverable: PointerEventAware {
         cursor_option_signal: impl Signal<Item = impl Into<Option<CursorIcon>> + 'static> + Send + Sync + 'static,
         disabled: impl Signal<Item = bool> + Send + Sync + 'static,
     ) -> Self {
-        self.with_builder(|builder| builder.component_signal::<CursorDisabled, _>(disabled.map_true(|_: In<()>| CursorDisabled::default())))
-            .cursor_signal_disableable::<CursorDisabled>(cursor_option_signal)
+        self.with_builder(|builder| {
+            builder.component_signal::<CursorDisabled, _>(disabled.map_true(|_: In<()>| CursorDisabled::default()))
+        })
+        .cursor_signal_disableable::<CursorDisabled>(cursor_option_signal)
     }
 
     /// When this [`Element`](super::element::Element) receives a [`Pointer<Over>`] event, set the

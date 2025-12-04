@@ -1,7 +1,10 @@
 use bevy_ecs::prelude::*;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
-use jonmo::{builder::JonmoBuilder, signal::{Signal, SignalExt}};
+use jonmo::{
+    builder::JonmoBuilder,
+    signal::{Signal, SignalExt},
+};
 
 use super::{
     align::{Alignable, LayoutDirection},
@@ -90,9 +93,11 @@ impl<NodeType: Bundle> El<NodeType> {
     {
         if let Some(child_option_signal) = child_option_signal_option.into() {
             self.with_builder(|builder| {
-                builder.child_signal(child_option_signal.map_in(move |child_option: IOE| {
-                    child_option.into_option_element().map(|el| el.into_builder())
-                }))
+                builder.child_signal(
+                    child_option_signal.map_in(move |child_option: IOE| {
+                        child_option.into_option_element().map(|el| el.into_builder())
+                    }),
+                )
             })
         } else {
             self
@@ -105,4 +110,3 @@ impl<NodeType: Bundle> Alignable for El<NodeType> {
         LayoutDirection::Column
     }
 }
-

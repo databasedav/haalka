@@ -76,8 +76,10 @@ pub trait MouseWheelScrollable: ViewportMutable {
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.with_builder(|builder| builder.component_signal::<ScrollDisabled, _>(blocked.map_true(|_: In<()>| ScrollDisabled::default())))
-            .on_scroll_with_system_disableable::<ScrollDisabled, _>(handler)
+        self.with_builder(|builder| {
+            builder.component_signal::<ScrollDisabled, _>(blocked.map_true(|_: In<()>| ScrollDisabled::default()))
+        })
+        .on_scroll_with_system_disableable::<ScrollDisabled, _>(handler)
     }
 
     /// When this element receives a [`MouseWheel`] event, if it does not have a `Disabled`
@@ -104,8 +106,10 @@ pub trait MouseWheelScrollable: ViewportMutable {
         handler: impl FnMut(MouseWheel) + Send + Sync + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.with_builder(|builder| builder.component_signal::<ScrollDisabled, _>(blocked.map_true(|_: In<()>| ScrollDisabled::default())))
-            .on_scroll_disableable::<ScrollDisabled>(handler)
+        self.with_builder(|builder| {
+            builder.component_signal::<ScrollDisabled, _>(blocked.map_true(|_: In<()>| ScrollDisabled::default()))
+        })
+        .on_scroll_disableable::<ScrollDisabled>(handler)
     }
 }
 
@@ -268,8 +272,8 @@ impl BasicScrollHandler {
         Query<&ScrollDirection>,
         Query<&ScrollMagnitude>,
     ) + Send
-           + Sync
-           + 'static {
+    + Sync
+    + 'static {
         move |In((entity, mouse_wheel)): In<(Entity, MouseWheel)>,
               keys: Res<ButtonInput<KeyCode>>,
               mut scroll_positions: Query<&mut ScrollPosition>,

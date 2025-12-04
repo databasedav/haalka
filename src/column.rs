@@ -89,9 +89,10 @@ impl<NodeType: Bundle> Column<NodeType> {
     {
         if let Some(item_option_signal) = item_option_signal_option.into() {
             self.with_builder(|builder| {
-                builder.child_signal(item_option_signal.map_in(move |item_option: IOE| {
-                    item_option.into_option_element().map(|el| el.into_builder())
-                }))
+                builder.child_signal(
+                    item_option_signal
+                        .map_in(move |item_option: IOE| item_option.into_option_element().map(|el| el.into_builder())),
+                )
             })
         } else {
             self
@@ -128,12 +129,9 @@ impl<NodeType: Bundle> Column<NodeType> {
     {
         if let Some(items_options_signal_vec) = items_options_signal_vec_option.into() {
             self.with_builder(|builder| {
-                builder.children_signal_vec(
-                    items_options_signal_vec
-                        .filter_map(|In(item_option): In<IOE>| {
-                            item_option.into_option_element().map(|el| el.into_builder())
-                        }),
-                )
+                builder.children_signal_vec(items_options_signal_vec.filter_map(|In(item_option): In<IOE>| {
+                    item_option.into_option_element().map(|el| el.into_builder())
+                }))
             })
         } else {
             self

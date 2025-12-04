@@ -128,7 +128,10 @@ impl<NodeType: Bundle> Stack<NodeType> {
     }
 
     /// Declare reactive z-axis stacked children.
-    pub fn layers_signal_vec<IOE: IntoOptionElement + Clone + 'static, S: SignalVec<Item = IOE> + Send + Sync + 'static>(
+    pub fn layers_signal_vec<
+        IOE: IntoOptionElement + Clone + 'static,
+        S: SignalVec<Item = IOE> + Send + Sync + 'static,
+    >(
         self,
         layers_options_signal_vec_option: impl Into<Option<S>>,
     ) -> Self {
@@ -161,4 +164,3 @@ impl<NodeType: Bundle> Alignable for Stack<NodeType> {
         LayoutDirection::Grid
     }
 }
-

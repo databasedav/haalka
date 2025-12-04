@@ -83,9 +83,9 @@ impl<NodeType: Bundle> Row<NodeType> {
         item_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(item_option_signal) = item_option_signal_option.into() {
-            self.raw_el = self.raw_el.child_signal(item_option_signal.map(move |item_option| {
-                item_option.into_option_element()
-            }));
+            self.raw_el = self
+                .raw_el
+                .child_signal(item_option_signal.map(move |item_option| item_option.into_option_element()));
         }
         self
     }
@@ -99,9 +99,11 @@ impl<NodeType: Bundle> Row<NodeType> {
         I::IntoIter: Send + 'static,
     {
         if let Some(items_options) = items_options_option.into() {
-            self.raw_el = self.raw_el.children(items_options.into_iter().map(move |item_option| {
-                item_option.into_option_element()
-            }));
+            self.raw_el = self.raw_el.children(
+                items_options
+                    .into_iter()
+                    .map(move |item_option| item_option.into_option_element()),
+            );
         }
         self
     }
@@ -112,11 +114,9 @@ impl<NodeType: Bundle> Row<NodeType> {
         items_options_signal_vec_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(items_options_signal_vec) = items_options_signal_vec_option.into() {
-            self.raw_el = self
-                .raw_el
-                .children_signal_vec(items_options_signal_vec.map(move |item_option| {
-                    item_option.into_option_element()
-                }));
+            self.raw_el = self.raw_el.children_signal_vec(
+                items_options_signal_vec.map(move |item_option| item_option.into_option_element()),
+            );
         }
         self
     }

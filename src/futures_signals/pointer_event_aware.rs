@@ -113,7 +113,9 @@ pub trait PointerEventAware: GlobalEventAware {
         self.update_raw_el(|raw_el| {
             raw_el
                 .insert(Pickable::default())
-                .component_signal::<ClickPropagationStopped, _>(propagation_stopped.map_true(|| ClickPropagationStopped))
+                .component_signal::<ClickPropagationStopped, _>(
+                    propagation_stopped.map_true(|| ClickPropagationStopped),
+                )
                 .observe(
                     move |mut click: On<Pointer<Click>>, propagation_stopped: Query<&ClickPropagationStopped>| {
                         if propagation_stopped.contains(click.entity) {
@@ -545,9 +547,7 @@ pub trait CursorOnHoverable: PointerEventAware {
                     },
                 )
                 .observe(
-                    |event: On<Insert, CursorOnHover>,
-                     cursor_overs: Query<&CursorOver>,
-                     mut commands: Commands| {
+                    |event: On<Insert, CursorOnHover>, cursor_overs: Query<&CursorOver>, mut commands: Commands| {
                         let entity = event.entity;
                         if cursor_overs.contains(entity)
                             && let Ok(mut entity) = commands.get_entity(entity)
@@ -587,9 +587,7 @@ pub trait CursorOnHoverable: PointerEventAware {
                     },
                 )
                 .observe(
-                    move |event: On<Remove, Disabled>,
-                          cursor_over: Query<&CursorOver>,
-                          mut commands: Commands| {
+                    move |event: On<Remove, Disabled>, cursor_over: Query<&CursorOver>, mut commands: Commands| {
                         let entity = event.event().entity;
                         if let Ok(mut entity_commands) = commands.get_entity(entity) {
                             entity_commands.try_insert(CursorOverPropagationStopped);
@@ -600,7 +598,9 @@ pub trait CursorOnHoverable: PointerEventAware {
                     },
                 )
                 .observe(
-                    |mut over: On<Pointer<Over>>, propagation_stopped: Query<&CursorOverPropagationStopped>, mut commands: Commands| {
+                    |mut over: On<Pointer<Over>>,
+                     propagation_stopped: Query<&CursorOverPropagationStopped>,
+                     mut commands: Commands| {
                         let entity = over.entity;
                         if propagation_stopped.contains(entity) {
                             over.propagate(false);

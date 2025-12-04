@@ -1077,9 +1077,10 @@ fn menu() -> impl Element {
                 .apply(|element| focus_on_signal(element, SHOW_SUB_MENU.signal_ref(Option::is_none)))
                 .update_raw_el(|raw_el| {
                     raw_el
-                    .component_signal::<MenuInputDisabled, _>(SHOW_SUB_MENU.signal_ref(Option::is_some).map_true(|| MenuInputDisabled))
-                    .observe(
-                        move |event: On<MenuInputEvent>, disabled: Query<&MenuInputDisabled>| {
+                        .component_signal::<MenuInputDisabled, _>(
+                            SHOW_SUB_MENU.signal_ref(Option::is_some).map_true(|| MenuInputDisabled),
+                        )
+                        .observe(move |event: On<MenuInputEvent>, disabled: Query<&MenuInputDisabled>| {
                             if disabled.contains(event.entity) {
                                 return;
                             }
@@ -1112,8 +1113,7 @@ fn menu() -> impl Element {
                                 }
                                 _ => (),
                             }
-                        },
-                    )
+                        })
                 })
                 .with_node(|mut node| node.row_gap = Val::Px(BASE_PADDING * 2.))
                 .item(

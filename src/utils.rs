@@ -5,9 +5,12 @@ pub use enclose::enclose as clone;
 #[doc(no_inline)]
 pub use jonmo::prelude::clone as jonmo_clone;
 
-use std::sync::{Arc, OnceLock};
-use bevy_ecs::{prelude::*, system::{SystemId, SystemInput, IntoObserverSystem}};
+use bevy_ecs::{
+    prelude::*,
+    system::{IntoObserverSystem, SystemId, SystemInput},
+};
 use jonmo::builder::JonmoBuilder;
+use std::sync::{Arc, OnceLock};
 
 /// Marker [`Component`] for filtering `SystemId` `Entity`s managed by haalka.
 #[derive(Component)]
@@ -38,7 +41,8 @@ pub fn observe<E: Event, B: Bundle, Marker>(
     world.spawn((Observer::new(observer).with_entity(entity), HaalkaObserver))
 }
 
-/// If [`Some`] [`System`] is returned by the `getter`, remove it from the [`World`] on element removal.
+/// If [`Some`] [`System`] is returned by the `getter`, remove it from the [`World`] on element
+/// removal.
 pub fn remove_system_on_remove<I: SystemInput + 'static, O: 'static>(
     getter: impl FnOnce() -> Option<SystemId<I, O>> + Send + Sync + 'static,
 ) -> impl FnOnce(JonmoBuilder) -> JonmoBuilder {
