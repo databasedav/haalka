@@ -19,7 +19,7 @@
 
 use bevy_app::prelude::*;
 use bevy_ecs::{lifecycle::HookContext, prelude::*, world::DeferredWorld};
-use bevy_ui::{prelude::*, JustifyItems};
+use bevy_ui::{JustifyItems, prelude::*};
 use futures_signals::signal::{Signal, SignalExt};
 
 use super::raw::RawElWrapper;
@@ -102,7 +102,10 @@ impl Align {
 
     /// Center on both axes.
     pub fn center() -> Self {
-        Self { x: AlignX::Center, y: AlignY::Center }
+        Self {
+            x: AlignX::Center,
+            y: AlignY::Center,
+        }
     }
 
     /// Center horizontally.
@@ -174,9 +177,7 @@ pub trait Alignable: RawElWrapper + Sized {
     ) -> Self {
         if let Some(align_option_signal) = align_option_signal_option.into() {
             self.update_raw_el(|raw_el| {
-                raw_el.component_signal::<Alignment, _>(
-                    align_option_signal.map(|opt| opt.map(|a| a.to_alignment())),
-                )
+                raw_el.component_signal::<Alignment, _>(align_option_signal.map(|opt| opt.map(|a| a.to_alignment())))
             })
         } else {
             self
@@ -259,7 +260,10 @@ fn on_alignment_remove(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
 
 /// System that applies content alignment to parent nodes.
 fn apply_content_alignment(
-    mut query: Query<(&ContentAlignment, &LayoutDirection, &mut Node), Or<(Changed<ContentAlignment>, Added<ContentAlignment>)>>,
+    mut query: Query<
+        (&ContentAlignment, &LayoutDirection, &mut Node),
+        Or<(Changed<ContentAlignment>, Added<ContentAlignment>)>,
+    >,
 ) {
     for (content_alignment, direction, mut node) in &mut query {
         apply_content_alignment_to_node(&mut node, content_alignment, *direction);
@@ -339,11 +343,7 @@ fn apply_alignment_to_node(node: &mut Node, alignment: &Alignment, direction: La
 }
 
 /// Apply content alignment to a parent node based on its direction.
-fn apply_content_alignment_to_node(
-    node: &mut Node,
-    content_alignment: &ContentAlignment,
-    direction: LayoutDirection,
-) {
+fn apply_content_alignment_to_node(node: &mut Node, content_alignment: &ContentAlignment, direction: LayoutDirection) {
     // Reset to defaults first
     node.justify_content = JustifyContent::DEFAULT;
     node.align_items = AlignItems::DEFAULT;

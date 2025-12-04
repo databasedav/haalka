@@ -153,9 +153,9 @@ impl<NodeType: Bundle> Grid<NodeType> {
         cell_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(cell_option_signal) = cell_option_signal_option.into() {
-            self.raw_el = self.raw_el.child_signal(cell_option_signal.map(move |cell_option| {
-                cell_option.into_option_element()
-            }));
+            self.raw_el = self
+                .raw_el
+                .child_signal(cell_option_signal.map(move |cell_option| cell_option.into_option_element()));
         }
         self
     }
@@ -169,9 +169,11 @@ impl<NodeType: Bundle> Grid<NodeType> {
         I::IntoIter: Send + 'static,
     {
         if let Some(cells_options) = cells_options_option.into() {
-            self.raw_el = self.raw_el.children(cells_options.into_iter().map(move |cell_option| {
-                cell_option.into_option_element()
-            }));
+            self.raw_el = self.raw_el.children(
+                cells_options
+                    .into_iter()
+                    .map(move |cell_option| cell_option.into_option_element()),
+            );
         }
         self
     }
@@ -182,11 +184,9 @@ impl<NodeType: Bundle> Grid<NodeType> {
         cells_options_signal_vec_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(cells_options_signal_vec) = cells_options_signal_vec_option.into() {
-            self.raw_el = self
-                .raw_el
-                .children_signal_vec(cells_options_signal_vec.map(move |cell_option| {
-                    cell_option.into_option_element()
-                }));
+            self.raw_el = self.raw_el.children_signal_vec(
+                cells_options_signal_vec.map(move |cell_option| cell_option.into_option_element()),
+            );
         }
         self
     }
@@ -197,4 +197,3 @@ impl<NodeType: Bundle> Alignable for Grid<NodeType> {
         LayoutDirection::Grid
     }
 }
-

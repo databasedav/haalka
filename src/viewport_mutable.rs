@@ -138,9 +138,7 @@ pub trait ViewportMutable: BuilderWrapper {
     ) -> Self {
         if let Some(x_signal) = x_signal_option.into() {
             self = self.with_builder(|builder| {
-                builder
-                    .insert(LastSignalScrollPosition::default())
-                    .on_signal(
+                builder.insert(LastSignalScrollPosition::default()).on_signal(
                     x_signal,
                     |In((entity, x)): In<(Entity, f32)>,
                      mut query: Query<(&mut ScrollPosition, &mut LastSignalScrollPosition)>| {
@@ -164,9 +162,7 @@ pub trait ViewportMutable: BuilderWrapper {
     ) -> Self {
         if let Some(y_signal) = y_signal_option.into() {
             self = self.with_builder(|builder| {
-                builder
-                    .insert(LastSignalScrollPosition::default())
-                    .on_signal(
+                builder.insert(LastSignalScrollPosition::default()).on_signal(
                     y_signal,
                     |In((entity, y)): In<(Entity, f32)>,
                      mut query: Query<(&mut ScrollPosition, &mut LastSignalScrollPosition)>| {

@@ -163,9 +163,10 @@ impl<NodeType: Bundle> Grid<NodeType> {
     ) -> Self {
         if let Some(cell_option_signal) = cell_option_signal_option.into() {
             self.with_builder(|builder| {
-                builder.child_signal(cell_option_signal.map_in(move |cell_option: IOE| {
-                    cell_option.into_option_element().map(|el| el.into_builder())
-                }))
+                builder.child_signal(
+                    cell_option_signal
+                        .map_in(move |cell_option: IOE| cell_option.into_option_element().map(|el| el.into_builder())),
+                )
             })
         } else {
             self
@@ -182,9 +183,11 @@ impl<NodeType: Bundle> Grid<NodeType> {
     {
         if let Some(cells_options) = cells_options_option.into() {
             self.with_builder(|builder| {
-                builder.children(cells_options.into_iter().filter_map(move |cell_option| {
-                    cell_option.into_option_element().map(|el| el.into_builder())
-                }))
+                builder.children(
+                    cells_options
+                        .into_iter()
+                        .filter_map(move |cell_option| cell_option.into_option_element().map(|el| el.into_builder())),
+                )
             })
         } else {
             self
@@ -192,7 +195,10 @@ impl<NodeType: Bundle> Grid<NodeType> {
     }
 
     /// Declare reactive grid children.
-    pub fn cells_signal_vec<IOE: IntoOptionElement + Clone + 'static, S: SignalVec<Item = IOE> + Send + Sync + 'static>(
+    pub fn cells_signal_vec<
+        IOE: IntoOptionElement + Clone + 'static,
+        S: SignalVec<Item = IOE> + Send + Sync + 'static,
+    >(
         self,
         cells_options_signal_vec_option: impl Into<Option<S>>,
     ) -> Self {
@@ -213,4 +219,3 @@ impl<NodeType: Bundle> Alignable for Grid<NodeType> {
         LayoutDirection::Grid
     }
 }
-

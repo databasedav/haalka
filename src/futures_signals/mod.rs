@@ -11,13 +11,13 @@
 )]
 
 pub mod node_builder;
-pub use node_builder::{async_world, NodeBuilder, TaskHolder};
 pub(crate) use node_builder::init_async_world;
+pub use node_builder::{NodeBuilder, TaskHolder, async_world};
 
 pub mod raw;
 pub use raw::{
-    DeferredUpdaterAppendDirection, HaalkaObserver, HaalkaOneShotSystem, IntoOptionRawElement,
-    IntoRawElement, RawElWrapper, RawElement, RawHaalkaEl, Spawnable,
+    DeferredUpdaterAppendDirection, HaalkaObserver, HaalkaOneShotSystem, IntoOptionRawElement, IntoRawElement,
+    RawElWrapper, RawElement, RawHaalkaEl, Spawnable,
 };
 
 cfg_if::cfg_if! {
@@ -77,9 +77,9 @@ pub struct FuturesSignalsPlugin;
 impl bevy_app::Plugin for FuturesSignalsPlugin {
     fn build(&self, app: &mut bevy_app::App) {
         use bevy_app::prelude::*;
-        
+
         app.add_plugins(bevy_async_ecs::AsyncEcsPlugin);
-        
+
         #[cfg(feature = "ui")]
         {
             app.add_plugins((
@@ -89,7 +89,7 @@ impl bevy_app::Plugin for FuturesSignalsPlugin {
                 viewport_mutable::plugin,
             ));
         }
-        
+
         #[cfg(feature = "text_input")]
         app.add_plugins(text_input::plugin);
 

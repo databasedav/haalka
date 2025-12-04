@@ -15,10 +15,7 @@ use super::{
     raw::utils::remove_system_holder_on_remove,
 };
 use apply::Apply;
-use bevy_ecs::{
-    component::*, error::*, lifecycle::HookContext, prelude::*, system::*,
-    world::*,
-};
+use bevy_ecs::{component::*, error::*, lifecycle::HookContext, prelude::*, system::*, world::*};
 use bevy_log::error;
 use bevy_tasks::Task;
 use bevy_utils::prelude::*;

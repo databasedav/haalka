@@ -156,4 +156,3 @@ impl<NodeType: Bundle> Alignable for Stack<NodeType> {
         LayoutDirection::Grid
     }
 }
-
