@@ -2,23 +2,24 @@
 
 use std::borrow::Cow;
 
-use super::align::Alignable;
+use super::{
+    align::{AlignabilityFacade, Alignable, Aligner, ChildAlignable},
+    raw::{RawElWrapper, RawElement, RawHaalkaEl},
+};
 use bevy_ecs::{component::*, lifecycle::HookContext, prelude::*, system::RunSystemOnce, world::DeferredWorld};
 use bevy_log::warn;
 use bevy_picking::prelude::*;
-use jonmo::{
-    builder::JonmoBuilder,
-    signal::{Signal, SignalExt},
-};
+use futures_signals::signal::{Signal, SignalExt};
 
-/// [`Element`]s are types that wrap [`JonmoBuilder`] and can be aligned using [haalka](crate)'s
-/// [simple alignability semantics](super::align::Align) and granted UI-specific abilities like
-/// [pointer event awareness](super::pointer_event_aware::PointerEventAware), [viewport
+/// [`Element`]s are [`RawElement`]s that wrap [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs)
+/// and be can be aligned using [haalka](crate)'s [simple alignability
+/// semantics](super::align::Align) and granted UI-specific abilities like [pointer event
+/// awareness](super::pointer_event_aware::PointerEventAware), [viewport
 /// mutability](super::viewport_mutable::ViewportMutable),
 /// [scrollability](super::mouse_wheel_scrollable::MouseWheelScrollable), etc.
-pub trait Element: BuilderWrapper + Alignable {}
+pub trait Element: RawElement + Alignable + ChildAlignable {}
 
-impl<E: BuilderWrapper + Alignable> Element for E {}
+impl<E: RawElement + Alignable + ChildAlignable> Element for E {}
 
 /// Allows consumers to pass non-[`ElementWrapper`] types to the child methods of all alignable
 /// types.
@@ -69,49 +70,20 @@ impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
     }
 }
 
-/// The core trait for all UI element types in haalka. Types implementing this trait wrap a
-/// [`JonmoBuilder`] and can be used with haalka's UI abilities like
-/// [`PointerEventAware`](super::pointer_event_aware::PointerEventAware),
-/// [`ViewportMutable`](super::viewport_mutable::ViewportMutable), etc.
+/// [`ElementWrapper`]s can be passed to the child methods of all alignable types, e.g.
+/// [`.child`](super::el::El::child), [`.item_signal`](super::column::Column::item_signal),
+/// [`.layers`](super::stack::Stack::layers),
+/// [`.cells_signal_vec`](super::grid::Grid::cells_signal_vec), etc. This trait provides the
+/// foundation for building "widgets" using [haalka](crate).
 ///
-/// **For primitive elements** (like [`El`](super::el::El), [`Column`](super::column::Column), etc.)
-/// that directly hold a [`JonmoBuilder`], implement this trait directly.
+/// For example one could create a selectable [`Button`](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/challenge01.rs#L83)
+/// widget and then [stack them horizontally](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/challenge01.rs#L354)
+/// in a [`Row`](super::row::Row) (or vertically in a [`Column`](super::column::Column)) and add
+/// some [exclusivity logic](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/challenge01.rs#L374)
+/// to create a [`RadioGroup`](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/challenge01.rs#L314) widget.
 ///
-/// **For widgets** that wrap other elements, implement [`ElementWrapper`] instead, which provides
-/// a blanket implementation of `BuilderWrapper` automatically.
-pub trait BuilderWrapper: Sized {
-    /// Mutable reference to the [`JonmoBuilder`] that this wrapper wraps.
-    fn builder_mut(&mut self) -> &mut JonmoBuilder;
-
-    /// Process the wrapped [`JonmoBuilder`] directly.
-    fn with_builder(mut self, f: impl FnOnce(JonmoBuilder) -> JonmoBuilder) -> Self {
-        let builder = std::mem::take(self.builder_mut());
-        *self.builder_mut() = f(builder);
-        self
-    }
-
-    /// Consume this wrapper, returning the wrapped [`JonmoBuilder`].
-    fn into_builder(mut self) -> JonmoBuilder {
-        std::mem::take(self.builder_mut())
-    }
-}
-
-/// Allows [`BuilderWrapper`]s to be spawned into the world.
-pub trait Spawnable: BuilderWrapper {
-    /// Spawn the element into the world.
-    fn spawn(self, world: &mut World) -> Entity {
-        self.into_builder().spawn(world)
-    }
-}
-
-impl<T: BuilderWrapper> Spawnable for T {}
-
-/// A convenience trait for building "widgets" - composite UI elements that wrap other
-/// [`Element`]s. Implementing this trait automatically provides implementations of
-/// [`BuilderWrapper`] and [`Alignable`] by delegating to the wrapped element.
-///
-/// Use this when your widget contains another element (like `El<Node>`) as a field, rather than
-/// directly holding a [`JonmoBuilder`].
+/// [`ElementWrapper`]s can also be granted UI-specific abilities, enabling consumers to easily add
+/// additional functionality to their custom widgets.
 ///
 /// # Example
 /// ```
@@ -130,7 +102,6 @@ impl<T: BuilderWrapper> Spawnable for T {}
 ///     }
 /// }
 ///
-/// // These abilities are now available on MyWidget:
 /// impl GlobalEventAware for MyWidget {}
 /// impl PointerEventAware for MyWidget {}
 /// impl ViewportMutable for MyWidget {}
@@ -157,19 +128,13 @@ pub trait ElementWrapper: Sized {
     }
 }
 
-impl<EW: ElementWrapper> BuilderWrapper for EW {
-    fn builder_mut(&mut self) -> &mut JonmoBuilder {
-        self.element_mut().builder_mut()
+impl<EW: ElementWrapper> RawElWrapper for EW {
+    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
+        self.element_mut().raw_el_mut()
     }
 
-    fn into_builder(self) -> JonmoBuilder {
-        self.into_el().into_builder()
-    }
-}
-
-impl<EW: ElementWrapper> Alignable for EW {
-    fn layout_direction() -> super::align::LayoutDirection {
-        EW::EL::layout_direction()
+    fn into_raw_el(self) -> RawHaalkaEl {
+        self.into_el().into_raw()
     }
 }
 
@@ -177,43 +142,22 @@ impl<EW: ElementWrapper> Alignable for EW {
 ///
 /// Since [`Element`]s or [`ElementWrapper::EL`]s can be of different concrete types (e.g.
 /// `El<Node>`, `El<ImageBundle>`, `Column<Node>`, etc.), one will run into unfortunate
-/// type issues when doing things like returning different [`ElementWrapper`]s (read: widgets) from
+/// type issues when doing things like returning differnt [`ElementWrapper`]s (read: widgets) from
 /// diverging branches of logic, or creating a collection of [`ElementWrapper`]s of different types.
-/// This trait allows collapsing all [`Element`]s and [`ElementWrapper`]s into a single
-/// "type erased" [`AlignabilityFacade`] type that still implements [`Element`].
+/// Since we have an exhaustive list of the possible [`Aligner`]s, we can use a bit of type
+/// indirection via [`AlignabilityFacade`] to collapse all [`Element`]s and [`ElementWrapper`]s into
+/// a single "type erased" type.
 pub trait TypeEraseable {
     /// Convert this type into an [`AlignabilityFacade`], allowing it to mix with other types of
     /// [`Element`]s and [`ElementWrapper`]s.
     fn type_erase(self) -> AlignabilityFacade;
 }
 
-impl<T: BuilderWrapper> TypeEraseable for T {
-    fn type_erase(self) -> AlignabilityFacade {
-        AlignabilityFacade(self.into_builder())
-    }
-}
-
-/// A type-erased [`Element`] that provides a facade of alignability.
-///
-/// Created via [`TypeEraseable::type_erase`]. The underlying [`LayoutDirection`] component
-/// is preserved from the original element, so alignment behavior works correctly.
-/// Alignment methods should be called *before* type erasure, not after.
-///
-/// [`LayoutDirection`]: super::align::LayoutDirection
-pub struct AlignabilityFacade(JonmoBuilder);
-
-impl BuilderWrapper for AlignabilityFacade {
-    fn builder_mut(&mut self) -> &mut JonmoBuilder {
-        &mut self.0
-    }
-}
-
-impl Alignable for AlignabilityFacade {
-    fn layout_direction() -> super::align::LayoutDirection {
-        panic!(
-            "AlignabilityFacade::layout_direction() should never be called. \
-             Alignment methods should be called before type erasure, not after."
-        )
+impl<T: Alignable> TypeEraseable for T {
+    fn type_erase(mut self) -> AlignabilityFacade {
+        let aligner = self.aligner().unwrap_or(Aligner::El);
+        let (align_option, raw_el) = (self.align_mut().take(), self.into_raw());
+        AlignabilityFacade::new(raw_el, align_option, aligner)
     }
 }
 
@@ -239,33 +183,32 @@ fn warn_non_orphan_ui_root(mut world: DeferredWorld, HookContext { entity, .. }:
 pub struct UiRoot;
 
 /// Allows [`Element`]s to be marked as the root of the UI tree.
-pub trait UiRootable: BuilderWrapper {
+pub trait UiRootable: RawElWrapper {
     /// Mark this node as the root of the UI tree.
     fn ui_root(self) -> Self {
-        self.with_builder(|builder| builder.insert(UiRoot).insert(Pickable::default()))
+        self.update_raw_el(|raw_el| raw_el.insert(UiRoot).insert(Pickable::default()))
     }
 }
 
 /// Convenience trait for adding a [`Name`] to an [`Element`].
-pub trait Nameable: BuilderWrapper {
+pub trait Nameable: RawElWrapper {
     /// Set the [`Name`] of this element.
     fn name<T: Into<Cow<'static, str>>>(mut self, name_option: impl Into<Option<T>>) -> Self {
         if let Some(name) = name_option.into() {
-            self = self.with_builder(|builder| builder.insert(Name::new(name)));
+            self = self.update_raw_el(|raw_el| raw_el.insert(Name::new(name)));
         }
         self
     }
 
     /// Reactively set the name of this element. If the signal outputs [`None`] the [`Name`] is
     /// removed.
-    fn name_signal<T, S>(mut self, name_option_signal_option: impl Into<Option<S>>) -> Self
-    where
-        T: Into<Cow<'static, str>> + Clone + 'static,
-        S: Signal<Item = Option<T>> + Send + Sync + 'static,
-    {
+    fn name_signal<T: Into<Cow<'static, str>> + 'static, S: Signal<Item = Option<T>> + Send + 'static>(
+        mut self,
+        name_option_signal_option: impl Into<Option<S>>,
+    ) -> Self {
         if let Some(name_option_signal) = name_option_signal_option.into() {
-            self = self.with_builder(|builder| {
-                builder.component_signal(name_option_signal.map_in(|name_option: Option<T>| name_option.map(Name::new)))
+            self = self.update_raw_el(|raw_el| {
+                raw_el.component_signal::<Name, _>(name_option_signal.map(|name_option| name_option.map(Name::new)))
             });
         }
         self

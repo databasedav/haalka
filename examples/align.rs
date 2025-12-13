@@ -19,6 +19,9 @@ fn main() {
                 camera,
             ),
         )
+        .insert_resource(Alignment::Self_)
+        .insert_resource(RectangleSelfAlignment::default())
+        .insert_resource(RectangleContentAlignment::default())
         .run();
 }
 
@@ -52,18 +55,20 @@ impl RectangleAlignment {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Resource)]
 enum Alignment {
     Self_,
     Content,
 }
 
-static ALIGNMENT: LazyLock<Mutable<Alignment>> = LazyLock::new(|| Mutable::new(Alignment::Self_));
-static RECTANGLE_SELF_ALIGNMENT: LazyLock<Mutable<Option<RectangleAlignment>>> = LazyLock::new(default);
-static RECTANGLE_CONTENT_ALIGNMENT: LazyLock<Mutable<Option<RectangleAlignment>>> = LazyLock::new(default);
+#[derive(Resource, Clone, Copy, PartialEq, Default, Deref, DerefMut)]
+struct RectangleSelfAlignment(Option<RectangleAlignment>);
+
+#[derive(Resource, Clone, Copy, PartialEq, Default, Deref, DerefMut)]
+struct RectangleContentAlignment(Option<RectangleAlignment>);
 
 fn alignment_button(alignment: Alignment) -> impl Element {
-    let hovered = Mutable::new(false);
+    let lazy_entity = LazyEntity::new();
     El::<Node>::new()
         .align(Align::center())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
@@ -71,19 +76,23 @@ fn alignment_button(alignment: Alignment) -> impl Element {
             node.width = Val::Px(250.);
             node.height = Val::Px(80.);
         })
+        .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
         .background_color_signal(
-            signal::or(
-                hovered.signal(),
-                ALIGNMENT
-                    .signal()
-                    .map(move |other_alignment| alignment == other_alignment),
+            signal::or!(
+                SignalBuilder::from_lazy_entity(lazy_entity)
+                    .has_component::<Hovered>()
+                    .dedupe(),
+                SignalBuilder::from_resource::<Alignment>().dedupe().eq(alignment)
             )
-            .map_bool(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
-            .map(BackgroundColor),
+            .dedupe()
+            .map_bool_in(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
+            .map_in(BackgroundColor)
+            .map_in(Some),
         )
-        .hovered_sync(hovered)
         .align_content(Align::center())
-        .on_click(move || ALIGNMENT.set(alignment))
+        .on_click(move |_: In<_>, mut current_alignment: ResMut<Alignment>| {
+            *current_alignment = alignment;
+        })
         .child(
             El::<Text>::new()
                 .text_font(TextFont::from_font_size(25.))
@@ -134,10 +143,10 @@ fn ui_root() -> impl Element {
         )
 }
 
-fn container_node<E: RawElWrapper>(el: E) -> E {
-    el.update_raw_el(|raw_el| {
-        raw_el
-            .insert(BorderColor(bevy::color::palettes::basic::GRAY.into()))
+fn container_node<E: Element>(el: E) -> E {
+    el.with_builder(|builder| {
+        builder
+            .insert(BorderColor::all(bevy::color::palettes::basic::GRAY))
             .with_component::<Node>(|mut node| {
                 node.height = Val::Px(200.);
                 node.width = Val::Px(278.);
@@ -157,14 +166,17 @@ fn container(name: &str, element: impl Element) -> impl Element {
         .item(
             element
                 .align_content_signal(
-                    ALIGNMENT
-                        .signal()
-                        .map(|alignment| matches!(alignment, Alignment::Content))
-                        .map_true_signal(|| {
-                            RECTANGLE_CONTENT_ALIGNMENT
-                                .signal_ref(|alignment| alignment.map(|alignment| alignment.to_align()))
+                    SignalBuilder::from_resource::<Alignment>()
+                        .dedupe()
+                        .eq(Alignment::Content)
+                        .map_true_in(|| {
+                            SignalBuilder::from_resource::<RectangleContentAlignment>()
+                                .dedupe()
+                                .map_in(deref_copied)
+                                .map_in(RectangleAlignment::to_align)
                         })
-                        .map(Option::flatten),
+                        .map_in(signal::option)
+                        .flatten(),
                 )
                 .apply(container_node),
         )
@@ -179,13 +191,18 @@ fn rectangle(index: i32) -> impl Element {
         })
         .background_color(BackgroundColor(bevy::color::palettes::css::DARK_GREEN.into()))
         .align_signal(
-            ALIGNMENT
-                .signal()
-                .map(|alignment| matches!(alignment, Alignment::Self_))
-                .map_true_signal(|| {
-                    RECTANGLE_SELF_ALIGNMENT.signal_ref(|alignment| alignment.map(|alignment| alignment.to_align()))
+            SignalBuilder::from_resource::<Alignment>()
+                .dedupe()
+                .eq(Alignment::Self_)
+                .map_true_in(|| {
+                    SignalBuilder::from_resource::<RectangleSelfAlignment>()
+                        .dedupe()
+                        .map_in(deref_copied)
+                        .map_some_in(RectangleAlignment::to_align)
                 })
-                .map(Option::flatten),
+                .map_in(signal::option)
+                .flatten()
+                .map_in(Option::flatten),
         )
         .child(
             El::<Text>::new()
@@ -200,28 +217,38 @@ fn rectangles() -> Vec<impl Element> {
 }
 
 fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
-    let (hovered, hovered_signal) = Mutable::new_and_signal(false);
+    let lazy_entity = LazyEntity::new();
     El::<Node>::new()
         .align(rectangle_alignment.to_align())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
+        .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
         .background_color_signal(
-            signal::or(
-                ALIGNMENT
-                    .signal()
-                    .map(|alignment| match alignment {
-                        Alignment::Self_ => RECTANGLE_SELF_ALIGNMENT.signal(),
-                        Alignment::Content => RECTANGLE_CONTENT_ALIGNMENT.signal(),
+            signal::or!(
+                SignalBuilder::from_resource::<Alignment>()
+                    .dedupe()
+                    .switch(move |In(alignment): In<Alignment>| {
+                        match alignment {
+                            Alignment::Self_ => SignalBuilder::from_resource::<RectangleSelfAlignment>()
+                                .dedupe()
+                                .map_in(deref_copied)
+                                .left_either(),
+
+                            Alignment::Content => SignalBuilder::from_resource::<RectangleContentAlignment>()
+                                .dedupe()
+                                .map_in(deref_copied)
+                                .right_either(),
+                        }
                     })
-                    .flatten()
-                    .map(move |selected_option| selected_option == Some(rectangle_alignment)),
-                hovered_signal,
+                    .eq(Some(rectangle_alignment)),
+                SignalBuilder::from_lazy_entity(lazy_entity).has_component::<Hovered>(),
             )
-            .map_bool(
-                || bevy::color::palettes::basic::BLUE,
+            .dedupe()
+            .map_bool_in(
                 || bevy::color::palettes::css::MIDNIGHT_BLUE,
+                || bevy::color::palettes::basic::BLUE,
             )
-            .map(Into::<Color>::into)
-            .map(BackgroundColor),
+            .map_in(BackgroundColor::from)
+            .map_in(Some),
         )
         .with_node(|mut node| node.padding = UiRect::all(Val::Px(5.)))
         .child(
@@ -229,14 +256,29 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
                 .text_font(TextFont::from_font_size(11.67))
                 .text(Text(rectangle_alignment.to_string())),
         )
-        .hovered_sync(hovered)
-        .on_click(move || {
-            match ALIGNMENT.get() {
-                Alignment::Self_ => &RECTANGLE_SELF_ALIGNMENT,
-                Alignment::Content => &RECTANGLE_CONTENT_ALIGNMENT,
-            }
-            .set(Some(rectangle_alignment));
-        })
+        .on_click(
+            move |_: In<_>,
+                  alignment: Res<Alignment>,
+                  mut self_align: ResMut<RectangleSelfAlignment>,
+                  mut content_align: ResMut<RectangleContentAlignment>| {
+                match *alignment {
+                    Alignment::Self_ => {
+                        if **self_align == Some(rectangle_alignment) {
+                            **self_align = None;
+                        } else {
+                            **self_align = Some(rectangle_alignment);
+                        }
+                    }
+                    Alignment::Content => {
+                        if **content_align == Some(rectangle_alignment) {
+                            **content_align = None;
+                        } else {
+                            **content_align = Some(rectangle_alignment);
+                        }
+                    }
+                }
+            },
+        )
 }
 
 fn camera(mut commands: Commands) {

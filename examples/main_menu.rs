@@ -12,12 +12,12 @@ use utils::*;
 use std::{convert::identity, fmt::Display, time::Duration};
 
 use bevy::prelude::*;
-use haalka::prelude::*;
+use haalka::futures_signals::prelude::*;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 fn main() {
     App::new()
-        .add_plugins(examples_plugin)
+        .add_plugins((examples_plugin, HaalkaFuturesSignalsPlugin))
         .add_systems(
             Startup,
             (
@@ -100,7 +100,7 @@ impl Button {
                         Color::BLACK
                     }
                 })
-                .map(BorderColor)
+                .map(BorderColor::all)
         };
         let background_color_signal = {
             selected_hovered_broadcaster
@@ -185,7 +185,7 @@ fn menu_base(width: f32, height: f32, title: &str) -> Column<Node> {
             node.width = Val::Px(width);
             node.height = Val::Px(height);
         })
-        .border_color(BorderColor(Color::BLACK))
+        .border_color(BorderColor::all(Color::BLACK))
         .background_color(BackgroundColor(NORMAL_BUTTON))
         .item(
             El::<Node>::new()
@@ -230,6 +230,9 @@ where
     }
 }
 
+#[derive(Component)]
+struct MenuInputDisabled;
+
 struct Checkbox {
     el: Button,
     controlling: Mutable<bool>,
@@ -243,20 +246,22 @@ impl Checkbox {
                 lil_baby_button()
                     .apply(|element| focus_on_signal(element, controlling.signal()))
                     .update_raw_el(clone!((checked) move |raw_el| {
-                        raw_el.on_event_disableable_signal::<MenuInput>(
-                            move |event| {
-                                match event {
-                                    MenuInput::Select => {
-                                        checked.set_neq(!checked.get());
-                                    },
-                                    MenuInput::Delete => {
-                                        checked.set(false);
-                                    },
-                                    _ => ()
-                                }
-                            },
-                            signal::not(controlling_signal),
-                        )
+                        raw_el
+                        .component_signal::<MenuInputDisabled, _>(signal::not(controlling_signal).map_true(|| MenuInputDisabled))
+                        .observe(move |event: On<MenuInputEvent>, disabled: Query<&MenuInputDisabled>| {
+                            if disabled.contains(event.entity) {
+                                return;
+                            }
+                            match event.input {
+                                MenuInput::Select => {
+                                    checked.set_neq(!checked.get());
+                                },
+                                MenuInput::Delete => {
+                                    checked.set(false);
+                                },
+                                _ => ()
+                            }
+                        })
                     }))
                     .on_click(clone!((checked) move || flip(&checked)))
                     .selected_signal(checked.signal())
@@ -303,13 +308,18 @@ impl RadioGroup {
                 Row::<Node>::new()
                 .apply(|element| focus_on_signal(element, controlling.signal()))
                 .update_raw_el(|raw_el| {
-                    raw_el.on_event_disableable_signal::<MenuInput>(
-                        clone!((options, selected) move |event| {
-                            match event {
+                    raw_el
+                    .component_signal::<MenuInputDisabled, _>(signal::not(controlling_signal).map_true(|| MenuInputDisabled))
+                    .observe(
+                        clone!((options, selected) move |event: On<MenuInputEvent>, disabled: Query<&MenuInputDisabled>| {
+                            if disabled.contains(event.entity) {
+                                return;
+                            }
+                            match event.input {
                                 MenuInput::Left | MenuInput::Right => {
                                     let selected_option = selected.lock_ref().as_ref().copied();
                                     let (mut i, step) = {
-                                        if matches!(event, MenuInput::Left) {
+                                        if matches!(event.input, MenuInput::Left) {
                                             (selected_option.unwrap_or(options.lock_ref().len() - 1) as isize, -1)
                                         } else {
                                             (selected_option.unwrap_or(0) as isize, 1)
@@ -326,7 +336,6 @@ impl RadioGroup {
                                 _ => ()
                             }
                         }),
-                        signal::not(controlling_signal)
                     )
                 })
                 .items_signal_vec(
@@ -408,14 +417,19 @@ impl IterableOptions {
                     // TODO: only allowing one flasher like this doesn't prevent desyncing either ...
                     let left_flasher = Mutable::new(None);
                     let right_flasher = Mutable::new(None);
-                    raw_el.on_event_disableable_signal::<MenuInput>(
-                        clone!((options, selected, left_pressed, right_pressed) move |event| {
-                            match event {
+                    raw_el
+                    .component_signal::<MenuInputDisabled, _>(signal::not(controlling_signal).map_true(|| MenuInputDisabled))
+                    .observe(
+                        clone!((options, selected, left_pressed, right_pressed) move |event: On<MenuInputEvent>, disabled: Query<&MenuInputDisabled>| {
+                            if disabled.contains(event.entity) {
+                                return;
+                            }
+                            match event.input {
                                 MenuInput::Left | MenuInput::Right => {
                                     let i_option = options.lock_ref().iter().position(|option| option == &*selected.lock_ref()).map(|i| i as isize);
                                     if let Some(mut i) = i_option {
                                         let step = {
-                                            (if matches!(event, MenuInput::Left) {
+                                            (if matches!(event.input, MenuInput::Left) {
                                                 left_pressed.set(true);
                                                 left_flasher.set(Some(spawn(clone!((left_pressed) async move {
                                                     sleep(Duration::from_millis(FLASH_MS as u64)).await;
@@ -441,7 +455,6 @@ impl IterableOptions {
                                 _ => ()
                             }
                         }),
-                        signal::not(controlling_signal)
                     )
                 })
                 .with_node(|mut node| node.column_gap = Val::Px(BASE_PADDING * 2.))
@@ -512,17 +525,21 @@ impl Slider {
                     .update_raw_el(|raw_el| raw_el.insert(SliderTag))
                     .apply(|element| focus_on_signal(element, controlling.signal()))
                     .update_raw_el(|raw_el| {
-                        raw_el.on_event_disableable_signal::<MenuInput>(
-                            clone!((left) move |event| {
-                                match event {
+                        raw_el
+                        .component_signal::<MenuInputDisabled, _>(signal::not(controlling_signal).map_true(|| MenuInputDisabled))
+                        .observe(
+                            clone!((left) move |event: On<MenuInputEvent>, disabled: Query<&MenuInputDisabled>| {
+                                if disabled.contains(event.entity) {
+                                    return;
+                                }
+                                match event.input {
                                     MenuInput::Left | MenuInput::Right => {
-                                        let dir = if matches!(event, MenuInput::Left) { -1. } else { 1. };
+                                        let dir = if matches!(event.input, MenuInput::Left) { -1. } else { 1. };
                                         left.update(move |left| (left + dir * max * 0.001).max(0.).min(max));
                                     },
                                     _ => ()
                                 }
                             }),
-                            signal::not(controlling_signal),
                         )
                     })
                     .update_raw_el(|raw_el| raw_el.hold_tasks([value_setter]))
@@ -549,11 +566,11 @@ impl Slider {
                                     .align(Align::new().center_y())
                                     .update_raw_el(|raw_el| {
                                         raw_el
-                                            .on_event::<Pointer<DragStart>>(
-                                                clone!((dragging) move |_| dragging.set_neq(true)),
+                                            .observe(
+                                                clone!((dragging) move |_: On<Pointer<DragStart>>| dragging.set_neq(true)),
                                             )
-                                            .on_event::<Pointer<DragEnd>>(move |_| dragging.set_neq(false))
-                                            .on_event::<Pointer<Drag>>(move |drag| {
+                                            .observe(move |_: On<Pointer<DragEnd>>| dragging.set_neq(false))
+                                            .observe(move |drag: On<Pointer<Drag>>| {
                                                 left.set_neq((left.get() + drag.delta.x).max(0.).min(max));
                                             })
                                     })
@@ -659,11 +676,11 @@ impl Dropdown {
             El::<Node>::new()
             .apply(|element| focus_on_signal(element, controlling.signal()))
             .update_raw_el(|raw_el| {
-                raw_el.observe::<MenuInput, _, _>(
-                    clone!((controlling, show_dropdown, hovered, options, options_hovered, selected) move |mut event: Trigger<MenuInput>| {
+                raw_el.observe::<MenuInputEvent, _, _>(
+                    clone!((controlling, show_dropdown, hovered, options, options_hovered, selected) move |mut event: On<MenuInputEvent>| {
                         // TODO: this is cringe, but the component driven alternative is equally cringe ? (need to use .observe here directly since we need to stop propagation conditionally within the body of the callback)
                         if controlling.get() {
-                            match *event {
+                            match event.input {
                                 MenuInput::Up | MenuInput::Down => {
                                     if show_dropdown.get() {
                                         event.propagate(false);
@@ -672,7 +689,7 @@ impl Dropdown {
                                             options_hovered.lock_ref()[i].set(false);
                                         }
                                         let (mut i, step) = {
-                                            if matches!(*event, MenuInput::Up) {
+                                            if matches!(event.input, MenuInput::Up) {
                                                 (hovered_option.unwrap_or(options.lock_ref().len() - 1) as isize, -1)
                                             } else {
                                                 (hovered_option.unwrap_or(0) as isize, 1)
@@ -858,17 +875,17 @@ fn focus_on_no_child_hovered<E: Element>(
 fn sub_menu_child_hover_manager<E: Element>(element: E, hovereds: MutableVec<Mutable<bool>>) -> E {
     let l = hovereds.lock_ref().len();
     element.update_raw_el(|raw_el| {
-        raw_el.on_event::<MenuInput>(clone!((hovereds) move |event| {
+        raw_el.observe(clone!((hovereds) move |event: On<MenuInputEvent>| {
             let hovereds_lock = hovereds.lock_ref();
-            match event {
+            match event.input {
                 MenuInput::Up | MenuInput::Down => {
                     let hovered_option = hovereds_lock.iter().position(|hovered| hovered.get());
                     if let Some(i) = hovered_option {
                         hovereds_lock[i].set(false);
-                        let new_i = if matches!(event, MenuInput::Up) { i + l - 1 } else { i + 1 } % l;
+                        let new_i = if matches!(event.input, MenuInput::Up) { i + l - 1 } else { i + 1 } % l;
                         hovereds_lock[new_i].set(true);
                     } else {
-                        let i = if matches!(event, MenuInput::Up) { hovereds_lock.len() - 1 } else { 0 };
+                        let i = if matches!(event.input, MenuInput::Up) { hovereds_lock.len() - 1 } else { 0 };
                         hovereds_lock[i].set(true);
                     }
                 },
@@ -1059,38 +1076,44 @@ fn menu() -> impl Element {
             menu_base(MAIN_MENU_SIDES, MAIN_MENU_SIDES, "main menu")
                 .apply(|element| focus_on_signal(element, SHOW_SUB_MENU.signal_ref(Option::is_none)))
                 .update_raw_el(|raw_el| {
-                    raw_el.on_event_disableable_signal::<MenuInput>(
-                        move |event| match event {
-                            MenuInput::Up | MenuInput::Down => {
-                                if let Some(cur_sub_menu) = SUB_MENU_SELECTED.get() {
-                                    if let Some(i) = SubMenu::iter().position(|sub_menu| cur_sub_menu == sub_menu) {
-                                        let sub_menus = SubMenu::iter().collect::<Vec<_>>();
-                                        SUB_MENU_SELECTED.set(if matches!(event, MenuInput::Down) {
-                                            sub_menus.iter().rev().cycle().nth(sub_menus.len() - i).copied()
-                                        } else {
-                                            sub_menus.iter().cycle().nth(i + 1).copied()
-                                        })
-                                    }
-                                } else {
-                                    SUB_MENU_SELECTED.set_neq(Some(if matches!(event, MenuInput::Up) {
-                                        SubMenu::iter().next_back().unwrap()
+                    raw_el
+                        .component_signal::<MenuInputDisabled, _>(
+                            SHOW_SUB_MENU.signal_ref(Option::is_some).map_true(|| MenuInputDisabled),
+                        )
+                        .observe(move |event: On<MenuInputEvent>, disabled: Query<&MenuInputDisabled>| {
+                            if disabled.contains(event.entity) {
+                                return;
+                            }
+                            match event.input {
+                                MenuInput::Up | MenuInput::Down => {
+                                    if let Some(cur_sub_menu) = SUB_MENU_SELECTED.get() {
+                                        if let Some(i) = SubMenu::iter().position(|sub_menu| cur_sub_menu == sub_menu) {
+                                            let sub_menus = SubMenu::iter().collect::<Vec<_>>();
+                                            SUB_MENU_SELECTED.set(if matches!(event.input, MenuInput::Down) {
+                                                sub_menus.iter().rev().cycle().nth(sub_menus.len() - i).copied()
+                                            } else {
+                                                sub_menus.iter().cycle().nth(i + 1).copied()
+                                            })
+                                        }
                                     } else {
-                                        SubMenu::iter().next().unwrap()
-                                    }));
+                                        SUB_MENU_SELECTED.set_neq(Some(if matches!(event.input, MenuInput::Up) {
+                                            SubMenu::iter().next_back().unwrap()
+                                        } else {
+                                            SubMenu::iter().next().unwrap()
+                                        }));
+                                    }
                                 }
-                            }
-                            MenuInput::Select => {
-                                if let Some(sub_menu) = SUB_MENU_SELECTED.get() {
-                                    SHOW_SUB_MENU.set_neq(Some(sub_menu));
+                                MenuInput::Select => {
+                                    if let Some(sub_menu) = SUB_MENU_SELECTED.get() {
+                                        SHOW_SUB_MENU.set_neq(Some(sub_menu));
+                                    }
                                 }
+                                MenuInput::Back => {
+                                    SUB_MENU_SELECTED.take();
+                                }
+                                _ => (),
                             }
-                            MenuInput::Back => {
-                                SUB_MENU_SELECTED.take();
-                            }
-                            _ => (),
-                        },
-                        SHOW_SUB_MENU.signal_ref(Option::is_some),
-                    )
+                        })
                 })
                 .with_node(|mut node| node.row_gap = Val::Px(BASE_PADDING * 2.))
                 .item(
@@ -1183,7 +1206,7 @@ static MISC_DEMO_SETTINGS: LazyLock<MiscDemoSettings> = LazyLock::new(|| MiscDem
     iterable_options: Mutable::new("option 1".to_string()),
 });
 
-#[derive(Clone, Copy, Component)]
+#[derive(Clone, Copy)]
 enum MenuInput {
     Up,
     Down,
@@ -1194,10 +1217,11 @@ enum MenuInput {
     Delete,
 }
 
-impl Event for MenuInput {
-    type Traversal = &'static ChildOf;
-
-    const AUTO_PROPAGATE: bool = true;
+#[derive(EntityEvent, Clone)]
+#[entity_event(propagate, auto_propagate)]
+struct MenuInputEvent {
+    entity: Entity,
+    input: MenuInput,
 }
 
 #[derive(Resource)]
@@ -1222,14 +1246,14 @@ fn rate_limited_menu_input(
 ) -> bool {
     match pressed_type {
         PressedType::Pressed => {
-            if rate_limiter.tick(time.delta()).finished() {
-                commands.trigger_targets(input, entity);
+            if rate_limiter.tick(time.delta()).is_finished() {
+                commands.trigger(MenuInputEvent { entity, input });
                 rate_limiter.reset();
             }
             true
         }
         PressedType::JustPressed => {
-            commands.trigger_targets(input, entity);
+            commands.trigger(MenuInputEvent { entity, input });
             rate_limiter.reset();
             true
         }

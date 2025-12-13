@@ -3,8 +3,9 @@
 use std::sync::{Arc, OnceLock};
 
 use super::{
-    element::{BuilderWrapper, UiRoot},
-    utils::{clone, observe, register_system, remove_system_holder_on_remove},
+    element::UiRoot,
+    raw::{RawElWrapper, observe, register_system, utils::remove_system_holder_on_remove},
+    utils::clone,
 };
 use apply::Apply;
 use bevy_ecs::prelude::*;
@@ -12,18 +13,18 @@ use bevy_ecs::prelude::*;
 /// Enables registering "global" event listeners on the [`UiRoot`] node. The [`UiRoot`] must be
 /// manually registered with [`UiRootable::ui_root`](super::element::UiRootable::ui_root) for this
 /// to work as expected.
-pub trait GlobalEventAware: BuilderWrapper {
+pub trait GlobalEventAware: RawElWrapper {
     /// When an `E` [`Event`] propagates to the [`UiRoot`] node, run a [`System`] which takes
     /// [`In`](`System::In`) this element's [`Entity`] (not the [`UiRoot`]'s) and the [`Event`].
     #[allow(clippy::type_complexity)]
     fn on_global_event_with_system<E: Event + Clone, Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + 'static,
     ) -> Self {
-        self.with_builder(|builder| {
+        self.update_raw_el(|raw_el| {
             let system_holder = Arc::new(OnceLock::new());
             let observer_holder = Arc::new(OnceLock::new());
-            builder
+            raw_el
                 .on_spawn(clone!((system_holder) move |world, _| {
                     let _ = system_holder.set(register_system(world, handler));
                 }))
@@ -41,9 +42,11 @@ pub trait GlobalEventAware: BuilderWrapper {
                         }
                     }
                 }))
-                .observe(move |_: On<Remove, ()>, world: &mut World| {
+                .on_remove(move |world, _| {
                     if let Some(&observer) = observer_holder.get() {
-                        let _ = world.try_despawn(observer);
+                        world.commands().queue(move |world: &mut World| {
+                            let _ = world.try_despawn(observer);
+                        })
                     }
                 })
         })

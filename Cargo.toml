@@ -15,109 +15,106 @@ repository = "https://github.com/databasedav/haalka"
 documentation = "https://docs.rs/haalka"
 
 [dependencies]
-bevy_app = { version = "0.16", default-features = false }
-bevy_color = { version = "0.16", optional = true, default-features = false }
-bevy_derive = { version = "0.16", optional = true, default-features = false }
-bevy_dev_tools = { version = "0.16", default-features = false, optional = true }
-bevy_ecs = { version = "0.16", default-features = false, features = ["multi_threaded"] }
-bevy_input = { version = "0.16", optional = true, default-features = false }
-bevy_input_focus = { version = "0.16", optional = true, default-features = false }
-bevy_log = { version = "0.16", default-features = false }
-bevy_math = { version = "0.16", optional = true, default-features = false }
-bevy_picking = { version = "0.16", optional = true, default-features = false }
-bevy_reflect = { version = "0.16", optional = true, default-features = false }
-bevy_render = { version = "0.16", optional = true, default-features = false, features = ["webgl"] }
-bevy_tasks = { version = "0.16", default-features = false, features = ["multi_threaded"] }
-bevy_text = { version = "0.16", optional = true, default-features = false }
-bevy_transform = { version = "0.16", optional = true, default-features = false }
-bevy_ui = { version = "0.16", optional = true, default-features = false }
-bevy_utils = { version = "0.16", default-features = false }
-bevy_window = { version = "0.16", optional = true, default-features = false }
-bevy_winit = { version = "0.16", optional = true, default-features = false, features = ["x11"] }
-bevy_ui_text_input = { version = "0.5", default-features = false, optional = true }
-bevy-async-ecs = "0.8"
+bevy_app = { version = "0.17", default-features = false }
+bevy_camera = { version = "0.17", optional = true, default-features = false }
+bevy_color = { version = "0.17", optional = true, default-features = false }
+bevy_dev_tools = { version = "0.17", default-features = false, optional = true }
+bevy_derive = { version = "0.17", default-features = false }
+bevy_ecs = { version = "0.17", default-features = false, features = ["multi_threaded"] }
+bevy_input = { version = "0.17", default-features = false }
+bevy_input_focus = { version = "0.17", optional = true, default-features = false }
+bevy_log = { version = "0.17", default-features = false }
+bevy_math = { version = "0.17", default-features = false }
+bevy_picking = { version = "0.17", default-features = false }
+bevy_reflect = { version = "0.17", default-features = false }
+bevy_render = { version = "0.17", default-features = false, features = ["webgl"] }
+bevy_tasks = { version = "0.17", default-features = false, features = ["multi_threaded"] }
+bevy_text = { version = "0.17", default-features = false }
+bevy_time = { version = "0.17", default-features = false }
+bevy_transform = { version = "0.17", default-features = false }
+bevy_ui = { version = "0.17", default-features = false }
+bevy_ui_render = { version = "0.17", optional = true, default-features = false }
+bevy_utils = { version = "0.17", default-features = false }
+bevy_window = { version = "0.17", default-features = false }
+bevy_winit = { version = "0.17", default-features = false, features = ["x11"] }
+bevy_ui_text_input = { version = "0.6", default-features = false, optional = true }
+bevy-async-ecs = { version = "0.9", optional = true }
+jonmo = { version = "0.4", path = "../jonmo", features = ["builder"] }
+cosmic-text = "0.14.2"
 apply = "0.3"
 cfg-if = "1.0"
 enclose = "1.2"
-futures-signals = "0.3"
+futures-signals = { version = "0.3", optional = true }
 paste = { version = "1.0", optional = true }
 document-features = { version = "0.2", optional = true }
 # aalo = { path = "../aalo", version = "0.0", optional = true }
 
 # TODO: use MoonZoon's futures-signals/futures-util extensions directly when it is published as a crate
-haalka_futures_signals_ext = { version = "0.0.3", path = "MoonZoon/crates/futures_signals_ext" }
+haalka_futures_signals_ext = { version = "0.0.3", path = "MoonZoon/crates/futures_signals_ext", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-async-io = "2.4"
+async-io = { version = "2.4", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-gloo-timers = { version = "0.3", features = ["futures"] }
-send_wrapper = { version = "0.6", features = ["futures"] }
-bevy_winit = { version = "0.16", optional = true }
-bevy_audio = { version = "0.16", optional = true, features = ["android_shared_stdcxx"] }
-bevy_core_pipeline = { version = "0.16", optional = true, default-features = false, features = ["webgl"] }
-bevy_pbr = { version = "0.16", optional = true, default-features = false, features = ["webgl"] }
-bevy_gizmos = { version = "0.16", optional = true, default-features = false, features = ["webgl"] }
-bevy_sprite = { version = "0.16", optional = true, default-features = false, features = ["webgl"] }
+gloo-timers = { version = "0.3", features = ["futures"], optional = true }
+send_wrapper = { version = "0.6", features = ["futures"], optional = true }
+bevy_winit = { version = "0.17", optional = true }
+bevy_audio = { version = "0.17", optional = true, features = ["android_shared_stdcxx"] }
+bevy_core_pipeline = { version = "0.17", optional = true, default-features = false, features = ["webgl"] }
+bevy_pbr = { version = "0.17", optional = true, default-features = false, features = ["webgl"] }
+bevy_gizmos = { version = "0.17", optional = true, default-features = false, features = ["webgl"] }
+bevy_sprite = { version = "0.17", optional = true, default-features = false}
 
 [features]
 default = [
     "text_input",
-    "ui",
+    "derive",
     "utils",
 ]
 
-## High level UI abstractions integrated with signals.
-ui = [
-    "derive",
-    "bevy_derive",
-    "bevy_input",
-    "bevy_math",
-    "bevy_picking",
-    "bevy_reflect",
-    "bevy_render",
-    "bevy_text",
-    "bevy_transform",
-    "bevy_ui",
-    "bevy_window",
-    "bevy_winit",
-]
-
 ## [bevy_ui_text_input](https://github.com/ickshonpe/bevy_ui_text_input) text input widget integrated with signals.
-text_input = ["ui", "bevy_color", "bevy_input_focus", "bevy_ui_text_input"]
+text_input = ["derive", "bevy_color", "bevy_input_focus", "bevy_ui_text_input"]
 
 ## Macro ([`impl_haalka_methods!`](https://docs.rs/haalka/latest/haalka/macro.impl_haalka_methods.html)) for deriving convenience methods for modifying components on custom element structs with static values, functions, or signals.
-derive = ["paste"]
+derive = ["paste", "bevy_camera"]
 
-## Utilities for working with async, [`futures_signals::Mutable`](https://docs.rs/futures-signals/0.3.34/futures_signals/signal/struct.Mutable.html)s and [`futures_signals::Signal`](https://docs.rs/futures-signals/latest/futures_signals/signal/trait.Signal.html)s.
+## Utilities for working with async.
 utils = []
 
 ## `DebugUiPlugin` which enables toggling [`bevy_dev_tools::ui_debug_overlay::DebugUiPlugin`](https://docs.rs/bevy/latest/bevy/dev_tools/ui_debug_overlay/struct.DebugUiPlugin.html) with the `F1` key; requires a camera to be marked with the [`IsDefaultCamera`](https://docs.rs/bevy/latest/bevy/prelude/struct.IsDefaultUiCamera.html#) component.
-debug = ["ui", "bevy_ui/bevy_ui_debug"]
+debug = ["bevy_ui_render/bevy_ui_debug"]
+
+## Deprecated futures-signals based reactive primitives. Use jonmo-based reactivity instead for new code.
+futures_signals = ["futures-signals", "bevy-async-ecs", "haalka_futures_signals_ext", "async-io", "gloo-timers", "send_wrapper"]
+futures_signals_derive = ["paste", "bevy_camera"]
+futures_signals_utils = []
+futures_signals_ui = ["futures_signals", "futures_signals_derive", "futures_signals_utils"]
+futures_signals_text_input = ["futures_signals_ui", "bevy_color", "bevy_input_focus", "bevy_ui_text_input"]
 
 deployed_wasm_example = []
 
 [dev-dependencies]
-bevy = "0.16"
-bevy_asset_loader = { version = "0.23", features = ["2d"] }
-colorgrad = "0.7"
+bevy = "0.17"
+# TODO: https://github.com/NiklasEi/bevy_asset_loader/pull/259
+# bevy_asset_loader = { version = "0.23", features = ["2d"] }
+colorgrad = "0.8"
 rand = "0.9"
 strum = { version = "0.27", features = ["derive"] }
+# TODO: version 0.5 is kinda overcomplicated and broken ? https://github.com/coriolinus/calc/issues/28
 calc = { version = "0.4", default-features = false }
-rust_decimal = "1.37"
+rust_decimal = "1.39"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.bevy_rand]
-version = "0.11"
-features = ["rand_chacha"]
+version = "0.12"
+features = ["wyrand"]
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies.bevy_rand]
-version = "0.11"
-features = ["rand_chacha", "wasm_js"]
+version = "0.12"
+features = ["wyrand", "wasm_js"]
 
 [package.metadata.cargo-all-features]
 allowlist = [
     "text_input",
-    "ui",
     "derive",
     "utils",
     "debug",
