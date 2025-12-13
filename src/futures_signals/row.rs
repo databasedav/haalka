@@ -7,7 +7,7 @@ use futures_signals::{
 };
 
 use super::{
-    align::{Alignable, LayoutDirection},
+    align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
     element::{IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
@@ -20,6 +20,7 @@ use super::{
 #[derive(Default)]
 pub struct Row<NodeType> {
     raw_el: RawHaalkaEl,
+    align: Option<AlignHolder>,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
@@ -32,8 +33,8 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Row<NodeType> {
                     node.flex_direction = FlexDirection::Row;
                     node.align_items = AlignItems::Center;
                 })
-                .insert(Pickable::IGNORE)
-                .insert(LayoutDirection::Row),
+                .insert(Pickable::IGNORE),
+            align: None,
             _node_type: std::marker::PhantomData,
         }
     }
@@ -72,7 +73,12 @@ impl<NodeType: Bundle> ViewportMutable for Row<NodeType> {}
 impl<NodeType: Bundle> Row<NodeType> {
     /// Declare a static horizontally stacked child.
     pub fn item<IOE: IntoOptionElement>(mut self, item_option: IOE) -> Self {
-        self.raw_el = self.raw_el.child(item_option.into_option_element());
+        let apply_alignment = self.apply_alignment_wrapper();
+        self.raw_el = self.raw_el.child(
+            item_option
+                .into_option_element()
+                .map(|item| Self::align_child(item, apply_alignment)),
+        );
         self
     }
 
@@ -83,9 +89,12 @@ impl<NodeType: Bundle> Row<NodeType> {
         item_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(item_option_signal) = item_option_signal_option.into() {
-            self.raw_el = self
-                .raw_el
-                .child_signal(item_option_signal.map(move |item_option| item_option.into_option_element()));
+            let apply_alignment = self.apply_alignment_wrapper();
+            self.raw_el = self.raw_el.child_signal(item_option_signal.map(move |item_option| {
+                item_option
+                    .into_option_element()
+                    .map(|item| Self::align_child(item, apply_alignment))
+            }));
         }
         self
     }
@@ -99,11 +108,12 @@ impl<NodeType: Bundle> Row<NodeType> {
         I::IntoIter: Send + 'static,
     {
         if let Some(items_options) = items_options_option.into() {
-            self.raw_el = self.raw_el.children(
-                items_options
-                    .into_iter()
-                    .map(move |item_option| item_option.into_option_element()),
-            );
+            let apply_alignment = self.apply_alignment_wrapper();
+            self.raw_el = self.raw_el.children(items_options.into_iter().map(move |item_option| {
+                item_option
+                    .into_option_element()
+                    .map(|item| Self::align_child(item, apply_alignment))
+            }));
         }
         self
     }
@@ -114,9 +124,14 @@ impl<NodeType: Bundle> Row<NodeType> {
         items_options_signal_vec_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(items_options_signal_vec) = items_options_signal_vec_option.into() {
-            self.raw_el = self.raw_el.children_signal_vec(
-                items_options_signal_vec.map(move |item_option| item_option.into_option_element()),
-            );
+            let apply_alignment = self.apply_alignment_wrapper();
+            self.raw_el = self
+                .raw_el
+                .children_signal_vec(items_options_signal_vec.map(move |item_option| {
+                    item_option
+                        .into_option_element()
+                        .map(|item| Self::align_child(item, apply_alignment))
+                }));
         }
         self
     }
@@ -134,7 +149,95 @@ impl<NodeType: Bundle> Row<NodeType> {
 }
 
 impl<NodeType: Bundle> Alignable for Row<NodeType> {
-    fn layout_direction() -> LayoutDirection {
-        LayoutDirection::Row
+    fn aligner(&mut self) -> Option<Aligner> {
+        Some(Aligner::Row)
+    }
+
+    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
+        &mut self.align
+    }
+
+    fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
+        match alignment {
+            Alignment::Top => {
+                node.align_items = match action {
+                    AddRemove::Add => AlignItems::Start,
+                    AddRemove::Remove => AlignItems::DEFAULT,
+                }
+            }
+            Alignment::Bottom => {
+                node.align_items = match action {
+                    AddRemove::Add => AlignItems::End,
+                    AddRemove::Remove => AlignItems::DEFAULT,
+                }
+            }
+            Alignment::Left => {
+                node.justify_content = match action {
+                    AddRemove::Add => JustifyContent::Start,
+                    AddRemove::Remove => JustifyContent::DEFAULT,
+                }
+            }
+            Alignment::Right => {
+                node.justify_content = match action {
+                    AddRemove::Add => JustifyContent::End,
+                    AddRemove::Remove => JustifyContent::DEFAULT,
+                }
+            }
+            Alignment::CenterX => {
+                node.justify_content = match action {
+                    AddRemove::Add => JustifyContent::Center,
+                    AddRemove::Remove => JustifyContent::DEFAULT,
+                }
+            }
+            Alignment::CenterY => {
+                node.align_items = match action {
+                    AddRemove::Add => AlignItems::Center,
+                    AddRemove::Remove => AlignItems::DEFAULT,
+                }
+            }
+        }
+    }
+}
+
+impl<NodeType: Bundle> ChildAlignable for Row<NodeType> {
+    fn apply_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
+        match alignment {
+            Alignment::Top => {
+                node.align_self = match action {
+                    AddRemove::Add => AlignSelf::Start,
+                    AddRemove::Remove => AlignSelf::DEFAULT,
+                }
+            }
+            Alignment::Bottom => {
+                node.align_self = match action {
+                    AddRemove::Add => AlignSelf::End,
+                    AddRemove::Remove => AlignSelf::DEFAULT,
+                }
+            }
+            Alignment::Left => {
+                node.margin.right = match action {
+                    AddRemove::Add => Val::Auto,
+                    AddRemove::Remove => Val::ZERO,
+                }
+            }
+            Alignment::Right => {
+                node.margin.left = match action {
+                    AddRemove::Add => Val::Auto,
+                    AddRemove::Remove => Val::ZERO,
+                }
+            }
+            Alignment::CenterX => {
+                (node.margin.left, node.margin.right) = match action {
+                    AddRemove::Add => (Val::Auto, Val::Auto),
+                    AddRemove::Remove => (Val::ZERO, Val::ZERO),
+                }
+            }
+            Alignment::CenterY => {
+                node.align_self = match action {
+                    AddRemove::Add => AlignSelf::Center,
+                    AddRemove::Remove => AlignSelf::DEFAULT,
+                }
+            }
+        }
     }
 }

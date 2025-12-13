@@ -94,7 +94,7 @@ macro_rules! impl_haalka_methods_futures_signals {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "ui")] {
+    if #[cfg(feature = "futures_signals_ui")] {
         use super::{column::Column, el::El, grid::Grid, raw::RawElWrapper, row::Row, stack::Stack};
         use bevy_ui::{prelude::*, widget::*, *};
         use bevy_text::prelude::*;

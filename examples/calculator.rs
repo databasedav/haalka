@@ -54,7 +54,7 @@ fn buttons() -> [&'static str; 16] {
 }
 
 fn button(symbol: &'static str) -> El<Node> {
-    textable_element(always(symbol))
+    textable_element(SignalBuilder::always(symbol))
         .with_node(|mut node| {
             node.width = Val::Px(BUTTON_SIZE);
             node.height = Val::Px(BUTTON_SIZE);
@@ -81,10 +81,11 @@ fn input_button(symbol: &'static str) -> impl Element {
             *OUTPUT.lock_mut() += symbol;
         }
     };
+    let lazy_entity = LazyEntity::new();
     button(symbol)
+        .hoverable()
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .background_color_signal(hovered.signal().map_bool(|| BLUE, || PINK).map(BackgroundColor))
-        .hovered_sync(hovered)
+        .background_color_signal(SignalBuilder::from_component_lazy::<Hovered>(lazy_entity).map_in(deref_copied).map_bool_in(|| BLUE, || PINK).map_in(BackgroundColor).map_in(Some))
         .on_click(f)
 }
 

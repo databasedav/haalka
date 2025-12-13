@@ -94,16 +94,12 @@ pub trait PointerEventAware: GlobalEventAware {
         })
     }
 
-    /// Run a function when this element is left clicked.
+    /// Run a function when this element is clicked.
     fn on_click(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.on_click_with_system(move |In((_, click)): In<(_, Pointer<Click>)>| {
-            if matches!(click.button, PointerButton::Primary) {
-                handler()
-            }
-        })
+        self.on_click_with_system(move |In((_, _click)): In<(_, Pointer<Click>)>| handler())
     }
 
-    /// Run a function when this element is left clicked, reactively controlling whether the click
+    /// Run a function when this element is clicked, reactively controlling whether the click
     /// bubbles up the hierarchy with a [`Signal`].
     fn on_click_propagation_stoppable(
         self,
@@ -121,9 +117,7 @@ pub trait PointerEventAware: GlobalEventAware {
                         if propagation_stopped.contains(click.entity) {
                             click.propagate(false);
                         }
-                        if matches!(click.button, PointerButton::Primary) {
-                            handler()
-                        }
+                        handler()
                     },
                 )
         })
@@ -190,7 +184,7 @@ pub trait PointerEventAware: GlobalEventAware {
     /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's
     /// [`Entity`] and its current pressed state. This method can be called repeatedly to register
     /// many such handlers.
-    fn on_pressed_with_system_blockable<Marker, Blocked: Component>(
+    fn on_pressed_with_system_blockable<Blocked: Component, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + 'static,
     ) -> Self {
@@ -208,10 +202,8 @@ pub trait PointerEventAware: GlobalEventAware {
                         }
                     });
                     observe(world, entity, move |pointer_press: On<Pointer<Press>>, mut commands: Commands| {
-                        if matches!(pointer_press.button, PointerButton::Primary) {
-                            if let Ok(mut entity) = commands.get_entity(pointer_press.entity) {
-                                entity.insert(Pressable);
-                            }
+                        if let Ok(mut entity) = commands.get_entity(pointer_press.entity) {
+                            entity.insert(Pressable);
                         }
                     });
                 }))
@@ -241,7 +233,7 @@ pub trait PointerEventAware: GlobalEventAware {
             }
         ))
         .update_raw_el(remove_system_holder_on_remove(system_holder.clone()))
-        .on_pressed_with_system_blockable::<_, PressHandlingBlocked>(
+        .on_pressed_with_system_blockable::<PressHandlingBlocked, _>(
             move |In((entity, cur)), mut pressed: Local<bool>, mut commands: Commands| {
                 if cur != *pressed {
                     *pressed = cur;
@@ -259,7 +251,7 @@ pub trait PointerEventAware: GlobalEventAware {
     /// On frames where this element is being pressed and does not have a `Blocked`
     /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's
     /// [`Entity`]. This method can be called repeatedly to register many such handlers.
-    fn on_pressing_with_system_blockable<Marker, Blocked: Component>(
+    fn on_pressing_with_system_blockable<Blocked: Component, Marker>(
         self,
         handler: impl IntoSystem<In<Entity>, (), Marker> + Send + 'static,
     ) -> Self {
@@ -273,7 +265,7 @@ pub trait PointerEventAware: GlobalEventAware {
                     .apply(remove_system_holder_on_remove(system_holder.clone()))
             }
         ))
-        .on_pressed_with_system_blockable::<_, Blocked>(
+        .on_pressed_with_system_blockable::<Blocked, _>(
             move |In((entity, pressed)), mut commands: Commands| {
                 if pressed {
                     commands.run_system_with(system_holder.get().copied().unwrap(), entity);
@@ -284,7 +276,7 @@ pub trait PointerEventAware: GlobalEventAware {
 
     /// On frames where this element is being pressed, run a function.
     fn on_pressing_blockable<Blocked: Component>(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.on_pressing_with_system_blockable::<_, Blocked>(move |_: In<_>| handler())
+        self.on_pressing_with_system_blockable::<Blocked, _>(move |_: In<_>| handler())
     }
 
     /// On frames where this element is being pressed, run a function, reactively controlling
@@ -322,7 +314,7 @@ pub trait PointerEventAware: GlobalEventAware {
                 )
                 .apply(remove_system_holder_on_remove(system_holder.clone()))
             })
-        .on_pressed_with_system_blockable::<_, PressHandlingBlocked>(
+        .on_pressed_with_system_blockable::<PressHandlingBlocked, _>(
             move |In((entity, pressed)), mut commands: Commands| {
                 if pressed {
                     commands.run_system_with(system_holder.get().copied().unwrap(), entity);

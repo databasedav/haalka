@@ -20,7 +20,7 @@
 use bevy_app::prelude::*;
 use bevy_ecs::{lifecycle::HookContext, prelude::*, world::DeferredWorld};
 use bevy_ui::{JustifyItems, prelude::*};
-use jonmo::signal::{Signal, SignalExt};
+use jonmo::{SignalProcessing, signal::{Signal, SignalExt}};
 
 use super::element::BuilderWrapper;
 
@@ -219,7 +219,7 @@ pub fn plugin(app: &mut App) {
             apply_self_alignment,
             apply_self_alignment_on_parent_change,
             apply_content_alignment,
-        ),
+        ).after(SignalProcessing),
     );
 }
 
@@ -236,12 +236,12 @@ fn apply_self_alignment(
 
 /// System that re-applies self-alignment when parent's layout direction changes.
 fn apply_self_alignment_on_parent_change(
-    mut children_query: Query<(&Alignment, &ChildOf, &mut Node)>,
-    changed_parents: Query<(Entity, &LayoutDirection), Changed<LayoutDirection>>,
+    mut children_query: Query<(&Alignment, &mut Node)>,
+    changed_parents: Query<(&LayoutDirection, &Children), Changed<LayoutDirection>>,
 ) {
-    for (parent_entity, direction) in &changed_parents {
-        for (alignment, child_of, mut node) in &mut children_query {
-            if child_of.parent() == parent_entity {
+    for (direction, children) in &changed_parents {
+        for &child in children {
+            if let Ok((alignment, mut node)) = children_query.get_mut(child) {
                 apply_alignment_to_node(&mut node, alignment, *direction);
             }
         }

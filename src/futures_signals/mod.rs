@@ -21,76 +21,51 @@ pub use raw::{
 };
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "ui")] {
+    if #[cfg(feature = "futures_signals_ui")] {
         pub mod align;
-        pub mod column;
-        pub mod el;
+        mod column;
+        mod el;
         pub mod element;
         pub mod grid;
         pub mod pointer_event_aware;
         pub mod global_event_aware;
-        pub mod row;
+        mod row;
         pub mod mouse_wheel_scrollable;
-        pub mod stack;
+        mod stack;
         pub mod viewport_mutable;
 
-        pub use align::{Align, Alignable, AlignX, AlignY, Alignment, ContentAlignment, LayoutDirection};
-        pub use column::Column;
-        pub use el::El;
-        pub use element::{
-            AlignabilityFacade, Element, ElementWrapper, IntoElement, IntoOptionElement, Nameable,
-            TypeEraseable, UiRoot, UiRootable,
-        };
-        pub use global_event_aware::GlobalEventAware;
-        pub use grid::{Grid, GRID_TRACK_FLOAT_PRECISION_SLACK};
-        pub use mouse_wheel_scrollable::{
-            BasicScrollHandler, MouseWheelScrollable, OnHoverMouseWheelScrollable, ScrollDirection,
-            ScrollDisabled,
-        };
-        pub use pointer_event_aware::{
-            CursorOnHover, CursorOnHoverDisabled, CursorOnHoverable, Enter, Leave, PointerEventAware,
-            SetCursor, UpdateHoverStatesDisabled,
-        };
-        pub use row::Row;
-        pub use stack::{Stack, StackChild};
-        pub use viewport_mutable::{
-            Axis, LogicalRect, MutableViewport, OnViewportLocationChange, Scene, Viewport, ViewportMutable,
-        };
-
         cfg_if::cfg_if! {
-            if #[cfg(feature = "text_input")] {
+            if #[cfg(feature = "futures_signals_text_input")] {
                 pub mod text_input;
-                pub use text_input::{ClearSelectionOnFocusChangeDisabled, TextInput};
             }
         }
     }
 }
 
-#[cfg(feature = "derive")]
+#[cfg(feature = "futures_signals_derive")]
 pub mod derive;
 
 pub mod utils;
 
 /// Plugin that adds the futures-signals based systems.
-pub struct FuturesSignalsPlugin;
+pub struct HaalkaFuturesSignalsPlugin;
 
-impl bevy_app::Plugin for FuturesSignalsPlugin {
+impl bevy_app::Plugin for HaalkaFuturesSignalsPlugin {
     fn build(&self, app: &mut bevy_app::App) {
         use bevy_app::prelude::*;
 
         app.add_plugins(bevy_async_ecs::AsyncEcsPlugin);
 
-        #[cfg(feature = "ui")]
+        #[cfg(feature = "futures_signals_ui")]
         {
             app.add_plugins((
-                align::plugin,
                 pointer_event_aware::plugin,
                 mouse_wheel_scrollable::plugin,
                 viewport_mutable::plugin,
             ));
         }
 
-        #[cfg(feature = "text_input")]
+        #[cfg(feature = "futures_signals_text_input")]
         app.add_plugins(text_input::plugin);
 
         app.add_systems(PreStartup, init_async_world);
@@ -101,7 +76,7 @@ impl bevy_app::Plugin for FuturesSignalsPlugin {
 pub mod prelude {
     #[doc(inline)]
     pub use super::{
-        FuturesSignalsPlugin,
+        HaalkaFuturesSignalsPlugin,
         node_builder::async_world,
         raw::{RawElWrapper, RawElement, RawHaalkaEl, Spawnable},
     };
@@ -110,13 +85,13 @@ pub mod prelude {
     pub use haalka_futures_signals_ext::*;
 
     cfg_if::cfg_if! {
-        if #[cfg(feature = "ui")] {
+        if #[cfg(feature = "futures_signals_ui")] {
             #[doc(inline)]
             pub use super::{
                 align::{Align, Alignable},
                 column::Column,
                 el::El,
-                element::{AlignabilityFacade, Element, ElementWrapper, Nameable, TypeEraseable, UiRoot, UiRootable},
+                element::{Element, ElementWrapper, Nameable, TypeEraseable, UiRoot, UiRootable},
                 global_event_aware::GlobalEventAware,
                 grid::Grid,
                 mouse_wheel_scrollable::{
@@ -131,7 +106,7 @@ pub mod prelude {
             pub use bevy_window::{SystemCursorIcon, CursorIcon};
 
             cfg_if::cfg_if! {
-                if #[cfg(feature = "text_input")] {
+                if #[cfg(feature = "futures_signals_text_input")] {
                     #[doc(inline)]
                     pub use super::text_input::TextInput;
                     pub use bevy_ui_text_input;
@@ -141,14 +116,14 @@ pub mod prelude {
     }
 
     cfg_if::cfg_if! {
-        if #[cfg(feature = "derive")] {
+        if #[cfg(feature = "futures_signals_derive")] {
             #[doc(no_inline)]
             pub use paste::paste;
         }
     }
 
     cfg_if::cfg_if! {
-        if #[cfg(feature = "utils")] {
+        if #[cfg(feature = "futures_signals_utils")] {
             #[doc(inline)]
             pub use super::utils::*;
             #[doc(no_inline)]

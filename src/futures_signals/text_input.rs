@@ -12,7 +12,7 @@ use bevy_picking::prelude::*;
 use bevy_text::{TextColor, TextFont};
 use cosmic_text::{Edit, Selection};
 
-use crate::impl_haalka_methods;
+use crate::impl_haalka_methods_futures_signals as impl_haalka_methods;
 
 use super::{
     el::El, element::{ElementWrapper, Nameable, UiRootable}, pointer_event_aware::{PointerEventAware, CursorOnHoverable}, raw::{RawElWrapper, register_system}, mouse_wheel_scrollable::MouseWheelScrollable,
@@ -304,14 +304,12 @@ impl_haalka_methods! {
     TextInput {
         node: Node,
         text_input_node: TextInputNode,
-        #[skip_signal]
         text_input_buffer: TextInputBuffer,
         text_font: TextFont,
         text_input_layout_info: TextInputLayoutInfo,
         text_input_style: TextInputStyle,
         text_color: TextColor,
         text_input_prompt: TextInputPrompt,
-        #[skip_signal]
         text_input_queue: TextInputQueue,
     }
 }
@@ -338,9 +336,10 @@ fn clear_selection_on_focus_change(
 }
 
 pub(super) fn plugin(app: &mut App) {
-    app
-    .add_plugins(TextInputPlugin)
-    .add_systems(
+    if app.is_plugin_added::<TextInputPlugin>().not() {
+        app.add_plugins(TextInputPlugin);
+    }
+    app.add_systems(
         Update,
         (
             on_change.run_if(any_with_component::<ListenToChanges>),

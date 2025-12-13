@@ -2,7 +2,7 @@
 //! mouse wheel events.
 
 use super::{
-    pointer_event_aware::PointerEventAware,
+    pointer_event_aware::{HoverHandlerData, PointerEventAware},
     utils::{clone, observe, register_system, remove_system_holder_on_remove},
     viewport_mutable::ViewportMutable,
 };
@@ -123,9 +123,9 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
         self,
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
-        self.on_hovered_change_with_system(|In((entity, hovered)), mut commands: Commands| {
+        self.on_hovered_change(|In((entity, data)): In<(Entity, HoverHandlerData)>, mut commands: Commands| {
             if let Ok(mut entity) = commands.get_entity(entity) {
-                if hovered {
+                if data.hovered {
                     entity.remove::<ScrollDisabled>();
                 } else {
                     entity.try_insert(ScrollDisabled);

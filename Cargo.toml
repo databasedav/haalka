@@ -68,6 +68,7 @@ bevy_sprite = { version = "0.17", optional = true, default-features = false}
 [features]
 default = [
     "text_input",
+    "derive",
     "utils",
 ]
 
@@ -84,7 +85,11 @@ utils = []
 debug = ["bevy_ui_render/bevy_ui_debug"]
 
 ## Deprecated futures-signals based reactive primitives. Use jonmo-based reactivity instead for new code.
-futures_signals = ["dep:futures-signals", "dep:bevy-async-ecs", "dep:haalka_futures_signals_ext", "dep:async-io", "dep:gloo-timers", "dep:send_wrapper"]
+futures_signals = ["futures-signals", "bevy-async-ecs", "haalka_futures_signals_ext", "async-io", "gloo-timers", "send_wrapper"]
+futures_signals_derive = ["paste", "bevy_camera"]
+futures_signals_utils = []
+futures_signals_ui = ["futures_signals", "futures_signals_derive", "futures_signals_utils"]
+futures_signals_text_input = ["futures_signals_ui", "bevy_color", "bevy_input_focus", "bevy_ui_text_input"]
 
 deployed_wasm_example = []
 

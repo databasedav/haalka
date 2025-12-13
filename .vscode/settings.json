@@ -1,7 +1,8 @@
 {
     // "rust-analyzer.cargo.target": "wasm32-unknown-unknown",
     // "rust-analyzer.cargo.noDefaultFeatures": true,
-    "rust-analyzer.cargo.features": ["debug"],
+    // "rust-analyzer.cargo.features": ["debug", "futures_signals_text_input"],
+    // "rust-analyzer.cargo.noDefaultFeatures": true,
     "filewatcher.commands": [
         {
             "match": ".*.ncl$",

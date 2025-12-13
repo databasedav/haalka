@@ -12,12 +12,12 @@ use utils::*;
 use std::{convert::identity, fmt::Display, time::Duration};
 
 use bevy::prelude::*;
-use haalka::prelude::*;
+use haalka::futures_signals::prelude::*;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 fn main() {
     App::new()
-        .add_plugins(examples_plugin)
+        .add_plugins((examples_plugin, HaalkaFuturesSignalsPlugin))
         .add_systems(
             Startup,
             (
