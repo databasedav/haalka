@@ -15,7 +15,7 @@ use super::{
     element::{BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
-    pointer_event_aware::{CursorOnHoverable, PointerEventAware},
+    pointer_event_aware::{Hoverable, Pressable, CursorOnHoverable, PointerEventAware},
     viewport_mutable::ViewportMutable,
 };
 
@@ -33,8 +33,7 @@ impl<NodeType: Bundle> From<JonmoBuilder> for Grid<NodeType> {
                 .with_component::<Node>(|mut node| {
                     node.display = Display::Grid;
                 })
-                .insert(Pickable::IGNORE)
-                .insert(LayoutDirection::Grid),
+                .insert((LayoutDirection::Grid, Pickable::IGNORE, Hoverable, Pressable)),
             _node_type: std::marker::PhantomData,
         }
     }

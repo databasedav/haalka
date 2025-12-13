@@ -15,11 +15,20 @@ fn main() {
             Startup,
             (
                 |world: &mut World| {
-                    ui_root().spawn(world);
+                    let error_clearer = SignalBuilder::from_resource::<Output>()
+                        .map_in(deref_cloned)
+                        .dedupe()
+                        .map(|_: In<_>, mut commands: Commands| commands.remove_resource::<Error>())
+                        .register(world);
+                    ui_root()
+                        .with_builder(|builder| builder.hold_signals([error_clearer]))
+                        .spawn(world);
                 },
                 camera,
             ),
         )
+        .insert_resource(Output(String::new()))
+        .insert_resource(Error)
         .run();
 }
 
@@ -31,6 +40,12 @@ const BUTTON_SIZE: f32 = WIDTH / 5.;
 const GAP: f32 = BUTTON_SIZE / 5.;
 const HEIGHT: f32 = BUTTON_SIZE * 5. + GAP * 6.;
 
+#[derive(Resource, Clone)]
+struct Error;
+
+#[derive(Resource, Clone, Deref, DerefMut)]
+struct Output(String);
+
 fn textable_element(text_signal: impl Signal<Item = impl Into<String> + 'static> + Send + 'static) -> El<Node> {
     El::<Node>::new()
         .with_node(|mut node| node.border = UiRect::all(Val::Px(2.0)))
@@ -39,7 +54,7 @@ fn textable_element(text_signal: impl Signal<Item = impl Into<String> + 'static>
             El::<Text>::new()
                 .text_font(TextFont::from_font_size(FONT_SIZE))
                 .text_color(TextColor(Color::WHITE))
-                .text_signal(text_signal.map(Text::new)),
+                .text_signal(text_signal.map_in(Text::new).map_in(Some)),
         )
 }
 
@@ -63,42 +78,41 @@ fn button(symbol: &'static str) -> El<Node> {
 }
 
 fn input_button(symbol: &'static str) -> impl Element {
-    let hovered = Mutable::new(false);
-    let f = move || {
-        if symbol == "=" {
-            let mut output = OUTPUT.lock_mut();
-            if let Some(result) = Context::default()
-                .evaluate(&output)
-                .ok()
-                .and_then(|value| TryInto::<f64>::try_into(value).ok())
-                && let Some(result) = Decimal::from_f64((result * 100.).round() / 100.)
-            {
-                *output = result.normalize().to_string();
-                return;
-            }
-            ERROR.set_neq(true);
-        } else {
-            *OUTPUT.lock_mut() += symbol;
-        }
-    };
     let lazy_entity = LazyEntity::new();
     button(symbol)
-        .hoverable()
+        .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .background_color_signal(SignalBuilder::from_component_lazy::<Hovered>(lazy_entity).map_in(deref_copied).map_bool_in(|| BLUE, || PINK).map_in(BackgroundColor).map_in(Some))
-        .on_click(f)
+        .background_color_signal(
+            SignalBuilder::from_lazy_entity(lazy_entity)
+                .has_component::<Hovered>()
+                .map_bool_in(|| BLUE, || PINK)
+                .map_in(BackgroundColor)
+                .map_in(Some),
+        )
+        .on_click(move |In(_), mut output: ResMut<Output>, mut commands: Commands| {
+            if symbol == "=" {
+                // TryInto::<f64>::try_into(Context::default().evaluate(&output).unwrap()).unwrap();
+                if let Ok(result) = Context::<f64>::default().evaluate(&output)
+                    && let Some(result) = Decimal::from_f64((result * 100.).round() / 100.)
+                {
+                    **output = result.normalize().to_string();
+                    return;
+                }
+                commands.insert_resource(Error);
+            } else {
+                **output += symbol;
+            }
+        })
 }
 
-static OUTPUT: LazyLock<Mutable<String>> = LazyLock::new(default);
-static ERROR: LazyLock<Mutable<bool>> = LazyLock::new(default);
-
 fn display() -> impl Element {
-    textable_element(OUTPUT.signal_cloned())
-        .update_raw_el(|raw_el| {
-            raw_el.component_signal::<Outline, _>(
-                ERROR
-                    .signal()
-                    .map_true(|| Outline::new(Val::Px(4.0), Val::ZERO, bevy::color::palettes::basic::RED.into())),
+    textable_element(SignalBuilder::from_resource::<Output>().map_in(deref_cloned))
+        .with_builder(|builder| {
+            builder.component_signal::<Outline, _>(
+                SignalBuilder::from_resource_option::<Error>()
+                    .map_in_ref(Option::is_some)
+                    .dedupe()
+                    .map_true_in(|| Outline::new(Val::Px(4.0), Val::ZERO, bevy::color::palettes::basic::RED.into())),
             )
         })
         .with_node(|mut node| {
@@ -112,34 +126,39 @@ fn display() -> impl Element {
 }
 
 fn clear_button() -> impl Element {
-    let hovered = Mutable::new(false);
-    let output_empty = OUTPUT.signal_ref(String::is_empty).broadcast();
+    let output_empty = SignalBuilder::from_resource::<Output>()
+        .map_in(deref_cloned)
+        .map_in_ref(String::is_empty);
+    let lazy_entity = LazyEntity::new();
     button("c")
+        .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
         .background_color_signal(
-            map_ref! {
-                let output_empty = output_empty.signal(),
-                let hovered = hovered.signal() => {
-                    if *output_empty {
+            output_empty
+                .clone()
+                .combine(
+                    SignalBuilder::from_lazy_entity(lazy_entity)
+                        .has_component::<Hovered>()
+                        .dedupe(),
+                )
+                .map_in(|(output_empty, hovered)| {
+                    if output_empty {
                         BLUE
-                    } else if *hovered {
+                    } else if hovered {
                         bevy::color::palettes::basic::RED.into()
                     } else {
                         PINK
                     }
-                }
-            }
-            .dedupe()
-            .map(BackgroundColor),
+                })
+                .dedupe()
+                .map_in(BackgroundColor)
+                .map_in(Some),
         )
-        .cursor_disableable_signal(CursorIcon::System(SystemCursorIcon::Pointer), output_empty.signal())
-        .hovered_sync(hovered)
-        .on_click(|| OUTPUT.lock_mut().clear())
+        .cursor_disableable_signal(CursorIcon::System(SystemCursorIcon::Pointer), output_empty)
+        .on_click(|_: In<_>, mut output: ResMut<Output>| output.0.clear())
 }
 
 fn ui_root() -> impl Element {
-    let error_clearer = OUTPUT.signal_ref(|_| ERROR.set_neq(false)).to_future().apply(spawn);
     El::<Node>::new()
-        .update_raw_el(|raw_el| raw_el.hold_tasks([error_clearer]))
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
             node.height = Val::Percent(100.);

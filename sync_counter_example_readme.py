@@ -4,8 +4,8 @@ import re
 with open('examples/counter.rs', 'r') as file:
     lines = file.readlines()
 
-# Remove the first 6 lines
-lines = lines[6:]
+# Remove the first 5 lines
+lines = lines[5:]
 
 # Join the lines into a single string
 content = ''.join(lines)

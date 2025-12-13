@@ -12,7 +12,7 @@ use super::{
     element::{BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
-    pointer_event_aware::{CursorOnHoverable, PointerEventAware},
+    pointer_event_aware::{Hoverable, Pressable, CursorOnHoverable, PointerEventAware},
     viewport_mutable::ViewportMutable,
 };
 
@@ -32,8 +32,7 @@ impl<NodeType: Bundle> From<JonmoBuilder> for Row<NodeType> {
                     node.flex_direction = FlexDirection::Row;
                     node.align_items = AlignItems::Center;
                 })
-                .insert(Pickable::IGNORE)
-                .insert(LayoutDirection::Row),
+                .insert((LayoutDirection::Row, Pickable::IGNORE, Hoverable, Pressable)),
             _node_type: std::marker::PhantomData,
         }
     }

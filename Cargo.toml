@@ -100,7 +100,8 @@ bevy = "0.17"
 colorgrad = "0.8"
 rand = "0.9"
 strum = { version = "0.27", features = ["derive"] }
-calc = { version = "0.5", default-features = false }
+# TODO: version 0.5 is kinda overcomplicated and broken ? https://github.com/coriolinus/calc/issues/28
+calc = { version = "0.4", default-features = false }
 rust_decimal = "1.39"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.bevy_rand]

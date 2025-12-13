@@ -14,7 +14,7 @@ use bevy_ecs::{prelude::*, system::SystemId};
 use bevy_log::prelude::*;
 use bevy_picking::{
     backend::prelude::*,
-    hover::{HoverMap, PreviousHoverMap},
+    hover::{HoverMap, PickingInteraction, PreviousHoverMap},
     pointer::PointerMap,
     prelude::*,
 };
@@ -27,7 +27,7 @@ use jonmo::signal::{Signal, SignalExt};
 use super::{
     element::UiRoot,
     global_event_aware::GlobalEventAware,
-    utils::{clone, observe, register_system, remove_system_holder_on_remove, HaalkaObserver},
+    utils::{HaalkaObserver, clone, observe, register_system, remove_system_holder_on_remove},
 };
 
 /// Helper to create a signal that always outputs a constant value.
@@ -39,7 +39,7 @@ use jonmo::signal::SignalBuilder;
 
 /// Handler data for hover events, containing hover state and hit information.
 #[derive(Clone)]
-pub struct HoverHandlerData {
+pub struct HoverData {
     /// Whether the element is currently hovered.
     pub hovered: bool,
     /// Hit information for the pointer intersection.
@@ -48,7 +48,7 @@ pub struct HoverHandlerData {
 
 /// Handler data for press events, containing press state, button, and hit information.
 #[derive(Clone)]
-pub struct PressHandlerData {
+pub struct PressData {
     /// Whether the element is currently pressed.
     pub pressed: bool,
     /// The button that was pressed.
@@ -59,22 +59,15 @@ pub struct PressHandlerData {
 
 /// Enables reacting to pointer events like hover, click, and press. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`PointerEventAware`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/ability/pointer_event_aware.rs).
 pub trait PointerEventAware: GlobalEventAware {
-    /// Enable hover tracking for this element by inserting the [`Hovered`] component.
-    /// The component will be automatically updated by the `update_hover_states` system.
-    /// This is useful when you want to read the hover state via signals without needing a callback.
-    fn hoverable(self) -> Self {
-        self.with_builder(|builder| builder.insert((Pickable::default(), Hovered(false))))
-    }
-
     /// On frames where this element is hovered or gets unhovered and does not have a `Blocked`
     /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`]
     /// and [`HoverHandlerData`] containing its current hovered state and the latest [`HitData`].
     /// While hovered, the handler will be executed every frame.
     fn on_hovered_blockable<Blocked: Component, Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, HoverHandlerData)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, HoverData)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
-        self.hoverable().with_builder(|builder| {
+        self.with_builder(|builder| {
             let hover_handler_holder = Arc::new(OnceLock::new());
             let hovering_handler_holder = Arc::new(OnceLock::new());
             builder
@@ -85,14 +78,14 @@ pub trait PointerEventAware: GlobalEventAware {
                     let hovering_handler_system = register_system(
                         world,
                         move |In(entity): In<Entity>,
-                              hover_datas: Query<&HoverData>,
+                              hover_datas: Query<&HoverDataInternal>,
                               blocked: Query<&Blocked>,
                               mut commands: Commands| {
                             if blocked.contains(entity) {
                                 return;
                             }
                             if let Ok(hover_data) = hover_datas.get(entity) {
-                                commands.run_system_with(hover_handler_system, (entity, HoverHandlerData {
+                                commands.run_system_with(hover_handler_system, (entity, HoverData {
                                     hovered: true,
                                     hit: hover_data.hit.clone(),
                                 }));
@@ -121,7 +114,7 @@ pub trait PointerEventAware: GlobalEventAware {
                                 commands
                                     .spawn((
                                         Observer::new(
-                                            |move_event: On<Pointer<Move>>, mut hover_datas: Query<&mut HoverData>| {
+                                            |move_event: On<Pointer<Move>>, mut hover_datas: Query<&mut HoverDataInternal>| {
                                                 let entity = move_event.entity;
                                                 if let Ok(mut hover_data) = hover_datas.get_mut(entity) {
                                                     hover_data.hit = move_event.hit.clone();
@@ -135,15 +128,15 @@ pub trait PointerEventAware: GlobalEventAware {
                             });
 
                             if let Ok(mut entity_commands) = commands.get_entity(entity) {
-                                entity_commands.insert(HoverData { hit: hit.clone() });
+                                entity_commands.insert(HoverDataInternal { hit: hit.clone() });
                                 entity_commands.insert(Hovering);
-                                entity_commands.insert(Hoverable(hovering_handler_system));
+                                entity_commands.insert(HoveredSystem(hovering_handler_system));
                                 if let Some(move_observer) = move_observer {
                                     entity_commands.insert(HoverMoveObserver(move_observer));
                                 }
                             }
 
-                            commands.run_system_with(hover_handler_system, (entity, HoverHandlerData {
+                            commands.run_system_with(hover_handler_system, (entity, HoverData {
                                 hovered: true,
                                 hit,
                             }));
@@ -163,7 +156,7 @@ pub trait PointerEventAware: GlobalEventAware {
                             let hit = leave.hit.clone();
 
                             if !blocked.contains(entity) {
-                                commands.run_system_with(hover_handler_system, (entity, HoverHandlerData {
+                                commands.run_system_with(hover_handler_system, (entity, HoverData {
                                     hovered: false,
                                     hit,
                                 }));
@@ -172,9 +165,9 @@ pub trait PointerEventAware: GlobalEventAware {
                             let move_observer = move_observers.get(entity).ok().map(|o| o.0);
 
                             if let Ok(mut entity_commands) = commands.get_entity(entity) {
-                                entity_commands.remove::<HoverData>();
+                                entity_commands.remove::<HoverDataInternal>();
                                 entity_commands.remove::<Hovering>();
-                                entity_commands.remove::<Hoverable>();
+                                entity_commands.remove::<HoveredSystem>();
                                 if move_observer.is_some() {
                                     entity_commands.remove::<HoverMoveObserver>();
                                 }
@@ -195,7 +188,7 @@ pub trait PointerEventAware: GlobalEventAware {
     /// handling is blocked with a [`Signal`].
     fn on_hovered_blockable_signal<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, HoverHandlerData)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, HoverData)>, (), Marker> + Send + Sync + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
         self.with_builder(|builder| {
@@ -211,7 +204,7 @@ pub trait PointerEventAware: GlobalEventAware {
     /// can be called repeatedly to register many such handlers.
     fn on_hovered_change<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, HoverHandlerData)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, HoverData)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         self.with_builder(clone!((system_holder) move |builder| {
@@ -222,7 +215,9 @@ pub trait PointerEventAware: GlobalEventAware {
                 .apply(remove_system_holder_on_remove(system_holder.clone()))
         }))
         .on_hovered_blockable::<HoverHandlingBlocked, _>(
-            move |In((entity, data)): In<(Entity, HoverHandlerData)>, mut prev: Local<Option<bool>>, mut commands: Commands| {
+            move |In((entity, data)): In<(Entity, HoverData)>,
+                  mut prev: Local<Option<bool>>,
+                  mut commands: Commands| {
                 if prev.map_or(true, |prev| prev != data.hovered) {
                     *prev = Some(data.hovered);
                     commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data));
@@ -246,11 +241,13 @@ pub trait PointerEventAware: GlobalEventAware {
                 }))
                 .apply(remove_system_holder_on_remove(system_holder.clone()))
         }))
-        .on_hovered_blockable::<Blocked, _>(move |In((entity, data)): In<(Entity, HoverHandlerData)>, mut commands: Commands| {
-            if data.hovered {
-                commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data.hit));
-            }
-        })
+        .on_hovered_blockable::<Blocked, _>(
+            move |In((entity, data)): In<(Entity, HoverData)>, mut commands: Commands| {
+                if data.hovered {
+                    commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data.hit));
+                }
+            },
+        )
     }
 
     /// Like [`PointerEventAware::on_hovering_blockable`], but reactively controls whether hover
@@ -270,7 +267,10 @@ pub trait PointerEventAware: GlobalEventAware {
 
     /// On frames where this element is hovered, run a [`System`] which takes
     /// [`In`](`System::In`) this element's [`Entity`] and [`HitData`].
-    fn on_hovering<Marker>(self, handler: impl IntoSystem<In<(Entity, HitData)>, (), Marker> + Send + Sync + 'static) -> Self {
+    fn on_hovering<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, HitData)>, (), Marker> + Send + Sync + 'static,
+    ) -> Self {
         self.on_hovering_blockable::<HoverHandlingBlocked, _>(handler)
     }
 
@@ -292,7 +292,7 @@ pub trait PointerEventAware: GlobalEventAware {
                 .apply(remove_system_holder_on_remove(system_holder.clone()))
         })
         .on_hovered_blockable::<HoverHandlingBlocked, _>(
-            move |In((entity, data)): In<(Entity, HoverHandlerData)>, mut commands: Commands, time: Res<Time>, mut timers: Query<&mut HoverThrottleTimer>| {
+            move |In((entity, data)): In<(Entity, HoverData)>, mut commands: Commands, time: Res<Time>, mut timers: Query<&mut HoverThrottleTimer>| {
                 if data.hovered {
                     if let Ok(mut timer) = timers.get_mut(entity) {
                         timer.0.tick(time.delta());
@@ -428,10 +428,11 @@ pub trait PointerEventAware: GlobalEventAware {
 
     /// On frames where this element is pressed or gets unpressed and does not have a `Blocked`
     /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`]
-    /// and [`PressHandlerData`]. This method can be called repeatedly to register many such handlers.
+    /// and [`PressHandlerData`]. This method can be called repeatedly to register many such
+    /// handlers.
     fn on_pressed_blockable<Blocked: Component, Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, PressHandlerData)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, PressData)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
         self.with_builder(|builder| {
             let press_handler_holder = Arc::new(OnceLock::new());
@@ -445,7 +446,7 @@ pub trait PointerEventAware: GlobalEventAware {
                     let pressing_handler_system = register_system(
                         world,
                         move |In(entity): In<Entity>,
-                              press_datas: Query<&PressData>,
+                              press_datas: Query<&PressDataInternal>,
                               blocked: Query<&Blocked>,
                               mut commands: Commands| {
                             if blocked.contains(entity) {
@@ -454,9 +455,9 @@ pub trait PointerEventAware: GlobalEventAware {
                             if let Ok(press_data) = press_datas.get(entity) {
                                 commands.run_system_with(
                                     press_handler_system,
-                                    (entity, PressHandlerData {
+                                    (entity, PressData {
                                         pressed: true,
-                                        button: press_data.button.clone(),
+                                        button: press_data.button,
                                         hit: press_data.hit.clone(),
                                     }),
                                 );
@@ -477,14 +478,14 @@ pub trait PointerEventAware: GlobalEventAware {
                                 return;
                             }
 
-                            let button = press.button.clone();
+                            let button = press.button;
                             let hit = press.hit.clone();
 
                             let move_observer = (!move_observers.contains(entity)).then(|| {
                                 commands
                                     .spawn((
                                         Observer::new(
-                                            |move_event: On<Pointer<Move>>, mut press_datas: Query<&mut PressData>| {
+                                            |move_event: On<Pointer<Move>>, mut press_datas: Query<&mut PressDataInternal>| {
                                                 let entity = move_event.entity;
                                                 if let Ok(mut press_data) = press_datas.get_mut(entity) {
                                                     press_data.hit = move_event.hit.clone();
@@ -498,17 +499,17 @@ pub trait PointerEventAware: GlobalEventAware {
                             });
 
                             if let Ok(mut entity_commands) = commands.get_entity(entity) {
-                                entity_commands.insert(PressData {
-                                    button: button.clone(),
+                                entity_commands.insert(PressDataInternal {
+                                    button,
                                     hit: hit.clone(),
                                 });
-                                entity_commands.insert(Pressable(pressing_handler_system));
+                                entity_commands.insert(PressedSystem(pressing_handler_system));
                                 if let Some(move_observer) = move_observer {
                                     entity_commands.insert(PressMoveObserver(move_observer));
                                 }
                             }
 
-                            commands.run_system_with(press_handler_system, (entity, PressHandlerData {
+                            commands.run_system_with(press_handler_system, (entity, PressData {
                                 pressed: true,
                                 button,
                                 hit,
@@ -522,7 +523,7 @@ pub trait PointerEventAware: GlobalEventAware {
                         move |release: On<Pointer<Release>>,
                               blocked: Query<&Blocked>,
                               move_observers: Query<&PressMoveObserver>,
-                              press_datas: Query<&PressData>,
+                              press_datas: Query<&PressDataInternal>,
                               mut commands: Commands| {
                             let entity = release.entity;
 
@@ -534,13 +535,13 @@ pub trait PointerEventAware: GlobalEventAware {
                                 return;
                             }
 
-                            let button = release.button.clone();
+                            let button = release.button;
                             let hit = release.hit.clone();
 
                             let move_observer = move_observers.get(entity).ok().map(|o| o.0);
 
                             if !blocked.contains(entity) {
-                                commands.run_system_with(press_handler_system, (entity, PressHandlerData {
+                                commands.run_system_with(press_handler_system, (entity, PressData {
                                     pressed: false,
                                     button,
                                     hit,
@@ -548,8 +549,8 @@ pub trait PointerEventAware: GlobalEventAware {
                             }
 
                             if let Ok(mut entity_commands) = commands.get_entity(entity) {
-                                entity_commands.remove::<PressData>();
-                                entity_commands.remove::<Pressable>();
+                                entity_commands.remove::<PressDataInternal>();
+                                entity_commands.remove::<PressedSystem>();
                                 if move_observer.is_some() {
                                     entity_commands.remove::<PressMoveObserver>();
                                 }
@@ -565,7 +566,7 @@ pub trait PointerEventAware: GlobalEventAware {
                 .apply(remove_system_holder_on_remove(pressing_handler_holder))
         })
         .on_hovered_change(
-            |In((entity, data)): In<(Entity, HoverHandlerData)>,
+            |In((entity, data)): In<(Entity, HoverData)>,
              move_observers: Query<&PressMoveObserver>,
              mut commands: Commands| {
                 if !data.hovered {
@@ -574,8 +575,8 @@ pub trait PointerEventAware: GlobalEventAware {
                     }
                     if let Ok(mut entity_commands) = commands.get_entity(entity) {
                         entity_commands.remove::<PressMoveObserver>();
-                        entity_commands.remove::<PressData>();
-                        entity_commands.remove::<Pressable>();
+                        entity_commands.remove::<PressDataInternal>();
+                        entity_commands.remove::<PressedSystem>();
                     }
                 }
             },
@@ -586,7 +587,7 @@ pub trait PointerEventAware: GlobalEventAware {
     /// handling is blocked with a [`Signal`].
     fn on_pressed_blockable_signal<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, PressHandlerData)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, PressData)>, (), Marker> + Send + Sync + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
         self.with_builder(|builder| {
@@ -602,7 +603,7 @@ pub trait PointerEventAware: GlobalEventAware {
     /// can be called repeatedly to register many such handlers.
     fn on_pressed_change<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, PressHandlerData)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, PressData)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         self.with_builder(clone!(
@@ -614,8 +615,10 @@ pub trait PointerEventAware: GlobalEventAware {
         ))
         .with_builder(remove_system_holder_on_remove(system_holder.clone()))
         .on_pressed_blockable::<PressHandlingBlocked, _>(
-            move |In((entity, data)): In<(Entity, PressHandlerData)>, mut pressed: Local<Option<bool>>, mut commands: Commands| {
-                if pressed.map_or(true, |prev| prev != data.pressed) {
+            move |In((entity, data)): In<(Entity, PressData)>,
+                  mut pressed: Local<Option<bool>>,
+                  mut commands: Commands| {
+                if pressed.is_none_or(|prev| prev != data.pressed) {
                     *pressed = Some(data.pressed);
                     commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data));
                 }
@@ -641,11 +644,13 @@ pub trait PointerEventAware: GlobalEventAware {
                     .apply(remove_system_holder_on_remove(system_holder.clone()))
             }
         ))
-        .on_pressed_blockable::<Blocked, _>(move |In((entity, data)): In<(Entity, PressHandlerData)>, mut commands: Commands| {
-            if data.pressed {
-                commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data.button, data.hit));
-            }
-        })
+        .on_pressed_blockable::<Blocked, _>(
+            move |In((entity, data)): In<(Entity, PressData)>, mut commands: Commands| {
+                if data.pressed {
+                    commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data.button, data.hit));
+                }
+            },
+        )
     }
 
     /// On frames where this element is being pressed, run a [`System`], reactively controlling
@@ -665,7 +670,10 @@ pub trait PointerEventAware: GlobalEventAware {
 
     /// When this element is being pressed, run a [`System`] which takes [`In`](`System::In`) this
     /// element's [`Entity`], [`PointerButton`], and [`HitData`].
-    fn on_pressing<Marker>(self, handler: impl IntoSystem<In<(Entity, PointerButton, HitData)>, (), Marker> + Send + Sync + 'static) -> Self {
+    fn on_pressing<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, PointerButton, HitData)>, (), Marker> + Send + Sync + 'static,
+    ) -> Self {
         self.on_pressing_blockable::<PressHandlingBlocked, _>(handler)
     }
 
@@ -687,7 +695,7 @@ pub trait PointerEventAware: GlobalEventAware {
                 .apply(remove_system_holder_on_remove(system_holder.clone()))
             })
         .on_pressed_blockable::<PressHandlingBlocked, _>(
-            move |In((entity, data)): In<(Entity, PressHandlerData)>, mut commands: Commands, time: Res<Time>, mut timers: Query<&mut PressThrottleTimer>| {
+            move |In((entity, data)): In<(Entity, PressData)>, mut commands: Commands, time: Res<Time>, mut timers: Query<&mut PressThrottleTimer>| {
                 if data.pressed {
                     if let Ok(mut timer) = timers.get_mut(entity) {
                         timer.0.tick(time.delta());
@@ -710,9 +718,8 @@ struct PressThrottleTimer(Timer);
 #[derive(Component, Deref, DerefMut)]
 struct HoverThrottleTimer(Timer);
 
-/// Component that tracks whether an element is currently being hovered by the pointer.
-#[derive(Component, Clone, Deref, DerefMut)]
-pub struct Hovered(pub bool);
+#[derive(Component, Clone)]
+pub struct Hovered;
 
 #[derive(Component, Default, Clone)]
 struct PressHandlingBlocked;
@@ -740,13 +747,13 @@ fn update_hover_states(
     pointers: Query<&PointerLocation>,
     hover_map: Res<HoverMap>,
     previous_hover_map: Res<PreviousHoverMap>,
-    mut hovereds: Query<(Entity, &mut Hovered)>,
+    mut hovereds: Query<(Entity, Option<&Hovered>)>,
     child_ofs: Query<&ChildOf>,
     mut commands: Commands,
 ) {
     let pointer_id = PointerId::Mouse;
     let hover_set = hover_map.get(&pointer_id);
-    for (entity, mut hovered) in hovereds.iter_mut() {
+    for (entity, hovered) in hovereds.iter_mut() {
         let hit_data_option = match hover_set {
             Some(map) => map
                 .iter()
@@ -755,8 +762,7 @@ fn update_hover_states(
             None => None,
         };
         let is_hovered = hit_data_option.is_some();
-        if **hovered != is_hovered {
-            **hovered = is_hovered;
+        if hovered.is_some() != is_hovered {
             let Some(location) = pointer_map
                 .get_entity(pointer_id)
                 .and_then(|entity| pointers.get(entity).ok())
@@ -771,17 +777,21 @@ fn update_hover_states(
             };
             if let Some(hit) = hit_data_option.cloned() {
                 commands.trigger(Pointer::new(pointer_id, location, Enter { hit }, entity));
+                if let Ok(mut entity) = commands.get_entity(entity) {
+                    entity.insert(Hovered);
+                }
             } else {
-                let previous_hit = previous_hover_map
-                    .get(&pointer_id)
-                    .and_then(|map| {
-                        map.iter()
-                            .find(|(ha, _)| **ha == entity || child_ofs.iter_ancestors(**ha).any(|e| e == entity))
-                            .map(|(_, hit)| hit.clone())
-                    });
+                let previous_hit = previous_hover_map.get(&pointer_id).and_then(|map| {
+                    map.iter()
+                        .find(|(ha, _)| **ha == entity || child_ofs.iter_ancestors(**ha).any(|e| e == entity))
+                        .map(|(_, hit)| hit.clone())
+                });
 
                 if let Some(hit) = previous_hit {
                     commands.trigger(Pointer::new(pointer_id, location, Leave { hit }, entity));
+                    if let Ok(mut entity) = commands.get_entity(entity) {
+                        entity.remove::<Hovered>();
+                    }
                 } else {
                     debug!(
                         "Unable to get previous hit for pointer {:?} leave on {:?}",
@@ -800,7 +810,7 @@ struct ClickPropagationStopped;
 struct OutPropagationStopped;
 
 #[derive(Component, Clone)]
-struct PressData {
+struct PressDataInternal {
     button: PointerButton,
     hit: HitData,
 }
@@ -809,7 +819,7 @@ struct PressData {
 struct PressMoveObserver(Entity);
 
 #[derive(Component, Clone)]
-struct HoverData {
+struct HoverDataInternal {
     hit: HitData,
 }
 
@@ -817,26 +827,51 @@ struct HoverData {
 struct HoverMoveObserver(Entity);
 
 #[derive(Component, Clone, Copy)]
-struct Hoverable(SystemId<In<Entity>, ()>);
+struct HoveredSystem(SystemId<In<Entity>, ()>);
+
+#[derive(Component)]
+pub(crate) struct Hoverable;
 
 #[derive(Component, Clone, Copy)]
 struct Hovering;
 
 #[derive(Component)]
-struct Pressable(SystemId<In<Entity>, ()>);
+pub(crate) struct Pressable;
+
+#[derive(Component)]
+struct PressedSystem(SystemId<In<Entity>, ()>);
 
 #[allow(clippy::type_complexity)]
-fn pressable_system(
-    mut interaction_query: Query<(Entity, &Pressable), With<Pressed>>,
-    mut commands: Commands,
-) {
-    for (entity, &Pressable(system)) in &mut interaction_query {
+fn pressed_system(mut interaction_query: Query<(Entity, &PressedSystem), With<Pressed>>, mut commands: Commands) {
+    for (entity, &PressedSystem(system)) in &mut interaction_query {
         commands.run_system_with(system, entity);
     }
 }
 
-fn hoverable_system(mut hovering_query: Query<(Entity, &Hoverable), With<Hovering>>, mut commands: Commands) {
-    for (entity, &Hoverable(system)) in &mut hovering_query {
+#[allow(clippy::type_complexity)]
+fn pressable_system(
+    mut interaction_query: Query<
+        (Entity, &PickingInteraction, Option<&Pressed>),
+        (With<Pressable>, Changed<PickingInteraction>),
+    >,
+    mut commands: Commands,
+) {
+    for (entity, interaction, pressed_option) in &mut interaction_query {
+        let is_pressed = matches!(interaction, PickingInteraction::Pressed);
+        if is_pressed != pressed_option.is_some()
+            && let Ok(mut entity) = commands.get_entity(entity)
+        {
+            if is_pressed {
+                entity.insert(Pressed);
+            } else {
+                entity.remove::<Pressed>();
+            }
+        }
+    }
+}
+
+fn hoverable_system(mut hovering_query: Query<(Entity, &HoveredSystem), With<Hovering>>, mut commands: Commands) {
+    for (entity, &HoveredSystem(system)) in &mut hovering_query {
         commands.run_system_with(system, entity);
     }
 }
@@ -1109,10 +1144,14 @@ pub(super) fn plugin(app: &mut App) {
     app.add_observer(on_set_cursor).add_systems(
         Update,
         (
-            pressable_system.run_if(any_with_component::<Pressable>),
-            hoverable_system.run_if(any_with_component::<Hoverable>),
+            (
+                pressable_system.run_if(any_with_component::<Pressable>),
+                pressed_system.run_if(any_with_component::<PressedSystem>),
+            )
+                .chain(),
+            hoverable_system.run_if(any_with_component::<HoveredSystem>),
             update_hover_states.run_if(
-                any_with_component::<Hovered>
+                any_with_component::<Hoverable>
                     // TODO: apparently this updates every frame no matter what, if so, remove this condition
                     // TODO: remove when native `Enter` and `Leave` available
                     .and(resource_exists_and_changed::<HoverMap>)
