@@ -59,15 +59,11 @@ fn counter_button(counter_holder: LazyEntity, label: &'static str, step: i32) ->
         .align_content(Align::center())
         .border_radius(BorderRadius::MAX)
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .hoverable()
         .with_builder(|builder| builder.lazy_entity(button_holder.clone()))
         .background_color_signal(
-            SignalBuilder::from_component_lazy(button_holder)
-                .map_in(|hovered: Hovered| *hovered)
-                .map_bool(
-                    |_: In<()>| Color::hsl(300., 0.75, 0.85),
-                    |_: In<()>| Color::hsl(300., 0.75, 0.75),
-                )
+            SignalBuilder::from_lazy_entity(button_holder)
+                .has_component::<Hovered>()
+                .map_bool_in(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
                 .map_in(BackgroundColor)
                 .map_in(Some),
         )

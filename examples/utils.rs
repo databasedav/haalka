@@ -57,37 +57,37 @@ impl Plugin for FpsOverlayPlugin {
         fn fps_ui_root() -> impl Element {
             let fps_holder = LazyEntity::new();
             El::<Node>::new()
-                // .with_node(|mut node| {
-                //     node.position_type = PositionType::Absolute;
-                //     node.padding.top = Val::Px(FPS_PADDING);
-                //     node.padding.left = Val::Px(FPS_PADDING);
-                // })
-                // .with_builder(|builder| builder.insert(GlobalZIndex(FPS_OVERLAY_ZINDEX)))
-                // .child(
-                //     Row::<Text>::new()
-                //         .with_builder(|builder| {
-                //             builder
-                //                 .insert((Fps::default(), FpsText))
-                //                 .lazy_entity(fps_holder.clone())
-                //         })
-                //         .item(
-                //             El::<Text>::new()
-                //                 .text_font(TextFont::from_font_size(FPS_FONT_SIZE))
-                //                 .text(Text::new("fps: ")),
-                //         )
-                //         .item(
-                //             El::<Text>::new()
-                //                 .text_font(TextFont::from_font_size(FPS_FONT_SIZE))
-                //                 .text_signal(
-                //                     SignalBuilder::from_component_lazy(fps_holder)
-                //                         .map_in(|fps: Fps| fps.0)
-                //                         .dedupe()
-                //                         .map_in(|fps| format!("{fps:.2}"))
-                //                         .map_in(Text)
-                //                         .map_in(Some),
-                //                 ),
-                //         ),
-                // )
+                .with_node(|mut node| {
+                    node.position_type = PositionType::Absolute;
+                    node.padding.top = Val::Px(FPS_PADDING);
+                    node.padding.left = Val::Px(FPS_PADDING);
+                })
+                .with_builder(|builder| builder.insert(GlobalZIndex(FPS_OVERLAY_ZINDEX)))
+                .child(
+                    Row::<Text>::new()
+                        .with_builder(|builder| {
+                            builder
+                                .insert((Fps::default(), FpsText))
+                                .lazy_entity(fps_holder.clone())
+                        })
+                        .item(
+                            El::<Text>::new()
+                                .text_font(TextFont::from_font_size(FPS_FONT_SIZE))
+                                .text(Text::new("fps: ")),
+                        )
+                        .item(
+                            El::<Text>::new()
+                                .text_font(TextFont::from_font_size(FPS_FONT_SIZE))
+                                .text_signal(
+                                    SignalBuilder::from_component_lazy(fps_holder)
+                                        .map_in(|fps: Fps| fps.0)
+                                        .dedupe()
+                                        .map_in(|fps| format!("{fps:.2}"))
+                                        .map_in(Text)
+                                        .map_in(Some),
+                                ),
+                        ),
+                )
         }
 
         fn update_fps(diagnostic: Res<DiagnosticsStore>, mut fps_query: Query<&mut Fps, With<FpsText>>) {
@@ -165,37 +165,37 @@ pub(crate) fn examples_plugin(app: &mut App) {
             }),
             ..default()
         }),
-        // HaalkaPlugin,
+        HaalkaPlugin,
         FpsOverlayPlugin,
         #[cfg(feature = "debug")]
         DebugUiPlugin,
-    ));
-    // .add_systems(
-    //     PostStartup,
-    //     (
-    //         mark_default_ui_camera.run_if(not(any_with_component::<IsDefaultUiCamera>)),
-    //         |world: &mut World| {
-    //             let mut el = Column::<Node>::new()
-    //                 .align(Align::new().bottom().left())
-    //                 .with_node(|mut node| node.row_gap = Val::Px(10.));
-    //             cfg_if::cfg_if! {
-    //                 if #[cfg(feature = "debug")] {
-    //                     el = el.item(El::<Text>::new().text(Text::new("press f1 to toggle debug overlay")));
-    //                 }
-    //             }
-    //             el = el.item(El::<Text>::new().text(Text::new("press f2 to toggle fps counter")));
-    //             El::<Node>::new()
-    //                 .with_node(|mut node| {
-    //                     node.height = Val::Percent(100.);
-    //                     node.width = Val::Percent(100.);
-    //                     node.padding.bottom = Val::Px(FPS_PADDING);
-    //                     node.padding.left = Val::Px(FPS_PADDING);
-    //                 })
-    //                 .child(el)
-    //                 .spawn(world);
-    //         },
-    //     ),
-    // );
+    ))
+    .add_systems(
+        PostStartup,
+        (
+            mark_default_ui_camera.run_if(not(any_with_component::<IsDefaultUiCamera>)),
+            |world: &mut World| {
+                let mut el = Column::<Node>::new()
+                    .align(Align::new().bottom().left())
+                    .with_node(|mut node| node.row_gap = Val::Px(10.));
+                cfg_if::cfg_if! {
+                    if #[cfg(feature = "debug")] {
+                        el = el.item(El::<Text>::new().text(Text::new("press f1 to toggle debug overlay")));
+                    }
+                }
+                el = el.item(El::<Text>::new().text(Text::new("press f2 to toggle fps counter")));
+                El::<Node>::new()
+                    .with_node(|mut node| {
+                        node.height = Val::Percent(100.);
+                        node.width = Val::Percent(100.);
+                        node.padding.bottom = Val::Px(FPS_PADDING);
+                        node.padding.left = Val::Px(FPS_PADDING);
+                    })
+                    .child(el)
+                    .spawn(world);
+            },
+        ),
+    );
 }
 
 static COLORS: &[Color] = &[

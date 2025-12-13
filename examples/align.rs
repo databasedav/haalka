@@ -76,12 +76,11 @@ fn alignment_button(alignment: Alignment) -> impl Element {
             node.width = Val::Px(250.);
             node.height = Val::Px(80.);
         })
-        .hoverable()
         .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
         .background_color_signal(
             signal::or!(
-                SignalBuilder::from_component_lazy::<Hovered>(lazy_entity)
-                    .map_in(deref_copied)
+                SignalBuilder::from_lazy_entity(lazy_entity)
+                    .has_component::<Hovered>()
                     .dedupe(),
                 SignalBuilder::from_resource::<Alignment>().dedupe().eq(alignment)
             )
@@ -222,7 +221,6 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
     El::<Node>::new()
         .align(rectangle_alignment.to_align())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .hoverable()
         .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
         .background_color_signal(
             signal::or!(
@@ -242,7 +240,7 @@ fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
                         }
                     })
                     .eq(Some(rectangle_alignment)),
-                SignalBuilder::from_component_lazy::<Hovered>(lazy_entity).map_in(deref_copied),
+                SignalBuilder::from_lazy_entity(lazy_entity).has_component::<Hovered>(),
             )
             .dedupe()
             .map_bool_in(
