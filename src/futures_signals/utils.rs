@@ -61,7 +61,7 @@ where
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(all(feature = "debug", feature = "ui"))] {
+    if #[cfg(all(feature = "debug", feature = "futures_signals_ui"))] {
         use bevy_ecs::prelude::*;
         use bevy_input::prelude::*;
         use bevy_app::prelude::*;

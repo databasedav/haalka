@@ -11,14 +11,14 @@ use utils::*;
 use std::time::Duration;
 
 use bevy::prelude::*;
-use haalka::{
+use haalka::futures_signals::{
     prelude::*,
     viewport_mutable::{LogicalRect, MutableViewport},
 };
 
 fn main() {
     App::new()
-        .add_plugins(examples_plugin)
+        .add_plugins((examples_plugin, HaalkaFuturesSignalsPlugin))
         .add_systems(
             Startup,
             (
@@ -140,10 +140,11 @@ fn text_input(
                 .map(BackgroundColor),
         )
         .cursor(CursorIcon::System(SystemCursorIcon::Text))
-        .on_click(clone!((focus) move || focus.set_neq(true)))
+        .on_click_stop_propagation(clone!((focus) move || focus.set_neq(true)))
         .on_click_outside_with_system(
             |In((entity, _)), mut input_focus: ResMut<InputFocus>, children: Query<&Children>| {
                 if input_focus.0 == Some(children.get(entity).unwrap().iter().next().unwrap()) {
+                    bevy::log::info!("clearing focus from outside click");
                     input_focus.0 = None;
                 }
             },
@@ -383,7 +384,7 @@ fn key_values() -> Column<Node> {
             node.row_gap = Val::Px(10.);
             node.height = Val::Percent(90.);
         })
-        .mutable_viewport(haalka::prelude::Axis::Vertical)
+        .mutable_viewport(haalka::futures_signals::prelude::Axis::Vertical)
         .viewport_y_sync(SCROLL_POSITION.clone())
         .on_scroll_with_system_on_hover(
             BasicScrollHandler::new()

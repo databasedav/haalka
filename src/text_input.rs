@@ -361,7 +361,10 @@ fn clear_selection_on_focus_change(
 }
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_plugins(TextInputPlugin).add_systems(
+    if app.is_plugin_added::<TextInputPlugin>().not() {
+        app.add_plugins(TextInputPlugin);
+    }
+    app.add_systems(
         Update,
         (
             on_change.run_if(any_with_component::<ListenToChanges>),
