@@ -140,11 +140,10 @@ fn text_input(
                 .map(BackgroundColor),
         )
         .cursor(CursorIcon::System(SystemCursorIcon::Text))
-        .on_click_stop_propagation(clone!((focus) move || focus.set_neq(true)))
+        .on_click(clone!((focus) move || focus.set_neq(true)))
         .on_click_outside_with_system(
             |In((entity, _)), mut input_focus: ResMut<InputFocus>, children: Query<&Children>| {
                 if input_focus.0 == Some(children.get(entity).unwrap().iter().next().unwrap()) {
-                    bevy::log::info!("clearing focus from outside click");
                     input_focus.0 = None;
                 }
             },

@@ -7,19 +7,24 @@ use super::{
     utils::{clone, observe, register_system, remove_system_holder_on_remove},
 };
 use apply::Apply;
-use bevy_ecs::prelude::*;
+use bevy_ecs::{event::PropagateEntityTrigger, prelude::*, traversal::Traversal};
 
 /// Enables registering "global" event listeners on the [`UiRoot`] node. The [`UiRoot`] must be
 /// manually registered with [`UiRootable::ui_root`](super::element::UiRootable::ui_root) for this
 /// to work as expected.
 pub trait GlobalEventAware: BuilderWrapper {
     /// When an `E` [`Event`] propagates to the [`UiRoot`] node, run a [`System`] which takes
-    /// [`In`](`System::In`) this element's [`Entity`] (not the [`UiRoot`]'s) and the [`Event`].
+    /// [`In`](`System::In`) this element's [`Entity`] (not the [`UiRoot`]'s) and a
+    /// [`GlobalEventData`] with the [`Event`].
     #[allow(clippy::type_complexity)]
-    fn on_global_event_with_system<E: Event + Clone, Marker>(
+    fn on_global_event<E, const AUTO_PROPAGATE: bool, T, Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, E)>, (), Marker> + Send + Sync + 'static,
-    ) -> Self {
+        handler: impl IntoSystem<In<(Entity, GlobalEventData<E>)>, (), Marker> + Send + Sync + 'static,
+    ) -> Self
+    where
+        E: EntityEvent + for<'a> Event<Trigger<'a> = PropagateEntityTrigger<AUTO_PROPAGATE, E, T>> + Clone,
+        T: Traversal<E> + 'static,
+    {
         self.with_builder(|builder| {
             let system_holder = Arc::new(OnceLock::new());
             let observer_holder = Arc::new(OnceLock::new());
@@ -33,7 +38,7 @@ pub trait GlobalEventAware: BuilderWrapper {
                         if ui_roots.contains(ancestor) {
                             commands.queue(clone!((system_holder, observer_holder) move |world: &mut World| {
                                 let observer = observe(world, ancestor, clone!((system_holder) move |event: On<E>, mut commands: Commands| {
-                                    commands.run_system_with(system_holder.get().copied().unwrap(), (entity, (*event).clone()));
+                                    commands.run_system_with(system_holder.get().copied().unwrap(), (entity, GlobalEventData { original_event_target: event.original_event_target(), event: event.clone() }));
                                 })).id();
                                 let _ = observer_holder.set(observer);
                             }));
@@ -41,16 +46,18 @@ pub trait GlobalEventAware: BuilderWrapper {
                         }
                     }
                 }))
-                .observe(move |_: On<Remove, ()>, world: &mut World| {
-                    if let Some(&observer) = observer_holder.get() {
-                        let _ = world.try_despawn(observer);
-                    }
+                .on_despawn(move |world, _| {
+                    world.commands().queue(clone!((observer_holder) move |world: &mut World| {
+                        if let Some(&observer) = observer_holder.get() {
+                            let _ = world.try_despawn(observer);
+                        }
+                    }))
                 })
         })
     }
+}
 
-    /// When an `E` [`Event`] propagates to the [`UiRoot`] node, run a function with the [`Event`].
-    fn on_global_event<E: Event + Clone>(self, mut handler: impl FnMut(E) + Send + Sync + 'static) -> Self {
-        self.on_global_event_with_system::<E, _>(move |In((_, event))| handler(event))
-    }
+pub struct GlobalEventData<E> {
+    pub original_event_target: Entity,
+    pub event: E,
 }

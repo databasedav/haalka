@@ -81,13 +81,14 @@ pub mod prelude {
             AlignabilityFacade, BuilderWrapper, Element, ElementWrapper, Nameable, Spawnable, TypeEraseable, UiRoot,
             UiRootable,
         },
-        global_event_aware::GlobalEventAware,
+        global_event_aware::{GlobalEventAware, GlobalEventData},
         grid::Grid,
         mouse_wheel_scrollable::{
             BasicScrollHandler, MouseWheelScrollable, OnHoverMouseWheelScrollable, ScrollDirection,
         },
         pointer_event_aware::{
-            CursorOnHoverDisabled, CursorOnHoverable, Enter, Hovered, Leave, PointerEventAware, SetCursor,
+            CursorOnHoverDisabled, CursorOnHoverable, Dragged, DraggingData, Enter, HoverData, Hovered, Leave,
+            PointerEventAware, PressData, PressingData, SetCursor,
         },
         row::Row,
         stack::Stack,

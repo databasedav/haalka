@@ -20,7 +20,10 @@
 use bevy_app::prelude::*;
 use bevy_ecs::{lifecycle::HookContext, prelude::*, world::DeferredWorld};
 use bevy_ui::{JustifyItems, prelude::*};
-use jonmo::{SignalProcessing, signal::{Signal, SignalExt}};
+use jonmo::{
+    SignalProcessing,
+    signal::{Signal, SignalExt},
+};
 
 use super::element::BuilderWrapper;
 
@@ -219,7 +222,8 @@ pub fn plugin(app: &mut App) {
             apply_self_alignment,
             apply_self_alignment_on_parent_change,
             apply_content_alignment,
-        ).after(SignalProcessing),
+        )
+            .after(SignalProcessing),
     );
 }
 

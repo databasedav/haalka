@@ -15,7 +15,7 @@ use super::{
     element::{BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
-    pointer_event_aware::{Hoverable, Pressable, CursorOnHoverable, PointerEventAware},
+    pointer_event_aware::{CursorOnHoverable, Hoverable, PointerEventAware, Pressable},
     viewport_mutable::ViewportMutable,
 };
 
