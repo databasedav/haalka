@@ -138,7 +138,7 @@ macro_rules! impl_throttled_handler {
                     .on_spawn(
                         clone!((system_holder, timer_id) move |world, entity| {
                             let _ = system_holder.set(register_system(world, handler));
-                            
+
                             // Get or insert the timer collection
                             let id = if let Ok(mut entity_mut) = world.get_entity_mut(entity) {
                                 if let Some(mut collection) = entity_mut.get_mut::<$timer_collection>() {

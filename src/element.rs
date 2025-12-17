@@ -199,8 +199,35 @@ impl<T: BuilderWrapper> TypeEraseable for T {
 /// is preserved from the original element, so alignment behavior works correctly.
 /// Alignment methods should be called *before* type erasure, not after.
 ///
+/// # `Clone` semantics
+/// This type derives `Clone`, but cloning should be treated as cloning a **build plan**, not a
+/// reusable UI template.
+///
+/// Internally this wraps a `jonmo::builder::JonmoBuilder`. `JonmoBuilder` is `Clone`, but some of
+/// its internal on-spawn hooks are **one-shot** and may be drained/consumed on the first spawn.
+/// Because clones share those internal queues, spawning one clone can affect later spawns of other
+/// clones.
+///
+/// If you need a reusable widget, prefer returning a fresh element from a function rather than
+/// storing a pre-built `AlignabilityFacade` and cloning it for later spawns.
+///
 /// [`LayoutDirection`]: super::align::LayoutDirection
 pub struct AlignabilityFacade(JonmoBuilder);
+
+impl Clone for AlignabilityFacade {
+    #[track_caller]
+    fn clone(&self) -> Self {
+        #[cfg(debug_assertions)]
+        warn!(
+            "Cloning AlignabilityFacade at {}. Note: this wraps JonmoBuilder, whose Clone shares some \
+             one-shot on-spawn hook queues. Spawning one clone can affect later spawns of other clones. \
+             Prefer factory functions that construct a fresh element when you need reusable UI templates.",
+            std::panic::Location::caller()
+        );
+
+        Self(self.0.clone())
+    }
+}
 
 impl BuilderWrapper for AlignabilityFacade {
     fn builder_mut(&mut self) -> &mut JonmoBuilder {

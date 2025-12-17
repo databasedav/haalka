@@ -1,6 +1,7 @@
 //! Simple grid layout model ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Grid`](https://github.com/MoonZoon/MoonZoon/blob/f8fc31065f65bdb3ab7b94faf5e3916bc5550dd9/crates/zoon/src/element/grid.rs).
 
 use bevy_ecs::prelude::*;
+use bevy_log::warn;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use bevy_utils::prelude::*;
@@ -19,11 +20,43 @@ use super::{
     viewport_mutable::ViewportMutable,
 };
 
-/// [`Element`](super::element::Element) with children aligned in a grid using a simple [`.row_wrap_cell_width`](Grid::row_wrap_cell_width) grid layout model. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Grid`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/grid.rs).
+/// [`Element`](super::element::Element) with children aligned in a grid using a simple [`.row_wrap_cell_width`](Grid::row_wrap_cell_width) grid layout model. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/grid.rs).
+///
+/// # `Clone` semantics
+/// This type derives `Clone`, but cloning should be treated as cloning a **build plan**, not a
+/// reusable UI template.
+///
+/// Internally this wraps a `jonmo::builder::JonmoBuilder`. `JonmoBuilder` is `Clone`, but some of
+/// its internal on-spawn hooks are **one-shot** and may be drained/consumed on the first spawn.
+/// Because clones share those internal queues, spawning one clone can affect later spawns of other
+/// clones.
+///
+/// If you need to spawn the same UI multiple times with identical initialization, prefer using a
+/// factory function (e.g. `fn widget(...) -> impl Element`) that constructs a fresh `Grid` each
+/// time instead of cloning a pre-built value.
 #[derive(Default)]
 pub struct Grid<NodeType> {
     builder: JonmoBuilder,
     _node_type: std::marker::PhantomData<NodeType>,
+}
+
+impl<NodeType> Clone for Grid<NodeType> {
+    #[track_caller]
+    fn clone(&self) -> Self {
+        #[cfg(debug_assertions)]
+        warn!(
+            "Cloning Grid at {}. Note: Grid wraps JonmoBuilder, whose Clone shares some one-shot \
+             on-spawn hook queues. Spawning one clone can affect later spawns of other clones. \
+             Prefer factory functions that construct a fresh element when you need reusable UI \
+             templates.",
+            std::panic::Location::caller()
+        );
+
+        Self {
+            builder: self.builder.clone(),
+            _node_type: std::marker::PhantomData,
+        }
+    }
 }
 
 impl<NodeType: Bundle> From<JonmoBuilder> for Grid<NodeType> {

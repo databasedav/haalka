@@ -1,4 +1,5 @@
 use bevy_ecs::prelude::*;
+use bevy_log::warn;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use jonmo::{
@@ -22,10 +23,42 @@ use super::{
 /// While multiple children can still be declared with repeated calls to [`.child`](`El::child`) or
 /// [`.child_signal`](`El::child_signal`), their relative alignment was arbitrarily chosen to match
 /// [MoonZoon's implementation](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/el.rs#L41-L69) and should not be relied on.
+///
+/// # `Clone` semantics
+/// This type derives `Clone`, but cloning should be treated as cloning a **build plan**, not a
+/// reusable UI template.
+///
+/// Internally this wraps a `jonmo::builder::JonmoBuilder`. `JonmoBuilder` is `Clone`, but some of
+/// its internal on-spawn hooks are **one-shot** and may be drained/consumed on the first spawn.
+/// Because clones share those internal queues, spawning one clone can affect later spawns of other
+/// clones.
+///
+/// If you need to spawn the same UI multiple times with identical initialization, prefer using a
+/// factory function (e.g. `fn widget(...) -> impl Element`) that constructs a fresh `El` each time
+/// instead of cloning a pre-built value.
 #[derive(Default)]
 pub struct El<NodeType> {
     builder: JonmoBuilder,
     _node_type: std::marker::PhantomData<NodeType>,
+}
+
+impl<NodeType> Clone for El<NodeType> {
+    #[track_caller]
+    fn clone(&self) -> Self {
+        #[cfg(debug_assertions)]
+        warn!(
+            "Cloning El at {}. Note: El wraps JonmoBuilder, whose Clone shares some one-shot \
+             on-spawn hook queues. Spawning one clone can affect later spawns of other clones. \
+             Prefer factory functions that construct a fresh element when you need reusable UI \
+             templates.",
+            std::panic::Location::caller()
+        );
+
+        Self {
+            builder: self.builder.clone(),
+            _node_type: std::marker::PhantomData,
+        }
+    }
 }
 
 impl<NodeType: Bundle> From<JonmoBuilder> for El<NodeType> {

@@ -1,4 +1,5 @@
 use bevy_ecs::prelude::*;
+use bevy_log::warn;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use jonmo::{
@@ -17,10 +18,42 @@ use super::{
 };
 
 /// [`Element`](super::element::Element) with children stacked on directly on top of each other (e.g. along the z-axis), with siblings ordered youngest to oldest, top to bottom. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Stack`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/stack.rs).
+///
+/// # `Clone` semantics
+/// This type derives `Clone`, but cloning should be treated as cloning a **build plan**, not a
+/// reusable UI template.
+///
+/// Internally this wraps a `jonmo::builder::JonmoBuilder`. `JonmoBuilder` is `Clone`, but some of
+/// its internal on-spawn hooks are **one-shot** and may be drained/consumed on the first spawn.
+/// Because clones share those internal queues, spawning one clone can affect later spawns of other
+/// clones.
+///
+/// If you need to spawn the same UI multiple times with identical initialization, prefer using a
+/// factory function (e.g. `fn widget(...) -> impl Element`) that constructs a fresh `Stack` each
+/// time instead of cloning a pre-built value.
 #[derive(Default)]
 pub struct Stack<NodeType> {
     builder: JonmoBuilder,
     _node_type: std::marker::PhantomData<NodeType>,
+}
+
+impl<NodeType> Clone for Stack<NodeType> {
+    #[track_caller]
+    fn clone(&self) -> Self {
+        #[cfg(debug_assertions)]
+        warn!(
+            "Cloning Stack at {}. Note: Stack wraps JonmoBuilder, whose Clone shares some one-shot \
+             on-spawn hook queues. Spawning one clone can affect later spawns of other clones. \
+             Prefer factory functions that construct a fresh element when you need reusable UI \
+             templates.",
+            std::panic::Location::caller()
+        );
+
+        Self {
+            builder: self.builder.clone(),
+            _node_type: std::marker::PhantomData,
+        }
+    }
 }
 
 impl<NodeType: Bundle> From<JonmoBuilder> for Stack<NodeType> {

@@ -85,28 +85,6 @@ fn ui_root() -> impl Element {
 fn square(i: usize) -> impl Element {
     let lazy_entity = LazyEntity::new();
 
-    let cursor_signal = signal::or!(
-        SignalBuilder::from_lazy_entity(lazy_entity.clone())
-            .has_component::<Pressed>()
-            .dedupe(),
-        SignalBuilder::from_lazy_entity(lazy_entity.clone())
-            .has_component::<Dragged>()
-            .dedupe(),
-    )
-    .dedupe()
-    .combine(
-        SignalBuilder::from_lazy_entity(lazy_entity.clone())
-            .has_component::<Hovered>()
-            .dedupe(),
-    )
-    .map_in(|(dragged, hovered)| match (dragged, hovered) {
-        (true, _) => SystemCursorIcon::Grabbing,
-        (false, true) => SystemCursorIcon::Grab,
-        (false, false) => SystemCursorIcon::Default,
-    })
-    .map_in(CursorIcon::System)
-    .dedupe();
-
     El::<Node>::new()
         .with_node(move |mut node| {
             node.width = Val::Px(WIDTH);
@@ -115,7 +93,29 @@ fn square(i: usize) -> impl Element {
         .align_content(Align::center())
         .background_color(BackgroundColor(random_color()))
         .global_z_index(GlobalZIndex(1))
-        .cursor_signal(cursor_signal)
+        .cursor_signal(
+            signal::or!(
+                SignalBuilder::from_lazy_entity(lazy_entity.clone())
+                    .has_component::<Pressed>()
+                    .dedupe(),
+                SignalBuilder::from_lazy_entity(lazy_entity.clone())
+                    .has_component::<Dragged>()
+                    .dedupe(),
+            )
+            .dedupe()
+            .combine(
+                SignalBuilder::from_lazy_entity(lazy_entity.clone())
+                    .has_component::<Hovered>()
+                    .dedupe(),
+            )
+            .map_in(|(dragged, hovered)| match (dragged, hovered) {
+                (true, _) => SystemCursorIcon::Grabbing,
+                (false, true) => SystemCursorIcon::Grab,
+                (false, false) => SystemCursorIcon::Default,
+            })
+            .map_in(CursorIcon::System)
+            .dedupe(),
+        )
         .with_builder(move |builder| {
             builder
                 .lazy_entity(lazy_entity.clone())
