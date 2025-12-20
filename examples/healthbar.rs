@@ -215,7 +215,7 @@ fn respawn_button() -> impl Element {
             node.height = Val::Px(80.);
         })
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
+        .lazy_entity(lazy_entity.clone())
         .background_color_signal(
             SignalBuilder::from_lazy_entity(lazy_entity)
                 .has_component::<Hovered>()

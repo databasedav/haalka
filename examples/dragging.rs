@@ -116,26 +116,18 @@ fn square(i: usize) -> impl Element {
             .map_in(CursorIcon::System)
             .dedupe(),
         )
-        .with_builder(move |builder| {
-            builder
-                .lazy_entity(lazy_entity.clone())
-                .insert((Pickable::default(), DragOffset::default()))
-                .observe(
-                    |click: On<Pointer<Press>>,
-                     max_z_index: ResMut<MaxZIndex>,
-                     z_indices: Query<&mut GlobalZIndex>,
-                     drag_offsets: Query<&mut DragOffset>,
-                     nodes: Query<&Node>| {
-                        calculate_and_set_drag_offset(
-                            click.entity,
-                            click.pointer_location.position,
-                            &nodes,
-                            drag_offsets,
-                        );
-                        update_z_index(click.entity, max_z_index, z_indices);
-                    },
-                )
-        })
+        .lazy_entity(lazy_entity.clone())
+        .insert((Pickable::default(), DragOffset::default()))
+        .observe(
+            |click: On<Pointer<Press>>,
+             max_z_index: ResMut<MaxZIndex>,
+             z_indices: Query<&mut GlobalZIndex>,
+             drag_offsets: Query<&mut DragOffset>,
+             nodes: Query<&Node>| {
+                calculate_and_set_drag_offset(click.entity, click.pointer_location.position, &nodes, drag_offsets);
+                update_z_index(click.entity, max_z_index, z_indices);
+            },
+        )
         .on_dragging(
             |In((entity, dragging_data)): In<(Entity, DraggingData)>, mut nodes: Query<(&mut Node, &DragOffset)>| {
                 if let Ok((node, drag_offset)) = nodes.get_mut(entity) {

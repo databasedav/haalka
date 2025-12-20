@@ -10,7 +10,7 @@ use jonmo::{
 
 use super::{
     align::{Alignable, LayoutDirection},
-    element::{BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
+    element::{BuilderPassThrough, BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
     pointer_event_aware::{CursorOnHoverable, Hoverable, PointerEventAware, Pressable},
@@ -93,6 +93,8 @@ impl<NodeType: Bundle> BuilderWrapper for Column<NodeType> {
         &mut self.builder
     }
 }
+
+impl<NodeType: Bundle> BuilderPassThrough for Column<NodeType> {}
 
 impl<NodeType: Bundle> CursorOnHoverable for Column<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Column<NodeType> {}

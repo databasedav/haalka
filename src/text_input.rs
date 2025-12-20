@@ -15,7 +15,7 @@ use bevy_ui::prelude::*;
 use bevy_utils::prelude::*;
 use cosmic_text::{Edit, Selection};
 
-use crate::impl_haalka_methods;
+use crate::{element::BuilderPassThrough, impl_haalka_methods};
 
 use super::{
     el::El,
@@ -44,6 +44,8 @@ impl ElementWrapper for TextInput {
         &mut self.el
     }
 }
+
+impl BuilderPassThrough for TextInput {}
 
 impl GlobalEventAware for TextInput {}
 impl Nameable for TextInput {}

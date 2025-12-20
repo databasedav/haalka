@@ -70,15 +70,16 @@ struct RectangleContentAlignment(Option<RectangleAlignment>);
 fn alignment_button(alignment: Alignment) -> impl Element {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
+        .insert(Pickable::default())
         .align(Align::center())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .with_node(|mut node| {
             node.width = Val::Px(250.);
             node.height = Val::Px(80.);
         })
-        .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
+        .lazy_entity(lazy_entity.clone())
         .background_color_signal(
-            signal::or!(
+            signal::any!(
                 SignalBuilder::from_lazy_entity(lazy_entity)
                     .has_component::<Hovered>()
                     .dedupe(),
@@ -105,6 +106,8 @@ fn alignment_button(alignment: Alignment) -> impl Element {
 
 fn ui_root() -> impl Element {
     Column::<Node>::new()
+        .ui_root()
+        .insert(Pickable::default())
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
             node.height = Val::Percent(100.);
@@ -219,11 +222,12 @@ fn rectangles() -> Vec<impl Element> {
 fn align_switcher(rectangle_alignment: RectangleAlignment) -> impl Element {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
+        .insert(Pickable::default())
         .align(rectangle_alignment.to_align())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
+        .lazy_entity(lazy_entity.clone())
         .background_color_signal(
-            signal::or!(
+            signal::any!(
                 SignalBuilder::from_resource::<Alignment>()
                     .dedupe()
                     .switch(move |In(alignment): In<Alignment>| {

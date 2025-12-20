@@ -30,11 +30,6 @@ use super::{
     utils::{HaalkaObserver, clone, observe, register_system, remove_system_holder_on_remove},
 };
 
-/// Helper to create a signal that always outputs a constant value.
-fn constant_signal<T: Clone + Send + Sync + 'static>(value: T) -> impl Signal<Item = T> + Send + Sync + 'static {
-    SignalBuilder::from_system(move |_: In<()>| Some(value.clone()))
-}
-
 use jonmo::signal::SignalBuilder;
 
 /// Helper trait for internal data components that track pointer state.
@@ -486,7 +481,6 @@ pub trait PointerEventAware: GlobalEventAware {
         self.with_builder(|builder| {
             let system_holder = Arc::new(OnceLock::new());
             builder
-                .insert(Pickable::default())
                 .on_spawn(clone!((system_holder) move |world, entity| {
                     let system = register_system(world, handler);
                     let _ = system_holder.set(system);
@@ -587,7 +581,6 @@ pub trait PointerEventAware: GlobalEventAware {
             let press_handler_holder = Arc::new(OnceLock::new());
             let pressing_handler_holder = Arc::new(OnceLock::new());
             builder
-                .insert(Pickable::default())
                 .on_spawn(
                     clone!((press_handler_holder, pressing_handler_holder) move |world, entity| {
                         let press_handler_system = register_system(world, handler);
@@ -832,7 +825,6 @@ pub trait PointerEventAware: GlobalEventAware {
         self.with_builder(|builder| {
             let drag_handler_holder = Arc::new(OnceLock::new());
             builder
-                .insert(Pickable::default())
                 .on_spawn(clone!((drag_handler_holder) move |world, entity| {
                     let drag_handler_system = register_system(world, handler);
                     let _ = drag_handler_holder.set(drag_handler_system);
@@ -963,7 +955,6 @@ pub trait PointerEventAware: GlobalEventAware {
         self.with_builder(|builder| {
             let dragging_handler_holder = Arc::new(OnceLock::new());
             builder
-                .insert(Pickable::default())
                 .on_spawn(clone!((dragging_handler_holder) move |world, entity| {
                     let dragging_handler = register_system(world, handler);
                     let _ = dragging_handler_holder.set(dragging_handler);
@@ -1445,7 +1436,7 @@ pub trait CursorOnHoverable: PointerEventAware {
         let cursor_option = cursor_option.into();
         self.with_builder(|builder| {
             builder
-                .insert((Pickable::default(), CursorOverPropagationStopped))
+                .insert(CursorOverPropagationStopped)
                 .observe(
                     |event: On<Insert, CursorOver>,
                      cursor_on_hovers: Query<&CursorOnHover>,
@@ -1557,7 +1548,9 @@ pub trait CursorOnHoverable: PointerEventAware {
         cursor_option_signal: impl Signal<Item = impl Into<Option<CursorIcon>> + 'static> + Send + Sync + 'static,
     ) -> Self {
         self.with_builder(|builder| {
-            builder.component_signal::<CursorOnHover, _>(cursor_option_signal.map_in(|x| Some(CursorOnHover(x.into()))))
+            builder.component_signal::<CursorOnHover, _>(
+                cursor_option_signal.map_in(|into_option_cursor| Some(CursorOnHover(into_option_cursor.into()))),
+            )
         })
         .cursor_disableable::<Disabled>(None)
     }
@@ -1605,7 +1598,7 @@ pub trait CursorOnHoverable: PointerEventAware {
         cursor_option: impl Into<Option<CursorIcon>>,
         disabled: impl Signal<Item = bool> + Send + Sync + 'static,
     ) -> Self {
-        self.cursor_signal_disableable_signal(constant_signal(cursor_option.into()), disabled)
+        self.cursor_signal_disableable_signal(SignalBuilder::always(cursor_option.into()).first(), disabled)
     }
 }
 

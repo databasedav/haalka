@@ -17,13 +17,7 @@ use haalka::{
 fn main() {
     App::new()
         .add_plugins(examples_plugin)
-        .add_systems(
-            Startup,
-            (
-                |world: &mut World| initialize(world),
-                camera,
-            ),
-        )
+        .add_systems(Startup, (|world: &mut World| initialize(world), camera))
         .add_systems(Update, (tabber, escaper, autofocus))
         .run();
 }
@@ -152,14 +146,16 @@ fn text_input(
     let text_input_holder = LazyEntity::new();
 
     // Focused if the InputFocus resource points at this TextInput entity.
-    let focused_signal = SignalBuilder::from_system(clone!((text_input_holder) move |_: In<()>, focus: Option<Res<InputFocus>>| {
-        Some(
-            focus
-                .as_deref()
-                .map(|f| f.0 == Some(text_input_holder.get()))
-                .unwrap_or(false),
-        )
-    }))
+    let focused_signal = SignalBuilder::from_system(
+        clone!((text_input_holder) move |_: In<()>, focus: Option<Res<InputFocus>>| {
+            Some(
+                focus
+                    .as_deref()
+                    .map(|f| f.0 == Some(text_input_holder.get()))
+                    .unwrap_or(false),
+            )
+        }),
+    )
     .dedupe();
 
     El::<Node>::new()
@@ -300,11 +296,7 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
     Row::<Node>::new()
         .with_node(|mut node| node.column_gap = Val::Px(35.))
         .align(Align::new().right())
-        .item_signal::<Option<El<Text>>, _>(
-            selected
-                .clone()
-                .map_bool_in(|| Some(sort_by_text_element()), || None),
-        )
+        .item_signal::<Option<El<Text>>, _>(selected.clone().map_bool_in(|| Some(sort_by_text_element()), || None))
         .item(
             El::<Node>::new()
                 .apply(border_radius_style(20.))
@@ -327,7 +319,10 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
                 )
                 .align_content(Align::center())
                 .on_click(
-                    move |_: In<_>, mut sort_by_res: ResMut<SortBy>, pairs: Res<Pairs>, mut pairs_data: Query<&mut MutableVecData<RowData>>| {
+                    move |_: In<_>,
+                          mut sort_by_res: ResMut<SortBy>,
+                          pairs: Res<Pairs>,
+                          mut pairs_data: Query<&mut MutableVecData<RowData>>| {
                         if sort_by_res.0 != sort_by {
                             sort_by_res.0 = sort_by;
                         }
@@ -346,11 +341,7 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
         )
 }
 
-fn reorder_pairs(
-    sort_by: KeyValue,
-    pairs: &MutableVec<RowData>,
-    pairs_data: &mut Query<&mut MutableVecData<RowData>>,
-) {
+fn reorder_pairs(sort_by: KeyValue, pairs: &MutableVec<RowData>, pairs_data: &mut Query<&mut MutableVecData<RowData>>) {
     let mut guard = pairs.write(pairs_data);
     let mut desired = guard.to_vec();
     match sort_by {

@@ -51,7 +51,7 @@ fn button() -> impl Element {
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .align_content(Align::center())
         .border_radius(BorderRadius::MAX)
-        .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
+        .lazy_entity(lazy_entity.clone())
         .border_color_signal(
             pressed_hovered_signal
                 .clone()

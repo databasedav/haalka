@@ -78,8 +78,8 @@ pub mod prelude {
         column::Column,
         el::El,
         element::{
-            AlignabilityFacade, BuilderWrapper, Element, ElementWrapper, Nameable, Spawnable, TypeEraseable, UiRoot,
-            UiRootable,
+            AlignabilityFacade, BuilderPassThrough, BuilderWrapper, Element, ElementWrapper, Nameable, Spawnable,
+            TypeEraseable, UiRoot, UiRootable,
         },
         global_event_aware::{GlobalEventAware, GlobalEventData},
         grid::Grid,

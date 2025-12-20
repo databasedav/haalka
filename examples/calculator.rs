@@ -80,7 +80,7 @@ fn button(symbol: &'static str) -> El<Node> {
 fn input_button(symbol: &'static str) -> impl Element {
     let lazy_entity = LazyEntity::new();
     button(symbol)
-        .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
+        .lazy_entity(lazy_entity.clone())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
             SignalBuilder::from_lazy_entity(lazy_entity)
@@ -131,7 +131,7 @@ fn clear_button() -> impl Element {
         .map_in_ref(String::is_empty);
     let lazy_entity = LazyEntity::new();
     button("c")
-        .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
+        .lazy_entity(lazy_entity.clone())
         .background_color_signal(
             output_empty
                 .clone()

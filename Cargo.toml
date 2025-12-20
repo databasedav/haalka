@@ -39,7 +39,7 @@ bevy_window = { version = "0.17", default-features = false }
 bevy_winit = { version = "0.17", default-features = false, features = ["x11"] }
 bevy_ui_text_input = { version = "0.6", default-features = false, optional = true }
 bevy-async-ecs = { version = "0.9", optional = true }
-jonmo = { version = "0.4", path = "../jonmo", features = ["builder"] }
+jonmo = "0.5"
 cosmic-text = "0.14.2"
 apply = "0.3"
 cfg-if = "1.0"

@@ -16,7 +16,7 @@ use std::{collections::HashMap, sync::OnceLock};
 
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
-use haalka::{jonmo::graph::SignalHandle, prelude::*};
+use haalka::prelude::*;
 use rand::{
     Rng,
     distr::{Bernoulli, Distribution},
@@ -33,6 +33,7 @@ fn main() {
         )
         .insert_resource(PointerPosition::default())
         .insert_resource(Dragging::default())
+        .insert_resource(CraftOutputState::default())
         // .add_systems(Startup, character_camera)
         // .add_systems(Startup, setup_3d)
         // .add_systems(Update, rotate_prism)
@@ -42,29 +43,52 @@ fn main() {
         .add_systems(
             OnEnter(AssetState::Loaded),
             (set_icon_texture_atlas, |world: &mut World| {
-                let handles = InventoryHandles::new();
-                let root = ui_root(handles.clone())
-                    .with_builder(|builder| {
-                        builder.on_spawn_with_system(
-                            move |In(entity): In<_>,
-                                  camera: Single<Entity, With<IsDefaultUiCamera>>,
-                                  mut commands: Commands| {
-                                // https://github.com/bevyengine/bevy/discussions/11223
-                                if let Ok(mut commands) = commands.get_entity(entity) {
-                                    commands.try_insert(UiTargetCamera(*camera));
+                let crafting_outputter = SignalBuilder::from_system({
+                    move |_: In<()>,
+                          input_cells: Query<(Entity, &ChildOf), With<CraftInputCell>>,
+                          children: Query<&Children>,
+                          contents: Query<&CellContent>| {
+                        let mut vals = [None; 4];
+                        if let Some(&ChildOf(parent)) = input_cells.iter().next().map(|(_, c)| c)
+                            && let Ok(children) = children.get(parent)
+                        {
+                            for (i, child) in children.iter().take(vals.len()).enumerate() {
+                                if let Ok(CellContent(content)) = contents.get(child) {
+                                    vals[i] = *content;
                                 }
-                            },
-                        )
-                    })
-                    .spawn(world);
+                            }
+                        }
+                        Some(vals)
+                    }
+                })
+                .dedupe()
+                .map({
+                    move |In(vals): In<[Option<CellData>; 4]>,
+                          output: Option<Single<&mut CellContent, With<CraftOutputSlot>>>,
+                          mut state: ResMut<CraftOutputState>| {
+                        let all_filled = vals.iter().all(Option::is_some);
+                        let recipe = all_filled.then(|| vals.map(|v| v.expect("all_filled")));
+                        if let Some(mut output) = output {
+                            // Output reflects the current input recipe.
+                            // If inputs are fully filled and the recipe changes, regenerate output
+                            // even if a previous output stack already exists (overwrite).
+                            if let Some(recipe) = recipe {
+                                if state.last_recipe != Some(recipe) {
+                                    output.0 = Some(random_cell_data(&mut rand::rng()));
+                                    state.last_recipe = Some(recipe);
+                                }
+                            } else {
+                                state.last_recipe = None;
+                            }
+                        }
+                    }
+                });
 
-                // Register crafting output updater after UI is spawned so LazyEntitys are set.
-                let crafting_outputter = register_crafting_outputter(world, handles);
-                if let Ok(mut entity) = world.get_entity_mut(root)
-                    && let Some(mut signal_handles) = entity.get_mut::<SignalHandles>()
-                {
-                    signal_handles.add(crafting_outputter);
-                }
+                let crafting_outputter = crafting_outputter.register(world);
+
+                ui_root()
+                    .with_builder(|builder| builder.hold_signals([crafting_outputter]))
+                    .spawn(world);
             })
                 .chain(),
         )
@@ -271,34 +295,21 @@ struct CellData {
 #[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
 struct CellContent(Option<CellData>);
 
-#[derive(Resource, Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Deref)]
 struct PointerPosition(Vec2);
 
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq)]
 struct Dragging {
     item: Option<CellData>,
     source: Option<Entity>,
+    ignore_source_click: bool,
 }
 
-#[derive(Clone)]
-struct InventoryHandles {
-    craft_inputs: [LazyEntity; 4],
-    craft_output: LazyEntity,
-}
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct CraftInputCell;
 
-impl InventoryHandles {
-    fn new() -> Self {
-        Self {
-            craft_inputs: [
-                LazyEntity::new(),
-                LazyEntity::new(),
-                LazyEntity::new(),
-                LazyEntity::new(),
-            ],
-            craft_output: LazyEntity::new(),
-        }
-    }
-}
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct CraftOutputSlot;
 
 #[derive(Component, Clone)]
 struct PressHandlingDisabled;
@@ -309,23 +320,26 @@ struct OutputPressDisabled;
 #[derive(Component, Default)]
 struct TooltipOrigin(Option<Vec2>);
 
+#[derive(Resource, Clone, Debug, Default, PartialEq, Eq)]
+struct CraftOutputState {
+    // Tracks the last full input recipe that produced the current output.
+    last_recipe: Option<[CellData; 4]>,
+}
+
 fn is_dragging_signal() -> impl Signal<Item = bool> + Clone {
     SignalBuilder::from_resource::<Dragging>()
-    .map_in(|Dragging { item, .. }| item.is_some())
+        .map_in(|Dragging { item, .. }| item.is_some())
         .dedupe()
 }
 
 fn pointer_position_signal() -> impl Signal<Item = Vec2> + Clone {
     SignalBuilder::from_resource::<PointerPosition>()
-        .map_in(|PointerPosition(pos)| pos)
+        .map_in(deref_copied)
         .dedupe()
 }
 
-fn cell(initial: Option<CellData>, insertable: bool) -> impl Element {
-    cell_with_handle(LazyEntity::new(), initial, insertable)
-}
-
-fn cell_with_handle(lazy_entity: LazyEntity, initial: Option<CellData>, insertable: bool) -> impl Element {
+fn cell(initial: Option<CellData>, insertable: bool) -> impl Element + BuilderPassThrough {
+    let lazy_entity = LazyEntity::new();
     let dragging = is_dragging_signal();
     let hovered = SignalBuilder::from_lazy_entity(lazy_entity.clone())
         .has_component::<Hovered>()
@@ -333,25 +347,151 @@ fn cell_with_handle(lazy_entity: LazyEntity, initial: Option<CellData>, insertab
     let content = SignalBuilder::from_component_lazy::<CellContent>(lazy_entity.clone()).dedupe();
     let populated = content.clone().map_in(|CellContent(x)| x.is_some()).dedupe();
 
-    let index_signal = content
-        .clone()
-        .map_in(|CellContent(x)| x.map(|d| d.index).unwrap_or(0))
-        .dedupe();
-    let count_signal = content
-        .clone()
-        .map_in(|CellContent(x)| x.map(|d| d.count).unwrap_or(0))
-        .dedupe();
+    {
+        let el = El::<Node>::new()
+            .lazy_entity(lazy_entity.clone())
+            .insert(Pickable::default())
+            .insert(CellContent(initial))
+            .with_builder(|builder| {
+                builder.component_signal::<PressHandlingDisabled, _>(
+                    signal::any!(dragging.clone(), populated.clone().map_in(|p| !p).dedupe())
+                        .dedupe()
+                        .map_true_in(|| PressHandlingDisabled),
+                )
+            })
+            .observe(
+                |pointer_down: On<Pointer<Press>>,
+                 disabled: Query<&PressHandlingDisabled>,
+                 mut dragging: ResMut<Dragging>,
+                 mut pointer: ResMut<PointerPosition>,
+                 mut contents: Query<&mut CellContent>| {
+                    if disabled.contains(pointer_down.entity) {
+                        return;
+                    }
 
-    let press_disabled = signal::or!(dragging.clone(), populated.clone().map_in(|p| !p).dedupe()).dedupe();
+                    let mut to_drag: Option<CellData> = None;
+                    if let Ok(mut content) = contents.get_mut(pointer_down.entity) {
+                        match pointer_down.button {
+                            PointerButton::Secondary => {
+                                if let Some(mut data) = content.0 {
+                                    let to_take = (data.count / 2).max(1);
+                                    data.count = data.count.saturating_sub(to_take);
+                                    to_drag = Some(CellData {
+                                        index: data.index,
+                                        count: to_take,
+                                    });
+                                    content.0 = (data.count > 0).then_some(data);
+                                }
+                            }
+                            _ => {
+                                to_drag = content.0.take();
+                            }
+                        }
+                    }
 
-    let tooltip_enabled = signal::and!(
-        hovered.clone(),
-        populated.clone(),
-        dragging.clone().map_in(|d| !d).dedupe(),
+                    dragging.item = to_drag;
+                    dragging.source = dragging.item.map(|_| pointer_down.entity);
+                    let pos = pointer_down.pointer_location.position;
+                    pointer.0 = pos;
+                    dragging.ignore_source_click = dragging.item.is_some();
+                },
+            );
+
+        if insertable {
+            el.observe(
+                |click: On<Pointer<Click>>, mut dragging: ResMut<Dragging>, mut contents: Query<&mut CellContent>| {
+                    let Some(mut dragged) = dragging.item else {
+                        return;
+                    };
+
+                    // Ignore the click emitted by releasing the same press that started the
+                    // drag on the source cell.
+                    if dragging.source == Some(click.entity) {
+                        // On pickup we start dragging on `Press`, but the matching `Click`
+                        // (release) arrives immediately on the same entity. Ignore it once.
+                        if dragging.ignore_source_click {
+                            dragging.ignore_source_click = false;
+                            return;
+                        }
+                    }
+
+                    // Any other click is a deliberate drop action; stop treating the source
+                    // cell specially.
+                    dragging.source = None;
+                    dragging.ignore_source_click = false;
+
+                    let Ok(mut content) = contents.get_mut(click.entity) else {
+                        return;
+                    };
+
+                    match &mut content.0 {
+                        None => {
+                            if matches!(click.button, PointerButton::Secondary) {
+                                // Drop a single item into an empty slot.
+                                content.0 = Some(CellData {
+                                    index: dragged.index,
+                                    count: 1,
+                                });
+                                dragged.count = dragged.count.saturating_sub(1);
+                                dragging.item = (dragged.count > 0).then_some(dragged);
+                            } else {
+                                // Drop entire stack into empty slot.
+                                content.0 = Some(dragged);
+                                dragging.item = None;
+                            }
+                        }
+                        Some(existing) => {
+                            if existing.index == dragged.index {
+                                if matches!(click.button, PointerButton::Secondary) {
+                                    existing.count = existing.count.saturating_add(1);
+                                    dragged.count = dragged.count.saturating_sub(1);
+                                    dragging.item = (dragged.count > 0).then_some(dragged);
+                                } else {
+                                    existing.count = existing.count.saturating_add(dragged.count);
+                                    dragging.item = None;
+                                }
+                            } else {
+                                // Swap different items.
+                                let tmp = *existing;
+                                *existing = dragged;
+                                dragging.item = Some(tmp);
+                            }
+                        }
+                    }
+                },
+            )
+        } else {
+            el
+        }
+    }
+    .cursor_disableable_signal(
+        CursorIcon::System(SystemCursorIcon::Grab),
+        signal::any!(populated.clone().not(), dragging.clone()).dedupe(),
     )
-    .dedupe();
-
-    let icon_layer = icon(index_signal, count_signal)
+    .with_node(|mut node| {
+        node.width = Val::Px(CELL_WIDTH);
+        node.height = Val::Px(CELL_WIDTH);
+        node.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
+    })
+    .background_color_signal(
+        hovered
+            .clone()
+            .map_bool_in(|| CELL_HIGHLIGHT_COLOR, || CELL_BACKGROUND_COLOR)
+            .map_in(BackgroundColor)
+            .map_in(Some),
+    )
+    .border_color(BorderColor::all(CELL_DARK_BORDER_COLOR))
+    .child(
+        icon(
+            content
+                .clone()
+                .map_in(|CellContent(cell_data_option)| cell_data_option.map(|cell_data| cell_data.index).unwrap_or(0))
+                .dedupe(),
+            content
+                .clone()
+                .map_in(|CellContent(cell_data_option)| cell_data_option.map(|cell_data| cell_data.count).unwrap_or(0))
+                .dedupe(),
+        )
         .with_builder(|builder| {
             builder.component_signal::<Visibility, _>(
                 populated
@@ -360,207 +500,74 @@ fn cell_with_handle(lazy_entity: LazyEntity, initial: Option<CellData>, insertab
                     .map_in(Some),
             )
         })
-        .type_erase();
+        .layer_signal(
+            signal::all!(hovered.clone(), populated.clone(), dragging.clone().not(),)
+                .dedupe()
+                .map_true_in({
+                    let cell_entity = lazy_entity.clone();
+                    move || tooltip(cell_entity.clone())
+                }),
+        ),
+    )
+}
 
-    let tooltip = {
-        let cell_entity = lazy_entity.clone();
-        El::<Node>::new()
-            .with_builder(|builder| builder.insert(TooltipOrigin::default()))
-            .with_node(|mut node| {
-                node.height = Val::Px(CELL_WIDTH);
-                node.position_type = PositionType::Absolute;
-                node.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
-                node.padding = UiRect::horizontal(Val::Px(10.));
-            })
-            .visibility(Visibility::Hidden)
-            .with_builder(|builder| {
-                builder.on_signal_with_entity(pointer_position_signal(), move |mut entity, pointer| {
-                    let Some(transform) = entity.get::<GlobalTransform>().cloned() else {
-                        return;
-                    };
+fn tooltip(cell_entity: LazyEntity) -> impl Element + Clone {
+    let tooltip_entity = LazyEntity::new();
+    El::<Node>::new()
+        .lazy_entity(tooltip_entity.clone())
+        .insert(TooltipOrigin::default())
+        .with_node(|mut node| {
+            node.height = Val::Px(CELL_WIDTH);
+            node.position_type = PositionType::Absolute;
+            node.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
+            node.padding = UiRect::horizontal(Val::Px(10.));
+        })
+        .visibility(Visibility::Hidden)
+        .with_builder(|builder| {
+            builder.on_signal_with_entity(pointer_position_signal(), move |mut entity, pointer| {
+                // Initialize the tooltip's world-space origin once GlobalTransform is available.
+                let origin = if let (Some(transform), Some(mut origin)) = (
+                    entity.get::<UiGlobalTransform>().cloned(),
+                    entity.get_mut::<TooltipOrigin>(),
+                ) {
+                    if origin.0.is_none() {
+                        origin.0 = Some(transform.translation.xy());
+                    }
+                    origin.0
+                } else {
+                    None
+                };
 
-                    // Initialize the tooltip's world-space origin once GlobalTransform is available.
-                    let origin = if let Some(mut origin) = entity.get_mut::<TooltipOrigin>() {
-                        if origin.0.is_none() {
-                            origin.0 = Some(transform.compute_transform().translation.xy());
-                        }
-                        origin.0
-                    } else {
-                        None
-                    };
+                if let Some(origin) = origin {
+                    let left = pointer.x - (origin.x - CELL_WIDTH / 2.);
+                    let top = pointer.y - (origin.y + CELL_WIDTH / 2.);
 
-                    if let Some(origin) = origin {
-                        let left = pointer.x - (origin.x - CELL_WIDTH / 2.);
-                        let top = pointer.y - (origin.y + CELL_WIDTH / 2.);
-
-                        if let Some(mut node) = entity.get_mut::<Node>() {
-                            node.left = Val::Px(left);
-                            node.top = Val::Px(top);
-                        }
-                        // Avoid a one-frame flash at the default position.
+                    if let Some(mut node) = entity.get_mut::<Node>() {
+                        node.left = Val::Px(left);
+                        node.top = Val::Px(top);
                         entity.insert(Visibility::Visible);
                     }
-                })
+                }
             })
-            .global_z_index(GlobalZIndex(1))
-            .background_color(BackgroundColor(CELL_BACKGROUND_COLOR))
-            .border_color(BorderColor::all(CELL_DARK_BORDER_COLOR))
-            .child(
-                El::<Text>::new()
-                    .align(Align::center())
-                    .text_font(TextFont::from_font_size(41.67))
-                    .text_layout(TextLayout::new_with_no_wrap())
-                    .text_signal(
-                        SignalBuilder::from_component_lazy::<CellContent>(cell_entity)
-                            .map_in(|CellContent(x)| x.map(|d| d.index))
-                            .dedupe()
-                            .map_in(|index: Option<usize>| {
-                                index
-                                    .and_then(|i| ITEM_NAMES.get(&i).copied())
-                                    .unwrap_or_default()
-                                    .to_string()
-                            })
-                            .map_in(Text)
-                            .map_in(Some),
-                    ),
-            )
-            .type_erase()
-    };
-
-    El::<Node>::new()
-        .with_builder(|builder| {
-            let builder = builder
-                .lazy_entity(lazy_entity.clone())
-                .insert(CellContent(initial))
-                .component_signal::<PressHandlingDisabled, _>(press_disabled.map_true_in(|| PressHandlingDisabled))
-                .observe(
-                    |pointer_down: On<Pointer<Press>>,
-                     disabled: Query<&PressHandlingDisabled>,
-                     mut dragging: ResMut<Dragging>,
-                     mut pointer: ResMut<PointerPosition>,
-                     mut contents: Query<&mut CellContent>| {
-                        if disabled.contains(pointer_down.entity) {
-                            return;
-                        }
-
-                        let mut to_drag: Option<CellData> = None;
-                        if let Ok(mut content) = contents.get_mut(pointer_down.entity) {
-                            match pointer_down.button {
-                                PointerButton::Secondary => {
-                                    if let Some(mut data) = content.0 {
-                                        let to_take = (data.count / 2).max(1);
-                                        data.count = data.count.saturating_sub(to_take);
-                                        to_drag = Some(CellData {
-                                            index: data.index,
-                                            count: to_take,
-                                        });
-                                        content.0 = (data.count > 0).then_some(data);
-                                    }
-                                }
-                                _ => {
-                                    to_drag = content.0.take();
-                                }
-                            }
-                        }
-
-                        dragging.item = to_drag;
-                        dragging.source = dragging.item.map(|_| pointer_down.entity);
-                        pointer.0 = pointer_down.pointer_location.position;
-                    },
-                );
-
-            if insertable {
-                builder.insert(Pickable::default()).observe(
-                    |click: On<Pointer<Click>>,
-                     mut dragging: ResMut<Dragging>,
-                     mut contents: Query<&mut CellContent>| {
-                        let Some(mut dragged) = dragging.item else {
-                            return;
-                        };
-
-                        // Ignore the click emitted by releasing the same press that started the
-                        // drag on the source cell.
-                        if dragging.source == Some(click.entity) {
-                            return;
-                        }
-
-                        // Any other click is a deliberate drop action; stop treating the source
-                        // cell specially.
-                        dragging.source = None;
-
-                        let Ok(mut content) = contents.get_mut(click.entity) else {
-                            return;
-                        };
-
-                        match &mut content.0 {
-                            None => {
-                                if matches!(click.button, PointerButton::Secondary) {
-                                    // Drop a single item into an empty slot.
-                                    content.0 = Some(CellData {
-                                        index: dragged.index,
-                                        count: 1,
-                                    });
-                                    dragged.count = dragged.count.saturating_sub(1);
-                                    dragging.item = (dragged.count > 0).then_some(dragged);
-                                } else {
-                                    // Drop entire stack into empty slot.
-                                    content.0 = Some(dragged);
-                                    dragging.item = None;
-                                }
-                            }
-                            Some(existing) => {
-                                if existing.index == dragged.index {
-                                    if matches!(click.button, PointerButton::Secondary) {
-                                        existing.count = existing.count.saturating_add(1);
-                                        dragged.count = dragged.count.saturating_sub(1);
-                                        dragging.item = (dragged.count > 0).then_some(dragged);
-                                    } else {
-                                        existing.count = existing.count.saturating_add(dragged.count);
-                                        dragging.item = None;
-                                    }
-                                } else {
-                                    // Swap different items.
-                                    let tmp = *existing;
-                                    *existing = dragged;
-                                    dragging.item = Some(tmp);
-                                }
-                            }
-                        }
-                    },
-                )
-            } else {
-                builder
-            }
         })
-        .cursor_signal(
-            dragging
-                .clone()
-                .combine(populated.clone())
-                .map_in(|(dragging, populated)| {
-                    if dragging {
-                        CursorIcon::System(SystemCursorIcon::Grabbing)
-                    } else if populated {
-                        CursorIcon::System(SystemCursorIcon::Grab)
-                    } else {
-                        CursorIcon::default()
-                    }
-                })
-                .dedupe(),
-        )
-        .with_node(|mut node| {
-            node.width = Val::Px(CELL_WIDTH);
-            node.height = Val::Px(CELL_WIDTH);
-            node.border = UiRect::all(Val::Px(CELL_BORDER_WIDTH));
-        })
-        .background_color_signal(
-            hovered
-                .map_bool_in(|| CELL_HIGHLIGHT_COLOR, || CELL_BACKGROUND_COLOR)
-                .map_in(BackgroundColor)
-                .map_in(Some),
-        )
+        .global_z_index(GlobalZIndex(1))
+        .background_color(BackgroundColor(CELL_BACKGROUND_COLOR))
         .border_color(BorderColor::all(CELL_DARK_BORDER_COLOR))
-        .child(icon_layer)
-        .child_signal(tooltip_enabled.map_true_in(move || tooltip.clone()))
+        .child(
+            El::<Text>::new()
+                .align(Align::center())
+                .text_font(TextFont::from_font_size(41.67))
+                .text_layout(TextLayout::new_with_no_wrap())
+                .text_signal(
+                    SignalBuilder::from_component_lazy::<CellContent>(cell_entity)
+                        .map_in(|CellContent(cell_data_option)| cell_data_option.map(|cell_data| cell_data.index))
+                        .dedupe()
+                        .map_some_in(|index| ITEM_NAMES.get(&index).copied())
+                        .map_in(Option::flatten)
+                        .map_some_in(Into::into)
+                        .map_some_in(Text),
+                ),
+        )
 }
 
 fn random_cell_data(rng: &mut impl Rng) -> CellData {
@@ -571,23 +578,20 @@ fn random_cell_data(rng: &mut impl Rng) -> CellData {
 }
 
 fn bern_cell_data_option(bern: f64) -> Option<CellData> {
-    'block: {
-        let distribution = Bernoulli::new(bern).unwrap();
-        let mut rng = rand::rng();
-        if distribution.sample(&mut rng) {
-            break 'block Some(random_cell_data(&mut rng));
-        }
-        None
-    }
+    let distribution = Bernoulli::new(bern).unwrap();
+    let mut rng = rand::rng();
+    distribution.sample(&mut rng).then(|| random_cell_data(&mut rng))
 }
 
 fn bern_cell(bern: f64, insertable: bool) -> impl Element {
     cell(bern_cell_data_option(bern), insertable)
 }
 
-fn grid<I: IntoIterator<Item = Option<CellData>>>(cell_data_options: I) -> impl Element
+fn grid<I, F>(cell_data_options: I, on_spawn_cell: F) -> impl Element
 where
+    I: IntoIterator<Item = Option<CellData>>,
     <I as IntoIterator>::IntoIter: std::marker::Send + 'static,
+    F: Fn(&mut World, Entity) + Clone + Send + Sync + 'static,
 {
     Grid::<Node>::new()
         .with_node(|mut node| {
@@ -597,11 +601,14 @@ where
             node.row_gap = Val::Px(CELL_GAP);
         })
         .row_wrap_cell_width(CELL_WIDTH)
-        .cells(
-            cell_data_options
-                .into_iter()
-                .map(move |cell_data_option| cell(cell_data_option, true)),
-        )
+        .cells(cell_data_options.into_iter().map(move |cell_data_option| {
+            let on_spawn_cell = on_spawn_cell.clone();
+            cell(cell_data_option, true).with_builder(move |builder| {
+                builder.on_spawn(move |world, entity| {
+                    on_spawn_cell(world, entity);
+                })
+            })
+        }))
 }
 
 fn set_icon_texture_atlas(rpg_icon_sheet: Res<RpgIconSheet>) {
@@ -678,9 +685,9 @@ fn side_column() -> impl Element {
         .items((0..4).map(|_| bern_cell(0.5, true)))
 }
 
-fn inventory_with_handles(handles: InventoryHandles) -> impl Element {
+fn inventory() -> impl Element {
     El::<Node>::new()
-        .align(Align::center())
+        .align_content(Align::center())
         .with_node(|mut node| {
             node.height = Val::Px(INVENTORY_SIZE);
             node.width = Val::Px(INVENTORY_SIZE);
@@ -717,7 +724,7 @@ fn inventory_with_handles(handles: InventoryHandles) -> impl Element {
                                         })
                                         .background_color(BackgroundColor(Color::BLACK)),
                                 )
-                                .item(side_column())
+                                .item(side_column()),
                         )
                         .item(
                             El::<Node>::new()
@@ -734,70 +741,86 @@ fn inventory_with_handles(handles: InventoryHandles) -> impl Element {
                                         .item(
                                             // need to add another wrapping node here so the special output `Down`
                                             // handler doesn't overwrite the default `cell` `Down` handler
-                                            El::<Node>::new()
-                                            .child({
+                                            El::<Node>::new().child({
                                                 let dragging_empty = SignalBuilder::from_resource::<Dragging>()
                                                     .map_in(|Dragging { item, .. }| item.is_none())
                                                     .dedupe();
-                                                let output_has_item = SignalBuilder::from_component_lazy::<CellContent>(handles.craft_output.clone())
-                                                    .map_in(|CellContent(x)| x.is_some())
+                                                let output_has_item =
+                                                    SignalBuilder::from_system(
+                                                        |_: In<()>,
+                                                         output: Option<
+                                                            Single<&CellContent, With<CraftOutputSlot>>,
+                                                        >| {
+                                                            Some(output.map(|c| c.0.is_some()).unwrap_or(false))
+                                                        },
+                                                    )
                                                     .dedupe();
-                                                let enabled = signal::and!(dragging_empty, output_has_item).dedupe();
-
-                                                cell_with_handle(handles.craft_output.clone(), None, false)
+                                                cell(None, false)
+                                                    .insert(CraftOutputSlot)
                                                     .with_builder(|builder| {
-                                                        builder
-                                                            .component_signal::<OutputPressDisabled, _>(
-                                                                enabled
-                                                                    .clone()
-                                                                    .map_in(|ok| !ok)
-                                                                    .dedupe()
-                                                                    .map_true_in(|| OutputPressDisabled),
-                                                            )
-                                                            .observe({
-                                                                let inputs = handles.craft_inputs.clone();
-                                                                move |press: On<Pointer<Press>>,
-                                                                      disabled: Query<&OutputPressDisabled>,
-                                                                      mut contents: Query<&mut CellContent>| {
-                                                                    if disabled.contains(press.entity) {
-                                                                        return;
-                                                                    }
-                                                                    for input in inputs.iter() {
-                                                                        if let Ok(mut c) = contents.get_mut(input.get()) {
-                                                                            c.0 = None;
-                                                                        }
-                                                                    }
+                                                        builder.component_signal(
+                                                            signal::all!(dragging_empty, output_has_item).dedupe()
+                                                                .clone()
+                                                                .not()
+                                                                .map_true_in(|| OutputPressDisabled),
+                                                        )
+                                                    })
+                                                    .observe({
+                                                        move |press: On<Pointer<Press>>,
+                                                              disabled: Query<&OutputPressDisabled>,
+                                                              input_cells: Query<(Entity, &ChildOf), With<CraftInputCell>>,
+                                                              children: Query<&Children>,
+                                                              mut contents: Query<&mut CellContent>| {
+                                                            if disabled.contains(press.entity) {
+                                                                return;
+                                                            }
+
+                                                            let Some(&ChildOf(parent)) =
+                                                                input_cells.iter().next().map(|(_, c)| c)
+                                                            else {
+                                                                return;
+                                                            };
+                                                            let Ok(children) = children.get(parent) else {
+                                                                return;
+                                                            };
+
+                                                            // Only consume/clear the inputs if a full recipe is present.
+                                                            // This prevents harvesting leftover output from wiping
+                                                            // partially-entered new inputs.
+                                                            let inputs_full = children.iter().take(4).all(|child| {
+                                                                contents.get(child).map(|c| c.0.is_some()).unwrap_or(false)
+                                                            });
+                                                            if !inputs_full {
+                                                                return;
+                                                            }
+
+                                                            for child in children.iter().take(4) {
+                                                                if let Ok(mut content) = contents.get_mut(child) {
+                                                                    content.0 = None;
                                                                 }
-                                                            })
+                                                            }
+                                                        }
                                                     })
                                                     .align(Align::center())
-                                            })
+                                            }),
                                         )
                                         .item(arrow())
                                         .item({
-                                            El::<Node>::new().with_node(|mut node| {
-                                                node.width = Val::Px(CELL_WIDTH * 2. + CELL_GAP);
-                                            })
-                                            .child({
-                                                let craft_inputs = handles.craft_inputs.clone();
-                                                let cells = (0..4).map(move |i| {
-                                                    cell_with_handle(
-                                                        craft_inputs[i].clone(),
-                                                        bern_cell_data_option(0.2),
-                                                        true,
+                                            El::<Node>::new()
+                                                .with_node(|mut node| {
+                                                    node.width = Val::Px(CELL_WIDTH * 2. + CELL_GAP);
+                                                    node.height = Val::Px(CELL_WIDTH * 2. + CELL_GAP);
+                                                })
+                                                .child({
+                                                    grid(
+                                                        (0..4).map(|_| bern_cell_data_option(0.2)),
+                                                        |world, entity| {
+                                                            if let Ok(mut entity) = world.get_entity_mut(entity) {
+                                                                entity.insert(CraftInputCell);
+                                                            }
+                                                        },
                                                     )
-                                                });
-                                                Grid::<Node>::new()
-                                                    .with_node(|mut node| {
-                                                        node.width = Val::Percent(100.);
-                                                        node.height = Val::Percent(100.);
-                                                        node.column_gap = Val::Px(CELL_GAP);
-                                                        node.row_gap = Val::Px(CELL_GAP);
-                                                    })
-                                                    .row_wrap_cell_width(CELL_WIDTH)
-                                                    .cells(cells)
-                                                    .align_content(Align::new().center_x())
-                                            })
+                                                })
                                         })
                                 }),
                         ),
@@ -806,7 +829,7 @@ fn inventory_with_handles(handles: InventoryHandles) -> impl Element {
                     El::<Node>::new()
                         .with_node(|mut node| node.width = Val::Percent(100.))
                         .child(
-                            grid((0..27).map(|_| bern_cell_data_option(0.5)))
+                            grid((0..27).map(|_| bern_cell_data_option(0.5)), |_, _| {})
                                 .align_content(Align::new().center_x()),
                         ),
                 )
@@ -820,25 +843,31 @@ fn inventory_with_handles(handles: InventoryHandles) -> impl Element {
         )
 }
 
-fn ui_root(handles: InventoryHandles) -> impl Element {
+fn ui_root() -> impl Element {
     Stack::<Node>::new()
         .cursor_disableable_signal(CursorIcon::default(), is_dragging_signal())
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
             node.height = Val::Percent(100.);
         })
-        .with_builder(|builder| {
-            builder
-                .insert(Pickable {
-                    should_block_lower: false,
-                    is_hoverable: false,
-                })
-                .observe(|move_: On<Pointer<Move>>, mut pointer: ResMut<PointerPosition>| {
-                    pointer.0 = move_.pointer_location.position;
-                })
+        .with_builder(move |builder| {
+            builder.on_spawn_with_system(
+                move |In(entity): In<_>, camera: Single<Entity, With<IsDefaultUiCamera>>, mut commands: Commands| {
+                    // https://github.com/bevyengine/bevy/discussions/11223
+                    if let Ok(mut commands) = commands.get_entity(entity) {
+                        commands.try_insert(UiTargetCamera(*camera));
+                    }
+                },
+            )
+        })
+        // Root is used for pointer tracking and global click/drag behavior.
+        // It must not be hoverable, otherwise it competes with cell cursors (Grab vs Default).
+        .insert(Pickable::default())
+        .observe(|move_: On<Pointer<Move>>, mut pointer: ResMut<PointerPosition>| {
+            pointer.0 = move_.pointer_location.position;
         })
         .align_content(Align::center())
-        .layer(inventory_with_handles(handles.clone()))
+        .layer(inventory())
         .layer_signal(is_dragging_signal().dedupe().map_true_in(move || {
             let index_signal = SignalBuilder::from_resource::<Dragging>()
                 .map_in(|Dragging { item, .. }| item.map(|d| d.index).unwrap_or(0))
@@ -848,15 +877,12 @@ fn ui_root(handles: InventoryHandles) -> impl Element {
                 .dedupe();
 
             icon(index_signal, count_signal)
-                .with_builder(|builder| {
-                    builder.on_spawn_with_system(
-                        |In(entity): In<Entity>, pointer: Res<PointerPosition>, mut nodes: Query<&mut Node>| {
-                            if let Ok(mut node) = nodes.get_mut(entity) {
-                                node.left = Val::Px(pointer.0.x - CELL_WIDTH / 2.);
-                                node.top = Val::Px(pointer.0.y - CELL_WIDTH / 2.);
-                            }
-                        },
-                    )
+                // Overlay must not block underlying cells from hover/click.
+                // Setting `should_block_lower: false` allows both the overlay and the cell under
+                // it to be hovered.
+                .insert(Pickable {
+                    should_block_lower: false,
+                    ..Pickable::default()
                 })
                 .cursor(CursorIcon::System(SystemCursorIcon::Grabbing))
                 .with_node(|mut node| {
@@ -865,6 +891,13 @@ fn ui_root(handles: InventoryHandles) -> impl Element {
                     node.position_type = PositionType::Absolute;
                 })
                 .global_z_index(GlobalZIndex(1))
+                .visibility(Visibility::Hidden)
+                .visibility_signal(
+                    pointer_position_signal()
+                        .first()
+                        .map_in(|_| Visibility::Visible)
+                        .map_in(Some),
+                )
                 .on_signal_with_node(pointer_position_signal(), set_dragging_position)
                 .type_erase()
         }))
@@ -873,27 +906,6 @@ fn ui_root(handles: InventoryHandles) -> impl Element {
 fn set_dragging_position(mut node: Mut<Node>, pointer_position: Vec2) {
     node.left = Val::Px(pointer_position.x - CELL_WIDTH / 2.);
     node.top = Val::Px(pointer_position.y - CELL_WIDTH / 2.);
-}
-
-fn register_crafting_outputter(world: &mut World, handles: InventoryHandles) -> SignalHandle {
-    SignalBuilder::from_system({
-        let inputs = handles.craft_inputs.clone();
-        move |_: In<()>, contents: Query<&CellContent>| {
-            let vals = [0usize, 1, 2, 3].map(|i| contents.get(inputs[i].get()).ok().and_then(|c| c.0));
-            Some(vals)
-        }
-    })
-    .dedupe()
-    .map({
-        let out = handles.craft_output.clone();
-        move |In(vals): In<[Option<CellData>; 4]>, mut contents: Query<&mut CellContent>| {
-            let all_filled = vals.iter().all(Option::is_some);
-            if let Ok(mut output) = contents.get_mut(out.get()) {
-                output.0 = all_filled.then(|| random_cell_data(&mut rand::rng()));
-            }
-        }
-    })
-    .register(world)
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]

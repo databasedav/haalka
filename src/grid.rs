@@ -13,7 +13,7 @@ use jonmo::{
 
 use super::{
     align::{Alignable, LayoutDirection},
-    element::{BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
+    element::{BuilderPassThrough, BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
     pointer_event_aware::{CursorOnHoverable, Hoverable, PointerEventAware, Pressable},
@@ -93,17 +93,9 @@ impl<NodeType> BuilderWrapper for Grid<NodeType> {
     fn builder_mut(&mut self) -> &mut JonmoBuilder {
         &mut self.builder
     }
-
-    fn into_builder(mut self) -> JonmoBuilder {
-        // TODO: why won't grid_template_columns work without a grid wrapper ?
-        let inner = std::mem::take(&mut self.builder);
-        JonmoBuilder::from(Node {
-            display: Display::Grid,
-            ..default()
-        })
-        .child(inner)
-    }
 }
+
+impl<NodeType> BuilderPassThrough for Grid<NodeType> {}
 
 impl<NodeType: Bundle> CursorOnHoverable for Grid<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Grid<NodeType> {}

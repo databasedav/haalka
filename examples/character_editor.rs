@@ -112,7 +112,7 @@ fn button(shape: Shape) -> impl Element {
             node.border = UiRect::all(Val::Px(5.));
         })
         .align_content(Align::center())
-        .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
+        .lazy_entity(lazy_entity.clone())
         .border_color_signal(
             selected_pressed_hovered_signal
                 .clone()
@@ -178,7 +178,7 @@ fn ui_root() -> impl Element {
                         .item({
                             let lazy_entity = LazyEntity::new();
                             El::<Node>::new()
-                                .with_builder(|builder| builder.insert(BackgroundColor(NORMAL_BUTTON)))
+                                .insert(BackgroundColor(NORMAL_BUTTON))
                                 .with_node(|mut node| node.height = Val::Px(BUTTON_HEIGHT))
                                 .child(
                                     TextInput::new()
@@ -200,7 +200,7 @@ fn ui_root() -> impl Element {
                                             color: Some(bevy::color::palettes::basic::GRAY.into()),
                                             ..default()
                                         })
-                                        .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
+                                        .lazy_entity(lazy_entity.clone())
                                         .on_change_with_system(
                                             |In((_, text)),
                                              mut scroll_pos: ResMut<ScrollPosition>,

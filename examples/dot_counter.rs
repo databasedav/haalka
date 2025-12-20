@@ -167,7 +167,7 @@ where
         .with_node(|mut node| node.width = Val::Px(45.0))
         .align_content(Align::center())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .with_builder(|builder| builder.lazy_entity(lazy_entity.clone()))
+        .lazy_entity(lazy_entity.clone())
         .background_color_signal(
             SignalBuilder::from_lazy_entity(lazy_entity)
                 .has_component::<Hovered>()

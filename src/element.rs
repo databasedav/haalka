@@ -11,6 +11,8 @@ use jonmo::{
     signal::{Signal, SignalExt},
 };
 
+use bevy_ecs::system::IntoObserverSystem;
+
 /// [`Element`]s are types that wrap [`JonmoBuilder`] and can be aligned using [haalka](crate)'s
 /// [simple alignability semantics](super::align::Align) and granted UI-specific abilities like
 /// [pointer event awareness](super::pointer_event_aware::PointerEventAware), [viewport
@@ -269,7 +271,7 @@ pub struct UiRoot;
 pub trait UiRootable: BuilderWrapper {
     /// Mark this node as the root of the UI tree.
     fn ui_root(self) -> Self {
-        self.with_builder(|builder| builder.insert(UiRoot).insert(Pickable::default()))
+        self.with_builder(|builder| builder.insert(UiRoot))
     }
 }
 
@@ -296,5 +298,32 @@ pub trait Nameable: BuilderWrapper {
             });
         }
         self
+    }
+}
+
+/// Pass-through convenience methods for a wrapped [`JonmoBuilder`].
+///
+/// This exists for the handful of low-level builder operations that are commonly needed while
+/// writing widgets, so callers don't have to spell `with_builder(|b| b.*)`.
+///
+/// This trait is intentionally **not** blanket-implemented for all [`BuilderWrapper`]s; instead,
+/// it is implemented for the base element types (`El`, `Row`, `Column`, etc.).
+pub trait BuilderPassThrough: BuilderWrapper {
+    /// Pass-through for [`JonmoBuilder::lazy_entity`].
+    fn lazy_entity(self, entity: jonmo::utils::LazyEntity) -> Self {
+        self.with_builder(|builder| builder.lazy_entity(entity))
+    }
+
+    /// Pass-through for [`JonmoBuilder::insert`].
+    fn insert<T: Bundle>(self, bundle: T) -> Self {
+        self.with_builder(|builder| builder.insert(bundle))
+    }
+
+    /// Pass-through for [`JonmoBuilder::observe`].
+    fn observe<E: EntityEvent, B: Bundle, Marker>(
+        self,
+        observer: impl IntoObserverSystem<E, B, Marker> + Sync,
+    ) -> Self {
+        self.with_builder(|builder| builder.observe(observer))
     }
 }
