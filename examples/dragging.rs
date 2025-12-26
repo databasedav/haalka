@@ -71,9 +71,10 @@ fn ui_root() -> impl Element {
             node.width = Val::Percent(100.0);
             node.height = Val::Percent(100.0);
         })
+        .insert(Pickable::default())
         .cursor_disableable_signal(
             CursorIcon::System(SystemCursorIcon::Default),
-            signal::or!(
+            signal::any!(
                 SignalBuilder::from_system(|In(_), presseds: Query<&Pressed>| !presseds.is_empty()).dedupe(),
                 SignalBuilder::from_system(|In(_), draggeds: Query<&Dragged>| !draggeds.is_empty()).dedupe(),
             ),
@@ -94,7 +95,7 @@ fn square(i: usize) -> impl Element {
         .background_color(BackgroundColor(random_color()))
         .global_z_index(GlobalZIndex(1))
         .cursor_signal(
-            signal::or!(
+            signal::any!(
                 SignalBuilder::from_lazy_entity(lazy_entity.clone())
                     .has_component::<Pressed>()
                     .dedupe(),

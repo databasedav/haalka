@@ -436,9 +436,6 @@ fn update_hover_states(
 struct ClickPropagationStopped;
 
 #[derive(Component)]
-struct OutPropagationStopped;
-
-#[derive(Component)]
 struct Pressable;
 
 // TODO: migrate to bevy's Pressed
@@ -602,7 +599,6 @@ pub trait CursorOnHoverable: PointerEventAware {
                         }
                     },
                 )
-                .insert(OutPropagationStopped)
                 .observe(|mut out: On<Pointer<Out>>, mut commands: Commands| {
                     out.propagate(false);
                     if let Ok(mut entity) = commands.get_entity(out.entity) {

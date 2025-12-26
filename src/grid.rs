@@ -109,39 +109,29 @@ impl<NodeType: Bundle> ViewportMutable for Grid<NodeType> {}
 pub const GRID_TRACK_FLOAT_PRECISION_SLACK: f32 = 0.001;
 
 impl<NodeType: Bundle> Grid<NodeType> {
-    /// Simple grid layout model [ported from MoonZoon](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/grid.rs#L95).
-    /// The `cell_width` passed is simply the width all cells must occupy without overflowing their
-    /// parent; if a cell with said width does overflow its parent, it will wrap around to the next
-    /// row.
+    /// Sets the width of each grid column. The grid will automatically create as many columns
+    /// as can fit within the container's width, wrapping items to new rows as needed.
     ///
-    /// For example, let's say our grid items where the letters A to E, where each letter occupies 1
-    /// unit of width. Then a `row_wrap_cell_width` of 3 would result in the following grid:
+    /// This uses CSS Grid's `auto-fill` behavior: `columns_per_row = floor(container_width / cell_width)`.
     ///
-    /// ```text
-    /// A B C
-    /// D E
-    /// ```
-    ///
-    /// `row_wrap_cell_width` of 2:
+    /// For example, with a 300px wide container and `row_wrap_cell_width(100.0)`:
     ///
     /// ```text
-    /// A B
-    /// C D
-    /// E
+    /// [  A  ][  B  ][  C  ]   <- 3 columns fit (300 / 100 = 3)
+    /// [  D  ][  E  ]
     /// ```
     ///
-    /// and 1:
+    /// With the same container but `row_wrap_cell_width(150.0)`:
+    ///
     /// ```text
-    /// A
-    /// B
-    /// C
-    /// D
-    /// E
+    /// [  A  ][  B  ]          <- 2 columns fit (300 / 150 = 2)
+    /// [  C  ][  D  ]
+    /// [  E  ]
     /// ```
     ///
-    /// While this grid layout definition is not nearly as rich as the [CSS grid layout](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout),
-    /// it may suffice for one's needs. If not, one can always use bevy_ui's CSS grid API directly
-    /// by modifiying the appropriate fields on any UI node's [`Node`] [`Component`].
+    /// For more complex grid layouts, modify the [`Node`] component's grid fields directly.
+    ///
+    /// Ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/grid.rs#L95).
     pub fn row_wrap_cell_width(self, cell_width_option: impl Into<Option<f32>>) -> Self {
         if let Some(cell_width) = cell_width_option.into() {
             self.with_builder(|builder| {

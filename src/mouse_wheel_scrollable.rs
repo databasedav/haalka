@@ -3,13 +3,14 @@
 
 use super::{
     pointer_event_aware::{HoverData, PointerEventAware},
-    utils::{clone, observe, register_system, remove_system_holder_on_remove},
+    utils::{clamp_scroll_position, clone, observe, register_system, remove_system_holder_on_remove},
     viewport_mutable::ViewportMutable,
 };
 use apply::Apply;
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use bevy_input::{mouse::*, prelude::*};
+use bevy_math::Vec2;
 use bevy_ui::prelude::*;
 use jonmo::signal::{Signal, SignalExt};
 use std::sync::{Arc, OnceLock};
@@ -27,7 +28,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
     /// component, run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`]
     /// and the [`MouseWheel`]. This method can be called repeatedly to register many such
     /// handlers.
-    fn on_scroll_with_system_disableable<Disabled: Component, Marker>(
+    fn on_scroll_disableable<Disabled: Component, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
@@ -60,18 +61,18 @@ pub trait MouseWheelScrollable: ViewportMutable {
     /// When this element receives a [`MouseWheel`] event, run a [`System`] which takes
     /// [`In`](`System::In`) this element's [`Entity`] and the [`MouseWheel`]. This method can
     /// be called repeatedly to register many such handlers.
-    fn on_scroll_with_system<Marker>(
+    fn on_scroll<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
-        self.on_scroll_with_system_disableable::<ScrollDisabled, Marker>(handler)
+        self.on_scroll_disableable::<ScrollDisabled, Marker>(handler)
     }
 
     /// When this element receives a [`MouseWheel`] event, run a system which takes
     /// [`In`](`System::In`) this element's [`Entity`] and the [`MouseWheel`], reactively
     /// controlling whether the handling is disabled with a [`Signal`]. This method can be
     /// called repeatedly to register many such handlers.
-    fn on_scroll_with_system_disableable_signal<Marker>(
+    fn on_scroll_disableable_signal<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
@@ -79,37 +80,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
         self.with_builder(|builder| {
             builder.component_signal::<ScrollDisabled, _>(blocked.map_true(|_: In<()>| ScrollDisabled::default()))
         })
-        .on_scroll_with_system_disableable::<ScrollDisabled, _>(handler)
-    }
-
-    /// When this element receives a [`MouseWheel`] event, if it does not have a `Disabled`
-    /// component, run a function with the [`MouseWheel`]. This method can be called repeatedly to
-    /// register many such handlers.
-    fn on_scroll_disableable<Disabled: Component>(
-        self,
-        mut handler: impl FnMut(MouseWheel) + Send + Sync + 'static,
-    ) -> Self {
-        self.on_scroll_with_system_disableable::<Disabled, _>(move |In((_, mouse_wheel))| handler(mouse_wheel))
-    }
-
-    /// When this element receives a [`MouseWheel`] event, run a function with the [`MouseWheel`].
-    /// This method can be called repeatedly to register many such handlers.
-    fn on_scroll(self, handler: impl FnMut(MouseWheel) + Send + Sync + 'static) -> Self {
-        self.on_scroll_disableable::<ScrollDisabled>(handler)
-    }
-
-    /// When this element receives a [`MouseWheel`] event, run a function with the [`MouseWheel`],
-    /// reactively controlling whether the handling is disabled with a [`Signal`]. This method can
-    /// be called repeatedly to register many such handlers.
-    fn on_scroll_disableable_signal(
-        self,
-        handler: impl FnMut(MouseWheel) + Send + Sync + 'static,
-        blocked: impl Signal<Item = bool> + Send + 'static,
-    ) -> Self {
-        self.with_builder(|builder| {
-            builder.component_signal::<ScrollDisabled, _>(blocked.map_true(|_: In<()>| ScrollDisabled::default()))
-        })
-        .on_scroll_disableable::<ScrollDisabled>(handler)
+        .on_scroll_disableable::<ScrollDisabled, _>(handler)
     }
 }
 
@@ -119,7 +90,7 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
     /// [`ScrollDisabled`] component, run a [`System`] which takes [`In`](`System::In`) this
     /// element's [`Entity`] and the [`MouseWheel`]. This method can be called repeatedly to
     /// register many such handlers.
-    fn on_scroll_with_system_on_hover<Marker>(
+    fn on_scroll_on_hover<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
@@ -132,14 +103,8 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
                 }
             }
         })
-        .on_scroll_with_system_disableable::<ScrollDisabled, _>(handler)
+        .on_scroll_disableable::<ScrollDisabled, _>(handler)
         .with_builder(|builder| builder.insert(ScrollDisabled))
-    }
-
-    /// When this element receives a [`MouseWheel`] event while it is hovered, run a function with
-    /// the [`MouseWheel`]. This method can be called repeatedly to register many such handlers.
-    fn on_scroll_on_hover(self, mut handler: impl FnMut(MouseWheel) + Send + Sync + 'static) -> Self {
-        self.on_scroll_with_system_on_hover::<_>(move |In((_, mouse_wheel))| handler(mouse_wheel))
     }
 }
 
@@ -234,7 +199,12 @@ impl BasicScrollHandler {
     pub fn into_system(
         self,
     ) -> Box<
-        dyn FnMut(In<(Entity, MouseWheel)>, Res<ButtonInput<KeyCode>>, Query<&mut ScrollPosition>)
+        dyn FnMut(
+                In<(Entity, MouseWheel)>,
+                Res<ButtonInput<KeyCode>>,
+                Query<&mut ScrollPosition>,
+                Query<&ComputedNode>,
+            )
             + Send
             + Sync
             + 'static,
@@ -242,7 +212,8 @@ impl BasicScrollHandler {
         let BasicScrollHandler { direction, magnitude } = self;
         let f = move |In((entity, mouse_wheel)): In<(Entity, MouseWheel)>,
                       keys: Res<ButtonInput<KeyCode>>,
-                      mut scroll_positions: Query<&mut ScrollPosition>| {
+                      mut scroll_positions: Query<&mut ScrollPosition>,
+                      computed_nodes: Query<&ComputedNode>| {
             let dy = scroll_normalizer(mouse_wheel.unit, mouse_wheel.y, magnitude);
             if let Ok(mut scroll_position) = scroll_positions.get_mut(entity) {
                 if matches!(direction, ScrollDirection::Vertical)
@@ -256,46 +227,16 @@ impl BasicScrollHandler {
                 {
                     scroll_position.x -= dy;
                 }
+
+                let clamped = clamp_scroll_position(
+                    Vec2::new(scroll_position.x, scroll_position.y),
+                    computed_nodes.get(entity).ok(),
+                );
+                scroll_position.x = clamped.x;
+                scroll_position.y = clamped.y;
             }
         };
         Box::new(f)
-    }
-
-    /// Convert this [`BasicScrollHandler`] into a system that reads scroll settings from
-    /// [`ScrollDirection`] and [`ScrollMagnitude`] components, allowing reactive updates.
-    /// If the components are not present, default values are used.
-    #[allow(clippy::type_complexity)]
-    pub fn component_based_system() -> impl FnMut(
-        In<(Entity, MouseWheel)>,
-        Res<ButtonInput<KeyCode>>,
-        Query<&mut ScrollPosition>,
-        Query<&ScrollDirection>,
-        Query<&ScrollMagnitude>,
-    ) + Send
-    + Sync
-    + 'static {
-        move |In((entity, mouse_wheel)): In<(Entity, MouseWheel)>,
-              keys: Res<ButtonInput<KeyCode>>,
-              mut scroll_positions: Query<&mut ScrollPosition>,
-              directions: Query<&ScrollDirection>,
-              magnitudes: Query<&ScrollMagnitude>| {
-            let direction = directions.get(entity).copied().unwrap_or(DEFAULT_SCROLL_DIRECTION);
-            let magnitude = magnitudes.get(entity).map(|m| m.0).unwrap_or(DEFAULT_SCROLL_MAGNITUDE);
-            let dy = scroll_normalizer(mouse_wheel.unit, mouse_wheel.y, magnitude);
-            if let Ok(mut scroll_position) = scroll_positions.get_mut(entity) {
-                if matches!(direction, ScrollDirection::Vertical)
-                    || matches!(direction, ScrollDirection::Both)
-                        && !(keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight))
-                {
-                    scroll_position.y -= dy;
-                } else if matches!(direction, ScrollDirection::Horizontal)
-                    || matches!(direction, ScrollDirection::Both)
-                        && (keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight))
-                {
-                    scroll_position.x -= dy;
-                }
-            }
-        }
     }
 }
 

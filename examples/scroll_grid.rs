@@ -16,7 +16,7 @@ fn main() {
                 .chars()
                 .cycle()
                 .skip(i)
-                .take(26)
+                .take(letters.len())
                 .enumerate()
                 .map(|(j, letter)| LetterColor {
                     letter: letter.to_string(),
@@ -31,7 +31,7 @@ fn main() {
                 .chars()
                 .cycle()
                 .skip(i)
-                .take(26)
+                .take(letters.len())
                 .map(|letter| LetterColor {
                     letter: letter.to_string(),
                     color: ROYGBIV[i].into(),
@@ -41,22 +41,31 @@ fn main() {
         .collect::<Vec<_>>();
     App::new()
         .add_plugins(examples_plugin)
+        .insert_resource(Rails { vertical, horizontal })
+        .insert_resource(Shifted(false))
+        .insert_resource(Cells::new())
         .add_systems(
             Startup,
             (
                 |world: &mut World| {
-                    ui_root().spawn(world);
+                    let cell_data: Vec<_> = {
+                        let cells = world.resource::<Cells>();
+                        (0..5)
+                            .flat_map(|x| (0..5).map(move |y| (x, y, cells.0[x][y].clone())))
+                            .collect()
+                    };
+                    ui_root(cell_data).spawn(world);
                 },
                 camera,
             ),
         )
         .add_systems(Update, (scroller.run_if(resource_exists::<HoveredCell>), shifter))
-        .insert_resource(Rails { vertical, horizontal })
-        .insert_resource(Shifted(false))
         .run();
 }
 
 const LETTER_SIZE: f32 = 54.167; // 65 / 1.2
+const CELL_SIZE: f32 = 66.;
+const NUM_VISIBLE: usize = 5;
 
 #[derive(Clone, Copy)]
 enum Scroll {
@@ -67,27 +76,47 @@ enum Scroll {
 #[derive(Resource)]
 struct HoveredCell(usize, usize);
 
+#[derive(Component, Clone)]
+struct CellPosition(usize, usize);
+
+#[derive(Component, Clone, Default)]
+struct LetterColorComponent(LetterColor);
+
 #[rustfmt::skip]
 fn letter(
     x: usize,
     y: usize,
-    letter_color: impl Signal<Item = LetterColor> + Send + Sync + 'static,
+    initial: LetterColor,
 ) -> impl Element {
-    let letter_color = letter_color.broadcast();
-    let letter = letter_color.signal_ref(|LetterColor { letter, .. }| letter.clone());
-    let color = letter_color.signal_ref(|LetterColor { color, .. }| *color);
-    El::<Text>::new()
-    .on_hovered_change(move |is_hovered| {
-        if is_hovered {
-            async_world().insert_resource(HoveredCell(x, y)).apply(spawn).detach()
+    let lazy_entity = LazyEntity::new();
+    let letter_color = SignalBuilder::from_component_lazy::<LetterColorComponent>(lazy_entity.clone())
+        .map_in(|LetterColorComponent(lc)| lc);
+    let letter = letter_color.clone().map_in(|LetterColor { letter, .. }| letter).dedupe();
+    let color = letter_color.map_in(|LetterColor { color, .. }| color).dedupe();
+    El::<Node>::new()
+    .lazy_entity(lazy_entity.clone())
+    .insert(CellPosition(x, y))
+    .insert(LetterColorComponent(initial))
+    .insert(Pickable::default())
+    .with_node(|mut node| {
+        node.width = Val::Px(CELL_SIZE);
+        node.height = Val::Px(CELL_SIZE);
+    })
+    .align_content(Align::center())
+    .on_hovered_change(move |In((_, data)): In<(Entity, HoverData)>, mut commands: Commands| {
+        if data.hovered {
+            commands.insert_resource(HoveredCell(x, y));
         }
     })
-    .text_font(TextFont::from_font_size(LETTER_SIZE))
-    .text_color_signal(color.map(TextColor))
-    .text_signal(letter.map(Text))
+    .child(
+        El::<Text>::new()
+        .text_font(TextFont::from_font_size(LETTER_SIZE))
+        .text_color_signal(color.map_in(TextColor).map_in(Some))
+        .text_signal(letter.map_in(Text).map_in(Some))
+    )
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 struct LetterColor {
     letter: String,
     color: Color,
@@ -109,49 +138,61 @@ const ROYGBIV: &[Srgba] = &[
     bevy::color::palettes::css::VIOLET,
 ];
 
-static CELLS: LazyLock<Vec<Vec<Mutable<LetterColor>>>> = LazyLock::new(|| {
-    let cells = (0..5)
-        .map(|_| (0..5).map(|_| Mutable::new(default())).collect::<Vec<_>>())
-        .collect::<Vec<_>>();
-    let letters = "abcdefghijklmnopqrstuvwxyz";
-    for i in 0..5 {
-        for (j, letter) in letters.chars().skip(i).take(5).enumerate() {
-            cells[i][j].set(LetterColor {
-                letter: letter.to_string(),
-                color: ROYGBIV[i].into(),
-            });
-        }
-    }
-    cells
-});
+#[derive(Resource)]
+struct Cells([[LetterColor; 5]; 5]);
 
-fn ui_root() -> impl Element {
+impl Cells {
+    fn new() -> Self {
+        let letters = "abcdefghijklmnopqrstuvwxyz";
+        let mut cells = [[(); 5]; 5].map(|row| row.map(|_| LetterColor::default()));
+        for i in 0..5 {
+            for (j, letter) in letters.chars().skip(i).take(5).enumerate() {
+                cells[i][j] = LetterColor {
+                    letter: letter.to_string(),
+                    color: ROYGBIV[i].into(),
+                };
+            }
+        }
+        Self(cells)
+    }
+}
+
+fn ui_root(cell_data: Vec<(usize, usize, LetterColor)>) -> impl Element {
+    let shifted = SignalBuilder::from_resource::<Shifted>()
+        .map_in(|Shifted(s)| s)
+        .dedupe();
     El::<Node>::new()
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
             node.height = Val::Percent(100.);
         })
+        .insert(Pickable::default())
+        .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(
             Grid::<Node>::new()
-                .on_hovered_change(move |is_hovered| {
-                    if !is_hovered {
-                        async_world().remove_resource::<HoveredCell>().apply(spawn).detach()
+                .insert(Pickable::default())
+                .on_hovered_change(|In((_, data)): In<(Entity, HoverData)>, mut commands: Commands| {
+                    if !data.hovered {
+                        commands.remove_resource::<HoveredCell>();
                     }
                 })
-                .row_wrap_cell_width(48.)
+                .cursor_signal(
+                    shifted
+                        .map_bool_in(
+                            || SystemCursorIcon::EwResize,
+                            || SystemCursorIcon::NsResize,
+                        )
+                        .map_in(CursorIcon::System)
+                        .dedupe(),
+                )
+                .row_wrap_cell_width(CELL_SIZE)
                 .with_node(|mut node| {
-                    node.width = Val::Px(300.);
-                    node.height = Val::Px(5. * LETTER_SIZE);
-                    node.column_gap = Val::Px(15.);
+                    node.width = Val::Px(CELL_SIZE * NUM_VISIBLE as f32);
+                    node.height = Val::Px(CELL_SIZE * NUM_VISIBLE as f32);
                 })
                 .align(Align::center())
-                .cells(CELLS.iter().enumerate().flat_map(|(x, cells)| {
-                    cells
-                        .iter()
-                        .enumerate()
-                        .map(move |(y, cell)| letter(x, y, cell.signal_cloned()))
-                })),
+                .cells(cell_data.into_iter().map(|(x, y, lc)| letter(x, y, lc))),
         )
 }
 
@@ -160,6 +201,8 @@ fn scroller(
     hovered_cell: Res<HoveredCell>,
     mut rails: ResMut<Rails>,
     shifted: Res<Shifted>,
+    mut cells: ResMut<Cells>,
+    mut letter_colors: Query<(&CellPosition, &mut LetterColorComponent)>,
 ) {
     for mouse_wheel_event in mouse_wheel_events.read() {
         let scroll = if mouse_wheel_event.y.is_sign_negative() {
@@ -176,16 +219,16 @@ fn scroller(
                     for (v, h) in vertical.iter_mut().zip(horizontal[x].iter()) {
                         v[x] = h.clone();
                     }
-                    for (cell, v) in CELLS[x].iter().zip(horizontal[x].iter()) {
-                        cell.set(v.clone());
+                    for (j, v) in horizontal[x].iter().take(5).enumerate() {
+                        cells.0[x][j] = v.clone();
                     }
                 } else {
                     vertical[y].rotate_left(1);
                     for (h, v) in horizontal.iter_mut().zip(vertical[y].iter()) {
                         h[y] = v.clone();
                     }
-                    for (cell, v) in CELLS.iter().zip(vertical[y].iter()) {
-                        cell[y].set(v.clone());
+                    for (i, v) in vertical[y].iter().take(5).enumerate() {
+                        cells.0[i][y] = v.clone();
                     }
                 }
             }
@@ -195,24 +238,29 @@ fn scroller(
                     for (v, h) in vertical.iter_mut().zip(horizontal[x].iter()) {
                         v[x] = h.clone();
                     }
-                    for (cell, v) in CELLS[x].iter().zip(horizontal[x].iter()) {
-                        cell.set(v.clone());
+                    for (j, v) in horizontal[x].iter().take(5).enumerate() {
+                        cells.0[x][j] = v.clone();
                     }
                 } else {
                     vertical[y].rotate_right(1);
                     for (h, v) in horizontal.iter_mut().zip(vertical[y].iter()) {
                         h[y] = v.clone();
                     }
-                    for (cell, v) in CELLS.iter().zip(vertical[y].iter()) {
-                        cell[y].set(v.clone());
+                    for (i, v) in vertical[y].iter().take(5).enumerate() {
+                        cells.0[i][y] = v.clone();
                     }
                 }
             }
         }
+        // Update the LetterColorComponent on the ECS entities
+        for (pos, mut lc) in letter_colors.iter_mut() {
+            let CellPosition(px, py) = *pos;
+            lc.0 = cells.0[px][py].clone();
+        }
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Clone, Copy)]
 struct Shifted(bool);
 
 fn shifter(keys: Res<ButtonInput<KeyCode>>, mut shifted: ResMut<Shifted>) {

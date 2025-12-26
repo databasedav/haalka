@@ -8,7 +8,7 @@ use std::{
 
 use super::{
     element::BuilderWrapper,
-    utils::{clone, observe, register_system, remove_system_holder_on_remove},
+    utils::{clone, max_scroll_offset, observe, register_system, remove_system_holder_on_remove},
 };
 use apply::Apply;
 use bevy_app::prelude::*;
@@ -63,16 +63,6 @@ struct MutableViewportEvent {
 #[derive(Component)]
 pub struct OnViewportLocationChange;
 
-/// Along which axes the [`Viewport`] can be mutated.
-pub enum Axis {
-    #[allow(missing_docs)]
-    Horizontal,
-    #[allow(missing_docs)]
-    Vertical,
-    #[allow(missing_docs)]
-    Both,
-}
-
 /// Sentinel component to store the last scroll position set by a signal.
 /// This is used to break feedback loops in two-way bindings.
 #[derive(Component, Default, Debug)]
@@ -88,16 +78,12 @@ pub trait ViewportMutable: BuilderWrapper {
     /// CRITICALLY NOTE, methods expecting viewport mutability will not function without calling
     /// this method. I could not find a way to enforce this at compile time; please let me know if
     /// you can.
-    fn mutable_viewport(self, axis: Axis) -> Self {
+    fn mutable_viewport(self, overflow: Overflow) -> Self {
         self.with_builder(move |builder| {
             builder
                 .insert(MutableViewport::default())
                 .with_component::<Node>(move |mut node| {
-                    node.overflow = match axis {
-                        Axis::Horizontal => Overflow::scroll_x(),
-                        Axis::Vertical => Overflow::scroll_y(),
-                        Axis::Both => Overflow::scroll(),
-                    }
+                    node.overflow = overflow;
                 })
         })
     }
@@ -105,7 +91,7 @@ pub trait ViewportMutable: BuilderWrapper {
     /// When this element's [`Scene`] or [`Viewport`] changes, run a [`System`] which takes
     /// [`In`](`System::In`) this element's [`Entity`], [`Scene`], and [`Viewport`]. This method
     /// can be called repeatedly to register many such handlers.
-    fn on_viewport_location_change_with_system<Marker>(
+    fn on_viewport_location_change<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, (Scene, Viewport))>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
@@ -125,12 +111,6 @@ pub trait ViewportMutable: BuilderWrapper {
         })
     }
 
-    /// When this element's [`Scene`] or [`Viewport`] changes, run a function with its [`Scene`] and
-    /// [`Viewport`]. This method can be called repeatedly to register many such handlers.
-    fn on_viewport_location_change(self, mut handler: impl FnMut(Scene, Viewport) + Send + Sync + 'static) -> Self {
-        self.on_viewport_location_change_with_system(move |In((_, (scene, viewport)))| handler(scene, viewport))
-    }
-
     /// Reactively set the horizontal position of the viewport.
     fn viewport_x_signal<S: Signal<Item = f32> + Send + 'static>(
         mut self,
@@ -141,12 +121,25 @@ pub trait ViewportMutable: BuilderWrapper {
                 builder.insert(LastSignalScrollPosition::default()).on_signal(
                     x_signal,
                     |In((entity, x)): In<(Entity, f32)>,
-                     mut query: Query<(&mut ScrollPosition, &mut LastSignalScrollPosition)>| {
-                        if let Ok((mut scroll_pos, mut last_signal_pos)) = query.get_mut(entity)
+                     mut query: Query<(
+                        &mut ScrollPosition,
+                        &mut LastSignalScrollPosition,
+                        Option<&ComputedNode>,
+                     )>| {
+                        if let Ok((mut scroll_pos, mut last_signal_pos, maybe_node)) =
+                            query.get_mut(entity)
                             && last_signal_pos.x.to_bits() != x.to_bits()
                         {
-                            last_signal_pos.x = x;
-                            scroll_pos.x = x;
+                            let mut target = x;
+
+                            target = if let Some(node) = maybe_node {
+                                target.clamp(0.0, max_scroll_offset(node).x)
+                            } else {
+                                target.max(0.0)
+                            };
+
+                            last_signal_pos.x = target;
+                            scroll_pos.x = target;
                         }
                     },
                 )
@@ -165,12 +158,25 @@ pub trait ViewportMutable: BuilderWrapper {
                 builder.insert(LastSignalScrollPosition::default()).on_signal(
                     y_signal,
                     |In((entity, y)): In<(Entity, f32)>,
-                     mut query: Query<(&mut ScrollPosition, &mut LastSignalScrollPosition)>| {
-                        if let Ok((mut scroll_pos, mut last_signal_pos)) = query.get_mut(entity)
+                     mut query: Query<(
+                        &mut ScrollPosition,
+                        &mut LastSignalScrollPosition,
+                        Option<&ComputedNode>,
+                     )>| {
+                        if let Ok((mut scroll_pos, mut last_signal_pos, maybe_node)) =
+                            query.get_mut(entity)
                             && last_signal_pos.y.to_bits() != y.to_bits()
                         {
-                            last_signal_pos.y = y;
-                            scroll_pos.y = y;
+                            let mut target = y;
+
+                            target = if let Some(node) = maybe_node {
+                                target.clamp(0.0, max_scroll_offset(node).y)
+                            } else {
+                                target.max(0.0)
+                            };
+
+                            last_signal_pos.y = target;
+                            scroll_pos.y = target;
                         }
                     },
                 )
@@ -183,14 +189,14 @@ pub trait ViewportMutable: BuilderWrapper {
 /// Use to fetch the logical pixel coordinates of the UI node, based on its [`GlobalTransform`].
 #[derive(SystemParam)]
 pub struct LogicalRect<'w, 's> {
-    data: Query<'w, 's, (&'static ComputedNode, &'static GlobalTransform)>,
+    data: Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
 }
 
 impl LogicalRect<'_, '_> {
     /// Get the logical pixel coordinates of the UI node, based on its [`GlobalTransform`].
     pub fn get(&self, entity: Entity) -> Option<Rect> {
         if let Ok((computed_node, global_transform)) = self.data.get(entity) {
-            return Rect::from_center_size(global_transform.translation().xy(), computed_node.size()).apply(Some);
+            return Rect::from_center_size(global_transform.translation.xy(), computed_node.size()).apply(Some);
         }
         None
     }

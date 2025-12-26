@@ -41,8 +41,8 @@ fn ui_root() -> impl Element {
                 .item(counter_button(counter_holder.clone(), "-", -1))
                 .item(
                     El::<Text>::new().text_font(TextFont::from_font_size(25.)).text_signal(
-                        SignalBuilder::from_component_lazy(counter_holder.clone())
-                            .map_in(|counter: Counter| *counter)
+                        SignalBuilder::from_component_lazy::<Counter>(counter_holder.clone())
+                            .map_in(deref_copied)
                             .dedupe()
                             .map_in_ref(ToString::to_string)
                             .map_in(Text)

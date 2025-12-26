@@ -8,7 +8,6 @@
 use bevy_app::prelude::*;
 
 use bevy_ecs::schedule::IntoScheduleConfigs;
-// Re-export jonmo for direct access
 pub use jonmo;
 
 pub mod align;
@@ -92,7 +91,7 @@ pub mod prelude {
         },
         row::Row,
         stack::Stack,
-        viewport_mutable::{Axis, ViewportMutable},
+        viewport_mutable::{ViewportMutable},
     };
 
     pub use bevy_window::{CursorIcon, SystemCursorIcon};

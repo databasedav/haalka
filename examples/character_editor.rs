@@ -37,7 +37,6 @@ fn main() {
             ),
         )
         .insert_resource(SelectedShape(Shape::Cuboid))
-        .insert_resource(ScrollPosition::default())
         .add_observer(
             |event: On<SetShape>,
              character: Single<Entity, With<MeshMaterial3d<StandardMaterial>>>,
@@ -81,9 +80,6 @@ enum Shape {
 #[derive(Resource, Clone, Copy, PartialEq, Deref, DerefMut)]
 struct SelectedShape(Shape);
 
-#[derive(Resource, Clone, Copy, PartialEq, Default, Deref, DerefMut)]
-struct ScrollPosition(f32);
-
 fn button(shape: Shape) -> impl Element {
     let lazy_entity = LazyEntity::new();
 
@@ -105,6 +101,7 @@ fn button(shape: Shape) -> impl Element {
         .dedupe();
 
     El::<Node>::new()
+        .insert(Pickable::default())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .with_node(|mut node| {
             node.width = Val::Px(BUTTON_WIDTH);
@@ -156,6 +153,7 @@ fn button(shape: Shape) -> impl Element {
 fn ui_root() -> impl Element {
     El::<Node>::new()
         .ui_root()
+        .insert(Pickable::default())
         .cursor(CursorIcon::default())
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
@@ -168,7 +166,8 @@ fn ui_root() -> impl Element {
                     node.width = Val::Percent(100.);
                     node.height = Val::Percent(100.);
                 })
-                .layer(
+                .layer({
+                    let shape_buttons = LazyEntity::new();
                     Column::<Node>::new()
                         .align(Align::new().center_y().right())
                         .with_node(|mut node| {
@@ -176,10 +175,13 @@ fn ui_root() -> impl Element {
                             node.row_gap = Val::Px(20.);
                         })
                         .item({
-                            let lazy_entity = LazyEntity::new();
+                            let text_input = LazyEntity::new();
                             El::<Node>::new()
-                                .insert(BackgroundColor(NORMAL_BUTTON))
+                                .insert((BackgroundColor(NORMAL_BUTTON), Pickable::default()))
+                                .cursor(CursorIcon::System(SystemCursorIcon::Text))
                                 .with_node(|mut node| node.height = Val::Px(BUTTON_HEIGHT))
+                                .on_click(clone!((text_input) move |In(_), mut input_focus: ResMut<InputFocus>| input_focus.0 = Some(*text_input)))
+                                .on_click_outside(|In(_), mut input_focus: ResMut<InputFocus>| input_focus.0 = None)
                                 .child(
                                     TextInput::new()
                                         .with_node(|mut node| {
@@ -193,49 +195,46 @@ fn ui_root() -> impl Element {
                                             // TODO: https://github.com/ickshonpe/bevy_ui_text_input/issues/10
                                             // node.justification = Justify::Center;
                                         })
-                                        .cursor(CursorIcon::System(SystemCursorIcon::Text))
                                         .text_color(TextColor(Color::WHITE))
                                         .text_input_prompt(TextInputPrompt {
                                             text: "name".to_string(),
                                             color: Some(bevy::color::palettes::basic::GRAY.into()),
                                             ..default()
                                         })
-                                        .lazy_entity(lazy_entity.clone())
-                                        .on_change_with_system(
-                                            |In((_, text)),
-                                             mut scroll_pos: ResMut<ScrollPosition>,
+                                        .lazy_entity(text_input.clone())
+                                        .on_change(
+                                            clone!((shape_buttons) move |In((_, text)),
+                                             mut scroll_positions: Query<&mut ScrollPosition>,
                                              mut commands: Commands| {
                                                 if let Some((i, shape)) = Shape::iter()
                                                     .enumerate()
                                                     .find(|(_, shape)| shape.to_string() == text)
                                                 {
                                                     commands.trigger(SetShape(shape));
-                                                    **scroll_pos = i as f32 * BUTTON_HEIGHT;
+                                                    scroll_positions.get_mut(*shape_buttons).unwrap().y = i as f32 * BUTTON_HEIGHT;
                                                 }
-                                            },
-                                        )
-                                        .on_click_outside(|In(_), mut commands: Commands| {
-                                            commands.insert_resource(InputFocus(None))
-                                        }),
+                                            }
+                                        ))
+                                        ,
                                 )
                         })
                         .item({
                             Column::<Node>::new()
+                                .lazy_entity(shape_buttons)
                                 .with_node(|mut node| node.height = Val::Px(200.))
                                 .align(Align::new().center_x())
-                                .mutable_viewport(haalka::prelude::Axis::Vertical)
-                                .on_scroll_with_system_on_hover(
+                                .insert(Pickable::default())
+                                .mutable_viewport(Overflow::scroll_y())
+                                .on_hovered_change(|In((_, hover_data)): In<(Entity, HoverData)>| bevy_log::debug!("Hover data changed: hovered={}", hover_data.hovered))
+                                .on_scroll_on_hover(
                                     BasicScrollHandler::new()
                                         .direction(ScrollDirection::Vertical)
                                         .pixels(20.)
                                         .into_system(),
                                 )
-                                .viewport_y_signal(
-                                    SignalBuilder::from_resource::<ScrollPosition>().map_in(deref_copied),
-                                )
                                 .items(Shape::iter().map(button))
-                        }),
-                ),
+                        })
+                }),
         )
 }
 

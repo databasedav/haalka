@@ -5,8 +5,11 @@
 
 mod utils;
 use bevy_input_focus::InputFocus;
-use bevy_ui_text_input::TextInputMode;
+use bevy_ui_text_input::{TextInputContents, TextInputMode};
 use utils::*;
+
+use std::collections::HashMap;
+use std::cmp::Ordering;
 
 use bevy::prelude::*;
 use haalka::{
@@ -17,8 +20,8 @@ use haalka::{
 fn main() {
     App::new()
         .add_plugins(examples_plugin)
-        .add_systems(Startup, (|world: &mut World| initialize(world), camera))
-        .add_systems(Update, (tabber, escaper, autofocus))
+        .add_systems(Startup, (init, camera))
+        .add_systems(Update, (tabber, escaper))
         .run();
 }
 
@@ -28,52 +31,62 @@ const STARTING_SORTED_BY: KeyValue = KeyValue::Key;
 const PADDING: f32 = 10.;
 static DARK_GRAY: LazyLock<Color> = LazyLock::new(|| Srgba::gray(0.25).into());
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Resource)]
 enum KeyValue {
     Key,
     Value,
 }
 
-#[derive(Resource, Clone, Copy)]
-struct SortBy(KeyValue);
+#[derive(Component, Clone, Deref, DerefMut)]
+struct KeyString(String);
 
-#[derive(Resource, Clone)]
-struct Pairs(MutableVec<RowData>);
-
-#[derive(Resource, Default)]
-struct NextRowId(u64);
-
-#[derive(Component, Clone, Copy, PartialEq, Eq)]
-struct RowId(u64);
-
-#[derive(Component, Clone, Copy, PartialEq, Eq)]
-enum Field {
-    Key,
-    Value,
+impl From<String> for KeyString {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
 }
 
-#[derive(Component, Clone, Copy, PartialEq, Eq)]
-struct RowField {
-    row_id: RowId,
-    field: Field,
+#[derive(Component, Clone, Deref, DerefMut)]
+struct ValueString(String);
+
+impl From<String> for ValueString {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
 }
 
-#[derive(Component)]
-struct AutoFocus;
+#[derive(Component, Clone, Copy)]
+struct ModelEntityRef(Entity);
 
-#[derive(Clone)]
-struct RowData {
-    id: RowId,
-    key: String,
-    value: String,
-    autofocus_key: bool,
+#[derive(Component, Clone, Copy, PartialEq, Eq, Hash)]
+struct InputField(KeyValue);
+
+#[derive(Component, Clone, Copy)]
+struct FocusOnSpawn(KeyValue);
+
+#[derive(Resource, Clone, Deref, DerefMut)]
+struct Pairs(MutableVec<Entity>);
+
+const ROW_GAP: f32 = 10.;
+const ROW_STEP: f32 = INPUT_HEIGHT + ROW_GAP; // 50px per row
+
+// fn clear_focus(foci: &mut Query<&mut Focused>) {
+//     for mut focus in foci.iter_mut() {
+//         *focus = Focused(false);
+//     }
+// }
+
+fn sort_by_text_element() -> El<Text> {
+    El::<Text>::new()
+        .text_font(TextFont::from_font_size(60.))
+        .text_color(TextColor(Color::WHITE))
+        .text(Text::new("sort by"))
 }
 
-fn initialize(world: &mut World) {
-    world.insert_resource(SortBy(STARTING_SORTED_BY));
-    world.insert_resource(NextRowId(0));
+fn init(world: &mut World) {
+    world.insert_resource(STARTING_SORTED_BY);
 
-    let mut initial_pairs = [
+    let mut pairs = [
         ("lorem", "ipsum"),
         ("dolor", "sit"),
         ("amet", "consectetur"),
@@ -108,92 +121,70 @@ fn initialize(world: &mut World) {
     .into_iter()
     .collect::<Vec<_>>();
 
-    match STARTING_SORTED_BY {
-        KeyValue::Key => initial_pairs.sort_by_key(|&(k, _)| k),
-        KeyValue::Value => initial_pairs.sort_by_key(|&(_, v)| v),
-    }
+    pairs.sort_by(|(a_key, a_value), (b_key, b_value)| match STARTING_SORTED_BY {
+        KeyValue::Key => cmp_text(a_key, b_key),
+        KeyValue::Value => cmp_text(a_value, b_value),
+    });
 
-    let mut next_id = world.resource::<NextRowId>().0;
-    let initial_values = initial_pairs
+    let model_entities = pairs
         .into_iter()
         .map(|(key, value)| {
-            let id = RowId(next_id);
-            next_id += 1;
-            RowData {
-                id,
-                key: key.to_string(),
-                value: value.to_string(),
-                autofocus_key: false,
-            }
+            world
+                .spawn((KeyString(key.to_string()), ValueString(value.to_string())))
+                .id()
         })
         .collect::<Vec<_>>();
-    world.resource_mut::<NextRowId>().0 = next_id;
 
-    let pairs = MutableVecBuilder::from(initial_values).spawn(world);
-    world.insert_resource(Pairs(pairs.clone()));
+    let pairs = Pairs(MutableVecBuilder::from(model_entities).spawn(world));
+    world.insert_resource(pairs.clone());
 
-    let viewport_holder = LazyEntity::new();
-    ui_root(pairs, viewport_holder).spawn(world);
+    ui_root(pairs).spawn(world);
 }
 
 fn text_input(
-    pairs: MutableVec<RowData>,
-    row_id: RowId,
-    field: Field,
-    initial_text: String,
-    autofocus: bool,
+    model_entity: Entity,
+    field: KeyValue,
+    initial: String,
 ) -> impl Element {
-    let text_input_holder = LazyEntity::new();
-
-    // Focused if the InputFocus resource points at this TextInput entity.
-    let focused_signal = SignalBuilder::from_system(
-        clone!((text_input_holder) move |_: In<()>, focus: Option<Res<InputFocus>>| {
-            Some(
-                focus
-                    .as_deref()
-                    .map(|f| f.0 == Some(text_input_holder.get()))
-                    .unwrap_or(false),
-            )
-        }),
-    )
-    .dedupe();
+    let ui_entity = LazyEntity::new();
+    let focused = SignalBuilder::from_resource::<InputFocus>()
+        .map_in(clone!((ui_entity) move |focus| focus.0 == Some(*ui_entity)))
+        .dedupe();
 
     El::<Node>::new()
-        .apply(border_radius_style(10.))
+        .insert(BorderRadius::all(Val::Px(10.)))
+        .insert(Pickable::default())
         .with_node(|mut node| {
             node.height = Val::Px(INPUT_HEIGHT);
             node.width = Val::Px(INPUT_WIDTH);
             node.overflow = Overflow::clip();
         })
         .background_color_signal(
-            focused_signal
+            focused
                 .clone()
                 .map_bool_in(|| Color::WHITE, || *DARK_GRAY)
                 .map_in(BackgroundColor)
                 .map_in(Some),
         )
         .cursor(CursorIcon::System(SystemCursorIcon::Text))
-        .on_click(clone!((text_input_holder) move |_: In<_>, mut input_focus: ResMut<InputFocus>| {
-            input_focus.0 = Some(text_input_holder.get());
+        .on_click(clone!((ui_entity) move |In(_), mut input_focus: ResMut<InputFocus>| {
+            input_focus.0 = Some(*ui_entity);
         }))
-        .on_click_outside(clone!((text_input_holder) move |_: In<_>, mut input_focus: ResMut<InputFocus>| {
-            if input_focus.0 == Some(text_input_holder.get()) {
+        .on_click_outside(clone!((ui_entity) move |In(_), mut input_focus: ResMut<InputFocus>| {
+            if input_focus.0 == Some(*ui_entity) {
                 input_focus.0 = None;
             }
         }))
         .child(
             TextInput::new()
+                .lazy_entity(ui_entity.clone())
+                .insert((
+                    TextInputContents::default(),
+                    ModelEntityRef(model_entity),
+                    InputField(field),
+                ))
+                .text(initial)
                 .align(Align::new().center_y())
-                .with_builder(|builder| {
-                    let builder = builder
-                        .lazy_entity(text_input_holder.clone())
-                        .insert(RowField { row_id, field });
-                    if autofocus {
-                        builder.insert(AutoFocus)
-                    } else {
-                        builder
-                    }
-                })
                 .with_node(|mut node| {
                     node.left = Val::Px(PADDING);
                     node.width = Val::Px(INPUT_WIDTH - PADDING * 2.);
@@ -204,129 +195,208 @@ fn text_input(
                     // TODO: https://github.com/ickshonpe/bevy_ui_text_input/issues/10
                     // node.justification = JustifyText::Center;
                 })
+                .with_builder(move |builder| {
+                    builder.on_spawn(move |world: &mut World, entity: Entity| {
+                        if world
+                            .get::<FocusOnSpawn>(model_entity)
+                            .is_some_and(|focus| focus.0 == field)
+                        {
+                            world.resource_mut::<InputFocus>().0 = Some(entity);
+                            world.entity_mut(model_entity).remove::<FocusOnSpawn>();
+                        }
+                    })
+                })
                 .text_color_signal(
-                    focused_signal
+                    focused
                         .clone()
                         .map_bool_in(|| Color::BLACK, || Color::WHITE)
                         .map_in(TextColor)
                         .map_in(Some),
                 )
-                .focus_signal(focused_signal.clone())
-                .text(initial_text)
-                .on_focused_change_with_system(clone!((pairs) move |In((entity, is_focused)): In<(Entity, bool)>, contents: Query<&bevy_ui_text_input::TextInputContents>, sort_by: Res<SortBy>, mut pairs_data: Query<&mut MutableVecData<RowData>>| {
-                    if !is_focused {
-                        if let Ok(contents) = contents.get(entity) {
-                            let text = contents.get().to_string();
-                            {
-                                let mut guard = pairs.write(&mut pairs_data);
-                                for i in 0..guard.len() {
-                                    if guard[i].id == row_id {
-                                        let mut updated = guard[i].clone();
-                                        match field {
-                                            Field::Key => updated.key = text.clone(),
-                                            Field::Value => updated.value = text.clone(),
-                                        }
-                                        updated.autofocus_key = false;
-                                        guard.set(i, updated);
-                                        break;
-                                    }
-                                }
-                            }
-                            reorder_pairs(sort_by.0, &pairs, &mut pairs_data);
-                        }
-                    }
-                }))
-                // on focus change, check if the focused element is in view, if not, scroll to it
-                .on_focused_change_with_system(
-                    |In((entity, is_focused)),
+                // On focus change, check if the focused element is in view, if not, scroll to it
+                .on_focused_change(
+                    |In((entity, is_focused)): In<(Entity, bool)>,
                      child_ofs: Query<&ChildOf>,
-                     mutable_viewports: Query<&MutableViewport>,
+                     mutable_viewports: Query<Entity, With<MutableViewport>>,
                      mut scroll_positions: Query<&mut ScrollPosition>,
                      logical_rect: LogicalRect| {
-                        if is_focused
-                            && let Some(text_input_rect) = child_ofs
-                                .get(entity)
-                                .ok()
-                                .and_then(|child_of| logical_rect.get(child_of.parent()))
-                        {
-                            for ancestor in child_ofs.iter_ancestors(entity) {
-                                if mutable_viewports.contains(ancestor) {
-                                    if let Some(viewport_rect) = logical_rect.get(ancestor) {
-                                        let d = text_input_rect.min.y - viewport_rect.min.y;
-                                        if d < 0. {
-                                            if let Ok(mut sp) = scroll_positions.get_mut(ancestor) {
-                                                sp.y += d;
-                                            }
-                                            return;
-                                        }
-                                        let d = text_input_rect.max.y - viewport_rect.max.y;
-                                        if d > 0. {
-                                            if let Ok(mut sp) = scroll_positions.get_mut(ancestor) {
-                                                sp.y += d;
-                                            }
-                                            return;
-                                        }
+                        if !is_focused {
+                            return;
+                        }
+                        let Some(text_input_rect) = child_ofs
+                            .get(entity)
+                            .ok()
+                            .and_then(|child_of| logical_rect.get(child_of.parent()))
+                        else {
+                            return;
+                        };
+                        for ancestor in child_ofs.iter_ancestors(entity) {
+                            if mutable_viewports.contains(ancestor) {
+                                let Some(viewport_rect) = logical_rect.get(ancestor) else {
+                                    return;
+                                };
+                                let d = text_input_rect.min.y - viewport_rect.min.y;
+                                if d < 0. {
+                                    if let Ok(mut sp) = scroll_positions.get_mut(ancestor) {
+                                        sp.0.y += d;
                                     }
-                                    break;
+                                    return;
                                 }
+                                let d = text_input_rect.max.y - viewport_rect.max.y;
+                                if d > 0. {
+                                    if let Ok(mut sp) = scroll_positions.get_mut(ancestor) {
+                                        sp.0.y += d;
+                                    }
+                                    return;
+                                }
+                                return;
                             }
                         }
                     },
                 )
+                .on_change(
+                    move |In((ui, text)): In<(Entity, String)>,
+                          sort_by: Res<KeyValue>,
+                          pairs: Res<Pairs>,
+                          input_focus: Res<InputFocus>,
+                          mut commands: Commands,
+                          model_refs: Query<&ModelEntityRef>,
+                          fields: Query<&InputField>,
+                          key_strings: Query<&KeyString>,
+                          value_strings: Query<&ValueString>,
+                          mut scroll_position: Single<&mut bevy::ui::ScrollPosition, With<MutableViewport>>,
+                          mut vec_datas: Query<&mut MutableVecData<Entity>>| {
+                        let Ok(model_entity_ref) = model_refs.get(ui) else {
+                            return;
+                        };
+                        let model_entity = model_entity_ref.0;
+
+                        match field {
+                            KeyValue::Key => {
+                                commands.entity(model_entity).insert(KeyString(text.clone()));
+                            }
+                            KeyValue::Value => {
+                                commands
+                                    .entity(model_entity)
+                                    .insert(ValueString(text.clone()));
+                            }
+                        }
+
+                        // Live reordering only affects the current sort field.
+                        if fields.get(ui).ok().map(|f| f.0) != Some(*sort_by) {
+                            return;
+                        }
+
+                        let mut write = pairs.0.write(&mut vec_datas);
+                        let items = write.to_vec();
+                        let Some(old_index) = items.iter().position(|e| *e == model_entity) else {
+                            return;
+                        };
+
+                        let moved_str: &str = text.as_str();
+
+                        let mut new_index = 0usize;
+                        for (i, other) in items.iter().enumerate() {
+                            if *other == model_entity {
+                                continue;
+                            }
+                            let other_str: &str = match *sort_by {
+                                KeyValue::Key => key_strings.get(*other).map(|s| s.as_str()).unwrap_or(""),
+                                KeyValue::Value => value_strings.get(*other).map(|s| s.as_str()).unwrap_or(""),
+                            };
+                            let cmp = cmp_text(other_str, moved_str);
+                            // For stable sorting: count items that are Less, or Equal but originally before us
+                            if cmp == Ordering::Less || (cmp == Ordering::Equal && i < old_index) {
+                                new_index += 1;
+                            }
+                        }
+
+                        if new_index != old_index {
+                            write.move_item(old_index, new_index);
+
+                            // Adjust scroll to keep focused input visually stationary
+                            if input_focus.0 == Some(ui) {
+                                let delta = (new_index as f32 - old_index as f32) * ROW_STEP;
+                                scroll_position.0.y += delta;
+                            }
+                        }
+                    },
+                ),
         )
 }
 
-fn sort_by_text_element() -> El<Text> {
-    El::<Text>::new()
-        .text_font(TextFont::from_font_size(60.))
-        .text_color(TextColor(Color::WHITE))
-        .text(Text::new("sort by"))
-}
-
-fn border_radius_style(border_radius: f32) -> impl FnOnce(El<Node>) -> El<Node> {
-    move |el| el.border_radius(BorderRadius::all(Val::Px(border_radius)))
-}
-
 fn sort_button(sort_by: KeyValue) -> impl Element {
-    let button_holder = LazyEntity::new();
-    let selected = SignalBuilder::from_resource::<SortBy>()
-        .map_in(move |cur| cur.0 == sort_by)
-        .dedupe();
-
+    let lazy_entity = LazyEntity::new();
+    let selected = SignalBuilder::from_resource::<KeyValue>().dedupe().eq(sort_by).dedupe();
     Row::<Node>::new()
         .with_node(|mut node| node.column_gap = Val::Px(35.))
         .align(Align::new().right())
-        .item_signal::<Option<El<Text>>, _>(selected.clone().map_bool_in(|| Some(sort_by_text_element()), || None))
+        .item_signal(selected.clone().map_true_in(sort_by_text_element))
         .item(
             El::<Node>::new()
-                .apply(border_radius_style(20.))
+                .insert(BorderRadius::all(Val::Px(20.)))
+                .insert(Pickable::default())
                 .with_node(|mut node| {
                     node.width = Val::Px(200.);
                     node.height = Val::Px(80.);
                 })
                 .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-                .with_builder(|builder| builder.lazy_entity(button_holder.clone()))
+                .lazy_entity(lazy_entity.clone())
                 .background_color_signal(
-                    SignalBuilder::from_lazy_entity(button_holder)
-                        .has_component::<Hovered>()
-                        .dedupe()
-                        .combine(selected)
-                        .dedupe()
-                        .map_in(|(hovered, selected)| hovered || selected)
-                        .map_bool_in(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
-                        .map_in(BackgroundColor)
-                        .map_in(Some),
+                    signal::any!(
+                        SignalBuilder::from_lazy_entity(lazy_entity)
+                            .has_component::<Hovered>()
+                            .dedupe(),
+                        selected.clone()
+                    )
+                    .dedupe()
+                    .map_bool_in(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
+                    .map_in(BackgroundColor)
+                    .map_in(Some),
                 )
                 .align_content(Align::center())
                 .on_click(
                     move |_: In<_>,
-                          mut sort_by_res: ResMut<SortBy>,
+                          mut current_sort: ResMut<KeyValue>,
                           pairs: Res<Pairs>,
-                          mut pairs_data: Query<&mut MutableVecData<RowData>>| {
-                        if sort_by_res.0 != sort_by {
-                            sort_by_res.0 = sort_by;
+                          key_strings: Query<&KeyString>,
+                          value_strings: Query<&ValueString>,
+                          mut vec_datas: Query<&mut MutableVecData<Entity>>| {
+                        if *current_sort == sort_by {
+                            return;
                         }
-                        reorder_pairs(sort_by_res.0, &pairs.0, &mut pairs_data);
+                        *current_sort = sort_by;
+
+                        let mut write = pairs.0.write(&mut vec_datas);
+                        let mut current = write.to_vec();
+                        let mut desired = current.clone();
+
+                        desired.sort_by(|a, b| {
+                            let a_str: &str = match sort_by {
+                                KeyValue::Key => key_strings.get(*a).map(|s| s.as_str()).unwrap_or(""),
+                                KeyValue::Value => value_strings.get(*a).map(|s| s.as_str()).unwrap_or(""),
+                            };
+                            let b_str: &str = match sort_by {
+                                KeyValue::Key => key_strings.get(*b).map(|s| s.as_str()).unwrap_or(""),
+                                KeyValue::Value => value_strings.get(*b).map(|s| s.as_str()).unwrap_or(""),
+                            };
+                            cmp_text(a_str, b_str)
+                        });
+
+                        for target_index in 0..desired.len() {
+                            if current[target_index] == desired[target_index] {
+                                continue;
+                            }
+                            let Some(from_index) = current
+                                .iter()
+                                .position(|e| *e == desired[target_index])
+                            else {
+                                continue;
+                            };
+                            current.remove(from_index);
+                            current.insert(target_index, desired[target_index]);
+                            write.move_item(from_index, target_index);
+                        }
                     },
                 )
                 .child(
@@ -341,89 +411,109 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
         )
 }
 
-fn reorder_pairs(sort_by: KeyValue, pairs: &MutableVec<RowData>, pairs_data: &mut Query<&mut MutableVecData<RowData>>) {
-    let mut guard = pairs.write(pairs_data);
-    let mut desired = guard.to_vec();
-    match sort_by {
-        KeyValue::Key => desired.sort_by_key(|r| (r.key.is_empty(), r.key.clone())),
-        KeyValue::Value => desired.sort_by_key(|r| (r.value.is_empty(), r.value.clone())),
-    }
-
-    let desired_ids = desired.iter().map(|r| r.id).collect::<Vec<_>>();
-    for target_index in 0..desired_ids.len() {
-        let target_id = desired_ids[target_index];
-
-        let mut current_index = None;
-        for i in 0..guard.len() {
-            if guard[i].id == target_id {
-                current_index = Some(i);
-                break;
-            }
-        }
-
-        if let Some(current_index) = current_index
-            && current_index != target_index
-        {
-            guard.move_item(current_index, target_index);
-        }
+fn cmp_text(a: &str, b: &str) -> Ordering {
+    match (a.is_empty(), b.is_empty()) {
+        (true, false) => Ordering::Greater,
+        (false, true) => Ordering::Less,
+        _ => a.cmp(b),
     }
 }
 
-fn key_values(pairs: MutableVec<RowData>, viewport_holder: LazyEntity) -> Column<Node> {
+// ----- Viewport sizing hierarchy -----
+// The viewport (scrollable key_values Column) is nested:
+//   Window (100vh)
+//     └─ outer Column (90% of window)
+//         └─ key_values Column (90% of outer) ← this is the viewport
+//
+// Therefore: viewport height = 90% × 90% = 81% of window height (81vh)
+const OUTER_COLUMN_HEIGHT_PERCENT: f32 = 90.;
+const KEY_VALUES_HEIGHT_PERCENT: f32 = 90.;
+const VIEWPORT_HEIGHT_VH: f32 = OUTER_COLUMN_HEIGHT_PERCENT * KEY_VALUES_HEIGHT_PERCENT / 100.;
+
+/// Empty element matching viewport height, allowing scroll past content bounds for focus anchoring.
+fn viewport_spacer() -> El<Node> {
+    El::<Node>::new().with_node(|mut node| {
+        node.min_height = Val::Vh(VIEWPORT_HEIGHT_VH);
+    })
+}
+
+fn key_values(pairs: Pairs) -> Column<Node> {
     Column::<Node>::new()
         .with_node(|mut node| {
-            node.row_gap = Val::Px(10.);
-            node.height = Val::Percent(90.);
+            node.row_gap = Val::Px(ROW_GAP);
+            node.height = Val::Percent(KEY_VALUES_HEIGHT_PERCENT);
         })
-        .with_builder(|builder| builder.lazy_entity(viewport_holder.clone()))
-        .mutable_viewport(haalka::prelude::Axis::Vertical)
-        .on_scroll_with_system_on_hover(
-            BasicScrollHandler::new()
-                .direction(ScrollDirection::Vertical)
-                .pixels(20.)
-                .into_system(),
-        )
-        .items_signal_vec(pairs.signal_vec().enumerate().map(clone!((pairs) move |In((index_signal, row)): In<(signal::Source<Option<usize>>, RowData)>| {
-            let _ = index_signal;
+        .insert(Pickable::default())
+        .mutable_viewport(Overflow::scroll_y())
+        .on_scroll(BasicScrollHandler::new().pixels(20.).into_system())
+        .with_builder(|builder| {
+            builder.on_spawn(|world: &mut World, entity: Entity| {
+                // Set initial scroll to skip past the top spacer
+                let Ok(window) = world.query::<&Window>().single(world) else {
+                    return;
+                };
+                let spacer_px = window.height() * VIEWPORT_HEIGHT_VH / 100.;
+                world.entity_mut(entity).insert(ScrollPosition(Vec2::new(0., spacer_px + ROW_GAP)));
+            })
+        })
+        .item(viewport_spacer())
+        .items_signal_vec(pairs.0.signal_vec().enumerate().map(
+            |In((index_signal, model_entity)): In<(signal::Source<Option<usize>>, Entity)>,
+             key_strings: Query<&KeyString>,
+             value_strings: Query<&ValueString>| {
+                let key_initial = key_strings
+                    .get(model_entity)
+                    .map(|s| s.as_str().to_string())
+                    .unwrap_or_default();
+                let value_initial = value_strings
+                    .get(model_entity)
+                    .map(|s| s.as_str().to_string())
+                    .unwrap_or_default();
+
                 Row::<Node>::new()
                     .with_node(|mut node| {
                         node.column_gap = Val::Px(10.);
-                        // without registering width up front, layout will take a frame or two to sync to size of
-                        // children, making it look like the elements are expanding into place,
-                        // try commenting out this line to see how it looks
                         node.width = Val::Px(INPUT_WIDTH * 2. + INPUT_HEIGHT + 10. * 2.)
                     })
-                    .item(text_input(pairs.clone(), row.id, Field::Key, row.key.clone(), row.autofocus_key))
-                    .item(text_input(pairs.clone(), row.id, Field::Value, row.value.clone(), false))
-                    .item(x_button().on_click(clone!((pairs) move |_: In<_>, mut input_focus: ResMut<InputFocus>, fields: Query<&RowField>, mut pairs_data: Query<&mut MutableVecData<RowData>>| {
-                        // Clear focus if we're focused on an input for this row.
-                        if let Some(focused) = input_focus.0
-                            && let Ok(rf) = fields.get(focused)
-                            && rf.row_id == row.id
-                        {
-                            input_focus.0 = None;
-                        }
-                        let mut guard = pairs.write(&mut pairs_data);
-                        if let Some(i) = guard.iter().position(|r| r.id == row.id) {
-                            guard.remove(i);
-                        }
-                    })))
-            }
-        )))
+                    .insert(Pickable::default())
+                    .item(text_input(model_entity, KeyValue::Key, key_initial))
+                    .item(text_input(model_entity, KeyValue::Value, value_initial))
+                    .item(
+                        x_button()
+                            .with_builder(|builder| builder.component_signal(index_signal.map_some_in(Index)))
+                            .on_click(
+                                move |In((entity, _)): In<_>,
+                                      pairs: Res<Pairs>,
+                                      indices: Query<&Index>,
+                                      mut commands: Commands,
+                                      mut vec_datas: Query<&mut MutableVecData<Entity>>| {
+                                    let index = indices.get(entity).unwrap().0;
+                                    let removed = pairs.0.write(&mut vec_datas).remove(index);
+                                    commands.entity(removed).despawn();
+                                },
+                            ),
+                    )
+            },
+        ))
+        .item(viewport_spacer())
 }
 
+#[derive(Component, Clone)]
+struct Index(usize);
+
 fn x_button() -> impl Element + PointerEventAware {
-    let button_holder = LazyEntity::new();
+    let lazy_entity = LazyEntity::new();
     El::<Node>::new()
-        .apply(border_radius_style(10.))
+        .insert(BorderRadius::all(Val::Px(10.)))
+        .insert(Pickable::default())
         .with_node(|mut node| {
             node.width = Val::Px(INPUT_HEIGHT);
             node.height = Val::Px(INPUT_HEIGHT);
         })
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .with_builder(|builder| builder.lazy_entity(button_holder.clone()))
+        .lazy_entity(lazy_entity.clone())
         .background_color_signal(
-            SignalBuilder::from_lazy_entity(button_holder)
+            SignalBuilder::from_lazy_entity(lazy_entity)
                 .has_component::<Hovered>()
                 .dedupe()
                 .map_bool_in(|| bevy::color::palettes::basic::RED.into(), || *DARK_GRAY)
@@ -439,9 +529,10 @@ fn x_button() -> impl Element + PointerEventAware {
         )
 }
 
-fn ui_root(pairs: MutableVec<RowData>, viewport_holder: LazyEntity) -> impl Element {
+fn ui_root(pairs: Pairs) -> impl Element {
     El::<Node>::new()
         .ui_root()
+        .insert(Pickable::default())
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
             node.height = Val::Percent(100.);
@@ -464,23 +555,24 @@ fn ui_root(pairs: MutableVec<RowData>, viewport_holder: LazyEntity) -> impl Elem
                     Column::<Node>::new()
                         .with_node(|mut node| {
                             node.row_gap = Val::Px(10.);
-                            node.height = Val::Percent(90.);
+                            node.height = Val::Percent(OUTER_COLUMN_HEIGHT_PERCENT);
                             node.width = Val::Px(INPUT_WIDTH * 2. + INPUT_HEIGHT + 10. * 2.);
                         })
                         .align_content(Align::center())
-                        .item(key_values(pairs.clone(), viewport_holder.clone()).with_node(|mut node| node.height = Val::Percent(90.)))
+                        .item(key_values(pairs.clone()).with_node(|mut node| node.height = Val::Percent(KEY_VALUES_HEIGHT_PERCENT)))
                         .item({
-                            let button_holder = LazyEntity::new();
+                            let lazy_entity = LazyEntity::new();
                             El::<Node>::new()
-                                .apply(border_radius_style(10.))
+                                .insert(BorderRadius::all(Val::Px(10.)))
+                                .insert(Pickable::default())
                                 .with_node(|mut node| {
                                     node.width = Val::Px(INPUT_WIDTH);
                                     node.height = Val::Px(INPUT_HEIGHT);
                                 })
                                 .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-                                .with_builder(|builder| builder.lazy_entity(button_holder.clone()))
+                                .lazy_entity(lazy_entity.clone())
                                 .background_color_signal(
-                                    SignalBuilder::from_lazy_entity(button_holder)
+                                    SignalBuilder::from_lazy_entity(lazy_entity)
                                         .has_component::<Hovered>()
                                         .dedupe()
                                         .map_bool_in(|| bevy::color::palettes::basic::GREEN.into(), || *DARK_GRAY)
@@ -493,110 +585,109 @@ fn ui_root(pairs: MutableVec<RowData>, viewport_holder: LazyEntity) -> impl Elem
                                         .text_font(TextFont::from_font_size(30.))
                                         .text(Text::new("+")),
                                 )
-                                .on_click(clone!((pairs, viewport_holder) move |_: In<_>, mut input_focus: ResMut<InputFocus>, mut next_id: ResMut<NextRowId>, mut pairs_data: Query<&mut MutableVecData<RowData>>, mut scroll_positions: Query<&mut ScrollPosition>| {
-                                    input_focus.0 = None;
-                                    let id = RowId(next_id.0);
-                                    next_id.0 += 1;
-                                    pairs.write(&mut pairs_data).push(RowData {
-                                        id,
-                                        key: String::new(),
-                                        value: String::new(),
-                                        autofocus_key: true,
-                                    });
-                                    if let Ok(mut sp) = scroll_positions.get_mut(viewport_holder.get()) {
-                                        sp.y = f32::MAX;
-                                    }
-                                }))
+                                .on_click(
+                                    |In((entity, click)): In<(Entity, Pointer<Click>)>,
+                                     pairs: Res<Pairs>,
+                                     mut commands: Commands,
+                                     mut scroll_positions: Query<
+                                        &mut bevy::ui::ScrollPosition,
+                                        With<MutableViewport>,
+                                    >,
+                                     mut vec_datas: Query<&mut MutableVecData<Entity>>| {
+                                        info!("Plus button clicked: entity={:?}, hit={:?}", entity, click.hit);
+                                        let model_entity = commands
+                                            .spawn((
+                                                KeyString(String::new()),
+                                                ValueString(String::new()),
+                                                FocusOnSpawn(KeyValue::Key),
+                                            ))
+                                            .id();
+                                        let mut write = pairs.0.write(&mut vec_datas);
+                                        write.push(model_entity);
+                                        let count = write.to_vec().len();
+                                        drop(write);
+                                        // Scroll so the new row's bottom aligns with viewport bottom
+                                        for mut scroll_position in scroll_positions.iter_mut() {
+                                            scroll_position.0.y = count as f32 * ROW_STEP;
+                                        }
+                                    },
+                                )
                         }),
                 ),
         )
 }
 
-fn autofocus(
-    mut commands: Commands,
-    mut input_focus: ResMut<InputFocus>,
-    autofocused: Query<Entity, Added<AutoFocus>>,
-) {
-    for entity in autofocused.iter() {
-        input_focus.0 = Some(entity);
-        commands.entity(entity).remove::<AutoFocus>();
-    }
-}
-
 fn tabber(
     keys: Res<ButtonInput<KeyCode>>,
     pairs: Res<Pairs>,
-    pairs_data: Query<&MutableVecData<RowData>>,
-    fields: Query<&RowField>,
-    entities_with_fields: Query<(Entity, &RowField)>,
-    mut input_focus: ResMut<InputFocus>,
+    vec_datas: Query<&MutableVecData<Entity>>,
+    inputs: Query<(Entity, &ModelEntityRef, &InputField)>,
+    model_refs: Query<&ModelEntityRef>,
+    fields: Query<&InputField>,
+    mut focused_option: ResMut<InputFocus>,
 ) {
+    let rows = pairs.0.read(&vec_datas);
+
+    let mut by_model_and_field: HashMap<(Entity, KeyValue), Entity> = HashMap::new();
+    for (ui, model, field) in inputs.iter() {
+        by_model_and_field.insert((model.0, field.0), ui);
+    }
+
+    let focused_data = (|| {
+        let focused = focused_option.0?;
+        let model_entity = model_refs.get(focused).ok()?.0;
+        let field = fields.get(focused).ok()?.0;
+        let index = rows.iter().position(|e| *e == model_entity)?;
+        Some((index, field))
+    })();
+
+    let mut set_focus = |model_entity: Entity, field: KeyValue| {
+        if let Some(ui) = by_model_and_field.get(&(model_entity, field)).copied() {
+            focused_option.0 = Some(ui);
+        }
+    };
+
     // TODO: use .pressed instead of .just_pressed to allow for holding down tab, browser seems to
     // require minimum press time before starting to repeat, and repeating seems slower than refresh
     // rate
-    let move_backward = keys.pressed(KeyCode::ShiftLeft) && keys.just_pressed(KeyCode::Tab);
-    let move_forward = keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::Enter);
-    if !move_backward && !move_forward {
-        return;
-    }
-
-    let current = input_focus.0.and_then(|entity| fields.get(entity).ok()).copied();
-    let pairs_read = pairs.0.read(&pairs_data);
-
-    let find_entity = |row_id: RowId, field: Field| -> Option<Entity> {
-        entities_with_fields
-            .iter()
-            .find_map(|(entity, rf)| (rf.row_id == row_id && rf.field == field).then_some(entity))
-    };
-
-    if let Some(RowField { row_id, field }) = current {
-        let row_index = pairs_read.iter().position(|r| r.id == row_id);
-        if let Some(i) = row_index {
-            let next = if move_backward {
-                match field {
-                    Field::Value => Some((row_id, Field::Key)),
-                    Field::Key => {
-                        if i > 0 {
-                            Some((pairs_read[i - 1].id, Field::Value))
-                        } else {
-                            pairs_read.last().map(|r| (r.id, Field::Value))
-                        }
-                    }
+    if keys.pressed(KeyCode::ShiftLeft) && keys.just_pressed(KeyCode::Tab) {
+        match focused_data {
+            None => {
+                if let Some(last_model) = rows.last().copied() {
+                    set_focus(last_model, KeyValue::Value);
                 }
-            } else {
-                match field {
-                    Field::Key => Some((row_id, Field::Value)),
-                    Field::Value => {
-                        if i + 1 < pairs_read.len() {
-                            Some((pairs_read[i + 1].id, Field::Key))
-                        } else {
-                            pairs_read.first().map(|r| (r.id, Field::Key))
-                        }
-                    }
+            }
+            Some((i, KeyValue::Value)) => {
+                set_focus(rows[i], KeyValue::Key);
+            }
+            Some((i, KeyValue::Key)) => {
+                let prev = if i > 0 { i - 1 } else { rows.len().saturating_sub(1) };
+                if let Some(prev_model) = rows.get(prev).copied() {
+                    set_focus(prev_model, KeyValue::Value);
                 }
-            };
-            if let Some((next_row, next_field)) = next
-                && let Some(entity) = find_entity(next_row, next_field)
-            {
-                input_focus.0 = Some(entity);
             }
         }
-    } else {
-        // No focus: focus first/last depending on direction.
-        let target = if move_backward {
-            pairs_read.last().map(|r| (r.id, Field::Value))
-        } else {
-            pairs_read.first().map(|r| (r.id, Field::Key))
-        };
-        if let Some((row_id, field)) = target
-            && let Some(entity) = find_entity(row_id, field)
-        {
-            input_focus.0 = Some(entity);
+    } else if keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::Enter) {
+        match focused_data {
+            None => {
+                if let Some(first_model) = rows.first().copied() {
+                    set_focus(first_model, KeyValue::Key);
+                }
+            }
+            Some((i, KeyValue::Key)) => {
+                set_focus(rows[i], KeyValue::Value);
+            }
+            Some((i, KeyValue::Value)) => {
+                let next = if i + 1 < rows.len() { i + 1 } else { 0 };
+                if let Some(next_model) = rows.get(next).copied() {
+                    set_focus(next_model, KeyValue::Key);
+                }
+            }
         }
     }
 }
 
-fn escaper(mut input_focus: ResMut<InputFocus>, keys: Res<ButtonInput<KeyCode>>) {
+fn escaper(keys: Res<ButtonInput<KeyCode>>, mut input_focus: ResMut<InputFocus>) {
     if keys.just_pressed(KeyCode::Escape) {
         input_focus.0 = None;
     }

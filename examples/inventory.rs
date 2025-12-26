@@ -43,52 +43,7 @@ fn main() {
         .add_systems(
             OnEnter(AssetState::Loaded),
             (set_icon_texture_atlas, |world: &mut World| {
-                let crafting_outputter = SignalBuilder::from_system({
-                    move |_: In<()>,
-                          input_cells: Query<(Entity, &ChildOf), With<CraftInputCell>>,
-                          children: Query<&Children>,
-                          contents: Query<&CellContent>| {
-                        let mut vals = [None; 4];
-                        if let Some(&ChildOf(parent)) = input_cells.iter().next().map(|(_, c)| c)
-                            && let Ok(children) = children.get(parent)
-                        {
-                            for (i, child) in children.iter().take(vals.len()).enumerate() {
-                                if let Ok(CellContent(content)) = contents.get(child) {
-                                    vals[i] = *content;
-                                }
-                            }
-                        }
-                        Some(vals)
-                    }
-                })
-                .dedupe()
-                .map({
-                    move |In(vals): In<[Option<CellData>; 4]>,
-                          output: Option<Single<&mut CellContent, With<CraftOutputSlot>>>,
-                          mut state: ResMut<CraftOutputState>| {
-                        let all_filled = vals.iter().all(Option::is_some);
-                        let recipe = all_filled.then(|| vals.map(|v| v.expect("all_filled")));
-                        if let Some(mut output) = output {
-                            // Output reflects the current input recipe.
-                            // If inputs are fully filled and the recipe changes, regenerate output
-                            // even if a previous output stack already exists (overwrite).
-                            if let Some(recipe) = recipe {
-                                if state.last_recipe != Some(recipe) {
-                                    output.0 = Some(random_cell_data(&mut rand::rng()));
-                                    state.last_recipe = Some(recipe);
-                                }
-                            } else {
-                                state.last_recipe = None;
-                            }
-                        }
-                    }
-                });
-
-                let crafting_outputter = crafting_outputter.register(world);
-
-                ui_root()
-                    .with_builder(|builder| builder.hold_signals([crafting_outputter]))
-                    .spawn(world);
+                ui_root().spawn(world);
             })
                 .chain(),
         )
@@ -844,6 +799,48 @@ fn inventory() -> impl Element {
 }
 
 fn ui_root() -> impl Element {
+    let crafting_outputter = SignalBuilder::from_system({
+        move |_: In<()>,
+              input_cells: Query<(Entity, &ChildOf), With<CraftInputCell>>,
+              children: Query<&Children>,
+              contents: Query<&CellContent>| {
+            let mut vals = [None; 4];
+            if let Some(&ChildOf(parent)) = input_cells.iter().next().map(|(_, c)| c)
+                && let Ok(children) = children.get(parent)
+            {
+                for (i, child) in children.iter().take(vals.len()).enumerate() {
+                    if let Ok(CellContent(content)) = contents.get(child) {
+                        vals[i] = *content;
+                    }
+                }
+            }
+            Some(vals)
+        }
+    })
+    .dedupe()
+    .map({
+        move |In(vals): In<[Option<CellData>; 4]>,
+              output: Option<Single<&mut CellContent, With<CraftOutputSlot>>>,
+              mut state: ResMut<CraftOutputState>| {
+            let all_filled = vals.iter().all(Option::is_some);
+            let recipe = all_filled.then(|| vals.map(|v| v.expect("all_filled")));
+            if let Some(mut output) = output {
+                // Output reflects the current input recipe.
+                // If inputs are fully filled and the recipe changes, regenerate output
+                // even if a previous output stack already exists (overwrite).
+                if let Some(recipe) = recipe {
+                    if state.last_recipe != Some(recipe) {
+                        output.0 = Some(random_cell_data(&mut rand::rng()));
+                        state.last_recipe = Some(recipe);
+                    }
+                } else {
+                    state.last_recipe = None;
+                }
+            }
+        }
+    })
+    .hold();
+
     Stack::<Node>::new()
         .cursor_disableable_signal(CursorIcon::default(), is_dragging_signal())
         .with_node(|mut node| {
@@ -851,14 +848,18 @@ fn ui_root() -> impl Element {
             node.height = Val::Percent(100.);
         })
         .with_builder(move |builder| {
-            builder.on_spawn_with_system(
-                move |In(entity): In<_>, camera: Single<Entity, With<IsDefaultUiCamera>>, mut commands: Commands| {
-                    // https://github.com/bevyengine/bevy/discussions/11223
-                    if let Ok(mut commands) = commands.get_entity(entity) {
-                        commands.try_insert(UiTargetCamera(*camera));
-                    }
-                },
-            )
+            builder
+                .hold_signals([crafting_outputter])
+                .on_spawn_with_system(
+                    move |In(entity): In<_>,
+                          camera: Single<Entity, With<IsDefaultUiCamera>>,
+                          mut commands: Commands| {
+                        // https://github.com/bevyengine/bevy/discussions/11223
+                        if let Ok(mut commands) = commands.get_entity(entity) {
+                            commands.try_insert(UiTargetCamera(*camera));
+                        }
+                    },
+                )
         })
         // Root is used for pointer tracking and global click/drag behavior.
         // It must not be hoverable, otherwise it competes with cell cursors (Grab vs Default).

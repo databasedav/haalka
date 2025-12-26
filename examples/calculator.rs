@@ -19,7 +19,7 @@ fn main() {
                         .map_in(deref_cloned)
                         .dedupe()
                         .map(|_: In<_>, mut commands: Commands| commands.remove_resource::<Error>())
-                        .register(world);
+                        .hold();
                     ui_root()
                         .with_builder(|builder| builder.hold_signals([error_clearer]))
                         .spawn(world);

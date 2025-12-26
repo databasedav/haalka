@@ -56,7 +56,7 @@ pub enum AlignY {
 }
 
 /// Marker component for self-alignment of an element within its parent.
-/// Applied to children and processed based on the parent's [`LayoutDirection`].
+/// Applied to children and processed based on the parent's [`AlignmentHandler`].
 #[derive(Component, Clone, Copy, Default, PartialEq, Eq, Debug)]
 #[component(on_remove = on_alignment_remove)]
 pub struct Alignment {
@@ -77,17 +77,115 @@ pub struct ContentAlignment {
     pub y: AlignY,
 }
 
-/// The layout direction of a container element.
-/// Determines how child alignments are interpreted.
-#[derive(Component, Clone, Copy, Default, PartialEq, Eq, Debug)]
+/// Function signature for applying self-alignment to a child node.
+pub type ApplyAlignmentFn = fn(&mut Node, &Alignment);
+
+/// Function signature for applying content alignment to a parent node.
+pub type ApplyContentAlignmentFn = fn(&mut Node, &ContentAlignment);
+
+/// Function signature for resetting alignment styles when the component is removed.
+pub type ResetAlignmentFn = fn(&mut Node);
+
+/// Handler component that defines how self-alignment is applied to a child node.
+/// 
+/// This is the low-level component that drives alignment behavior. Users typically
+/// don't interact with this directly - instead use [`LayoutDirection`] which
+/// automatically installs the appropriate handlers.
+#[derive(Component, Clone, Copy)]
+pub struct AlignmentHandler {
+    /// Function to apply alignment to the node.
+    pub apply: ApplyAlignmentFn,
+    /// Function to reset alignment styles when [`Alignment`] is removed.
+    pub reset: ResetAlignmentFn,
+}
+
+/// Handler component that defines how content alignment is applied to a parent node.
+/// 
+/// This is the low-level component that drives content alignment behavior. Users typically
+/// don't interact with this directly - instead use [`LayoutDirection`] which
+/// automatically installs the appropriate handlers.
+#[derive(Component, Clone, Copy)]
+pub struct ContentAlignmentHandler {
+    /// Function to apply content alignment to the node.
+    pub apply: ApplyContentAlignmentFn,
+    /// Function to reset content alignment styles when [`ContentAlignment`] is removed.
+    pub reset: ResetAlignmentFn,
+}
+
+/// The layout direction of a container element (high-level API).
+/// 
+/// This enum provides a queryable, serializable representation of layout direction.
+/// When inserted, it automatically installs the appropriate [`AlignmentHandler`] and
+/// [`ContentAlignmentHandler`] components via a component hook.
+/// 
+/// For custom alignment behavior, either:
+/// - Insert handlers directly without using this enum
+/// - Insert this enum, then replace the handlers with custom ones
+#[derive(Component, Clone, Copy, Default, PartialEq, Eq, Debug, Hash)]
+#[component(on_insert = on_layout_direction_insert)]
 pub enum LayoutDirection {
-    /// Vertical stacking (like [`Column`]).
+    /// Vertical stacking layout (like [`Column`]).
+    /// 
+    /// - X-axis alignment uses `align_self`
+    /// - Y-axis alignment uses `margin.top`/`margin.bottom`
+    /// - Content X uses `align_items`, content Y uses `justify_content`
     #[default]
     Column,
-    /// Horizontal stacking (like [`Row`]).
+    /// Horizontal stacking layout (like [`Row`]).
+    /// 
+    /// - X-axis alignment uses `margin.left`/`margin.right`
+    /// - Y-axis alignment uses `align_self`
+    /// - Content X uses `justify_content`, content Y uses `align_items`
     Row,
-    /// Grid/Stack layout (children overlap in same cell).
+    /// Grid/Stack layout (children can overlap in same cell).
+    /// 
+    /// - X-axis alignment uses `justify_self`
+    /// - Y-axis alignment uses `align_self`
+    /// - Content uses same semantics as row
     Grid,
+}
+
+/// Hook that installs appropriate handlers when [`LayoutDirection`] is inserted.
+fn on_layout_direction_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    let Some(direction) = world.get::<LayoutDirection>(entity).copied() else {
+        return;
+    };
+
+    let (alignment_handler, content_alignment_handler) = match direction {
+        LayoutDirection::Column => (
+            AlignmentHandler {
+                apply: column::apply_alignment,
+                reset: column::reset_alignment,
+            },
+            ContentAlignmentHandler {
+                apply: column::apply_content_alignment,
+                reset: column::reset_content_alignment,
+            },
+        ),
+        LayoutDirection::Row => (
+            AlignmentHandler {
+                apply: row::apply_alignment,
+                reset: row::reset_alignment,
+            },
+            ContentAlignmentHandler {
+                apply: row::apply_content_alignment,
+                reset: row::reset_content_alignment,
+            },
+        ),
+        LayoutDirection::Grid => (
+            AlignmentHandler {
+                apply: grid::apply_alignment,
+                reset: grid::reset_alignment,
+            },
+            ContentAlignmentHandler {
+                // Grid uses row semantics for content alignment
+                apply: row::apply_content_alignment,
+                reset: row::reset_content_alignment,
+            },
+        ),
+    };
+
+    world.commands().entity(entity).insert((alignment_handler, content_alignment_handler));
 }
 
 /// Composable alignment builder. Used with [`.align`](`Alignable::align`) and related methods.
@@ -227,26 +325,27 @@ pub fn plugin(app: &mut App) {
     );
 }
 
-/// System that applies self-alignment based on parent's layout direction.
+/// System that applies self-alignment based on parent's alignment handler.
 fn apply_self_alignment(
     mut data: Query<(&Alignment, &ChildOf, &mut Node), Or<(Changed<Alignment>, Added<Alignment>, Added<ChildOf>)>>,
-    layout_directions: Query<&LayoutDirection>,
+    handlers: Query<&AlignmentHandler>,
 ) {
     for (alignment, child_of, mut node) in &mut data {
-        let direction = layout_directions.get(child_of.parent()).copied().unwrap_or_default();
-        apply_alignment_to_node(&mut node, alignment, direction);
+        if let Ok(handler) = handlers.get(child_of.parent()) {
+            (handler.apply)(&mut node, alignment);
+        }
     }
 }
 
-/// System that re-applies self-alignment when parent's layout direction changes.
+/// System that re-applies self-alignment when parent's alignment handler changes.
 fn apply_self_alignment_on_parent_change(
     mut children_query: Query<(&Alignment, &mut Node)>,
-    changed_parents: Query<(&LayoutDirection, &Children), Changed<LayoutDirection>>,
+    changed_parents: Query<(&AlignmentHandler, &Children), Changed<AlignmentHandler>>,
 ) {
-    for (direction, children) in &changed_parents {
+    for (handler, children) in &changed_parents {
         for &child in children {
             if let Ok((alignment, mut node)) = children_query.get_mut(child) {
-                apply_alignment_to_node(&mut node, alignment, *direction);
+                (handler.apply)(&mut node, alignment);
             }
         }
     }
@@ -254,167 +353,169 @@ fn apply_self_alignment_on_parent_change(
 
 /// Hook called when Alignment component is removed - resets node styles.
 fn on_alignment_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
-    let direction = world
+    let handler = world
         .get::<ChildOf>(entity)
-        .and_then(|child_of| world.get::<LayoutDirection>(child_of.parent()).copied())
-        .unwrap_or_default();
+        .and_then(|child_of| world.get::<AlignmentHandler>(child_of.parent()).copied());
 
-    if let Some(mut node) = world.get_mut::<Node>(entity) {
-        match direction {
-            LayoutDirection::Column => {
-                // Column child alignment uses: align_self (X) + margin.top/bottom (Y)
-                node.align_self = AlignSelf::DEFAULT;
-                node.margin.top = Val::ZERO;
-                node.margin.bottom = Val::ZERO;
-            }
-            LayoutDirection::Row => {
-                // Row child alignment uses: margin.left/right (X) + align_self (Y)
-                node.margin.left = Val::ZERO;
-                node.margin.right = Val::ZERO;
-                node.align_self = AlignSelf::DEFAULT;
-            }
-            LayoutDirection::Grid => {
-                // Grid/Stack child alignment uses: justify_self (X) + align_self (Y)
-                node.justify_self = JustifySelf::DEFAULT;
-                node.align_self = AlignSelf::DEFAULT;
-            }
-        }
+    if let (Some(handler), Some(mut node)) = (handler, world.get_mut::<Node>(entity)) {
+        (handler.reset)(&mut node);
     }
 }
 
 /// System that applies content alignment to parent nodes.
 fn apply_content_alignment(
     mut data: Query<
-        (&ContentAlignment, &LayoutDirection, &mut Node),
-        Or<(Changed<ContentAlignment>, Added<ContentAlignment>)>,
+        (&ContentAlignment, &ContentAlignmentHandler, &mut Node),
+        Or<(Changed<ContentAlignment>, Added<ContentAlignment>, Changed<ContentAlignmentHandler>)>,
     >,
 ) {
-    for (content_alignment, direction, mut node) in &mut data {
-        apply_content_alignment_to_node(&mut node, content_alignment, *direction);
+    for (content_alignment, handler, mut node) in &mut data {
+        (handler.apply)(&mut node, content_alignment);
     }
 }
 
 /// Hook called when ContentAlignment component is removed - resets node styles.
 fn on_content_alignment_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
-    let direction = world.get::<LayoutDirection>(entity).copied().unwrap_or_default();
-    if let Some(mut node) = world.get_mut::<Node>(entity) {
-        match direction {
-            LayoutDirection::Column => {
-                // Column content alignment uses: align_items (X) + justify_content (Y)
-                node.align_items = AlignItems::DEFAULT;
-                node.justify_content = JustifyContent::DEFAULT;
-            }
-            LayoutDirection::Row | LayoutDirection::Grid => {
-                // Row content alignment uses: justify_content (X) + align_items (Y)
-                // Origin Stack/Grid content alignment delegates to Row.
-                node.justify_content = JustifyContent::DEFAULT;
-                node.align_items = AlignItems::DEFAULT;
-            }
-        }
+    let handler = world.get::<ContentAlignmentHandler>(entity).copied();
+
+    if let (Some(handler), Some(mut node)) = (handler, world.get_mut::<Node>(entity)) {
+        (handler.reset)(&mut node);
     }
 }
 
-/// Apply self-alignment to a node based on parent direction.
-fn apply_alignment_to_node(node: &mut Node, alignment: &Alignment, direction: LayoutDirection) {
-    match direction {
-        LayoutDirection::Column => {
-            // In a column, X-axis uses align_self, Y-axis uses margin
-            node.align_self = match alignment.x {
-                AlignX::None => AlignSelf::DEFAULT,
-                AlignX::Left => AlignSelf::Start,
-                AlignX::Center => AlignSelf::Center,
-                AlignX::Right => AlignSelf::End,
-            };
+/// Column alignment implementations.
+pub mod column {
+    use super::*;
 
-            (node.margin.top, node.margin.bottom) = match alignment.y {
-                AlignY::None => (Val::ZERO, Val::ZERO),
-                AlignY::Top => (Val::ZERO, Val::Auto),
-                AlignY::Center => (Val::Auto, Val::Auto),
-                AlignY::Bottom => (Val::Auto, Val::ZERO),
-            };
-        }
-        LayoutDirection::Row => {
-            // In a row, X-axis uses margin, Y-axis uses align_self
-            (node.margin.left, node.margin.right) = match alignment.x {
-                AlignX::None => (Val::ZERO, Val::ZERO),
-                AlignX::Left => (Val::ZERO, Val::Auto),
-                AlignX::Center => (Val::Auto, Val::Auto),
-                AlignX::Right => (Val::Auto, Val::ZERO),
-            };
+    /// Apply column-style self-alignment to a child node.
+    /// X-axis uses `align_self`, Y-axis uses `margin.top`/`margin.bottom`.
+    pub fn apply_alignment(node: &mut Node, alignment: &Alignment) {
+        node.align_self = match alignment.x {
+            AlignX::None => AlignSelf::DEFAULT,
+            AlignX::Left => AlignSelf::Start,
+            AlignX::Center => AlignSelf::Center,
+            AlignX::Right => AlignSelf::End,
+        };
 
-            node.align_self = match alignment.y {
-                AlignY::None => AlignSelf::DEFAULT,
-                AlignY::Top => AlignSelf::Start,
-                AlignY::Center => AlignSelf::Center,
-                AlignY::Bottom => AlignSelf::End,
-            };
-        }
-        LayoutDirection::Grid => {
-            // In a grid/stack, self alignment uses justify_self (X) and align_self (Y)
-            // (matches origin Stack/Grid child alignment behavior).
-            node.justify_self = match alignment.x {
-                AlignX::None => JustifySelf::DEFAULT,
-                AlignX::Left => JustifySelf::Start,
-                AlignX::Center => JustifySelf::Center,
-                AlignX::Right => JustifySelf::End,
-            };
-            node.align_self = match alignment.y {
-                AlignY::None => AlignSelf::DEFAULT,
-                AlignY::Top => AlignSelf::Start,
-                AlignY::Center => AlignSelf::Center,
-                AlignY::Bottom => AlignSelf::End,
-            };
-        }
+        (node.margin.top, node.margin.bottom) = match alignment.y {
+            AlignY::None => (Val::ZERO, Val::ZERO),
+            AlignY::Top => (Val::ZERO, Val::Auto),
+            AlignY::Center => (Val::Auto, Val::Auto),
+            AlignY::Bottom => (Val::Auto, Val::ZERO),
+        };
+    }
+
+    /// Apply column-style content alignment to a parent node.
+    /// X-axis uses `align_items`, Y-axis uses `justify_content`.
+    pub fn apply_content_alignment(node: &mut Node, content_alignment: &ContentAlignment) {
+        node.align_items = match content_alignment.x {
+            AlignX::None => AlignItems::DEFAULT,
+            AlignX::Left => AlignItems::Start,
+            AlignX::Center => AlignItems::Center,
+            AlignX::Right => AlignItems::End,
+        };
+        node.justify_content = match content_alignment.y {
+            AlignY::None => JustifyContent::DEFAULT,
+            AlignY::Top => JustifyContent::Start,
+            AlignY::Center => JustifyContent::Center,
+            AlignY::Bottom => JustifyContent::End,
+        };
+    }
+
+    /// Reset column-style alignment on a child node.
+    pub fn reset_alignment(node: &mut Node) {
+        node.align_self = AlignSelf::DEFAULT;
+        node.margin.top = Val::ZERO;
+        node.margin.bottom = Val::ZERO;
+    }
+
+    /// Reset column-style content alignment on a parent node.
+    pub fn reset_content_alignment(node: &mut Node) {
+        node.align_items = AlignItems::DEFAULT;
+        node.justify_content = JustifyContent::DEFAULT;
     }
 }
 
-/// Apply content alignment to a parent node based on its direction.
-fn apply_content_alignment_to_node(node: &mut Node, content_alignment: &ContentAlignment, direction: LayoutDirection) {
-    match direction {
-        LayoutDirection::Column => {
-            // In a column, X-axis uses align_items, Y-axis uses justify_content
-            node.align_items = match content_alignment.x {
-                AlignX::None => AlignItems::DEFAULT,
-                AlignX::Left => AlignItems::Start,
-                AlignX::Center => AlignItems::Center,
-                AlignX::Right => AlignItems::End,
-            };
-            node.justify_content = match content_alignment.y {
-                AlignY::None => JustifyContent::DEFAULT,
-                AlignY::Top => JustifyContent::Start,
-                AlignY::Center => JustifyContent::Center,
-                AlignY::Bottom => JustifyContent::End,
-            };
-        }
-        LayoutDirection::Row => {
-            // In a row, X-axis uses justify_content, Y-axis uses align_items
-            node.justify_content = match content_alignment.x {
-                AlignX::None => JustifyContent::DEFAULT,
-                AlignX::Left => JustifyContent::Start,
-                AlignX::Center => JustifyContent::Center,
-                AlignX::Right => JustifyContent::End,
-            };
-            node.align_items = match content_alignment.y {
-                AlignY::None => AlignItems::DEFAULT,
-                AlignY::Top => AlignItems::Start,
-                AlignY::Center => AlignItems::Center,
-                AlignY::Bottom => AlignItems::End,
-            };
-        }
-        LayoutDirection::Grid => {
-            // Origin Stack/Grid content alignment delegates to Row semantics.
-            node.justify_content = match content_alignment.x {
-                AlignX::None => JustifyContent::DEFAULT,
-                AlignX::Left => JustifyContent::Start,
-                AlignX::Center => JustifyContent::Center,
-                AlignX::Right => JustifyContent::End,
-            };
-            node.align_items = match content_alignment.y {
-                AlignY::None => AlignItems::DEFAULT,
-                AlignY::Top => AlignItems::Start,
-                AlignY::Center => AlignItems::Center,
-                AlignY::Bottom => AlignItems::End,
-            };
-        }
+/// Row alignment implementations.
+pub mod row {
+    use super::*;
+
+    /// Apply row-style self-alignment to a child node.
+    /// X-axis uses `margin.left`/`margin.right`, Y-axis uses `align_self`.
+    pub fn apply_alignment(node: &mut Node, alignment: &Alignment) {
+        (node.margin.left, node.margin.right) = match alignment.x {
+            AlignX::None => (Val::ZERO, Val::ZERO),
+            AlignX::Left => (Val::ZERO, Val::Auto),
+            AlignX::Center => (Val::Auto, Val::Auto),
+            AlignX::Right => (Val::Auto, Val::ZERO),
+        };
+
+        node.align_self = match alignment.y {
+            AlignY::None => AlignSelf::DEFAULT,
+            AlignY::Top => AlignSelf::Start,
+            AlignY::Center => AlignSelf::Center,
+            AlignY::Bottom => AlignSelf::End,
+        };
     }
+
+    /// Apply row-style content alignment to a parent node.
+    /// X-axis uses `justify_content`, Y-axis uses `align_items`.
+    pub fn apply_content_alignment(node: &mut Node, content_alignment: &ContentAlignment) {
+        node.justify_content = match content_alignment.x {
+            AlignX::None => JustifyContent::DEFAULT,
+            AlignX::Left => JustifyContent::Start,
+            AlignX::Center => JustifyContent::Center,
+            AlignX::Right => JustifyContent::End,
+        };
+        node.align_items = match content_alignment.y {
+            AlignY::None => AlignItems::DEFAULT,
+            AlignY::Top => AlignItems::Start,
+            AlignY::Center => AlignItems::Center,
+            AlignY::Bottom => AlignItems::End,
+        };
+    }
+
+    /// Reset row-style alignment on a child node.
+    pub fn reset_alignment(node: &mut Node) {
+        node.margin.left = Val::ZERO;
+        node.margin.right = Val::ZERO;
+        node.align_self = AlignSelf::DEFAULT;
+    }
+
+    /// Reset row-style content alignment on a parent node.
+    pub fn reset_content_alignment(node: &mut Node) {
+        node.justify_content = JustifyContent::DEFAULT;
+        node.align_items = AlignItems::DEFAULT;
+    }
+}
+
+/// Grid alignment implementations.
+pub mod grid {
+    use super::*;
+
+    /// Apply grid-style self-alignment to a child node.
+    /// X-axis uses `justify_self`, Y-axis uses `align_self`.
+    pub fn apply_alignment(node: &mut Node, alignment: &Alignment) {
+        node.justify_self = match alignment.x {
+            AlignX::None => JustifySelf::DEFAULT,
+            AlignX::Left => JustifySelf::Start,
+            AlignX::Center => JustifySelf::Center,
+            AlignX::Right => JustifySelf::End,
+        };
+        node.align_self = match alignment.y {
+            AlignY::None => AlignSelf::DEFAULT,
+            AlignY::Top => AlignSelf::Start,
+            AlignY::Center => AlignSelf::Center,
+            AlignY::Bottom => AlignSelf::End,
+        };
+    }
+
+    /// Reset grid-style alignment on a child node.
+    pub fn reset_alignment(node: &mut Node) {
+        node.justify_self = JustifySelf::DEFAULT;
+        node.align_self = AlignSelf::DEFAULT;
+    }
+
+    // Grid uses row semantics for content alignment, so no separate functions needed.
+    // Use `row::apply_content_alignment` and `row::reset_content_alignment`.
 }

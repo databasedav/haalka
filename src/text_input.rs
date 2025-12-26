@@ -159,7 +159,7 @@ impl TextInput {
 
     /// When this input's focused state changes, run a system which takes [`In`](`System::In`)
     /// this input's [`Entity`] and its current focused state.
-    pub fn on_focused_change_with_system<Marker>(
+    pub fn on_focused_change<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, bool)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
@@ -178,11 +178,6 @@ impl TextInput {
                 }))
                 .apply(remove_system_holder_on_remove(system_holder.clone()))
         })
-    }
-
-    /// When this input's focused state changes, run a function with its current focused state.
-    pub fn on_focused_change(self, mut handler: impl FnMut(bool) + Send + Sync + 'static) -> Self {
-        self.on_focused_change_with_system(move |In((_, is_focused))| handler(is_focused))
     }
 
     /// Set the focused state of this input.
@@ -228,7 +223,7 @@ impl TextInput {
 
     /// When the string in this input changes, run a `handler` [`System`] which takes
     /// [`In`](System::In) the [`Entity`] of this input's [`Entity`] and the new [`String`].
-    pub fn on_change_with_system<Marker>(
+    pub fn on_change<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, String)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
@@ -249,11 +244,6 @@ impl TextInput {
                 .apply(remove_system_holder_on_remove(system_holder))
         })
     }
-
-    /// When the text of this input changes, run a function with the new text.
-    pub fn on_change(self, mut handler: impl FnMut(String) + Send + Sync + 'static) -> Self {
-        self.on_change_with_system(move |In((_, text))| handler(text))
-    }
 }
 
 /// A component to store the last text value that was successfully applied by
@@ -264,6 +254,8 @@ struct LastSignalText(String);
 
 fn queue_set_text_actions(text_input_queue: &mut TextInputQueue, text: String) {
     for action in [
+        // TODO: need this extra one (with non-empty string too), otherwise, cosmic text panics on deleting an empty selection, which may be a bug
+        TextInputAction::Edit(actions::TextInputEdit::Paste(" ".to_string())),
         TextInputAction::Edit(actions::TextInputEdit::SelectAll),
         TextInputAction::Edit(actions::TextInputEdit::Paste(text)),
     ] {

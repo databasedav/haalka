@@ -74,12 +74,13 @@ fn ui_root() -> impl Element {
         .child(
             Row::<Node>::new()
                 .with_node(|mut node| node.column_gap = Val::Px(15.0))
-                .with_builder(|builder| builder.insert(Counter(0)).lazy_entity(counter_holder.clone()))
+                .insert(Counter(0))
+                .lazy_entity(counter_holder.clone())
                 .item(counter_button(counter_holder.clone(), "-", -1))
                 .item(
                     El::<Text>::new().text_font(TextFont::from_font_size(25.)).text_signal(
-                        SignalBuilder::from_component_lazy(counter_holder.clone())
-                            .map_in(|counter: Counter| *counter)
+                        SignalBuilder::from_component_lazy::<Counter>(counter_holder.clone())
+                            .map_in(deref_copied)
                             .dedupe()
                             .map_in_ref(ToString::to_string)
                             .map_in(Text)
@@ -97,7 +98,7 @@ fn counter_button(counter_holder: LazyEntity, label: &'static str, step: i32) ->
         .align_content(Align::center())
         .border_radius(BorderRadius::MAX)
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
-        .with_builder(|builder| builder.lazy_entity(button_holder.clone()))
+        .lazy_entity(button_holder.clone())
         .background_color_signal(
             SignalBuilder::from_lazy_entity(button_holder)
                 .has_component::<Hovered>()

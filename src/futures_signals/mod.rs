@@ -12,7 +12,7 @@
 
 pub mod node_builder;
 pub(crate) use node_builder::init_async_world;
-pub use node_builder::{NodeBuilder, TaskHolder, async_world};
+pub use node_builder::{NodeBuilder, async_world};
 
 pub mod raw;
 pub use raw::{

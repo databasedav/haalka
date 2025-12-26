@@ -9,8 +9,21 @@ use bevy_ecs::{
     prelude::*,
     system::{IntoObserverSystem, SystemId, SystemInput},
 };
+use bevy_math::Vec2;
+use bevy_ui::ComputedNode;
 use jonmo::builder::JonmoBuilder;
 use std::sync::{Arc, OnceLock};
+
+pub(crate) fn max_scroll_offset(node: &ComputedNode) -> Vec2 {
+    (node.content_size - node.size() + node.scrollbar_size).max(Vec2::ZERO)
+}
+
+pub(crate) fn clamp_scroll_position(position: Vec2, node: Option<&ComputedNode>) -> Vec2 {
+    match node {
+        Some(node) => position.clamp(Vec2::ZERO, max_scroll_offset(node)),
+        None => position.max(Vec2::ZERO),
+    }
+}
 
 /// Marker [`Component`] for filtering `SystemId` `Entity`s managed by haalka.
 #[derive(Component)]

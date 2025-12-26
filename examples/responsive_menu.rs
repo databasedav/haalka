@@ -6,12 +6,12 @@
 
 mod utils;
 use bevy_ui::widget::NodeImageMode;
+use bevy_ui::Pressed;
 use utils::*;
 
 use std::sync::OnceLock;
 
 use bevy::{prelude::*, window::WindowResized};
-use futures_signals::signal::Mutable;
 use haalka::prelude::*;
 
 fn main() {
@@ -25,8 +25,12 @@ fn main() {
                 .chain(),
         )
         .add_systems(Update, on_resize)
+        .insert_resource(Width(0.))
         .run();
 }
+
+#[derive(Resource, Clone, Copy, PartialEq, Deref, DerefMut)]
+struct Width(f32);
 
 const BASE_SIZE: f32 = 600.;
 const GAP: f32 = 10.;
@@ -54,7 +58,7 @@ fn image() -> &'static Handle<Image> {
     IMAGE.get().expect("expected IMAGE to be initialized")
 }
 
-fn nine_slice_el(frame_signal: impl Signal<Item = usize> + Send + 'static) -> El<ImageNode> {
+fn nine_slice_el(frame_signal: impl Signal<Item = usize> + Send + Sync + 'static) -> El<ImageNode> {
     El::<ImageNode>::new()
         .image_node(
             ImageNode::from_atlas_image(
@@ -79,30 +83,36 @@ fn nine_slice_el(frame_signal: impl Signal<Item = usize> + Send + 'static) -> El
 }
 
 fn nine_slice_button() -> impl Element {
-    let hovered = Mutable::new(false);
-    let pressed = Mutable::new(false);
-    nine_slice_el(map_ref! {
-        let hovered = hovered.signal(),
-        let pressed = pressed.signal() => {
-            if *pressed {
+    let lazy_entity = LazyEntity::new();
+    let pressed_hovered_signal = SignalBuilder::from_lazy_entity(lazy_entity.clone())
+        .map(|In(entity), presseds: Query<&Pressed>| presseds.contains(entity))
+        .dedupe()
+        .combine(
+            SignalBuilder::from_lazy_entity(lazy_entity.clone())
+                .has_component::<Hovered>()
+                .dedupe(),
+        )
+        .dedupe();
+
+    nine_slice_el(
+        pressed_hovered_signal.clone().map_in(|(pressed, hovered)| {
+            if pressed {
                 2
-            } else if *hovered {
+            } else if hovered {
                 1
             } else {
                 0
             }
-        }
-    })
+        }),
+    )
+    .lazy_entity(lazy_entity)
     .with_node(|mut node| {
         node.width = Val::Px(100.);
         node.height = Val::Px(50.);
     })
-    .hovered_sync(hovered)
-    .pressed_sync(pressed)
+    .insert(Pickable::default())
     .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
 }
-
-static WIDTH: LazyLock<Mutable<f32>> = LazyLock::new(default);
 
 fn horizontal() -> impl Element {
     Row::<Node>::new()
@@ -146,21 +156,21 @@ fn vertical() -> impl Element {
 }
 
 fn menu() -> impl Element {
-    nine_slice_el(always(3))
+    let width = SignalBuilder::from_resource::<Width>().map_in(deref_copied);
+    nine_slice_el(SignalBuilder::always(3))
         .with_node(|mut node| {
             node.height = Val::Px(BASE_SIZE);
             node.padding = UiRect::all(Val::Px(GAP));
         })
         .on_signal_with_node(
-            WIDTH.signal().map(|width| BASE_SIZE.min(width)).dedupe().map(Val::Px),
+            width.clone().map_in(|width| BASE_SIZE.min(width)).dedupe().map_in(Val::Px),
             |mut node, width| node.width = width,
         )
         .child_signal(
-            WIDTH
-                .signal()
-                .map(|width| width > 400.)
+            width
+                .map_in(|width| width > 400.)
                 .dedupe()
-                .map_bool(|| horizontal().type_erase(), || vertical().type_erase()),
+                .map_bool_in(|| horizontal().type_erase(), || vertical().type_erase()),
         )
 }
 
@@ -171,6 +181,7 @@ fn ui_root() -> impl Element {
             node.height = Val::Percent(100.);
         })
         .align_content(Align::center())
+        .insert(Pickable::default())
         .cursor(CursorIcon::default())
         .child(
             Column::<Node>::new()
@@ -186,7 +197,13 @@ fn ui_root() -> impl Element {
                         .item(
                             El::<Text>::new()
                                 .text_font(TextFont::from_font_size(FONT_SIZE))
-                                .text_signal(WIDTH.signal_ref(ToString::to_string).map(Text)),
+                                .text_signal(
+                                    SignalBuilder::from_resource::<Width>()
+                                        .map_in(deref_copied)
+                                        .map_in_ref(|width: &f32| width.to_string())
+                                        .map_in(Text)
+                                        .map_in(Some),
+                                ),
                         ),
                 )
                 .item(menu()),
@@ -210,8 +227,8 @@ fn setup(
     commands.spawn(Camera2d);
 }
 
-fn on_resize(mut resize_events: MessageReader<WindowResized>) {
+fn on_resize(mut resize_events: MessageReader<WindowResized>, mut width: ResMut<Width>) {
     for event in resize_events.read() {
-        WIDTH.set(event.width)
+        **width = event.width;
     }
 }

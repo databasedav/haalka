@@ -14,7 +14,7 @@ use bevy_log::prelude::*;
 use bevy_math::Vec2;
 use bevy_picking::{
     backend::prelude::*,
-    hover::{HoverMap, PickingInteraction, PreviousHoverMap},
+    hover::{HoverMap, PickingInteraction},
     pointer::{Location, PointerMap},
     prelude::*,
 };
@@ -1150,9 +1150,11 @@ impl HoverThrottleTimers {
 }
 
 #[derive(Component, Clone)]
+/// Marker component for entities currently hovered by a pointer.
 pub struct Hovered;
 
 #[derive(Component, Clone)]
+/// Marker component for entities currently being dragged.
 pub struct Dragged;
 
 #[derive(Component, Default, Clone)]
@@ -1204,27 +1206,55 @@ pub struct Leave {
     pub hit: HitData,
 }
 
+/// Caches the most recent `HitData` observed anywhere in this entity's hovered subtree.
+///
+/// This enables emitting `Leave { hit: .. }` under subtree-hover semantics even though the
+/// picking `HoverMap` / `PreviousHoverMap` typically only includes directly hovered entities.
+#[derive(Component, Clone)]
+struct LastSubtreeHoverHit(HitData);
+
 // TODO: integrate with bubbling observers and upstreamed event listener
 fn update_hover_states(
     pointer_map: Res<PointerMap>,
     pointers: Query<&PointerLocation>,
     hover_map: Res<HoverMap>,
-    previous_hover_map: Res<PreviousHoverMap>,
-    mut hovereds: Query<(Entity, Option<&Hovered>)>,
+    mut hovereds: Query<
+        (Entity, Option<&Hovered>, Option<&LastSubtreeHoverHit>),
+        Or<(With<Hoverable>, With<Hovered>)>,
+    >,
     child_ofs: Query<&ChildOf>,
     mut commands: Commands,
 ) {
     let pointer_id = PointerId::Mouse;
     let hover_set = hover_map.get(&pointer_id);
-    for (entity, hovered) in hovereds.iter_mut() {
-        let hit_data_option = match hover_set {
-            Some(map) => map
-                .iter()
-                .find(|(ha, _)| **ha == entity || child_ofs.iter_ancestors(**ha).any(|e| e == entity))
-                .map(|(_, hit_data)| hit_data),
-            None => None,
-        };
+
+    for (entity, hovered, last_subtree_hit) in hovereds.iter_mut() {
+        let hit_data_option = hover_set.and_then(|map| {
+            if let Some(hit) = map.get(&entity) {
+                Some(hit)
+            } else {
+                map.iter()
+                    .find(|(hit_entity, _)| child_ofs.iter_ancestors(**hit_entity).any(|e| e == entity))
+                    .map(|(_, hit_data)| hit_data)
+            }
+        });
+
+        // Keep the cached hit fresh while hovered (self or descendant).
+        if let Some(hit) = hit_data_option {
+            let should_update_cache = last_subtree_hit
+                .is_none_or(|cached| cached.0 != *hit);
+            if should_update_cache {
+                if let Ok(mut entity_commands) = commands.get_entity(entity) {
+                    entity_commands.insert(LastSubtreeHoverHit(hit.clone()));
+                }
+            }
+        }
+
+        // Semantics:
+        // - Entered when self OR any descendant is hovered.
+        // - Left when self AND all descendants are not hovered.
         let is_hovered = hit_data_option.is_some();
+
         if hovered.is_some() != is_hovered {
             let Some(location) = pointer_map
                 .get_entity(pointer_id)
@@ -1238,36 +1268,31 @@ fn update_hover_states(
                 );
                 continue;
             };
+
             if let Some(hit) = hit_data_option.cloned() {
                 commands.trigger(Pointer::new(pointer_id, location, Enter { hit }, entity));
-                if let Ok(mut entity) = commands.get_entity(entity) {
-                    entity.insert(Hovered);
+                if let Ok(mut entity_commands) = commands.get_entity(entity) {
+                    entity_commands.insert(Hovered);
                 }
-            } else {
-                let previous_hit = previous_hover_map.get(&pointer_id).and_then(|map| {
-                    map.iter()
-                        .find(|(ha, _)| **ha == entity || child_ofs.iter_ancestors(**ha).any(|e| e == entity))
-                        .map(|(_, hit)| hit.clone())
-                });
+                continue;
+            }
 
-                if let Some(hit) = previous_hit {
-                    commands.trigger(Pointer::new(pointer_id, location, Leave { hit }, entity));
-                    if let Ok(mut entity) = commands.get_entity(entity) {
-                        entity.remove::<Hovered>();
-                    }
-                } else {
-                    debug!(
-                        "Unable to get previous hit for pointer {:?} leave on {:?}",
-                        pointer_id, entity
-                    );
-                }
+            if let Some(hit) = last_subtree_hit.map(|h| h.0.clone()) {
+                commands.trigger(Pointer::new(pointer_id, location, Leave { hit }, entity));
+            } else {
+                debug!(
+                    "Unable to get cached subtree hit for pointer {:?} leave on {:?}",
+                    pointer_id, entity
+                );
+            }
+
+            if let Ok(mut entity_commands) = commands.get_entity(entity) {
+                entity_commands.remove::<Hovered>();
+                entity_commands.remove::<LastSubtreeHoverHit>();
             }
         }
     }
 }
-
-#[derive(Component)]
-struct OutPropagationStopped;
 
 #[derive(Component, Clone)]
 struct PressDataInternal {
@@ -1519,7 +1544,6 @@ pub trait CursorOnHoverable: PointerEventAware {
                         }
                     },
                 )
-                .insert(OutPropagationStopped)
                 .observe(|mut out: On<Pointer<Out>>, mut commands: Commands| {
                     out.propagate(false);
                     if let Ok(mut entity) = commands.get_entity(out.entity) {
@@ -1644,8 +1668,22 @@ fn on_set_cursor(
 #[derive(Resource)]
 pub struct UpdateHoverStatesDisabled;
 
+fn stop_enter_leave_propagation(mut enter: On<Pointer<Enter>>) {
+    enter.propagate(false);
+}
+
+fn stop_leave_propagation(mut leave: On<Pointer<Leave>>) {
+    leave.propagate(false);
+}
+
 pub(super) fn plugin(app: &mut App) {
-    app.add_observer(on_set_cursor).add_systems(
+    // Our `Enter`/`Leave` semantics are subtree-based (self OR descendants). We compute that
+    // explicitly in `update_hover_states`, so we must *not* rely on `Pointer<E>` bubbling.
+    // Otherwise a child's `Leave` would be observed by parents as their own leave.
+    app.add_observer(stop_enter_leave_propagation)
+        .add_observer(stop_leave_propagation)
+        .add_observer(on_set_cursor)
+        .add_systems(
         Update,
         (
             (
