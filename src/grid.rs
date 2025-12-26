@@ -23,17 +23,9 @@ use super::{
 /// [`Element`](super::element::Element) with children aligned in a grid using a simple [`.row_wrap_cell_width`](Grid::row_wrap_cell_width) grid layout model. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/grid.rs).
 ///
 /// # `Clone` semantics
-/// This type derives `Clone`, but cloning should be treated as cloning a **build plan**, not a
-/// reusable UI template.
 ///
-/// Internally this wraps a `jonmo::builder::JonmoBuilder`. `JonmoBuilder` is `Clone`, but some of
-/// its internal on-spawn hooks are **one-shot** and may be drained/consumed on the first spawn.
-/// Because clones share those internal queues, spawning one clone can affect later spawns of other
-/// clones.
-///
-/// If you need to spawn the same UI multiple times with identical initialization, prefer using a
-/// factory function (e.g. `fn widget(...) -> impl Element`) that constructs a fresh `Grid` each
-/// time instead of cloning a pre-built value.
+/// This type implements [`Clone`] **only** to satisfy trait bounds required by signal combinators.
+/// **Cloning `Grid`s at runtime is a bug.** See [`Grid::clone`] for details.
 #[derive(Default)]
 pub struct Grid<NodeType> {
     builder: JonmoBuilder,
@@ -41,14 +33,36 @@ pub struct Grid<NodeType> {
 }
 
 impl<NodeType> Clone for Grid<NodeType> {
+    /// # Warning
+    ///
+    /// This clone implementation exists **only** to satisfy trait bounds required by signal
+    /// combinators. **Cloning `Grid`s at runtime is a bug and will lead to unexpected behavior.**
+    ///
+    /// Clones share internal on-spawn hooks via the underlying [`JonmoBuilder`]. These hooks are
+    /// one-shot ([`FnOnce`]) and are consumed when the element is spawned. Spawning one clone will
+    /// affect all other clones.
+    ///
+    /// Use factory functions instead if you need reusable UI templates:
+    ///
+    /// ```
+    /// use bevy_ui::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// fn my_grid(label: &str) -> Grid<Node> {
+    ///     Grid::new().cell(El::new().name(label))
+    /// }
+    ///
+    /// // Correct: each call creates a fresh element
+    /// let grid1 = my_grid("First");
+    /// let grid2 = my_grid("Second");
+    /// ```
     #[track_caller]
     fn clone(&self) -> Self {
-        #[cfg(debug_assertions)]
         warn!(
-            "Cloning Grid at {}. Note: Grid wraps JonmoBuilder, whose Clone shares some one-shot \
-             on-spawn hook queues. Spawning one clone can affect later spawns of other clones. \
-             Prefer factory functions that construct a fresh element when you need reusable UI \
-             templates.",
+            "Cloning `Grid` at {} is a bug! `Grid` wraps `JonmoBuilder`, whose `Clone` shares \
+             internal on-spawn hook queues. These hooks are one-shot (`FnOnce`) and are consumed on \
+             spawn. Spawning one clone will affect all other clones. Use factory functions instead \
+             if you need reusable UI templates.",
             std::panic::Location::caller()
         );
 
@@ -72,20 +86,13 @@ impl<NodeType: Bundle> From<JonmoBuilder> for Grid<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> Grid<NodeType> {
-    /// Construct a new [`Grid`] from a bundle.
-    pub fn from_bundle(node_bundle: NodeType) -> Self {
-        JonmoBuilder::from(node_bundle).into()
-    }
-}
-
 impl<NodeType: Bundle + Default> Grid<NodeType> {
     /// Construct a new [`Grid`] from a [`Bundle`] with a [`Default`] implementation.
     ///
     /// # Notes
     /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
-        Self::from_bundle(NodeType::default())
+        Self::from(JonmoBuilder::from(NodeType::default()))
     }
 }
 
@@ -95,7 +102,7 @@ impl<NodeType> BuilderWrapper for Grid<NodeType> {
     }
 }
 
-impl<NodeType> BuilderPassThrough for Grid<NodeType> {}
+impl<NodeType: Bundle> BuilderPassThrough for Grid<NodeType> {}
 
 impl<NodeType: Bundle> CursorOnHoverable for Grid<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Grid<NodeType> {}
@@ -112,7 +119,8 @@ impl<NodeType: Bundle> Grid<NodeType> {
     /// Sets the width of each grid column. The grid will automatically create as many columns
     /// as can fit within the container's width, wrapping items to new rows as needed.
     ///
-    /// This uses CSS Grid's `auto-fill` behavior: `columns_per_row = floor(container_width / cell_width)`.
+    /// This uses CSS Grid's `auto-fill` behavior: `columns_per_row = floor(container_width /
+    /// cell_width)`.
     ///
     /// For example, with a 300px wide container and `row_wrap_cell_width(100.0)`:
     ///
@@ -228,8 +236,4 @@ impl<NodeType: Bundle> Grid<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> Alignable for Grid<NodeType> {
-    fn layout_direction() -> LayoutDirection {
-        LayoutDirection::Grid
-    }
-}
+impl<NodeType: Bundle> Alignable for Grid<NodeType> {}

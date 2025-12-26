@@ -199,12 +199,7 @@ impl BasicScrollHandler {
     pub fn into_system(
         self,
     ) -> Box<
-        dyn FnMut(
-                In<(Entity, MouseWheel)>,
-                Res<ButtonInput<KeyCode>>,
-                Query<&mut ScrollPosition>,
-                Query<&ComputedNode>,
-            )
+        dyn FnMut(In<(Entity, MouseWheel)>, Res<ButtonInput<KeyCode>>, Query<&mut ScrollPosition>, Query<&ComputedNode>)
             + Send
             + Sync
             + 'static,

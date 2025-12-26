@@ -25,17 +25,9 @@ use super::{
 /// [MoonZoon's implementation](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/el.rs#L41-L69) and should not be relied on.
 ///
 /// # `Clone` semantics
-/// This type derives `Clone`, but cloning should be treated as cloning a **build plan**, not a
-/// reusable UI template.
 ///
-/// Internally this wraps a `jonmo::builder::JonmoBuilder`. `JonmoBuilder` is `Clone`, but some of
-/// its internal on-spawn hooks are **one-shot** and may be drained/consumed on the first spawn.
-/// Because clones share those internal queues, spawning one clone can affect later spawns of other
-/// clones.
-///
-/// If you need to spawn the same UI multiple times with identical initialization, prefer using a
-/// factory function (e.g. `fn widget(...) -> impl Element`) that constructs a fresh `El` each time
-/// instead of cloning a pre-built value.
+/// This type implements [`Clone`] **only** to satisfy trait bounds required by signal combinators.
+/// **Cloning `El`s at runtime is a bug.** See [`El::clone`] for details.
 #[derive(Default)]
 pub struct El<NodeType> {
     builder: JonmoBuilder,
@@ -43,14 +35,36 @@ pub struct El<NodeType> {
 }
 
 impl<NodeType> Clone for El<NodeType> {
+    /// # Warning
+    ///
+    /// This clone implementation exists **only** to satisfy trait bounds required by signal
+    /// combinators. **Cloning `El`s at runtime is a bug and will lead to unexpected behavior.**
+    ///
+    /// Clones share internal on-spawn hooks via the underlying [`JonmoBuilder`]. These hooks are
+    /// one-shot ([`FnOnce`]) and are consumed when the element is spawned. Spawning one clone will
+    /// affect all other clones.
+    ///
+    /// Use factory functions instead if you need reusable UI templates:
+    ///
+    /// ```
+    /// use bevy_ui::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// fn my_el(label: &str) -> El<Node> {
+    ///     El::new().name(label)
+    /// }
+    ///
+    /// // Correct: each call creates a fresh element
+    /// let el1 = my_el("First");
+    /// let el2 = my_el("Second");
+    /// ```
     #[track_caller]
     fn clone(&self) -> Self {
-        #[cfg(debug_assertions)]
         warn!(
-            "Cloning El at {}. Note: El wraps JonmoBuilder, whose Clone shares some one-shot \
-             on-spawn hook queues. Spawning one clone can affect later spawns of other clones. \
-             Prefer factory functions that construct a fresh element when you need reusable UI \
-             templates.",
+            "Cloning `El` at {} is a bug! `El` wraps `JonmoBuilder`, whose `Clone` shares \
+             internal on-spawn hook queues. These hooks are one-shot (`FnOnce`) and are consumed on \
+             spawn. Spawning one clone will affect all other clones. Use factory functions instead \
+             if you need reusable UI templates.",
             std::panic::Location::caller()
         );
 
@@ -83,14 +97,6 @@ impl<NodeType: Bundle + Default> El<NodeType> {
     pub fn new() -> Self {
         Self::from(JonmoBuilder::from(NodeType::default()))
     }
-
-    /// Construct a new [`El`] from a [`Bundle`].
-    ///
-    /// # Notes
-    /// [`Bundle`]s without the [`Node`] component will not behave as expected.
-    pub fn from_bundle(node_bundle: NodeType) -> Self {
-        Self::from(JonmoBuilder::from(node_bundle))
-    }
 }
 
 impl<NodeType> BuilderWrapper for El<NodeType> {
@@ -99,7 +105,7 @@ impl<NodeType> BuilderWrapper for El<NodeType> {
     }
 }
 
-impl<NodeType> BuilderPassThrough for El<NodeType> {}
+impl<NodeType: Bundle> BuilderPassThrough for El<NodeType> {}
 
 impl<NodeType: Bundle> CursorOnHoverable for El<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for El<NodeType> {}
@@ -139,8 +145,4 @@ impl<NodeType: Bundle> El<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> Alignable for El<NodeType> {
-    fn layout_direction() -> LayoutDirection {
-        LayoutDirection::Column
-    }
-}
+impl<NodeType: Bundle> Alignable for El<NodeType> {}

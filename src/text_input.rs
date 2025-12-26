@@ -254,7 +254,8 @@ struct LastSignalText(String);
 
 fn queue_set_text_actions(text_input_queue: &mut TextInputQueue, text: String) {
     for action in [
-        // TODO: need this extra one (with non-empty string too), otherwise, cosmic text panics on deleting an empty selection, which may be a bug
+        // TODO: need this extra one (with non-empty string too), otherwise, cosmic text panics on deleting an empty
+        // selection, which may be a bug
         TextInputAction::Edit(actions::TextInputEdit::Paste(" ".to_string())),
         TextInputAction::Edit(actions::TextInputEdit::SelectAll),
         TextInputAction::Edit(actions::TextInputEdit::Paste(text)),

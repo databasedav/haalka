@@ -91,7 +91,7 @@ pub mod prelude {
         },
         row::Row,
         stack::Stack,
-        viewport_mutable::{ViewportMutable},
+        viewport_mutable::ViewportMutable,
     };
 
     pub use bevy_window::{CursorIcon, SystemCursorIcon};

@@ -20,17 +20,9 @@ use super::{
 /// [`Element`](super::element::Element) with children stacked on directly on top of each other (e.g. along the z-axis), with siblings ordered youngest to oldest, top to bottom. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Stack`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/stack.rs).
 ///
 /// # `Clone` semantics
-/// This type derives `Clone`, but cloning should be treated as cloning a **build plan**, not a
-/// reusable UI template.
 ///
-/// Internally this wraps a `jonmo::builder::JonmoBuilder`. `JonmoBuilder` is `Clone`, but some of
-/// its internal on-spawn hooks are **one-shot** and may be drained/consumed on the first spawn.
-/// Because clones share those internal queues, spawning one clone can affect later spawns of other
-/// clones.
-///
-/// If you need to spawn the same UI multiple times with identical initialization, prefer using a
-/// factory function (e.g. `fn widget(...) -> impl Element`) that constructs a fresh `Stack` each
-/// time instead of cloning a pre-built value.
+/// This type implements [`Clone`] **only** to satisfy trait bounds required by signal combinators.
+/// **Cloning `Stack`s at runtime is a bug.** See [`Stack::clone`] for details.
 #[derive(Default)]
 pub struct Stack<NodeType> {
     builder: JonmoBuilder,
@@ -38,14 +30,36 @@ pub struct Stack<NodeType> {
 }
 
 impl<NodeType> Clone for Stack<NodeType> {
+    /// # Warning
+    ///
+    /// This clone implementation exists **only** to satisfy trait bounds required by signal
+    /// combinators. **Cloning `Stack`s at runtime is a bug and will lead to unexpected behavior.**
+    ///
+    /// Clones share internal on-spawn hooks via the underlying [`JonmoBuilder`]. These hooks are
+    /// one-shot ([`FnOnce`]) and are consumed when the element is spawned. Spawning one clone will
+    /// affect all other clones.
+    ///
+    /// Use factory functions instead if you need reusable UI templates:
+    ///
+    /// ```
+    /// use bevy_ui::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// fn my_stack(label: &str) -> Stack<Node> {
+    ///     Stack::new().layer(El::new().name(label))
+    /// }
+    ///
+    /// // Correct: each call creates a fresh element
+    /// let stack1 = my_stack("First");
+    /// let stack2 = my_stack("Second");
+    /// ```
     #[track_caller]
     fn clone(&self) -> Self {
-        #[cfg(debug_assertions)]
         warn!(
-            "Cloning Stack at {}. Note: Stack wraps JonmoBuilder, whose Clone shares some one-shot \
-             on-spawn hook queues. Spawning one clone can affect later spawns of other clones. \
-             Prefer factory functions that construct a fresh element when you need reusable UI \
-             templates.",
+            "Cloning `Stack` at {} is a bug! `Stack` wraps `JonmoBuilder`, whose `Clone` shares \
+             internal on-spawn hook queues. These hooks are one-shot (`FnOnce`) and are consumed on \
+             spawn. Spawning one clone will affect all other clones. Use factory functions instead \
+             if you need reusable UI templates.",
             std::panic::Location::caller()
         );
 
@@ -73,13 +87,6 @@ impl<NodeType: Bundle> From<JonmoBuilder> for Stack<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> Stack<NodeType> {
-    /// Construct a new [`Stack`] from a bundle.
-    pub fn from_bundle(node_bundle: NodeType) -> Self {
-        JonmoBuilder::from(node_bundle).into()
-    }
-}
-
 impl<NodeType: Bundle + Default> Stack<NodeType> {
     /// Construct a new [`Stack`] from a [`Bundle`] with a [`Default`] implementation.
     ///
@@ -96,7 +103,7 @@ impl<NodeType> BuilderWrapper for Stack<NodeType> {
     }
 }
 
-impl<NodeType> BuilderPassThrough for Stack<NodeType> {}
+impl<NodeType: Bundle> BuilderPassThrough for Stack<NodeType> {}
 
 impl<NodeType: Bundle> CursorOnHoverable for Stack<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Stack<NodeType> {}
@@ -193,8 +200,4 @@ impl<NodeType: Bundle> Stack<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> Alignable for Stack<NodeType> {
-    fn layout_direction() -> LayoutDirection {
-        LayoutDirection::Grid
-    }
-}
+impl<NodeType: Bundle> Alignable for Stack<NodeType> {}

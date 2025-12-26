@@ -50,9 +50,7 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
     let hovered = SignalBuilder::from_lazy_entity(lazy_entity.clone())
         .has_component::<Hovered>()
         .dedupe();
-    let shifted = SignalBuilder::from_resource::<Shifted>()
-        .map_in(deref_copied)
-        .dedupe();
+    let shifted = SignalBuilder::from_resource::<Shifted>().map_in(deref_copied).dedupe();
     Column::<Node>::new()
         .lazy_entity(lazy_entity)
         .insert(Pickable::default())
@@ -70,10 +68,7 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
         )
         .cursor_signal(
             shifted
-                .map_bool_in(
-                    || SystemCursorIcon::EwResize,
-                    || SystemCursorIcon::NsResize,
-                )
+                .map_bool_in(|| SystemCursorIcon::EwResize, || SystemCursorIcon::NsResize)
                 .map_in(CursorIcon::System)
                 .dedupe(),
         )
@@ -90,9 +85,7 @@ fn ui_root() -> impl Element {
     let hovered = SignalBuilder::from_lazy_entity(lazy_entity.clone())
         .has_component::<Hovered>()
         .dedupe();
-    let shifted = SignalBuilder::from_resource::<Shifted>()
-        .map_in(deref_copied)
-        .dedupe();
+    let shifted = SignalBuilder::from_resource::<Shifted>().map_in(deref_copied).dedupe();
     El::<Node>::new()
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
@@ -119,10 +112,7 @@ fn ui_root() -> impl Element {
                 )
                 .cursor_signal(
                     shifted
-                        .map_bool_in(
-                            || SystemCursorIcon::EwResize,
-                            || SystemCursorIcon::NsResize,
-                        )
+                        .map_bool_in(|| SystemCursorIcon::EwResize, || SystemCursorIcon::NsResize)
                         .map_in(CursorIcon::System)
                         .dedupe(),
                 )

@@ -95,8 +95,7 @@ deployed_wasm_example = []
 
 [dev-dependencies]
 bevy = "0.17"
-# TODO: https://github.com/NiklasEi/bevy_asset_loader/pull/259
-bevy_asset_loader = { version = "0.24.0-rc.1", features = ["2d"] }
+bevy_asset_loader = { version = "0.24", features = ["2d"] }
 # TODO version 0.8 breaks valid html colors ?
 colorgrad = "0.7"
 rand = "0.9"

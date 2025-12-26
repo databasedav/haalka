@@ -20,17 +20,9 @@ use super::{
 /// [`Element`](super::element::Element) with horizontally stacked children. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Row`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/row.rs).
 ///
 /// # `Clone` semantics
-/// This type derives `Clone`, but cloning should be treated as cloning a **build plan**, not a
-/// reusable UI template.
 ///
-/// Internally this wraps a `jonmo::builder::JonmoBuilder`. `JonmoBuilder` is `Clone`, but some of
-/// its internal on-spawn hooks are **one-shot** and may be drained/consumed on the first spawn.
-/// Because clones share those internal queues, spawning one clone can affect later spawns of other
-/// clones.
-///
-/// If you need to spawn the same UI multiple times with identical initialization, prefer using a
-/// factory function (e.g. `fn widget(...) -> impl Element`) that constructs a fresh `Row` each time
-/// instead of cloning a pre-built value.
+/// This type implements [`Clone`] **only** to satisfy trait bounds required by signal combinators.
+/// **Cloning `Row`s at runtime is a bug.** See [`Row::clone`] for details.
 #[derive(Default)]
 pub struct Row<NodeType> {
     builder: JonmoBuilder,
@@ -38,14 +30,36 @@ pub struct Row<NodeType> {
 }
 
 impl<NodeType> Clone for Row<NodeType> {
+    /// # Warning
+    ///
+    /// This clone implementation exists **only** to satisfy trait bounds required by signal
+    /// combinators. **Cloning `Row`s at runtime is a bug and will lead to unexpected behavior.**
+    ///
+    /// Clones share internal on-spawn hooks via the underlying [`JonmoBuilder`]. These hooks are
+    /// one-shot ([`FnOnce`]) and are consumed when the element is spawned. Spawning one clone will
+    /// affect all other clones.
+    ///
+    /// Use factory functions instead if you need reusable UI templates:
+    ///
+    /// ```
+    /// use bevy_ui::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// fn my_row(label: &str) -> Row<Node> {
+    ///     Row::new().item(El::new().name(label))
+    /// }
+    ///
+    /// // Correct: each call creates a fresh element
+    /// let row1 = my_row("First");
+    /// let row2 = my_row("Second");
+    /// ```
     #[track_caller]
     fn clone(&self) -> Self {
-        #[cfg(debug_assertions)]
         warn!(
-            "Cloning Row at {}. Note: Row wraps JonmoBuilder, whose Clone shares some one-shot \
-             on-spawn hook queues. Spawning one clone can affect later spawns of other clones. \
-             Prefer factory functions that construct a fresh element when you need reusable UI \
-             templates.",
+            "Cloning `Row` at {} is a bug! `Row` wraps `JonmoBuilder`, whose `Clone` shares \
+             internal on-spawn hook queues. These hooks are one-shot (`FnOnce`) and are consumed on \
+             spawn. Spawning one clone will affect all other clones. Use factory functions instead \
+             if you need reusable UI templates.",
             std::panic::Location::caller()
         );
 
@@ -78,14 +92,6 @@ impl<NodeType: Bundle + Default> Row<NodeType> {
     /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
         Self::from(JonmoBuilder::from(NodeType::default()))
-    }
-
-    /// Construct a new [`Row`] from a [`Bundle`].
-    ///
-    /// # Notes
-    /// [`Bundle`]s without the [`Node`] component will not behave as expected.
-    pub fn from_bundle(node_bundle: NodeType) -> Self {
-        Self::from(JonmoBuilder::from(node_bundle))
     }
 }
 
@@ -186,8 +192,4 @@ impl<NodeType: Bundle> Row<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> Alignable for Row<NodeType> {
-    fn layout_direction() -> LayoutDirection {
-        LayoutDirection::Row
-    }
-}
+impl<NodeType: Bundle> Alignable for Row<NodeType> {}

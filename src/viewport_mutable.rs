@@ -125,9 +125,8 @@ pub trait ViewportMutable: BuilderWrapper {
                         &mut ScrollPosition,
                         &mut LastSignalScrollPosition,
                         Option<&ComputedNode>,
-                     )>| {
-                        if let Ok((mut scroll_pos, mut last_signal_pos, maybe_node)) =
-                            query.get_mut(entity)
+                    )>| {
+                        if let Ok((mut scroll_pos, mut last_signal_pos, maybe_node)) = query.get_mut(entity)
                             && last_signal_pos.x.to_bits() != x.to_bits()
                         {
                             let mut target = x;
@@ -162,9 +161,8 @@ pub trait ViewportMutable: BuilderWrapper {
                         &mut ScrollPosition,
                         &mut LastSignalScrollPosition,
                         Option<&ComputedNode>,
-                     )>| {
-                        if let Ok((mut scroll_pos, mut last_signal_pos, maybe_node)) =
-                            query.get_mut(entity)
+                    )>| {
+                        if let Ok((mut scroll_pos, mut last_signal_pos, maybe_node)) = query.get_mut(entity)
                             && last_signal_pos.y.to_bits() != y.to_bits()
                         {
                             let mut target = y;

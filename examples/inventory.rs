@@ -848,18 +848,14 @@ fn ui_root() -> impl Element {
             node.height = Val::Percent(100.);
         })
         .with_builder(move |builder| {
-            builder
-                .hold_signals([crafting_outputter])
-                .on_spawn_with_system(
-                    move |In(entity): In<_>,
-                          camera: Single<Entity, With<IsDefaultUiCamera>>,
-                          mut commands: Commands| {
-                        // https://github.com/bevyengine/bevy/discussions/11223
-                        if let Ok(mut commands) = commands.get_entity(entity) {
-                            commands.try_insert(UiTargetCamera(*camera));
-                        }
-                    },
-                )
+            builder.hold_signals([crafting_outputter]).on_spawn_with_system(
+                move |In(entity): In<_>, camera: Single<Entity, With<IsDefaultUiCamera>>, mut commands: Commands| {
+                    // https://github.com/bevyengine/bevy/discussions/11223
+                    if let Ok(mut commands) = commands.get_entity(entity) {
+                        commands.try_insert(UiTargetCamera(*camera));
+                    }
+                },
+            )
         })
         // Root is used for pointer tracking and global click/drag behavior.
         // It must not be hoverable, otherwise it competes with cell cursors (Grab vs Default).

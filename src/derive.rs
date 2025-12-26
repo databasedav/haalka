@@ -190,6 +190,7 @@ macro_rules! impl_haalka_methods_for_aligners_and_node_bundles {
                         text_layout: TextLayout,
                         text_font: TextFont,
                         text_color: TextColor,
+                        text_shadow: TextShadow,
                         text_node_flags: TextNodeFlags,
                         #[skip_signal]
                         content_size: ContentSize,

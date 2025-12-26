@@ -8,8 +8,7 @@ use bevy_input_focus::InputFocus;
 use bevy_ui_text_input::{TextInputContents, TextInputMode};
 use utils::*;
 
-use std::collections::HashMap;
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashMap};
 
 use bevy::prelude::*;
 use haalka::{
@@ -141,11 +140,7 @@ fn init(world: &mut World) {
     ui_root(pairs).spawn(world);
 }
 
-fn text_input(
-    model_entity: Entity,
-    field: KeyValue,
-    initial: String,
-) -> impl Element {
+fn text_input(model_entity: Entity, field: KeyValue, initial: String) -> impl Element {
     let ui_entity = LazyEntity::new();
     let focused = SignalBuilder::from_resource::<InputFocus>()
         .map_in(clone!((ui_entity) move |focus| focus.0 == Some(*ui_entity)))
@@ -276,9 +271,7 @@ fn text_input(
                                 commands.entity(model_entity).insert(KeyString(text.clone()));
                             }
                             KeyValue::Value => {
-                                commands
-                                    .entity(model_entity)
-                                    .insert(ValueString(text.clone()));
+                                commands.entity(model_entity).insert(ValueString(text.clone()));
                             }
                         }
 
@@ -387,10 +380,7 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
                             if current[target_index] == desired[target_index] {
                                 continue;
                             }
-                            let Some(from_index) = current
-                                .iter()
-                                .position(|e| *e == desired[target_index])
-                            else {
+                            let Some(from_index) = current.iter().position(|e| *e == desired[target_index]) else {
                                 continue;
                             };
                             current.remove(from_index);
@@ -453,7 +443,9 @@ fn key_values(pairs: Pairs) -> Column<Node> {
                     return;
                 };
                 let spacer_px = window.height() * VIEWPORT_HEIGHT_VH / 100.;
-                world.entity_mut(entity).insert(ScrollPosition(Vec2::new(0., spacer_px + ROW_GAP)));
+                world
+                    .entity_mut(entity)
+                    .insert(ScrollPosition(Vec2::new(0., spacer_px + ROW_GAP)));
             })
         })
         .item(viewport_spacer())
@@ -559,7 +551,10 @@ fn ui_root(pairs: Pairs) -> impl Element {
                             node.width = Val::Px(INPUT_WIDTH * 2. + INPUT_HEIGHT + 10. * 2.);
                         })
                         .align_content(Align::center())
-                        .item(key_values(pairs.clone()).with_node(|mut node| node.height = Val::Percent(KEY_VALUES_HEIGHT_PERCENT)))
+                        .item(
+                            key_values(pairs.clone())
+                                .with_node(|mut node| node.height = Val::Percent(KEY_VALUES_HEIGHT_PERCENT)),
+                        )
                         .item({
                             let lazy_entity = LazyEntity::new();
                             El::<Node>::new()

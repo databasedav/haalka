@@ -93,7 +93,7 @@ fn lists_element(
                             },
                         )
                 } else {
-                    el  
+                    el
                 }
             })
             .item(

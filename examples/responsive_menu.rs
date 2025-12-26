@@ -5,8 +5,7 @@
 //!   buttons.
 
 mod utils;
-use bevy_ui::widget::NodeImageMode;
-use bevy_ui::Pressed;
+use bevy_ui::{Pressed, widget::NodeImageMode};
 use utils::*;
 
 use std::sync::OnceLock;
@@ -94,17 +93,15 @@ fn nine_slice_button() -> impl Element {
         )
         .dedupe();
 
-    nine_slice_el(
-        pressed_hovered_signal.clone().map_in(|(pressed, hovered)| {
-            if pressed {
-                2
-            } else if hovered {
-                1
-            } else {
-                0
-            }
-        }),
-    )
+    nine_slice_el(pressed_hovered_signal.clone().map_in(|(pressed, hovered)| {
+        if pressed {
+            2
+        } else if hovered {
+            1
+        } else {
+            0
+        }
+    }))
     .lazy_entity(lazy_entity)
     .with_node(|mut node| {
         node.width = Val::Px(100.);
@@ -163,7 +160,11 @@ fn menu() -> impl Element {
             node.padding = UiRect::all(Val::Px(GAP));
         })
         .on_signal_with_node(
-            width.clone().map_in(|width| BASE_SIZE.min(width)).dedupe().map_in(Val::Px),
+            width
+                .clone()
+                .map_in(|width| BASE_SIZE.min(width))
+                .dedupe()
+                .map_in(Val::Px),
             |mut node, width| node.width = width,
         )
         .child_signal(

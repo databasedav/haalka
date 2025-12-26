@@ -119,9 +119,7 @@ fn grid(cells: MutableVec<Cell>) -> impl Element {
         .cells_signal_vec(
             cells
                 .signal_vec()
-                .map(|In(cell): In<Cell>| {
-                    El::<Node>::new().background_color(BackgroundColor::from(cell))
-                }),
+                .map(|In(cell): In<Cell>| El::<Node>::new().background_color(BackgroundColor::from(cell))),
         )
 }
 
@@ -133,16 +131,14 @@ fn hud() -> impl Element {
         })
         .align_content(Align::center())
         .item(
-            El::<Text>::new()
-                .text_font(TextFont::from_font_size(250.))
-                .text_signal(
-                    SignalBuilder::from_resource::<Score>()
-                        .map_in(deref_copied)
-                        .dedupe()
-                        .map_in_ref(ToString::to_string)
-                        .map_in(Text)
-                        .map_in(Some),
-                ),
+            El::<Text>::new().text_font(TextFont::from_font_size(250.)).text_signal(
+                SignalBuilder::from_resource::<Score>()
+                    .map_in(deref_copied)
+                    .dedupe()
+                    .map_in_ref(ToString::to_string)
+                    .map_in(Text)
+                    .map_in(Some),
+            ),
         )
         .item(
             Row::<Node>::new()
@@ -223,12 +219,7 @@ fn ui_root(cells: MutableVec<Cell>) -> impl Element {
             node.height = Val::Percent(100.);
         })
         .cursor(CursorIcon::default())
-        .layer(
-            Row::<Node>::new()
-                .align(Align::center())
-                .item(grid(cells))
-                .item(hud()),
-        )
+        .layer(Row::<Node>::new().align(Align::center()).item(grid(cells)).item(hud()))
         .layer_signal(
             SignalBuilder::from_resource::<GameOver>()
                 .map_in(deref_copied)
@@ -286,12 +277,12 @@ fn on_grid_size_change(
         GridSizeChange::Incr => {
             let new_size = cur_size + 1;
             let mut cells_write = cells.0.write(&mut vec_datas);
-            
+
             // Insert new top row (new_size empty cells at indices 0..new_size-1)
             for i in 0..new_size {
                 cells_write.insert(i, Cell::Empty);
             }
-            
+
             // Insert new right column cell at end of each old row
             // After inserting top row, old row k's end is at index: new_size + (k+1)*cur_size + k - 1
             // We insert at: new_size + (k+1)*cur_size + k = new_size + k*new_size + cur_size
@@ -299,7 +290,7 @@ fn on_grid_size_change(
                 let insert_idx = new_size + k * new_size + cur_size;
                 cells_write.insert(insert_idx, Cell::Empty);
             }
-            
+
             **grid_size = new_size;
         }
         GridSizeChange::Decr => {
@@ -310,7 +301,7 @@ fn on_grid_size_change(
 
                 if can_shrink {
                     let mut cells_write = cells.0.write(&mut vec_datas);
-                    
+
                     // Check if food is on the edges being removed (top row or right column)
                     let had_food = (0..cur_size).any(|i| {
                         // Top row: indices 0..cur_size
@@ -320,7 +311,7 @@ fn on_grid_size_change(
                         matches!(cells_write.get(top_idx), Some(Cell::Food))
                             || matches!(cells_write.get(right_idx), Some(Cell::Food))
                     });
-                    
+
                     // Remove from highest index to lowest to preserve indices
                     // Right column cells: (cur_size * cur_size - 1), minus cur_size each time
                     // For cur_size=4: indices 15, 11, 7 (but not 3, that's in top row)
@@ -328,15 +319,15 @@ fn on_grid_size_change(
                         let remove_idx = cur_size * cur_size - 1 - k * cur_size;
                         cells_write.remove(remove_idx);
                     }
-                    
+
                     // Top row: indices cur_size-1 down to 0
                     for i in (0..cur_size).rev() {
                         cells_write.remove(i);
                     }
-                    
+
                     drop(cells_write);
                     **grid_size = new_size;
-                    
+
                     if had_food {
                         commands.trigger(SpawnFood);
                     }
@@ -460,7 +451,7 @@ fn on_spawn_food(
         .enumerate()
         .filter_map(|(idx, cell)| matches!(cell, Cell::Empty).then_some(idx))
         .collect();
-    
+
     if let Some(idx) = empty_indices.into_iter().choose(rng.as_mut()) {
         cells_write.set(idx, Cell::Food);
     }

@@ -1218,10 +1218,7 @@ fn update_hover_states(
     pointer_map: Res<PointerMap>,
     pointers: Query<&PointerLocation>,
     hover_map: Res<HoverMap>,
-    mut hovereds: Query<
-        (Entity, Option<&Hovered>, Option<&LastSubtreeHoverHit>),
-        Or<(With<Hoverable>, With<Hovered>)>,
-    >,
+    mut hovereds: Query<(Entity, Option<&Hovered>, Option<&LastSubtreeHoverHit>), Or<(With<Hoverable>, With<Hovered>)>>,
     child_ofs: Query<&ChildOf>,
     mut commands: Commands,
 ) {
@@ -1241,8 +1238,7 @@ fn update_hover_states(
 
         // Keep the cached hit fresh while hovered (self or descendant).
         if let Some(hit) = hit_data_option {
-            let should_update_cache = last_subtree_hit
-                .is_none_or(|cached| cached.0 != *hit);
+            let should_update_cache = last_subtree_hit.is_none_or(|cached| cached.0 != *hit);
             if should_update_cache {
                 if let Ok(mut entity_commands) = commands.get_entity(entity) {
                     entity_commands.insert(LastSubtreeHoverHit(hit.clone()));
@@ -1684,26 +1680,26 @@ pub(super) fn plugin(app: &mut App) {
         .add_observer(stop_leave_propagation)
         .add_observer(on_set_cursor)
         .add_systems(
-        Update,
-        (
+            Update,
             (
-                pressable_system.run_if(any_with_component::<Pressable>),
-                pressed_system.run_if(any_with_component::<PressedSystem>),
-            )
-                .chain(),
-            dragged_system.run_if(any_with_component::<DraggedSystem>),
-            (
-                update_hover_states.run_if(
-                    any_with_component::<Hoverable>
-                        // TODO: apparently this updates every frame no matter what, if so, remove this condition
-                        // TODO: remove when native `Enter` and `Leave` available
-                        .and(resource_exists_and_changed::<HoverMap>)
-                        .and(not(resource_exists::<UpdateHoverStatesDisabled>)),
-                ),
-                hovered_system.run_if(any_with_component::<HoveredSystem>),
-            )
-                .chain(),
-            consume_queued_cursor.run_if(resource_removed::<CursorOnHoverDisabled>),
-        ),
-    );
+                (
+                    pressable_system.run_if(any_with_component::<Pressable>),
+                    pressed_system.run_if(any_with_component::<PressedSystem>),
+                )
+                    .chain(),
+                dragged_system.run_if(any_with_component::<DraggedSystem>),
+                (
+                    update_hover_states.run_if(
+                        any_with_component::<Hoverable>
+                            // TODO: apparently this updates every frame no matter what, if so, remove this condition
+                            // TODO: remove when native `Enter` and `Leave` available
+                            .and(resource_exists_and_changed::<HoverMap>)
+                            .and(not(resource_exists::<UpdateHoverStatesDisabled>)),
+                    ),
+                    hovered_system.run_if(any_with_component::<HoveredSystem>),
+                )
+                    .chain(),
+                consume_queued_cursor.run_if(resource_removed::<CursorOnHoverDisabled>),
+            ),
+        );
 }

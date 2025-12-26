@@ -169,11 +169,7 @@ impl<EW: ElementWrapper> BuilderWrapper for EW {
     }
 }
 
-impl<EW: ElementWrapper> Alignable for EW {
-    fn layout_direction() -> super::align::LayoutDirection {
-        EW::EL::layout_direction()
-    }
-}
+impl<EW: ElementWrapper> Alignable for EW {}
 
 /// Enables mixing of different types of [`Element`]s.
 ///
@@ -202,28 +198,33 @@ impl<T: BuilderWrapper> TypeEraseable for T {
 /// Alignment methods should be called *before* type erasure, not after.
 ///
 /// # `Clone` semantics
-/// This type derives `Clone`, but cloning should be treated as cloning a **build plan**, not a
-/// reusable UI template.
 ///
-/// Internally this wraps a `jonmo::builder::JonmoBuilder`. `JonmoBuilder` is `Clone`, but some of
-/// its internal on-spawn hooks are **one-shot** and may be drained/consumed on the first spawn.
-/// Because clones share those internal queues, spawning one clone can affect later spawns of other
-/// clones.
-///
-/// If you need a reusable widget, prefer returning a fresh element from a function rather than
-/// storing a pre-built `AlignabilityFacade` and cloning it for later spawns.
+/// This type implements [`Clone`] **only** to satisfy trait bounds required by signal combinators.
+/// **Cloning `AlignabilityFacade`s at runtime is a bug.** See [`AlignabilityFacade::clone`] for
+/// details.
 ///
 /// [`LayoutDirection`]: super::align::LayoutDirection
 pub struct AlignabilityFacade(JonmoBuilder);
 
 impl Clone for AlignabilityFacade {
+    /// # Warning
+    ///
+    /// This clone implementation exists **only** to satisfy trait bounds required by signal
+    /// combinators. **Cloning `AlignabilityFacade`s at runtime is a bug and will lead to unexpected
+    /// behavior.**
+    ///
+    /// Clones share internal on-spawn hooks via the underlying [`JonmoBuilder`]. These hooks are
+    /// one-shot ([`FnOnce`]) and are consumed when the element is spawned. Spawning one clone will
+    /// affect all other clones.
+    ///
+    /// Use factory functions instead if you need reusable UI templates.
     #[track_caller]
     fn clone(&self) -> Self {
-        #[cfg(debug_assertions)]
         warn!(
-            "Cloning AlignabilityFacade at {}. Note: this wraps JonmoBuilder, whose Clone shares some \
-             one-shot on-spawn hook queues. Spawning one clone can affect later spawns of other clones. \
-             Prefer factory functions that construct a fresh element when you need reusable UI templates.",
+            "Cloning `AlignabilityFacade` at {} is a bug! This wraps `JonmoBuilder`, whose `Clone` \
+             shares internal on-spawn hook queues. These hooks are one-shot (`FnOnce`) and are \
+             consumed on spawn. Spawning one clone will affect all other clones. Use factory \
+             functions instead if you need reusable UI templates.",
             std::panic::Location::caller()
         );
 
@@ -237,14 +238,7 @@ impl BuilderWrapper for AlignabilityFacade {
     }
 }
 
-impl Alignable for AlignabilityFacade {
-    fn layout_direction() -> super::align::LayoutDirection {
-        panic!(
-            "AlignabilityFacade::layout_direction() should never be called. \
-             Alignment methods should be called before type erasure, not after."
-        )
-    }
-}
+impl Alignable for AlignabilityFacade {}
 
 fn warn_non_orphan_ui_root(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
     world.commands().queue(move |world: &mut World| {

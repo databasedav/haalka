@@ -179,10 +179,7 @@ fn ui_root(cell_data: Vec<(usize, usize, LetterColor)>) -> impl Element {
                 })
                 .cursor_signal(
                     shifted
-                        .map_bool_in(
-                            || SystemCursorIcon::EwResize,
-                            || SystemCursorIcon::NsResize,
-                        )
+                        .map_bool_in(|| SystemCursorIcon::EwResize, || SystemCursorIcon::NsResize)
                         .map_in(CursorIcon::System)
                         .dedupe(),
                 )

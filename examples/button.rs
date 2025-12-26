@@ -48,6 +48,7 @@ fn button() -> impl Element {
             node.height = Val::Px(65.);
             node.border = UiRect::all(Val::Px(5.0));
         })
+        .insert(Pickable::default())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .align_content(Align::center())
         .border_radius(BorderRadius::MAX)
@@ -88,6 +89,7 @@ fn button() -> impl Element {
                     font_size: 33.0,
                     ..default()
                 })
+                .text_shadow(TextShadow::default())
                 .text_color(TextColor(Color::srgb(0.9, 0.9, 0.9)))
                 .text_signal(
                     pressed_hovered_signal
@@ -116,6 +118,7 @@ fn ui_root() -> impl Element {
             node.width = Val::Percent(100.);
             node.height = Val::Percent(100.);
         })
+        .insert(Pickable::default())
         .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(button())

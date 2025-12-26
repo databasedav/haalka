@@ -1,14 +1,9 @@
-//! Alignment system using marker components for a more Bevy-native approach.
+//! Simple alignment semantics ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`align`](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/style/align.rs) and [`align_content`](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/style/align_content.rs)
 //!
 //! An [`Element`](`super::element::Element`) can be aligned in nine different areas in relation to
 //! its parent: top left, top center, top right, center left, center, center right, bottom left,
 //! bottom center, and bottom right. This provides a simple and clear way to declare alignment as
 //! a thin layer on top of bevy_ui's flexbox and grid implementations.
-//!
-//! The alignment system uses marker components ([`Alignment`] and [`ContentAlignment`]) that are
-//! processed by Bevy systems based on the parent's [`LayoutDirection`]. This allows for flexible
-//! layouts where children automatically adapt when a parent's direction changes (similar to
-//! MoonZoon's Stripe element).
 //!
 //! [`Align`]s can be specified on individual elements using [`.align`](`Alignable::align`) and
 //! [`.align_signal`](`Alignable::align_signal`) or to all children using
@@ -55,8 +50,8 @@ pub enum AlignY {
     Bottom,
 }
 
-/// Marker component for self-alignment of an element within its parent.
-/// Applied to children and processed based on the parent's [`AlignmentHandler`].
+/// Component for self-alignment of an element within its parent. Applied to children and processed
+/// based on the parent's [`AlignmentHandler`].
 #[derive(Component, Clone, Copy, Default, PartialEq, Eq, Debug)]
 #[component(on_remove = on_alignment_remove)]
 pub struct Alignment {
@@ -66,8 +61,8 @@ pub struct Alignment {
     pub y: AlignY,
 }
 
-/// Marker component for content alignment (how a parent aligns its children).
-/// Applied to parents to control default alignment of all children.
+/// Component for content alignment (how a parent aligns its children). Applied to parents to
+/// control default alignment of all children.
 #[derive(Component, Clone, Copy, Default, PartialEq, Eq, Debug)]
 #[component(on_remove = on_content_alignment_remove)]
 pub struct ContentAlignment {
@@ -87,9 +82,9 @@ pub type ApplyContentAlignmentFn = fn(&mut Node, &ContentAlignment);
 pub type ResetAlignmentFn = fn(&mut Node);
 
 /// Handler component that defines how self-alignment is applied to a child node.
-/// 
+///
 /// This is the low-level component that drives alignment behavior. Users typically
-/// don't interact with this directly - instead use [`LayoutDirection`] which
+/// don't interact with this directly, instead use [`LayoutDirection`] which
 /// automatically installs the appropriate handlers.
 #[derive(Component, Clone, Copy)]
 pub struct AlignmentHandler {
@@ -100,9 +95,9 @@ pub struct AlignmentHandler {
 }
 
 /// Handler component that defines how content alignment is applied to a parent node.
-/// 
+///
 /// This is the low-level component that drives content alignment behavior. Users typically
-/// don't interact with this directly - instead use [`LayoutDirection`] which
+/// don't interact with this directly, instead use [`LayoutDirection`] which
 /// automatically installs the appropriate handlers.
 #[derive(Component, Clone, Copy)]
 pub struct ContentAlignmentHandler {
@@ -112,33 +107,32 @@ pub struct ContentAlignmentHandler {
     pub reset: ResetAlignmentFn,
 }
 
-/// The layout direction of a container element (high-level API).
-/// 
-/// This enum provides a queryable, serializable representation of layout direction.
+/// Simple, [haalka](crate)-managed layout direction options for container elements.
+///
 /// When inserted, it automatically installs the appropriate [`AlignmentHandler`] and
 /// [`ContentAlignmentHandler`] components via a component hook.
-/// 
+///
 /// For custom alignment behavior, either:
 /// - Insert handlers directly without using this enum
-/// - Insert this enum, then replace the handlers with custom ones
+/// - Insert this enum, then replace the desired handlers with custom ones
 #[derive(Component, Clone, Copy, Default, PartialEq, Eq, Debug, Hash)]
 #[component(on_insert = on_layout_direction_insert)]
 pub enum LayoutDirection {
     /// Vertical stacking layout (like [`Column`]).
-    /// 
+    ///
     /// - X-axis alignment uses `align_self`
     /// - Y-axis alignment uses `margin.top`/`margin.bottom`
     /// - Content X uses `align_items`, content Y uses `justify_content`
     #[default]
     Column,
     /// Horizontal stacking layout (like [`Row`]).
-    /// 
+    ///
     /// - X-axis alignment uses `margin.left`/`margin.right`
     /// - Y-axis alignment uses `align_self`
     /// - Content X uses `justify_content`, content Y uses `align_items`
     Row,
     /// Grid/Stack layout (children can overlap in same cell).
-    /// 
+    ///
     /// - X-axis alignment uses `justify_self`
     /// - Y-axis alignment uses `align_self`
     /// - Content uses same semantics as row
@@ -147,9 +141,7 @@ pub enum LayoutDirection {
 
 /// Hook that installs appropriate handlers when [`LayoutDirection`] is inserted.
 fn on_layout_direction_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
-    let Some(direction) = world.get::<LayoutDirection>(entity).copied() else {
-        return;
-    };
+    let direction = world.get::<LayoutDirection>(entity).copied().unwrap();
 
     let (alignment_handler, content_alignment_handler) = match direction {
         LayoutDirection::Column => (
@@ -185,7 +177,10 @@ fn on_layout_direction_insert(mut world: DeferredWorld, HookContext { entity, ..
         ),
     };
 
-    world.commands().entity(entity).insert((alignment_handler, content_alignment_handler));
+    world
+        .commands()
+        .entity(entity)
+        .insert((alignment_handler, content_alignment_handler));
 }
 
 /// Composable alignment builder. Used with [`.align`](`Alignable::align`) and related methods.
@@ -257,10 +252,19 @@ impl Align {
 }
 
 /// Trait for elements that can be aligned and can align their content.
+///
+/// # Requirements
+/// For alignment methods to function:
+/// - **Self-alignment** ([`align`](Alignable::align), [`align_signal`](Alignable::align_signal)):
+///   The **parent** entity must have an [`AlignmentHandler`] component.
+/// - **Content alignment** ([`align_content`](Alignable::align_content),
+///   [`align_content_signal`](Alignable::align_content_signal)): The entity itself must have a
+///   [`ContentAlignmentHandler`] component.
+///
+/// The built-in element types ([`El`](super::el::El), [`Column`](super::column::Column), [`Row`](super::row::Row), [`Stack`](super::stack::Stack), [`Grid`](super::grid::Grid)) automatically
+/// insert the appropriate handlers via their [`LayoutDirection`] component. For custom elements,
+/// either insert [`LayoutDirection`] or manually insert the handler components.
 pub trait Alignable: BuilderWrapper + Sized {
-    /// Get the layout direction for this element type.
-    fn layout_direction() -> LayoutDirection;
-
     /// Statically align this element within its parent.
     fn align(self, align_option: impl Into<Option<Align>>) -> Self {
         if let Some(align) = align_option.into() {
@@ -278,7 +282,9 @@ pub trait Alignable: BuilderWrapper + Sized {
     {
         if let Some(align_option_signal) = align_option_signal_option.into() {
             self.with_builder(|builder| {
-                builder.component_signal(align_option_signal.map_in(|opt: Option<Align>| opt.map(|a| a.to_alignment())))
+                builder.component_signal(
+                    align_option_signal.map_in(|align_option| align_option.map(|align| align.to_alignment())),
+                )
             })
         } else {
             self
@@ -303,7 +309,7 @@ pub trait Alignable: BuilderWrapper + Sized {
         if let Some(align_option_signal) = align_option_signal_option.into() {
             self.with_builder(|builder| {
                 builder.component_signal(
-                    align_option_signal.map_in(|opt: Option<Align>| opt.map(|a| a.to_content_alignment())),
+                    align_option_signal.map_in(|align_option| align_option.map(|align| align.to_content_alignment())),
                 )
             })
         } else {
@@ -351,7 +357,7 @@ fn apply_self_alignment_on_parent_change(
     }
 }
 
-/// Hook called when Alignment component is removed - resets node styles.
+/// Hook called when Alignment component is removed, resetting node properties.
 fn on_alignment_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
     let handler = world
         .get::<ChildOf>(entity)
@@ -366,7 +372,11 @@ fn on_alignment_remove(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
 fn apply_content_alignment(
     mut data: Query<
         (&ContentAlignment, &ContentAlignmentHandler, &mut Node),
-        Or<(Changed<ContentAlignment>, Added<ContentAlignment>, Changed<ContentAlignmentHandler>)>,
+        Or<(
+            Changed<ContentAlignment>,
+            Added<ContentAlignment>,
+            Changed<ContentAlignmentHandler>,
+        )>,
     >,
 ) {
     for (content_alignment, handler, mut node) in &mut data {
@@ -374,7 +384,7 @@ fn apply_content_alignment(
     }
 }
 
-/// Hook called when ContentAlignment component is removed - resets node styles.
+/// Hook called when ContentAlignment component is removed, resets node properties.
 fn on_content_alignment_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
     let handler = world.get::<ContentAlignmentHandler>(entity).copied();
 
@@ -388,6 +398,7 @@ pub mod column {
     use super::*;
 
     /// Apply column-style self-alignment to a child node.
+    ///
     /// X-axis uses `align_self`, Y-axis uses `margin.top`/`margin.bottom`.
     pub fn apply_alignment(node: &mut Node, alignment: &Alignment) {
         node.align_self = match alignment.x {
@@ -406,6 +417,7 @@ pub mod column {
     }
 
     /// Apply column-style content alignment to a parent node.
+    ///
     /// X-axis uses `align_items`, Y-axis uses `justify_content`.
     pub fn apply_content_alignment(node: &mut Node, content_alignment: &ContentAlignment) {
         node.align_items = match content_alignment.x {
@@ -441,6 +453,7 @@ pub mod row {
     use super::*;
 
     /// Apply row-style self-alignment to a child node.
+    ///
     /// X-axis uses `margin.left`/`margin.right`, Y-axis uses `align_self`.
     pub fn apply_alignment(node: &mut Node, alignment: &Alignment) {
         (node.margin.left, node.margin.right) = match alignment.x {
@@ -459,6 +472,7 @@ pub mod row {
     }
 
     /// Apply row-style content alignment to a parent node.
+    ///
     /// X-axis uses `justify_content`, Y-axis uses `align_items`.
     pub fn apply_content_alignment(node: &mut Node, content_alignment: &ContentAlignment) {
         node.justify_content = match content_alignment.x {
@@ -494,6 +508,7 @@ pub mod grid {
     use super::*;
 
     /// Apply grid-style self-alignment to a child node.
+    ///
     /// X-axis uses `justify_self`, Y-axis uses `align_self`.
     pub fn apply_alignment(node: &mut Node, alignment: &Alignment) {
         node.justify_self = match alignment.x {
@@ -517,5 +532,4 @@ pub mod grid {
     }
 
     // Grid uses row semantics for content alignment, so no separate functions needed.
-    // Use `row::apply_content_alignment` and `row::reset_content_alignment`.
 }
