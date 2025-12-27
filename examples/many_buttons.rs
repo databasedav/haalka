@@ -1,11 +1,9 @@
 //! Experimental port of <https://github.com/aevyrie/bevy_mod_picking/blob/main/examples/many_buttons.rs>.
 
 mod utils;
-use bevy_ui::Pressed;
-use jonmo::builder::JonmoBuilder;
 use utils::*;
 
-use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
+use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*, ui::Pressed};
 use haalka::prelude::*;
 
 fn main() {

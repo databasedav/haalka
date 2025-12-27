@@ -1,11 +1,9 @@
 //! Nested dynamic lists, arbitrarily deeply nested retained reactivity, spurred by <https://discord.com/channels/691052431525675048/885021580353237032/1356769984474517617>
 
 mod utils;
-use bevy_color::palettes::css::DARK_GRAY;
-use bevy_ui::Overflow;
 use utils::*;
 
-use bevy::prelude::*;
+use bevy::{color::palettes::css::DARK_GRAY, prelude::*, ui::Overflow};
 use haalka::prelude::*;
 
 fn main() {

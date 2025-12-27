@@ -4,13 +4,12 @@
 //! (yes i take requests)
 
 mod utils;
-use bevy_input_focus::InputFocus;
 use bevy_ui_text_input::{TextInputContents, TextInputMode};
 use utils::*;
 
 use std::{cmp::Ordering, collections::HashMap};
 
-use bevy::prelude::*;
+use bevy::{input_focus::InputFocus, prelude::*};
 use haalka::{
     prelude::*,
     viewport_mutable::{LogicalRect, MutableViewport},

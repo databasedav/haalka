@@ -6,7 +6,7 @@ use bevy_ui::{prelude::*, widget::*, *};
 use jonmo::signal::Signal;
 use paste::paste;
 
-use super::{column::Column, el::El, element::BuilderWrapper, grid::Grid, row::Row, stack::Stack};
+use super::{column::Column, el::El, element::BuilderWrapper, grid::Grid, row::Row, stack::Stack, stripe::Stripe};
 
 // TODO: add link to usage in example challenge 4
 /// Implement [haalka](crate)-esque methods for any [`BuilderWrapper`] over the named components,
@@ -40,7 +40,7 @@ use super::{column::Column, el::El, element::BuilderWrapper, grid::Grid, row::Ro
 ///         &mut self.0
 ///     }
 /// }
-/// 
+///
 /// impl_haalka_methods! {
 ///     MyEl {
 ///        my_component_a: MyComponentA,
@@ -80,7 +80,7 @@ use super::{column::Column, el::El, element::BuilderWrapper, grid::Grid, row::Ro
 /// #     type EL = El<MyBundle>;
 /// #     fn element_mut(&mut self) -> &mut Self::EL { &mut self.0 }
 /// # }
-/// 
+///
 /// impl_haalka_methods! {
 ///     MyEl {
 ///        my_component_a: MyComponentA,
@@ -229,6 +229,7 @@ impl_haalka_methods_for_aligners_and_node_bundles! {
     Row,
     Stack,
     Grid,
+    Stripe,
 }
 
 // TODO: macro doesn't play nice with generics and chatgpt can't figure it out

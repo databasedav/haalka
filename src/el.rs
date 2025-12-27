@@ -18,12 +18,13 @@ use crate::{clone_semantics_doc, impl_element_clone};
 
 // TODO: add the extra flag machinery that MoonZoon has to ensure that El's have exactly one child
 // (or child signal)
-/// Singleton [`Element`](super::element::Element) with exactly one child (not yet enforced). Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`El`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/el.rs).
+/// Singleton [`Element`](super::element::Element) with exactly one child (not yet enforced).
 ///
 /// While multiple children can still be declared with repeated calls to [`.child`](`El::child`) or
 /// [`.child_signal`](`El::child_signal`), their relative alignment was arbitrarily chosen to match
 /// [MoonZoon's implementation](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/el.rs#L41-L69) and should not be relied on.
 ///
+/// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`El`](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/element/el.rs).
 #[doc = clone_semantics_doc!("El")]
 #[derive(Default)]
 pub struct El<NodeType> {

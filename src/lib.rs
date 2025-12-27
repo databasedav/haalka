@@ -20,6 +20,7 @@ pub mod mouse_wheel_scrollable;
 pub mod pointer_event_aware;
 mod row;
 mod stack;
+pub mod stripe;
 pub mod viewport_mutable;
 
 #[cfg(feature = "text_input")]
@@ -84,11 +85,13 @@ pub mod prelude {
             BasicScrollHandler, MouseWheelScrollable, OnHoverMouseWheelScrollable, ScrollDirection,
         },
         pointer_event_aware::{
-            CursorOnHoverDisabled, CursorOnHoverable, Dragged, DraggingData, Enter, HoverData, Hovered, Leave,
-            PointerEventAware, PressData, PressingData, SetCursor,
+            CursorOnHover, CursorOnHoverDisabled, CursorOnHoverable, DragData, Dragged, DraggingData, Enter, HoverData,
+            Hovered, HoveringData, Leave, PointerEventAware, PressData, PressingData, SetCursor,
+            UpdateHoverStatesDisabled,
         },
         row::Row,
         stack::Stack,
+        stripe::{self, Stripe},
         viewport_mutable::ViewportMutable,
     };
 

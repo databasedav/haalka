@@ -7,11 +7,10 @@
 //!   - Keyboard/Controller: Separate styles for currently focused element.
 
 mod utils;
-use bevy_ui::Pressed;
 use haalka::impl_haalka_methods;
 use utils::*;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, ui::Pressed};
 use haalka::prelude::*;
 use strum::{Display, EnumIter, IntoEnumIterator};
 

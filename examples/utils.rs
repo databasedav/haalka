@@ -13,9 +13,8 @@ use bevy::{
     text::prelude::*,
     ui::prelude::*,
     utils::prelude::*,
-    window::prelude::*,
+    window::{WindowResolution, prelude::*},
 };
-use bevy_window::WindowResolution;
 use haalka::prelude::*;
 
 // TODO: port https://github.com/mintlu8/bevy-rectray/blob/main/examples/accordion.rs

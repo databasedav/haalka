@@ -1,10 +1,9 @@
 //! Dragging with z-index stacking
 
 mod utils;
-use bevy_ui::Pressed;
 use utils::*;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, ui::Pressed};
 use haalka::prelude::*;
 
 fn main() {

@@ -19,8 +19,10 @@ use super::{
 };
 use crate::{clone_semantics_doc, impl_element_clone};
 
-/// [`Element`](super::element::Element) with children aligned in a grid using a simple [`.row_wrap_cell_width`](Grid::row_wrap_cell_width) grid layout model. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/grid.rs).
+/// [`Element`](super::element::Element) with children aligned in a grid using a simple
+/// [`.row_wrap_cell_width`](Grid::row_wrap_cell_width) grid layout model.
 ///
+/// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/element/grid.rs).
 #[doc = clone_semantics_doc!("Grid")]
 #[derive(Default)]
 pub struct Grid<NodeType> {

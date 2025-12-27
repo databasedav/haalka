@@ -17,8 +17,10 @@ use super::{
 };
 use crate::{clone_semantics_doc, impl_element_clone};
 
-/// [`Element`](super::element::Element) with children stacked on directly on top of each other (e.g. along the z-axis), with siblings ordered youngest to oldest, top to bottom. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Stack`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/stack.rs).
+/// [`Element`](super::element::Element) with children stacked on directly on top of each other
+/// (e.g. along the z-axis), with siblings ordered youngest to oldest, top to bottom.
 ///
+/// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Stack`](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/element/stack.rs).
 #[doc = clone_semantics_doc!("Stack")]
 #[derive(Default)]
 pub struct Stack<NodeType> {

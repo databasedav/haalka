@@ -5,12 +5,15 @@
 //!   buttons.
 
 mod utils;
-use bevy_ui::{Pressed, widget::NodeImageMode};
 use utils::*;
 
 use std::sync::OnceLock;
 
-use bevy::{prelude::*, window::WindowResized};
+use bevy::{
+    prelude::*,
+    ui::{Pressed, widget::NodeImageMode},
+    window::WindowResized,
+};
 use haalka::prelude::*;
 
 fn main() {
@@ -111,67 +114,58 @@ fn nine_slice_button() -> impl Element {
     .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
 }
 
-fn horizontal() -> impl Element {
-    Row::<Node>::new()
-        .with_node(|mut node| {
-            node.width = Val::Percent(100.);
-            node.height = Val::Percent(100.);
-            node.column_gap = Val::Px(GAP);
-        })
-        .item(
-            Column::<Node>::new()
-                .with_node(|mut node| {
-                    node.width = Val::Percent(50.);
-                    node.height = Val::Percent(100.);
-                    node.row_gap = Val::Px(GAP);
-                })
-                .align_content(Align::center())
-                .items((0..8).map(|_| nine_slice_button())),
-        )
-        .item(El::<ImageNode>::new().image_node(ImageNode::new(image().clone())))
-}
-
-fn vertical() -> impl Element {
-    Column::<Node>::new()
-        .with_node(|mut node| {
-            node.width = Val::Percent(100.);
-            node.height = Val::Percent(100.);
-            node.row_gap = Val::Px(GAP);
-        })
-        .item(El::<ImageNode>::new().image_node(ImageNode::new(image().clone())))
-        .item(
-            Row::<Node>::new()
-                .multiline()
-                .align_content(Align::center())
-                .with_node(|mut node| {
-                    node.width = Val::Percent(100.);
-                    node.height = Val::Percent(50.);
-                    node.column_gap = Val::Px(GAP);
-                })
-                .items((0..8).map(|_| nine_slice_button())),
-        )
-}
-
 fn menu() -> impl Element {
-    let width = SignalBuilder::from_resource::<Width>().map_in(deref_copied);
+    let width = SignalBuilder::from_resource::<Width>().dedupe().map_in(deref_copied);
+    let is_wide = width.clone().map_in(|width| width > 400.).dedupe();
+    let image_el = || El::<ImageNode>::new().image_node(ImageNode::new(image().clone()));
     nine_slice_el(SignalBuilder::always(3))
         .with_node(|mut node| {
             node.height = Val::Px(BASE_SIZE);
             node.padding = UiRect::all(Val::Px(GAP));
         })
         .on_signal_with_node(
-            width
-                .clone()
-                .map_in(|width| BASE_SIZE.min(width))
-                .dedupe()
-                .map_in(Val::Px),
+            width.map_in(|width| BASE_SIZE.min(width)).dedupe().map_in(Val::Px),
             |mut node, width| node.width = width,
         )
-        .child_signal(
-            width
-                .map_in(|width| width > 400.)
-                .dedupe()
-                .map_bool_in(|| horizontal().type_erase(), || vertical().type_erase()),
+        .child(
+            Stripe::<Node>::new()
+                .direction_signal(
+                    is_wide
+                        .clone()
+                        .map_bool_in(|| stripe::Direction::Row, || stripe::Direction::Column),
+                )
+                .with_node(|mut node| {
+                    node.width = Val::Percent(100.);
+                    node.height = Val::Percent(100.);
+                    node.column_gap = Val::Px(GAP);
+                    node.row_gap = Val::Px(GAP);
+                })
+                .item_signal(is_wide.clone().not().map_true_in(image_el))
+                .item(
+                    Stripe::<Node>::new()
+                        .direction_signal(
+                            is_wide
+                                .clone()
+                                .map_bool_in(|| stripe::Direction::Column, || stripe::Direction::Row),
+                        )
+                        .multiline_row_signal(is_wide.clone().not())
+                        .align_content(Align::center())
+                        .on_signal_with_node(is_wide.clone().dedupe(), |mut node, wide| {
+                            if wide {
+                                node.width = Val::Percent(50.);
+                                node.height = Val::Percent(100.);
+                                node.row_gap = Val::Px(GAP);
+                                node.column_gap = Val::Px(0.);
+                            } else {
+                                node.width = Val::Percent(100.);
+                                node.height = Val::Percent(50.);
+                                node.column_gap = Val::Px(GAP);
+                                node.row_gap = Val::Px(0.);
+                            }
+                        })
+                        .items((0..8).map(|_| nine_slice_button())),
+                )
+                .item_signal(is_wide.clone().map_true_in(image_el)),
         )
 }
 

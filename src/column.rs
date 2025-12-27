@@ -17,8 +17,9 @@ use super::{
 };
 use crate::{clone_semantics_doc, impl_element_clone};
 
-/// [`Element`](super::element::Element) with vertically stacked children. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Column`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/column.rs).
+/// [`Element`](super::element::Element) with vertically stacked children.
 ///
+/// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Column`](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/element/column.rs).
 #[doc = clone_semantics_doc!("Column")]
 #[derive(Default)]
 pub struct Column<NodeType> {

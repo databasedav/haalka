@@ -133,11 +133,11 @@ All examples are compiled to wasm for both webgl2 and webgpu (check [compatibili
 
 - [**`button`**](https://github.com/databasedav/haalka/blob/main/examples/button.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/button/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/button/)
 
-    a basic button, port of <https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs>
+    a basic button, port of <https://github.com/bevyengine/bevy/blob/b176e1888c04b6c37035b85c115ad3a1266c22dd/examples/ui/button.rs>
 
 - [**`align`**](https://github.com/databasedav/haalka/blob/main/examples/align.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/align/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/align/)
 
-    alignment API demo, port of <https://github.com/MoonZoon/MoonZoon/tree/main/examples/align> and <https://github.com/MoonZoon/MoonZoon/tree/main/examples/align_content>
+    alignment API demo, port of <https://github.com/MoonZoon/MoonZoon/tree/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/examples/align> and <https://github.com/MoonZoon/MoonZoon/tree/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/examples/align_content>
 
 - [**`scroll`**](https://github.com/databasedav/haalka/blob/main/examples/scroll.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/scroll/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/scroll/)
 

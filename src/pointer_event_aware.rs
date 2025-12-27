@@ -258,7 +258,12 @@ pub struct DraggingData {
     pub delta: Vec2,
 }
 
-/// Enables reacting to pointer events like hover, click, and press. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`PointerEventAware`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/ability/pointer_event_aware.rs).
+/// Enables [`Pickable`] elements to react to pointer events like hover, click, and press.
+///
+/// **Note:** These methods will only function for [`Pickable`] entities (e.g., those with
+/// [`Pickable::default()`]).
+///
+/// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`PointerEventAware`](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/element/ability/pointer_event_aware.rs).
 pub trait PointerEventAware: GlobalEventAware {
     /// On frames where this element is hovered or gets unhovered and does not have a `Blocked`
     /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`]
@@ -1442,8 +1447,11 @@ pub struct CursorOnHoverDisabled;
 #[derive(Component, Clone)]
 pub struct CursorOnHover(Option<CursorIcon>);
 
-/// Enables managing the window's [`CursorIcon`] when an [`Element`](super::element::Element)
-/// receives an [`Pointer<Over>`] event.
+/// Enables managing the window's [`CursorIcon`] when a [`Pickable`]
+/// [`Element`](super::element::Element) receives an [`Pointer<Over>`] event.
+///
+/// **Note:** These methods will only function for [`Pickable`] entities (e.g., those with
+/// [`Pickable::default()`]).
 pub trait CursorOnHoverable: PointerEventAware {
     /// When this [`Element`] receives a [`Pointer<Over>`] event, set the window's cursor to
     /// [`Some`] [`CursorIcon`] in the [`CursorOnHover`] [`Component`] or hide it if [`None`].

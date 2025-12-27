@@ -8,12 +8,10 @@
 //! - On the top of the UI is a text field for the character name.
 
 mod utils;
-use bevy_input_focus::InputFocus;
-use bevy_ui::Pressed;
-use bevy_ui_text_input::{TextInputMode, TextInputPrompt};
 use utils::*;
 
-use bevy::prelude::*;
+use bevy::{input_focus::InputFocus, prelude::*, ui::Pressed};
+use bevy_ui_text_input::{TextInputMode, TextInputPrompt};
 use haalka::prelude::*;
 use strum::{self, IntoEnumIterator};
 

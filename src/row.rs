@@ -17,8 +17,9 @@ use super::{
 };
 use crate::{clone_semantics_doc, impl_element_clone};
 
-/// [`Element`](super::element::Element) with horizontally stacked children. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Row`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/row.rs).
+/// [`Element`](super::element::Element) with horizontally stacked children.
 ///
+/// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Row`](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/element/row.rs).
 #[doc = clone_semantics_doc!("Row")]
 #[derive(Default)]
 pub struct Row<NodeType> {
@@ -146,6 +147,27 @@ impl<NodeType: Bundle> Row<NodeType> {
                 node.flex_wrap = FlexWrap::Wrap;
                 node.flex_basis = Val::Px(0.);
                 node.flex_grow = 1.;
+            })
+        })
+    }
+
+    /// When the width of the row exceeds the width of its parent, wrap the row's children to the
+    /// next line, reactively.
+    pub fn multiline_signal<S>(self, multiline_signal: S) -> Self
+    where
+        S: Signal<Item = bool> + Send + Sync + 'static,
+    {
+        self.with_builder(|builder| {
+            builder.on_signal_with_component::<Node, _, _, _>(multiline_signal.dedupe(), |mut node, multiline| {
+                if multiline {
+                    node.flex_wrap = FlexWrap::Wrap;
+                    node.flex_basis = Val::Px(0.);
+                    node.flex_grow = 1.;
+                } else {
+                    node.flex_wrap = FlexWrap::NoWrap;
+                    node.flex_basis = Val::Auto;
+                    node.flex_grow = 0.;
+                }
             })
         })
     }
