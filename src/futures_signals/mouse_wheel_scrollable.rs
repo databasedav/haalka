@@ -11,6 +11,7 @@ use apply::Apply;
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use bevy_input::{mouse::*, prelude::*};
+use bevy_math::Vec2;
 use bevy_ui::prelude::*;
 use bevy_utils::prelude::*;
 use futures_signals::signal::{BoxSignal, Mutable, Signal, SignalExt, always};
@@ -147,10 +148,13 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
 
 impl<T: PointerEventAware + MouseWheelScrollable> OnHoverMouseWheelScrollable for T {}
 
+/// Event triggered when a mouse wheel scroll occurs on an entity.
 #[derive(EntityEvent)]
 pub struct MouseWheelEvent {
-    entity: Entity,
-    mouse_wheel: MouseWheel,
+    /// The entity that received the scroll event.
+    pub entity: Entity,
+    /// The mouse wheel event data.
+    pub mouse_wheel: MouseWheel,
 }
 
 fn scroll_system(
@@ -187,6 +191,17 @@ pub struct BasicScrollHandler {
 
 const DEFAULT_SCROLL_DIRECTION: ScrollDirection = ScrollDirection::Vertical;
 const DEFAULT_SCROLL_MAGNITUDE: f32 = 10.;
+
+fn max_scroll_offset(node: &ComputedNode) -> Vec2 {
+    (node.content_size - node.size() + node.scrollbar_size).max(Vec2::ZERO)
+}
+
+fn clamp_scroll_position(position: Vec2, node: Option<&ComputedNode>) -> Vec2 {
+    match node {
+        Some(node) => position.clamp(Vec2::ZERO, max_scroll_offset(node)),
+        None => position.max(Vec2::ZERO),
+    }
+}
 
 /// Normalizes the scroll amount based on the scroll unit and the specified magnitude.
 pub fn scroll_normalizer(unit: MouseScrollUnit, scroll: f32, magnitude: f32) -> f32 {
@@ -249,7 +264,7 @@ impl BasicScrollHandler {
     pub fn into_system(
         self,
     ) -> Box<
-        dyn FnMut(In<(Entity, MouseWheel)>, Res<ButtonInput<KeyCode>>, Query<&mut ScrollPosition>)
+        dyn FnMut(In<(Entity, MouseWheel)>, Res<ButtonInput<KeyCode>>, Query<&mut ScrollPosition>, Query<&ComputedNode>)
             + Send
             + Sync
             + 'static,
@@ -278,7 +293,8 @@ impl BasicScrollHandler {
         }
         let f = move |In((entity, mouse_wheel)): In<(Entity, MouseWheel)>,
                       keys: Res<ButtonInput<KeyCode>>,
-                      mut scroll_positions: Query<&mut ScrollPosition>| {
+                      mut scroll_positions: Query<&mut ScrollPosition>,
+                      computed_nodes: Query<&ComputedNode>| {
             let dy = scroll_normalizer(mouse_wheel.unit, mouse_wheel.y, magnitude.get());
             let direction = direction.get();
             if let Ok(mut scroll_position) = scroll_positions.get_mut(entity) {
@@ -293,6 +309,13 @@ impl BasicScrollHandler {
                 {
                     scroll_position.x -= dy;
                 }
+
+                let clamped = clamp_scroll_position(
+                    Vec2::new(scroll_position.x, scroll_position.y),
+                    computed_nodes.get(entity).ok(),
+                );
+                scroll_position.x = clamped.x;
+                scroll_position.y = clamped.y;
             }
         };
         Box::new(f)

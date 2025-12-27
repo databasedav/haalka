@@ -5,10 +5,7 @@ use bevy_ui::Pressed;
 use jonmo::builder::JonmoBuilder;
 use utils::*;
 
-use bevy::{
-    diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
-    prelude::*,
-};
+use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 use haalka::prelude::*;
 
 fn main() {

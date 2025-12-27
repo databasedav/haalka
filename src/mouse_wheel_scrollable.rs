@@ -77,10 +77,8 @@ pub trait MouseWheelScrollable: ViewportMutable {
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
         blocked: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.with_builder(|builder| {
-            builder.component_signal::<ScrollDisabled, _>(blocked.map_true(|_: In<()>| ScrollDisabled::default()))
-        })
-        .on_scroll_disableable::<ScrollDisabled, _>(handler)
+        self.with_builder(|builder| builder.component_signal(blocked.map_true_in(|| ScrollDisabled)))
+            .on_scroll_disableable::<ScrollDisabled, _>(handler)
     }
 }
 

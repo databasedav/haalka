@@ -358,15 +358,13 @@ fn content_align_switcher(rectangle_alignment: RectangleAlignment) -> impl Eleme
                 .text_font(TextFont::from_font_size(11.))
                 .text(Text(rectangle_alignment.to_string())),
         )
-        .on_click(
-            move |_: In<_>, mut content_align: ResMut<RectangleContentAlignment>| {
-                if **content_align == Some(rectangle_alignment) {
-                    **content_align = None;
-                } else {
-                    **content_align = Some(rectangle_alignment);
-                }
-            },
-        )
+        .on_click(move |_: In<_>, mut content_align: ResMut<RectangleContentAlignment>| {
+            if **content_align == Some(rectangle_alignment) {
+                **content_align = None;
+            } else {
+                **content_align = Some(rectangle_alignment);
+            }
+        })
 }
 
 fn camera(mut commands: Commands) {

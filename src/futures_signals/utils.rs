@@ -51,8 +51,10 @@ pub fn signal_eq<T: PartialEq + Send>(
 }
 
 // TODO: get these from futures-signals https://github.com/Pauan/rust-signals/pull/85
+/// A boxed signal that is `Send + Sync`.
 pub type SyncBoxSignal<'a, T> = Pin<Box<dyn Signal<Item = T> + Send + Sync + 'a>>;
 
+/// Boxes a signal into a `Pin<Box<dyn Signal + Send + Sync>>`.
 pub fn boxed_sync<'a, S, T>(signal: S) -> Pin<Box<dyn Signal<Item = T> + Send + Sync + 'a>>
 where
     S: Sized + Send + Sync + Signal<Item = T> + 'a,
@@ -79,6 +81,7 @@ cfg_if::cfg_if! {
             }
         }
 
+        /// Plugin that adds debug UI overlay toggling functionality.
         pub struct DebugUiPlugin;
 
         impl Plugin for DebugUiPlugin {

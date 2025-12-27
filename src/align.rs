@@ -261,9 +261,10 @@ impl Align {
 ///   [`align_content_signal`](Alignable::align_content_signal)): The entity itself must have a
 ///   [`ContentAlignmentHandler`] component.
 ///
-/// The built-in element types ([`El`](super::el::El), [`Column`](super::column::Column), [`Row`](super::row::Row), [`Stack`](super::stack::Stack), [`Grid`](super::grid::Grid)) automatically
-/// insert the appropriate handlers via their [`LayoutDirection`] component. For custom elements,
-/// either insert [`LayoutDirection`] or manually insert the handler components.
+/// The built-in element types ([`El`](super::el::El), [`Column`](super::column::Column),
+/// [`Row`](super::row::Row), [`Stack`](super::stack::Stack), [`Grid`](super::grid::Grid))
+/// automatically insert the appropriate handlers via their [`LayoutDirection`] component. For
+/// custom elements, either insert [`LayoutDirection`] or manually insert the handler components.
 pub trait Alignable: BuilderWrapper + Sized {
     /// Statically align this element within its parent.
     fn align(self, align_option: impl Into<Option<Align>>) -> Self {
@@ -332,6 +333,7 @@ pub fn plugin(app: &mut App) {
 }
 
 /// System that applies self-alignment based on parent's alignment handler.
+#[allow(clippy::type_complexity)]
 fn apply_self_alignment(
     mut data: Query<(&Alignment, &ChildOf, &mut Node), Or<(Changed<Alignment>, Added<Alignment>, Added<ChildOf>)>>,
     handlers: Query<&AlignmentHandler>,
@@ -369,6 +371,7 @@ fn on_alignment_remove(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
 }
 
 /// System that applies content alignment to parent nodes.
+#[allow(clippy::type_complexity)]
 fn apply_content_alignment(
     mut data: Query<
         (&ContentAlignment, &ContentAlignmentHandler, &mut Node),

@@ -6,6 +6,7 @@ pub use enclose::enclose as clone;
 pub use jonmo::prelude::clone as jonmo_clone;
 
 use bevy_ecs::{
+    event::EntityEvent,
     prelude::*,
     system::{IntoObserverSystem, SystemId, SystemInput},
 };
@@ -46,12 +47,15 @@ pub fn register_system<I: SystemInput + 'static, O: 'static, Marker, S: IntoSyst
 }
 
 /// Attach an observer to an entity with a marker component for filtering.
-pub fn observe<E: Event, B: Bundle, Marker>(
+pub fn observe<E: EntityEvent, B: Bundle, Marker>(
     world: &mut World,
     entity: Entity,
     observer: impl IntoObserverSystem<E, B, Marker>,
 ) -> EntityWorldMut<'_> {
-    world.spawn((Observer::new(observer).with_entity(entity), HaalkaObserver))
+    let mut entity = world.entity_mut(entity);
+    entity.insert(HaalkaObserver);
+    entity.observe(observer);
+    entity
 }
 
 /// If [`Some`] [`System`] is returned by the `getter`, remove it from the [`World`] on element

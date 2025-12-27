@@ -96,7 +96,11 @@ pub trait PointerEventAware: GlobalEventAware {
 
     /// Run a function when this element is clicked.
     fn on_click(self, mut handler: impl FnMut() + Send + Sync + 'static) -> Self {
-        self.on_click_with_system(move |In((_, _click)): In<(_, Pointer<Click>)>| handler())
+        self.on_click_with_system(move |In((_, click)): In<(_, Pointer<Click>)>| {
+            if matches!(click.button, PointerButton::Primary) {
+                handler()
+            }
+        })
     }
 
     /// Run a function when this element is clicked, reactively controlling whether the click
@@ -114,7 +118,8 @@ pub trait PointerEventAware: GlobalEventAware {
                 )
                 .observe(
                     move |mut click: On<Pointer<Click>>, propagation_stopped: Query<&ClickPropagationStopped>| {
-                        if propagation_stopped.contains(click.entity) {
+                        if matches!(click.button, PointerButton::Primary) && propagation_stopped.contains(click.entity)
+                        {
                             click.propagate(false);
                         }
                         handler()
@@ -202,7 +207,7 @@ pub trait PointerEventAware: GlobalEventAware {
                         }
                     });
                     observe(world, entity, move |pointer_press: On<Pointer<Press>>, mut commands: Commands| {
-                        if let Ok(mut entity) = commands.get_entity(pointer_press.entity) {
+                        if matches!(pointer_press.button, PointerButton::Primary) && let Ok(mut entity) = commands.get_entity(pointer_press.entity) {
                             entity.insert(Pressable);
                         }
                     });

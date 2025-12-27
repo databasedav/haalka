@@ -158,9 +158,9 @@ fn category_count(category: ColorCategory, count: impl Signal<Item = i32> + Send
 }
 
 // like serde
-fn incrde_button<T: Component, R: Resource>(step: f32) -> impl Element
+fn incrde_button<T: Component, R>(step: f32) -> impl Element
 where
-    R: Clone + Copy + Deref<Target = f32> + DerefMut,
+    R: Resource + Clone + Copy + Deref<Target = f32> + DerefMut,
 {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
@@ -190,9 +190,9 @@ where
         )
 }
 
-fn rate_element<T: Component, R: Resource>(rate_signal: impl Signal<Item = f32> + Send + 'static) -> impl Element
+fn rate_element<T: Component, R>(rate_signal: impl Signal<Item = f32> + Send + 'static) -> impl Element
 where
-    R: Clone + Copy + Deref<Target = f32> + DerefMut,
+    R: Resource + Clone + Copy + Deref<Target = f32> + DerefMut,
 {
     Row::<Node>::new()
         .with_node(|mut node| node.column_gap = Val::Px(15.0))

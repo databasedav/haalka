@@ -1180,31 +1180,33 @@ fn graphics_menu() -> Column<Node> {
     let bloom_entity = bloom_dropdown.lazy_entity.clone();
 
     // Signal: When preset changes, propagate to all individual qualities
+    #[allow(clippy::type_complexity)]
     let preset_broadcaster = SignalBuilder::from_component_lazy::<DropdownSelection>(preset_entity.clone())
         .map_in(|DropdownSelection(sel)| sel)
         .dedupe()
         .map(clone!((texture_entity, shadow_entity, bloom_entity) move |In(preset_quality): In<Option<String>>, mut selections: Query<&mut DropdownSelection>| {
             if let Some(ref quality) = preset_quality {
-                if let Ok(mut texture) = selections.get_mut(*texture_entity) {
-                    if texture.0.as_ref() != Some(quality) {
-                        texture.0 = Some(quality.clone());
-                    }
+                if let Ok(mut texture) = selections.get_mut(*texture_entity)
+                    && texture.0.as_ref() != Some(quality)
+                {
+                    texture.0 = Some(quality.clone());
                 }
-                if let Ok(mut shadow) = selections.get_mut(*shadow_entity) {
-                    if shadow.0.as_ref() != Some(quality) {
-                        shadow.0 = Some(quality.clone());
-                    }
+                if let Ok(mut shadow) = selections.get_mut(*shadow_entity)
+                    && shadow.0.as_ref() != Some(quality)
+                {
+                    shadow.0 = Some(quality.clone());
                 }
-                if let Ok(mut bloom) = selections.get_mut(*bloom_entity) {
-                    if bloom.0.as_ref() != Some(quality) {
-                        bloom.0 = Some(quality.clone());
-                    }
+                if let Ok(mut bloom) = selections.get_mut(*bloom_entity)
+                    && bloom.0.as_ref() != Some(quality)
+                {
+                    bloom.0 = Some(quality.clone());
                 }
             }
         }))
         .hold();
 
     // Signal: When individual qualities change, update preset if they all match
+    #[allow(clippy::type_complexity)]
     let preset_controller = SignalBuilder::from_component_lazy::<DropdownSelection>(texture_entity.clone())
         .map_in(|DropdownSelection(sel)| sel)
         .combine(

@@ -43,8 +43,10 @@ cfg_if::cfg_if! {
 }
 
 #[cfg(feature = "futures_signals_derive")]
+/// Derive macros for futures-signals integration.
 pub mod derive;
 
+/// Utility functions and types for futures-signals.
 pub mod utils;
 
 /// Plugin that adds the futures-signals based systems.

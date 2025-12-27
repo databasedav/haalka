@@ -57,7 +57,10 @@ pub trait GlobalEventAware: BuilderWrapper {
     }
 }
 
+/// Container for global event data, including the original target entity and the event itself.
 pub struct GlobalEventData<E> {
+    /// The entity that originally received/triggered the event.
     pub original_event_target: Entity,
+    /// The actual event data.
     pub event: E,
 }

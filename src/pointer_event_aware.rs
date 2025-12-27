@@ -1214,6 +1214,7 @@ pub struct Leave {
 struct LastSubtreeHoverHit(HitData);
 
 // TODO: integrate with bubbling observers and upstreamed event listener
+#[allow(clippy::type_complexity)]
 fn update_hover_states(
     pointer_map: Res<PointerMap>,
     pointers: Query<&PointerLocation>,
@@ -1239,10 +1240,8 @@ fn update_hover_states(
         // Keep the cached hit fresh while hovered (self or descendant).
         if let Some(hit) = hit_data_option {
             let should_update_cache = last_subtree_hit.is_none_or(|cached| cached.0 != *hit);
-            if should_update_cache {
-                if let Ok(mut entity_commands) = commands.get_entity(entity) {
-                    entity_commands.insert(LastSubtreeHoverHit(hit.clone()));
-                }
+            if should_update_cache && let Ok(mut entity_commands) = commands.get_entity(entity) {
+                entity_commands.insert(LastSubtreeHoverHit(hit.clone()));
             }
         }
 

@@ -5,7 +5,6 @@ use std::borrow::Cow;
 use super::align::Alignable;
 use bevy_ecs::{component::*, lifecycle::HookContext, prelude::*, system::RunSystemOnce, world::DeferredWorld};
 use bevy_log::warn;
-use bevy_picking::prelude::*;
 use jonmo::{
     builder::JonmoBuilder,
     signal::{Signal, SignalExt},

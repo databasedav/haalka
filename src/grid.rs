@@ -4,7 +4,6 @@ use bevy_ecs::prelude::*;
 use bevy_log::warn;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
-use bevy_utils::prelude::*;
 use jonmo::{
     builder::JonmoBuilder,
     signal::{Signal, SignalExt},

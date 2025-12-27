@@ -14,7 +14,6 @@ use apply::Apply;
 use bevy_app::prelude::*;
 use bevy_ecs::{prelude::*, system::SystemParam};
 use bevy_math::prelude::*;
-use bevy_transform::prelude::*;
 use bevy_ui::prelude::*;
 use futures_signals::signal::{Mutable, Signal};
 
@@ -215,14 +214,14 @@ pub trait ViewportMutable: RawElWrapper {
 /// Use to fetch the logical pixel coordinates of the UI node, based on its [`GlobalTransform`].
 #[derive(SystemParam)]
 pub struct LogicalRect<'w, 's> {
-    data: Query<'w, 's, (&'static ComputedNode, &'static GlobalTransform)>,
+    data: Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
 }
 
 impl LogicalRect<'_, '_> {
     /// Get the logical pixel coordinates of the UI node, based on its [`GlobalTransform`].
     pub fn get(&self, entity: Entity) -> Option<Rect> {
         if let Ok((computed_node, global_transform)) = self.data.get(entity) {
-            return Rect::from_center_size(global_transform.translation().xy(), computed_node.size()).apply(Some);
+            return Rect::from_center_size(global_transform.translation.xy(), computed_node.size()).apply(Some);
         }
         None
     }

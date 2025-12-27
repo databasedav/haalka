@@ -600,7 +600,6 @@ fn ui_root(pairs: Pairs) -> impl Element {
                                         let mut write = pairs.0.write(&mut vec_datas);
                                         write.push(model_entity);
                                         let count = write.to_vec().len();
-                                        drop(write);
                                         // Scroll so the new row's bottom aligns with viewport bottom
                                         for mut scroll_position in scroll_positions.iter_mut() {
                                             scroll_position.0.y = count as f32 * ROW_STEP;

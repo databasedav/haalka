@@ -325,7 +325,6 @@ fn on_grid_size_change(
                         cells_write.remove(i);
                     }
 
-                    drop(cells_write);
                     **grid_size = new_size;
 
                     if had_food {
@@ -386,6 +385,7 @@ impl Direction {
 #[derive(Resource)]
 struct DirectionResource(Direction);
 
+#[allow(clippy::too_many_arguments)]
 fn tick(
     mut snake: ResMut<Snake>,
     direction: Res<DirectionResource>,
@@ -412,7 +412,6 @@ fn tick(
 
     match cell {
         Cell::Snake => {
-            drop(cells_write);
             **game_over = true;
             commands.insert_resource(Paused);
         }
@@ -420,6 +419,7 @@ fn tick(
             cells_write.set(head_idx, Cell::Snake);
             match cell {
                 Cell::Food => {
+                    #[allow(clippy::drop_non_drop)]
                     drop(cells_write);
                     **score += 1;
                     commands.trigger(SpawnFood);
