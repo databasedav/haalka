@@ -63,13 +63,11 @@ pub mod prelude {
     #[doc(inline)]
     pub use crate::HaalkaPlugin;
 
-    // Re-export jonmo prelude
+    // Re-export jonmo crate and prelude
+    #[doc(no_inline)]
+    pub use crate::jonmo;
     #[doc(no_inline)]
     pub use jonmo::prelude::*;
-
-    // Re-export JonmoBuilder as the main builder type
-    #[doc(inline)]
-    pub use jonmo::builder::JonmoBuilder;
 
     #[doc(inline)]
     pub use crate::{

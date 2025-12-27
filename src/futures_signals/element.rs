@@ -88,7 +88,7 @@ impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
 /// # Example
 /// ```
 /// use bevy::prelude::*;
-/// use haalka::prelude::*;
+/// use haalka::futures_signals::prelude::*;
 ///
 /// struct MyWidget {
 ///     el: El<Node>,

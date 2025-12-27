@@ -12,6 +12,154 @@ use jonmo::{
 
 use bevy_ecs::system::IntoObserverSystem;
 
+/// Generates the `# Clone semantics` doc section for element struct documentation.
+///
+/// # Usage
+/// ```ignore
+/// #[doc = clone_semantics_doc!("El")]
+/// pub struct El<NodeType> { ... }
+/// ```
+#[macro_export]
+macro_rules! clone_semantics_doc {
+    ($type_name:literal) => {
+        concat!(
+            "# `Clone` semantics\n\n",
+            "This type implements [`Clone`] **only** to satisfy trait bounds required by signal combinators.\n",
+            "**Cloning `", $type_name, "`s at runtime is a bug.** See [`", $type_name, "::clone`] for details."
+        )
+    };
+}
+
+/// Generates the base warning text for clone documentation (without trailing punctuation).
+#[macro_export]
+macro_rules! clone_warning_doc_base {
+    ($type_name:literal) => {
+        concat!(
+            "# Warning\n\n",
+            "This clone implementation exists **only** to satisfy trait bounds required by signal\n",
+            "combinators. **Cloning `", $type_name, "`s at runtime is a bug and will lead to unexpected behavior.**\n\n",
+            "Clones share internal on-spawn hooks via the underlying [`JonmoBuilder`]. These hooks are\n",
+            "one-shot ([`FnOnce`]) and are consumed when the element is spawned. Spawning one clone will\n",
+            "affect all other clones.\n\n",
+            "Use factory functions instead if you need reusable UI templates"
+        )
+    };
+}
+
+/// Generates the warning docstring for a `Clone::clone` method on element types.
+///
+/// # Usage
+/// ```ignore
+/// impl Clone for MyType {
+///     #[doc = clone_warning_doc!("MyType")]
+///     fn clone(&self) -> Self { ... }
+/// }
+/// ```
+///
+/// Or with a code example:
+/// ```ignore
+/// impl Clone for MyType {
+///     #[doc = clone_warning_doc!("MyType", my_fn, ".method()")]
+///     fn clone(&self) -> Self { ... }
+/// }
+/// ```
+#[macro_export]
+macro_rules! clone_warning_doc {
+    // Without example
+    ($type_name:literal) => {
+        concat!($crate::clone_warning_doc_base!($type_name), ".")
+    };
+    // With example
+    ($type_name:literal, $example_fn:ident, $example_method:literal) => {
+        concat!(
+            $crate::clone_warning_doc_base!($type_name),
+            ":\n\n",
+            "```ignore\n",
+            "use bevy_ui::prelude::*;\n",
+            "use haalka::prelude::*;\n\n",
+            "fn ", stringify!($example_fn), "(label: &str) -> ", $type_name, "<Node> {\n",
+            "    ", $type_name, "::new()", $example_method, "\n",
+            "}\n\n",
+            "// Correct: each call creates a fresh element\n",
+            "let el1 = ", stringify!($example_fn), "(\"First\");\n",
+            "let el2 = ", stringify!($example_fn), "(\"Second\");\n",
+            "```"
+        )
+    };
+}
+
+/// Generates the runtime warning message for cloning an element type.
+#[macro_export]
+macro_rules! clone_warning_msg {
+    ($type_name:literal) => {
+        concat!(
+            "Cloning `", $type_name, "` at {} is a bug! `", $type_name, "` wraps `JonmoBuilder`, whose `Clone` shares ",
+            "internal on-spawn hook queues. These hooks are one-shot (`FnOnce`) and are consumed on ",
+            "spawn. Spawning one clone will affect all other clones. Use factory functions instead ",
+            "if you need reusable UI templates."
+        )
+    };
+}
+
+/// Implements [`Clone`] for element types with appropriate warnings.
+///
+/// This macro generates a `Clone` implementation that:
+/// - Logs a warning at runtime when cloned (since cloning elements is typically a bug)
+/// - Has complete documentation explaining the clone semantics
+///
+/// # Forms
+///
+/// ## Generic element types with `builder` and `_node_type` fields:
+/// ```ignore
+/// impl_element_clone! {
+///     "El",
+///     El<NodeType>,
+///     my_el,
+///     ".name(\"my_el\")"
+/// }
+/// ```
+///
+/// ## Non-generic tuple struct wrapping `JonmoBuilder`:
+/// ```ignore
+/// impl_element_clone!(simple "AlignabilityFacade", AlignabilityFacade);
+/// ```
+#[macro_export]
+macro_rules! impl_element_clone {
+    // Generic element type with builder + _node_type fields and example
+    ($type_name:literal, $type:ty, $example_fn:ident, $example_method:literal) => {
+        impl<NodeType> Clone for $type {
+            #[doc = $crate::clone_warning_doc!($type_name, $example_fn, $example_method)]
+            #[track_caller]
+            fn clone(&self) -> Self {
+                bevy_log::warn!(
+                    $crate::clone_warning_msg!($type_name),
+                    std::panic::Location::caller()
+                );
+
+                Self {
+                    builder: self.builder.clone(),
+                    _node_type: std::marker::PhantomData,
+                }
+            }
+        }
+    };
+    // Simple non-generic tuple struct wrapping JonmoBuilder
+    (simple $type_name:literal, $type:ty) => {
+        impl Clone for $type {
+            #[doc = $crate::clone_warning_doc!($type_name)]
+            #[track_caller]
+            fn clone(&self) -> Self {
+                bevy_log::warn!(
+                    $crate::clone_warning_msg!($type_name),
+                    std::panic::Location::caller()
+                );
+
+                Self(self.0.clone())
+            }
+        }
+    };
+}
+
 /// [`Element`]s are types that wrap [`JonmoBuilder`] and can be aligned using [haalka](crate)'s
 /// [simple alignability semantics](super::align::Align) and granted UI-specific abilities like
 /// [pointer event awareness](super::pointer_event_aware::PointerEventAware), [viewport
@@ -107,12 +255,11 @@ pub trait Spawnable: BuilderWrapper {
 
 impl<T: BuilderWrapper> Spawnable for T {}
 
-/// A convenience trait for building "widgets" - composite UI elements that wrap other
-/// [`Element`]s. Implementing this trait automatically provides implementations of
-/// [`BuilderWrapper`] and [`Alignable`] by delegating to the wrapped element.
-///
-/// Use this when your widget contains another element (like `El<Node>`) as a field, rather than
-/// directly holding a [`JonmoBuilder`].
+/// [`ElementWrapper`]s can be passed to the child methods of all alignable types, e.g.
+/// [`.child`](super::el::El::child), [`.item_signal`](super::column::Column::item_signal),
+/// [`.layers`](super::stack::Stack::layers),
+/// [`.cells_signal_vec`](super::grid::Grid::cells_signal_vec), etc. This trait provides the
+/// foundation for building "widgets" using [haalka](crate).
 ///
 /// # Example
 /// ```
@@ -121,7 +268,7 @@ impl<T: BuilderWrapper> Spawnable for T {}
 ///
 /// struct MyWidget {
 ///     el: El<Node>,
-///     data: Mutable<usize>,
+///     data: usize,
 /// }
 ///
 /// impl ElementWrapper for MyWidget {
@@ -131,7 +278,6 @@ impl<T: BuilderWrapper> Spawnable for T {}
 ///     }
 /// }
 ///
-/// // These abilities are now available on MyWidget:
 /// impl GlobalEventAware for MyWidget {}
 /// impl PointerEventAware for MyWidget {}
 /// impl ViewportMutable for MyWidget {}
@@ -184,7 +330,7 @@ pub trait TypeEraseable {
     fn type_erase(self) -> AlignabilityFacade;
 }
 
-impl<T: BuilderWrapper> TypeEraseable for T {
+impl<T: Alignable> TypeEraseable for T {
     fn type_erase(self) -> AlignabilityFacade {
         AlignabilityFacade(self.into_builder())
     }
@@ -192,44 +338,15 @@ impl<T: BuilderWrapper> TypeEraseable for T {
 
 /// A type-erased [`Element`] that provides a facade of alignability.
 ///
-/// Created via [`TypeEraseable::type_erase`]. The underlying [`LayoutDirection`] component
-/// is preserved from the original element, so alignment behavior works correctly.
-/// Alignment methods should be called *before* type erasure, not after.
+/// Created via [`TypeEraseable::type_erase`]. The underlying alignment components
+/// are preserved from the original element, so alignment behavior works correctly.
 ///
-/// # `Clone` semantics
-///
-/// This type implements [`Clone`] **only** to satisfy trait bounds required by signal combinators.
-/// **Cloning `AlignabilityFacade`s at runtime is a bug.** See [`AlignabilityFacade::clone`] for
-/// details.
+#[doc = crate::clone_semantics_doc!("AlignabilityFacade")]
 ///
 /// [`LayoutDirection`]: super::align::LayoutDirection
 pub struct AlignabilityFacade(JonmoBuilder);
 
-impl Clone for AlignabilityFacade {
-    /// # Warning
-    ///
-    /// This clone implementation exists **only** to satisfy trait bounds required by signal
-    /// combinators. **Cloning `AlignabilityFacade`s at runtime is a bug and will lead to unexpected
-    /// behavior.**
-    ///
-    /// Clones share internal on-spawn hooks via the underlying [`JonmoBuilder`]. These hooks are
-    /// one-shot ([`FnOnce`]) and are consumed when the element is spawned. Spawning one clone will
-    /// affect all other clones.
-    ///
-    /// Use factory functions instead if you need reusable UI templates.
-    #[track_caller]
-    fn clone(&self) -> Self {
-        warn!(
-            "Cloning `AlignabilityFacade` at {} is a bug! This wraps `JonmoBuilder`, whose `Clone` \
-             shares internal on-spawn hook queues. These hooks are one-shot (`FnOnce`) and are \
-             consumed on spawn. Spawning one clone will affect all other clones. Use factory \
-             functions instead if you need reusable UI templates.",
-            std::panic::Location::caller()
-        );
-
-        Self(self.0.clone())
-    }
-}
+impl_element_clone!(simple "AlignabilityFacade", AlignabilityFacade);
 
 impl BuilderWrapper for AlignabilityFacade {
     fn builder_mut(&mut self) -> &mut JonmoBuilder {

@@ -17,10 +17,10 @@ use super::{column::Column, el::El, element::BuilderWrapper, grid::Grid, row::Ro
 /// use bevy::prelude::*;
 /// use haalka::{prelude::*, impl_haalka_methods};
 ///
-/// #[derive(Component, Default)]
+/// #[derive(Component, Default, Clone)]
 /// struct MyComponentA(usize);
 ///
-/// #[derive(Component, Default)]
+/// #[derive(Component, Default, Clone)]
 /// struct MyComponentB {
 ///     data: usize,
 /// }
@@ -40,7 +40,7 @@ use super::{column::Column, el::El, element::BuilderWrapper, grid::Grid, row::Ro
 ///         &mut self.0
 ///     }
 /// }
-///
+/// 
 /// impl_haalka_methods! {
 ///     MyEl {
 ///        my_component_a: MyComponentA,
@@ -49,32 +49,38 @@ use super::{column::Column, el::El, element::BuilderWrapper, grid::Grid, row::Ro
 /// }
 ///
 /// MyEl::default()
-/// .my_component_a(MyComponentA(1))
-/// .with_some_other_component_idk(|mut some_other_component_idk| some_other_component_idk.data = 2)
-/// .my_component_a_signal(always(3).map(MyComponentA))
-/// .on_signal_with_some_other_component_idk(always(4), |mut some_other_component_idk, data| some_other_component_idk.data = data);
+///     .my_component_a(MyComponentA(1))
+///     .with_some_other_component_idk(|mut some_other_component_idk| some_other_component_idk.data = 2)
+///     .my_component_a_signal(SignalBuilder::always(Some(MyComponentA(3))))
+///     .on_signal_with_some_other_component_idk(SignalBuilder::always(4), |mut some_other_component_idk, data| some_other_component_idk.data = data);
 /// ```
 ///
-/// # Skipping Signal Derivation
+/// # Skipping `_signal` Derivation
 /// Use `#[skip_signal]` before a field to skip generating the `_signal` method for that field.
-/// This is useful when the component type doesn't implement [`Clone`] or when you don't need
-/// the signal method.
+/// This is necessary when the component type doesn't implement [`Clone`], which is required for the
+/// `_signal` method.
 ///
 /// ```
 /// # use bevy::prelude::*;
 /// # use haalka::{prelude::*, impl_haalka_methods};
-/// # #[derive(Component, Default)]
+/// #
+/// # #[derive(Component, Default, Clone)]
 /// # struct MyComponentA(usize);
-/// # #[derive(Component, Default)]
+/// #
+/// # #[derive(Component, Default, Clone)]
 /// # struct MyComponentB { data: usize }
+/// #
 /// # #[derive(Bundle, Default)]
 /// # struct MyBundle { my_component_a: MyComponentA, my_component_b: MyComponentB }
+/// #
 /// # #[derive(Default)]
 /// # struct MyEl(El<MyBundle>);
+/// #
 /// # impl ElementWrapper for MyEl {
 /// #     type EL = El<MyBundle>;
 /// #     fn element_mut(&mut self) -> &mut Self::EL { &mut self.0 }
 /// # }
+/// 
 /// impl_haalka_methods! {
 ///     MyEl {
 ///        my_component_a: MyComponentA,
@@ -194,26 +200,6 @@ macro_rules! impl_haalka_methods_for_aligners_and_node_bundles {
                         text_node_flags: TextNodeFlags,
                         #[skip_signal]
                         content_size: ContentSize,
-                        node: Node,
-                        computed_node: ComputedNode,
-                        background_color: BackgroundColor,
-                        border_color: BorderColor,
-                        border_radius: BorderRadius,
-                        box_shadow: BoxShadow,
-                        focus_policy: FocusPolicy,
-                        scroll_position: ScrollPosition,
-                        transform: Transform,
-                        global_transform: GlobalTransform,
-                        visibility: Visibility,
-                        inherited_visibility: InheritedVisibility,
-                        view_visibility: ViewVisibility,
-                        z_index: ZIndex,
-                        global_z_index: GlobalZIndex,
-                    }
-                }
-                impl_haalka_methods! {
-                    $el_type<Button> {
-                        interaction: Interaction,
                         node: Node,
                         computed_node: ComputedNode,
                         background_color: BackgroundColor,

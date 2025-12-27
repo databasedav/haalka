@@ -1,5 +1,4 @@
 use bevy_ecs::prelude::*;
-use bevy_log::warn;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use jonmo::{
@@ -16,59 +15,18 @@ use super::{
     pointer_event_aware::{CursorOnHoverable, Hoverable, PointerEventAware, Pressable},
     viewport_mutable::ViewportMutable,
 };
+use crate::{clone_semantics_doc, impl_element_clone};
 
 /// [`Element`](super::element::Element) with children stacked on directly on top of each other (e.g. along the z-axis), with siblings ordered youngest to oldest, top to bottom. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Stack`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/stack.rs).
 ///
-/// # `Clone` semantics
-///
-/// This type implements [`Clone`] **only** to satisfy trait bounds required by signal combinators.
-/// **Cloning `Stack`s at runtime is a bug.** See [`Stack::clone`] for details.
+#[doc = clone_semantics_doc!("Stack")]
 #[derive(Default)]
 pub struct Stack<NodeType> {
     builder: JonmoBuilder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType> Clone for Stack<NodeType> {
-    /// # Warning
-    ///
-    /// This clone implementation exists **only** to satisfy trait bounds required by signal
-    /// combinators. **Cloning `Stack`s at runtime is a bug and will lead to unexpected behavior.**
-    ///
-    /// Clones share internal on-spawn hooks via the underlying [`JonmoBuilder`]. These hooks are
-    /// one-shot ([`FnOnce`]) and are consumed when the element is spawned. Spawning one clone will
-    /// affect all other clones.
-    ///
-    /// Use factory functions instead if you need reusable UI templates:
-    ///
-    /// ```
-    /// use bevy_ui::prelude::*;
-    /// use haalka::prelude::*;
-    ///
-    /// fn my_stack(label: &str) -> Stack<Node> {
-    ///     Stack::new().layer(El::new().name(label))
-    /// }
-    ///
-    /// // Correct: each call creates a fresh element
-    /// let stack1 = my_stack("First");
-    /// let stack2 = my_stack("Second");
-    /// ```
-    #[track_caller]
-    fn clone(&self) -> Self {
-        warn!(
-            "Cloning `Stack` at {} is a bug! `Stack` wraps `JonmoBuilder`, whose `Clone` shares \
-             internal on-spawn hook queues. These hooks are one-shot (`FnOnce`) and are consumed on \
-             spawn. Spawning one clone will affect all other clones. Use factory functions instead \
-             if you need reusable UI templates.",
-            std::panic::Location::caller()
-        );
-
-        Self {
-            builder: self.builder.clone(),
-            _node_type: std::marker::PhantomData,
-        }
-    }
-}
+impl_element_clone!("Stack", Stack<NodeType>, my_stack, ".layer(El::new().name(label))");
 
 impl<NodeType: Bundle> From<JonmoBuilder> for Stack<NodeType> {
     fn from(builder: JonmoBuilder) -> Self {
@@ -103,8 +61,7 @@ impl<NodeType> BuilderWrapper for Stack<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> BuilderPassThrough for Stack<NodeType> {}
-
+impl<NodeType: Bundle> Alignable for Stack<NodeType> {}
 impl<NodeType: Bundle> CursorOnHoverable for Stack<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Stack<NodeType> {}
 impl<NodeType: Bundle> Nameable for Stack<NodeType> {}
@@ -112,6 +69,8 @@ impl<NodeType: Bundle> PointerEventAware for Stack<NodeType> {}
 impl<NodeType: Bundle> MouseWheelScrollable for Stack<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Stack<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Stack<NodeType> {}
+
+impl<NodeType: Bundle> BuilderPassThrough for Stack<NodeType> {}
 
 /// Marker component for Stack children to place them in the same grid cell.
 #[derive(Component, Clone, Copy, Default)]
@@ -199,5 +158,3 @@ impl<NodeType: Bundle> Stack<NodeType> {
             .insert(StackChild)
     }
 }
-
-impl<NodeType: Bundle> Alignable for Stack<NodeType> {}

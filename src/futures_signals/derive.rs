@@ -13,7 +13,8 @@ use paste::paste;
 /// # Example
 /// ```
 /// use bevy::prelude::*;
-/// use haalka::{prelude::*, impl_haalka_methods};
+/// use haalka::futures_signals::prelude::*;
+/// use haalka::impl_haalka_methods_futures_signals;
 ///
 /// #[derive(Component, Default)]
 /// struct MyComponentA(usize);

@@ -1,5 +1,4 @@
 use bevy_ecs::prelude::*;
-use bevy_log::warn;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use jonmo::{
@@ -16,59 +15,18 @@ use super::{
     pointer_event_aware::{CursorOnHoverable, Hoverable, PointerEventAware, Pressable},
     viewport_mutable::ViewportMutable,
 };
+use crate::{clone_semantics_doc, impl_element_clone};
 
 /// [`Element`](super::element::Element) with vertically stacked children. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Column`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/column.rs).
 ///
-/// # `Clone` semantics
-///
-/// This type implements [`Clone`] **only** to satisfy trait bounds required by signal combinators.
-/// **Cloning `Column`s at runtime is a bug.** See [`Column::clone`] for details.
+#[doc = clone_semantics_doc!("Column")]
 #[derive(Default)]
 pub struct Column<NodeType> {
     builder: JonmoBuilder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType> Clone for Column<NodeType> {
-    /// # Warning
-    ///
-    /// This clone implementation exists **only** to satisfy trait bounds required by signal
-    /// combinators. **Cloning `Column`s at runtime is a bug and will lead to unexpected behavior.**
-    ///
-    /// Clones share internal on-spawn hooks via the underlying [`JonmoBuilder`]. These hooks are
-    /// one-shot ([`FnOnce`]) and are consumed when the element is spawned. Spawning one clone will
-    /// affect all other clones.
-    ///
-    /// Use factory functions instead if you need reusable UI templates:
-    ///
-    /// ```
-    /// use bevy_ui::prelude::*;
-    /// use haalka::prelude::*;
-    ///
-    /// fn my_column(label: &str) -> Column<Node> {
-    ///     Column::new().item(El::new().name(label))
-    /// }
-    ///
-    /// // Correct: each call creates a fresh element
-    /// let col1 = my_column("First");
-    /// let col2 = my_column("Second");
-    /// ```
-    #[track_caller]
-    fn clone(&self) -> Self {
-        warn!(
-            "Cloning `Column` at {} is a bug! `Column` wraps `JonmoBuilder`, whose `Clone` shares \
-             internal on-spawn hook queues. These hooks are one-shot (`FnOnce`) and are consumed on \
-             spawn. Spawning one clone will affect all other clones. Use factory functions instead \
-             if you need reusable UI templates.",
-            std::panic::Location::caller()
-        );
-
-        Self {
-            builder: self.builder.clone(),
-            _node_type: std::marker::PhantomData,
-        }
-    }
-}
+impl_element_clone!("Column", Column<NodeType>, my_column, ".item(El::new().name(label))");
 
 impl<NodeType: Bundle> From<JonmoBuilder> for Column<NodeType> {
     fn from(builder: JonmoBuilder) -> Self {
@@ -100,8 +58,7 @@ impl<NodeType: Bundle> BuilderWrapper for Column<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> BuilderPassThrough for Column<NodeType> {}
-
+impl<NodeType: Bundle> Alignable for Column<NodeType> {}
 impl<NodeType: Bundle> CursorOnHoverable for Column<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Column<NodeType> {}
 impl<NodeType: Bundle> Nameable for Column<NodeType> {}
@@ -109,6 +66,8 @@ impl<NodeType: Bundle> PointerEventAware for Column<NodeType> {}
 impl<NodeType: Bundle> MouseWheelScrollable for Column<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Column<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Column<NodeType> {}
+
+impl<NodeType: Bundle> BuilderPassThrough for Column<NodeType> {}
 
 impl<NodeType: Bundle> Column<NodeType> {
     /// Declare a static vertically stacked child.
@@ -178,5 +137,3 @@ impl<NodeType: Bundle> Column<NodeType> {
         }
     }
 }
-
-impl<NodeType: Bundle> Alignable for Column<NodeType> {}

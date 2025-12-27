@@ -1,7 +1,6 @@
 //! Simple grid layout model ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Grid`](https://github.com/MoonZoon/MoonZoon/blob/f8fc31065f65bdb3ab7b94faf5e3916bc5550dd9/crates/zoon/src/element/grid.rs).
 
 use bevy_ecs::prelude::*;
-use bevy_log::warn;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use jonmo::{
@@ -18,59 +17,18 @@ use super::{
     pointer_event_aware::{CursorOnHoverable, Hoverable, PointerEventAware, Pressable},
     viewport_mutable::ViewportMutable,
 };
+use crate::{clone_semantics_doc, impl_element_clone};
 
 /// [`Element`](super::element::Element) with children aligned in a grid using a simple [`.row_wrap_cell_width`](Grid::row_wrap_cell_width) grid layout model. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/grid.rs).
 ///
-/// # `Clone` semantics
-///
-/// This type implements [`Clone`] **only** to satisfy trait bounds required by signal combinators.
-/// **Cloning `Grid`s at runtime is a bug.** See [`Grid::clone`] for details.
+#[doc = clone_semantics_doc!("Grid")]
 #[derive(Default)]
 pub struct Grid<NodeType> {
     builder: JonmoBuilder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType> Clone for Grid<NodeType> {
-    /// # Warning
-    ///
-    /// This clone implementation exists **only** to satisfy trait bounds required by signal
-    /// combinators. **Cloning `Grid`s at runtime is a bug and will lead to unexpected behavior.**
-    ///
-    /// Clones share internal on-spawn hooks via the underlying [`JonmoBuilder`]. These hooks are
-    /// one-shot ([`FnOnce`]) and are consumed when the element is spawned. Spawning one clone will
-    /// affect all other clones.
-    ///
-    /// Use factory functions instead if you need reusable UI templates:
-    ///
-    /// ```
-    /// use bevy_ui::prelude::*;
-    /// use haalka::prelude::*;
-    ///
-    /// fn my_grid(label: &str) -> Grid<Node> {
-    ///     Grid::new().cell(El::new().name(label))
-    /// }
-    ///
-    /// // Correct: each call creates a fresh element
-    /// let grid1 = my_grid("First");
-    /// let grid2 = my_grid("Second");
-    /// ```
-    #[track_caller]
-    fn clone(&self) -> Self {
-        warn!(
-            "Cloning `Grid` at {} is a bug! `Grid` wraps `JonmoBuilder`, whose `Clone` shares \
-             internal on-spawn hook queues. These hooks are one-shot (`FnOnce`) and are consumed on \
-             spawn. Spawning one clone will affect all other clones. Use factory functions instead \
-             if you need reusable UI templates.",
-            std::panic::Location::caller()
-        );
-
-        Self {
-            builder: self.builder.clone(),
-            _node_type: std::marker::PhantomData,
-        }
-    }
-}
+impl_element_clone!("Grid", Grid<NodeType>, my_grid, ".cell(El::new().name(label))");
 
 impl<NodeType: Bundle> From<JonmoBuilder> for Grid<NodeType> {
     fn from(builder: JonmoBuilder) -> Self {
@@ -101,8 +59,7 @@ impl<NodeType> BuilderWrapper for Grid<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> BuilderPassThrough for Grid<NodeType> {}
-
+impl<NodeType: Bundle> Alignable for Grid<NodeType> {}
 impl<NodeType: Bundle> CursorOnHoverable for Grid<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Grid<NodeType> {}
 impl<NodeType: Bundle> Nameable for Grid<NodeType> {}
@@ -110,6 +67,8 @@ impl<NodeType: Bundle> PointerEventAware for Grid<NodeType> {}
 impl<NodeType: Bundle> MouseWheelScrollable for Grid<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Grid<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Grid<NodeType> {}
+
+impl<NodeType: Bundle> BuilderPassThrough for Grid<NodeType> {}
 
 /// Must substract this from the total row width of a [`Grid`] due to [float precision shenanigans](https://github.com/bevyengine/bevy/issues/12152). See an example usage in the [snake example](https://github.com/databasedav/haalka/blob/e12350c55d7aace07bc27787989c79d5a4e064e5/examples/snake.rs#L112).
 pub const GRID_TRACK_FLOAT_PRECISION_SLACK: f32 = 0.001;
@@ -234,5 +193,3 @@ impl<NodeType: Bundle> Grid<NodeType> {
         }
     }
 }
-
-impl<NodeType: Bundle> Alignable for Grid<NodeType> {}

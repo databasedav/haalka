@@ -1,5 +1,4 @@
 use bevy_ecs::prelude::*;
-use bevy_log::warn;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use jonmo::{
@@ -15,6 +14,7 @@ use super::{
     pointer_event_aware::{CursorOnHoverable, Hoverable, PointerEventAware, Pressable},
     viewport_mutable::ViewportMutable,
 };
+use crate::{clone_semantics_doc, impl_element_clone};
 
 // TODO: add the extra flag machinery that MoonZoon has to ensure that El's have exactly one child
 // (or child signal)
@@ -24,56 +24,14 @@ use super::{
 /// [`.child_signal`](`El::child_signal`), their relative alignment was arbitrarily chosen to match
 /// [MoonZoon's implementation](https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/el.rs#L41-L69) and should not be relied on.
 ///
-/// # `Clone` semantics
-///
-/// This type implements [`Clone`] **only** to satisfy trait bounds required by signal combinators.
-/// **Cloning `El`s at runtime is a bug.** See [`El::clone`] for details.
+#[doc = clone_semantics_doc!("El")]
 #[derive(Default)]
 pub struct El<NodeType> {
     builder: JonmoBuilder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType> Clone for El<NodeType> {
-    /// # Warning
-    ///
-    /// This clone implementation exists **only** to satisfy trait bounds required by signal
-    /// combinators. **Cloning `El`s at runtime is a bug and will lead to unexpected behavior.**
-    ///
-    /// Clones share internal on-spawn hooks via the underlying [`JonmoBuilder`]. These hooks are
-    /// one-shot ([`FnOnce`]) and are consumed when the element is spawned. Spawning one clone will
-    /// affect all other clones.
-    ///
-    /// Use factory functions instead if you need reusable UI templates:
-    ///
-    /// ```
-    /// use bevy_ui::prelude::*;
-    /// use haalka::prelude::*;
-    ///
-    /// fn my_el(label: &str) -> El<Node> {
-    ///     El::new().name(label)
-    /// }
-    ///
-    /// // Correct: each call creates a fresh element
-    /// let el1 = my_el("First");
-    /// let el2 = my_el("Second");
-    /// ```
-    #[track_caller]
-    fn clone(&self) -> Self {
-        warn!(
-            "Cloning `El` at {} is a bug! `El` wraps `JonmoBuilder`, whose `Clone` shares \
-             internal on-spawn hook queues. These hooks are one-shot (`FnOnce`) and are consumed on \
-             spawn. Spawning one clone will affect all other clones. Use factory functions instead \
-             if you need reusable UI templates.",
-            std::panic::Location::caller()
-        );
-
-        Self {
-            builder: self.builder.clone(),
-            _node_type: std::marker::PhantomData,
-        }
-    }
-}
+impl_element_clone!("El", El<NodeType>, my_el, ".name(label)");
 
 impl<NodeType: Bundle> From<JonmoBuilder> for El<NodeType> {
     fn from(builder: JonmoBuilder) -> Self {
@@ -105,8 +63,7 @@ impl<NodeType> BuilderWrapper for El<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> BuilderPassThrough for El<NodeType> {}
-
+impl<NodeType: Bundle> Alignable for El<NodeType> {}
 impl<NodeType: Bundle> CursorOnHoverable for El<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for El<NodeType> {}
 impl<NodeType: Bundle> Nameable for El<NodeType> {}
@@ -114,6 +71,8 @@ impl<NodeType: Bundle> PointerEventAware for El<NodeType> {}
 impl<NodeType: Bundle> MouseWheelScrollable for El<NodeType> {}
 impl<NodeType: Bundle> UiRootable for El<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for El<NodeType> {}
+
+impl<NodeType: Bundle> BuilderPassThrough for El<NodeType> {}
 
 impl<NodeType: Bundle> El<NodeType> {
     /// Declare a static child.
@@ -144,5 +103,3 @@ impl<NodeType: Bundle> El<NodeType> {
         }
     }
 }
-
-impl<NodeType: Bundle> Alignable for El<NodeType> {}

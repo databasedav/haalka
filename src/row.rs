@@ -1,5 +1,4 @@
 use bevy_ecs::prelude::*;
-use bevy_log::warn;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use jonmo::{
@@ -16,59 +15,18 @@ use super::{
     pointer_event_aware::{CursorOnHoverable, Hoverable, PointerEventAware, Pressable},
     viewport_mutable::ViewportMutable,
 };
+use crate::{clone_semantics_doc, impl_element_clone};
 
 /// [`Element`](super::element::Element) with horizontally stacked children. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Row`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/row.rs).
 ///
-/// # `Clone` semantics
-///
-/// This type implements [`Clone`] **only** to satisfy trait bounds required by signal combinators.
-/// **Cloning `Row`s at runtime is a bug.** See [`Row::clone`] for details.
+#[doc = clone_semantics_doc!("Row")]
 #[derive(Default)]
 pub struct Row<NodeType> {
     builder: JonmoBuilder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType> Clone for Row<NodeType> {
-    /// # Warning
-    ///
-    /// This clone implementation exists **only** to satisfy trait bounds required by signal
-    /// combinators. **Cloning `Row`s at runtime is a bug and will lead to unexpected behavior.**
-    ///
-    /// Clones share internal on-spawn hooks via the underlying [`JonmoBuilder`]. These hooks are
-    /// one-shot ([`FnOnce`]) and are consumed when the element is spawned. Spawning one clone will
-    /// affect all other clones.
-    ///
-    /// Use factory functions instead if you need reusable UI templates:
-    ///
-    /// ```
-    /// use bevy_ui::prelude::*;
-    /// use haalka::prelude::*;
-    ///
-    /// fn my_row(label: &str) -> Row<Node> {
-    ///     Row::new().item(El::new().name(label))
-    /// }
-    ///
-    /// // Correct: each call creates a fresh element
-    /// let row1 = my_row("First");
-    /// let row2 = my_row("Second");
-    /// ```
-    #[track_caller]
-    fn clone(&self) -> Self {
-        warn!(
-            "Cloning `Row` at {} is a bug! `Row` wraps `JonmoBuilder`, whose `Clone` shares \
-             internal on-spawn hook queues. These hooks are one-shot (`FnOnce`) and are consumed on \
-             spawn. Spawning one clone will affect all other clones. Use factory functions instead \
-             if you need reusable UI templates.",
-            std::panic::Location::caller()
-        );
-
-        Self {
-            builder: self.builder.clone(),
-            _node_type: std::marker::PhantomData,
-        }
-    }
-}
+impl_element_clone!("Row", Row<NodeType>, my_row, ".item(El::new().name(label))");
 
 impl<NodeType: Bundle> From<JonmoBuilder> for Row<NodeType> {
     fn from(builder: JonmoBuilder) -> Self {
@@ -101,8 +59,7 @@ impl<NodeType: Bundle> BuilderWrapper for Row<NodeType> {
     }
 }
 
-impl<NodeType: Bundle> BuilderPassThrough for Row<NodeType> {}
-
+impl<NodeType: Bundle> Alignable for Row<NodeType> {}
 impl<NodeType: Bundle> CursorOnHoverable for Row<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Row<NodeType> {}
 impl<NodeType: Bundle> Nameable for Row<NodeType> {}
@@ -110,6 +67,8 @@ impl<NodeType: Bundle> PointerEventAware for Row<NodeType> {}
 impl<NodeType: Bundle> MouseWheelScrollable for Row<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Row<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Row<NodeType> {}
+
+impl<NodeType: Bundle> BuilderPassThrough for Row<NodeType> {}
 
 impl<NodeType: Bundle> Row<NodeType> {
     /// Declare a static horizontally stacked child.
@@ -191,5 +150,3 @@ impl<NodeType: Bundle> Row<NodeType> {
         })
     }
 }
-
-impl<NodeType: Bundle> Alignable for Row<NodeType> {}
