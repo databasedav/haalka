@@ -64,7 +64,7 @@ const CLICKED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
 const BUTTON_WIDTH: f32 = 250.;
 const BUTTON_HEIGHT: f32 = 50.;
 
-#[derive(Clone, Copy, PartialEq, strum::Display, strum::EnumIter)]
+#[derive(Clone, Copy, PartialEq, strum::Display, strum::EnumIter, strum::AsRefStr)]
 #[strum(serialize_all = "lowercase")]
 enum Shape {
     Sphere,
@@ -75,31 +75,26 @@ enum Shape {
     Torus,
 }
 
-#[derive(Resource, Clone, Copy, PartialEq, Deref, DerefMut)]
+#[derive(Resource, Clone, Copy, Deref, DerefMut)]
 struct SelectedShape(Shape);
 
 fn button(shape: Shape) -> impl Element {
     let lazy_entity = LazyEntity::new();
 
-    let selected_pressed_hovered_signal = SignalBuilder::from_resource::<SelectedShape>()
+    let selected = signal::from_resource_changed::<SelectedShape>()
         .map_in(deref_copied)
-        .dedupe()
-        .eq(shape)
-        .combine(
-            SignalBuilder::from_lazy_entity(lazy_entity.clone())
-                .map(|In(entity), presseds: Query<&Pressed>| presseds.contains(entity))
-                .dedupe(),
-        )
-        .combine(
-            SignalBuilder::from_lazy_entity(lazy_entity.clone())
-                .has_component::<Hovered>()
-                .dedupe(),
-        )
-        .map_in(|((selected, pressed), hovered)| (selected || pressed, hovered))
+        .eq(shape);
+    let pressed = signal::from_entity(lazy_entity.clone())
+        .has_component::<Pressed>()
+        .dedupe();
+    let hovered = signal::from_entity(lazy_entity.clone())
+        .has_component::<Hovered>()
         .dedupe();
 
+    let selected_hovered = signal::zip!(signal::any!(selected, pressed), hovered).dedupe();
+
     El::<Node>::new()
-        .insert(Pickable::default())
+        .insert((Pickable::default(), Hoverable, Pressable))
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .with_node(|mut node| {
             node.width = Val::Px(BUTTON_WIDTH);
@@ -109,7 +104,7 @@ fn button(shape: Shape) -> impl Element {
         .align_content(Align::center())
         .lazy_entity(lazy_entity.clone())
         .border_color_signal(
-            selected_pressed_hovered_signal
+            selected_hovered
                 .clone()
                 .map_in(|(selected, hovered)| {
                     if selected {
@@ -124,7 +119,7 @@ fn button(shape: Shape) -> impl Element {
                 .map_in(Some),
         )
         .background_color_signal(
-            selected_pressed_hovered_signal
+            selected_hovered
                 .map_in(|(selected, hovered)| {
                     if selected {
                         CLICKED_BUTTON
@@ -148,6 +143,78 @@ fn button(shape: Shape) -> impl Element {
         )
 }
 
+fn name_input(shape_buttons: LazyEntity) -> impl Element {
+    let text_input = LazyEntity::new();
+    El::<Node>::new()
+        .insert((BackgroundColor(NORMAL_BUTTON), Pickable::default()))
+        .cursor(CursorIcon::System(SystemCursorIcon::Text))
+        .with_node(|mut node| node.height = Val::Px(BUTTON_HEIGHT))
+        .on_click(
+            clone!((text_input) move |In(_), mut input_focus: ResMut<InputFocus>| input_focus.0 = Some(*text_input)),
+        )
+        .on_click_outside(|In(_), mut input_focus: ResMut<InputFocus>| input_focus.0 = None)
+        .child(
+            TextInput::new()
+                .with_node(|mut node| {
+                    node.left = Val::Px(10.);
+                    node.height = Val::Px(BUTTON_HEIGHT - 10. * 2.);
+                    node.width = Val::Px(BUTTON_WIDTH - 10.);
+                })
+                .align(Align::new().center_y())
+                .with_text_input_node(|mut node| {
+                    node.mode = TextInputMode::SingleLine;
+                    // TODO: https://github.com/ickshonpe/bevy_ui_text_input/issues/10
+                    // node.justification = Justify::Center;
+                })
+                .text_color(TextColor(Color::WHITE))
+                .text_input_prompt(TextInputPrompt {
+                    text: "name".to_string(),
+                    color: Some(bevy::color::palettes::basic::GRAY.into()),
+                    ..default()
+                })
+                .lazy_entity(text_input.clone())
+                .on_change(clone!((shape_buttons) move |In((_, text)),
+                    mut scroll_positions: Query<&mut ScrollPosition>,
+                    mut commands: Commands| {
+                    if let Some((i, shape)) = Shape::iter()
+                        .enumerate()
+                        .find(|(_, shape)| shape.as_ref() == text)
+                    {
+                        commands.trigger(SetShape(shape));
+                        scroll_positions.get_mut(*shape_buttons).unwrap().y = i as f32 * BUTTON_HEIGHT;
+                    }
+                })),
+        )
+}
+
+fn shape_buttons_list(shape_buttons: LazyEntity) -> impl Element {
+    Column::<Node>::new()
+        .lazy_entity(shape_buttons)
+        .with_node(|mut node| node.height = Val::Px(200.))
+        .align(Align::new().center_x())
+        .insert(Pickable::default())
+        .mutable_viewport(Overflow::scroll_y())
+        .on_scroll_on_hover(
+            BasicScrollHandler::new()
+                .direction(ScrollDirection::Vertical)
+                .pixels(20.)
+                .into_system(),
+        )
+        .items(Shape::iter().map(button))
+}
+
+fn editor_panel() -> impl Element {
+    let shape_buttons = LazyEntity::new();
+    Column::<Node>::new()
+        .align(Align::new().center_y().right())
+        .with_node(|mut node| {
+            node.padding.right = Val::Percent(20.);
+            node.row_gap = Val::Px(20.);
+        })
+        .item(name_input(shape_buttons.clone()))
+        .item(shape_buttons_list(shape_buttons))
+}
+
 fn ui_root() -> impl Element {
     El::<Node>::new()
         .ui_root()
@@ -157,83 +224,7 @@ fn ui_root() -> impl Element {
             node.width = Val::Percent(100.);
             node.height = Val::Percent(100.);
         })
-        .align_content(Align::center())
-        .child(
-            Stack::<Node>::new()
-                .with_node(|mut node| {
-                    node.width = Val::Percent(100.);
-                    node.height = Val::Percent(100.);
-                })
-                .layer({
-                    let shape_buttons = LazyEntity::new();
-                    Column::<Node>::new()
-                        .align(Align::new().center_y().right())
-                        .with_node(|mut node| {
-                            node.padding.right = Val::Percent(20.);
-                            node.row_gap = Val::Px(20.);
-                        })
-                        .item({
-                            let text_input = LazyEntity::new();
-                            El::<Node>::new()
-                                .insert((BackgroundColor(NORMAL_BUTTON), Pickable::default()))
-                                .cursor(CursorIcon::System(SystemCursorIcon::Text))
-                                .with_node(|mut node| node.height = Val::Px(BUTTON_HEIGHT))
-                                .on_click(clone!((text_input) move |In(_), mut input_focus: ResMut<InputFocus>| input_focus.0 = Some(*text_input)))
-                                .on_click_outside(|In(_), mut input_focus: ResMut<InputFocus>| input_focus.0 = None)
-                                .child(
-                                    TextInput::new()
-                                        .with_node(|mut node| {
-                                            node.left = Val::Px(10.);
-                                            node.height = Val::Px(BUTTON_HEIGHT - 10. * 2.);
-                                            node.width = Val::Px(BUTTON_WIDTH - 10.);
-                                        })
-                                        .align(Align::new().center_y())
-                                        .with_text_input_node(|mut node| {
-                                            node.mode = TextInputMode::SingleLine;
-                                            // TODO: https://github.com/ickshonpe/bevy_ui_text_input/issues/10
-                                            // node.justification = Justify::Center;
-                                        })
-                                        .text_color(TextColor(Color::WHITE))
-                                        .text_input_prompt(TextInputPrompt {
-                                            text: "name".to_string(),
-                                            color: Some(bevy::color::palettes::basic::GRAY.into()),
-                                            ..default()
-                                        })
-                                        .lazy_entity(text_input.clone())
-                                        .on_change(
-                                            clone!((shape_buttons) move |In((_, text)),
-                                             mut scroll_positions: Query<&mut ScrollPosition>,
-                                             mut commands: Commands| {
-                                                if let Some((i, shape)) = Shape::iter()
-                                                    .enumerate()
-                                                    .find(|(_, shape)| shape.to_string() == text)
-                                                {
-                                                    commands.trigger(SetShape(shape));
-                                                    scroll_positions.get_mut(*shape_buttons).unwrap().y = i as f32 * BUTTON_HEIGHT;
-                                                }
-                                            }
-                                        ))
-                                        ,
-                                )
-                        })
-                        .item({
-                            Column::<Node>::new()
-                                .lazy_entity(shape_buttons)
-                                .with_node(|mut node| node.height = Val::Px(200.))
-                                .align(Align::new().center_x())
-                                .insert(Pickable::default())
-                                .mutable_viewport(Overflow::scroll_y())
-                                .on_hovered_change(|In((_, hover_data)): In<(Entity, HoverData)>| bevy_log::debug!("Hover data changed: hovered={}", hover_data.hovered))
-                                .on_scroll_on_hover(
-                                    BasicScrollHandler::new()
-                                        .direction(ScrollDirection::Vertical)
-                                        .pixels(20.)
-                                        .into_system(),
-                                )
-                                .items(Shape::iter().map(button))
-                        })
-                }),
-        )
+        .child(editor_panel())
 }
 
 #[derive(Event, Deref)]

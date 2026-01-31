@@ -26,6 +26,7 @@ bevy_input_focus = { version = "0.17", optional = true, default-features = false
 bevy_log = { version = "0.17", default-features = false }
 bevy_math = { version = "0.17", default-features = false }
 bevy_picking = { version = "0.17", default-features = false }
+bevy_platform = { version = "0.17", default-features = false }
 bevy_reflect = { version = "0.17", default-features = false }
 bevy_render = { version = "0.17", default-features = false, features = ["webgl"] }
 bevy_tasks = { version = "0.17", default-features = false, features = ["multi_threaded"] }
@@ -217,3 +218,6 @@ name = "utils"
 path = "examples/utils.rs"
 doc-scrape-examples = true
 crate-type = ["lib"]
+
+[patch.crates-io]
+jonmo = { path = "../jonmo" }

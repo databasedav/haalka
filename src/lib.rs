@@ -43,7 +43,9 @@ pub struct HaalkaPlugin;
 
 impl Plugin for HaalkaPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(jonmo::JonmoPlugin::new().in_schedule(PostUpdate));
+        if !app.is_plugin_added::<jonmo::JonmoPlugin>() {
+            app.add_plugins(jonmo::JonmoPlugin::new().in_schedule(PostUpdate));
+        }
         app.add_plugins((
             align::plugin,
             pointer_event_aware::plugin,
@@ -52,7 +54,9 @@ impl Plugin for HaalkaPlugin {
         ));
         app.configure_sets(
             PostUpdate,
-            (jonmo::SignalProcessing, bevy_ui::UiSystems::Prepare).chain(),
+            jonmo::SignalProcessing
+                .before(bevy_ui::UiSystems::Prepare)
+                .before(bevy_text::Text2dUpdateSystems)
         );
         #[cfg(feature = "text_input")]
         app.add_plugins(text_input::plugin);
@@ -76,8 +80,8 @@ pub mod prelude {
         column::Column,
         el::El,
         element::{
-            AlignabilityFacade, BuilderPassThrough, BuilderWrapper, Element, ElementWrapper, Nameable, Spawnable,
-            TypeEraseable, UiRoot, UiRootable,
+            AlignabilityFacade, BuilderPassThrough, BuilderWrapper, Element, ElementEither, ElementWrapper,
+            IntoElementEither, Nameable, Spawnable, TypeEraseable, UiRoot, UiRootable,
         },
         global_event_aware::{GlobalEventAware, GlobalEventData},
         grid::Grid,
@@ -85,9 +89,8 @@ pub mod prelude {
             BasicScrollHandler, MouseWheelScrollable, OnHoverMouseWheelScrollable, ScrollDirection,
         },
         pointer_event_aware::{
-            CursorOnHover, CursorOnHoverDisabled, CursorOnHoverable, DragData, Dragged, DraggingData, Enter, HoverData,
-            Hovered, HoveringData, Leave, PointerEventAware, PressData, PressingData, SetCursor,
-            UpdateHoverStatesDisabled,
+            Cursor, Cursorable, CursorableDisabled, DragData, Draggable, Dragged, Enter, HoverData, Hoverable, Hovered,
+            Leave, PointerEventAware, PressData, Pressable, SetCursor, UpdateHoverStatesDisabled,
         },
         row::Row,
         stack::Stack,
@@ -116,7 +119,6 @@ pub mod prelude {
             pub use crate::utils::*;
             #[doc(no_inline)]
             pub use apply::{Also, Apply};
-            pub use std::sync::LazyLock;
         }
     }
 }

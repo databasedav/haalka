@@ -26,39 +26,21 @@ const FONT_SIZE: f32 = 5.83;
 const HOVERED_COLOR: Color = Color::srgb(0.25, 0.25, 0.25);
 const PRESSED_COLOR: Color = Color::srgb(0.35, 0.75, 0.35);
 
-fn button(i: usize, j: usize) -> JonmoBuilder {
+fn button(i: usize, j: usize) -> jonmo::Builder {
     let color = as_rainbow(j % i.max(1));
     let lazy_entity = LazyEntity::new();
 
-    let pressed_hovered_signal = SignalBuilder::from_lazy_entity(lazy_entity.clone())
-        // Can't use .has_component because Pressed is not Clone
-        .map(|In(entity), presseds: Query<&Pressed>| presseds.contains(entity))
-        .dedupe()
-        .combine(
-            SignalBuilder::from_lazy_entity(lazy_entity.clone())
-                .has_component::<Hovered>()
-                .dedupe(),
-        )
+    let pressed = signal::from_entity(lazy_entity.clone())
+        .has_component::<Pressed>()
         .dedupe();
-
-    let background_color_signal = pressed_hovered_signal
-        .map_in(move |(pressed, hovered)| {
-            if pressed {
-                PRESSED_COLOR
-            } else if hovered {
-                HOVERED_COLOR
-            } else {
-                color
-            }
-        })
-        .map_in(BackgroundColor)
-        .map_in(Some);
-
+    let hovered = signal::from_entity(lazy_entity.clone())
+        .has_component::<Hovered>()
+        .dedupe();
     let total = SIZE as f32;
     let width = 90. / total;
-    JonmoBuilder::new()
+    jonmo::Builder::new()
         .insert(Node::default())
-        .insert(Pickable::default())
+        .insert((Pickable::default(), Hoverable, Pressable))
         .with_component::<Node>(move |mut node| {
             node.width = Val::Percent(width);
             node.height = Val::Percent(width);
@@ -69,9 +51,23 @@ fn button(i: usize, j: usize) -> JonmoBuilder {
             node.border = UiRect::all(Val::Percent(10. / total));
         })
         .lazy_entity(lazy_entity)
-        .component_signal::<BackgroundColor, _>(background_color_signal)
+        .component_signal(
+            signal::zip!(pressed, hovered)
+                .dedupe()
+                .map_in(move |(pressed, hovered)| {
+                    if pressed {
+                        PRESSED_COLOR
+                    } else if hovered {
+                        HOVERED_COLOR
+                    } else {
+                        color
+                    }
+                })
+                .map_in(BackgroundColor)
+                .map_in(Some),
+        )
         .insert(BorderColor::all(as_rainbow(i % j.max(1))))
-        .child(JonmoBuilder::from((
+        .child(jonmo::Builder::from((
             Text(format!("{i} {j}")),
             TextFont::from_font_size(FONT_SIZE),
             TextColor(Color::srgb(0.2, 0.2, 0.2)),

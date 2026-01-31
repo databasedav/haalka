@@ -9,8 +9,38 @@ use bevy::{input::mouse::MouseWheel, prelude::*};
 use haalka::prelude::*;
 
 fn main() {
+    App::new()
+        .add_plugins(examples_plugin)
+        .insert_resource(create_rails())
+        .insert_resource(Shifted(false))
+        .insert_resource(Cells::new())
+        .add_systems(
+            Startup,
+            (
+                |world: &mut World| {
+                    let cell_data = {
+                        let cells = world.resource::<Cells>();
+                        (0..GRID_SIZE)
+                            .flat_map(|x| (0..GRID_SIZE).map(move |y| ((x, y), cells.0[x][y].clone())))
+                            .collect()
+                    };
+                    ui_root(cell_data).spawn(world);
+                },
+                camera,
+            ),
+        )
+        .add_systems(Update, (scroller.run_if(resource_exists::<HoveredCell>), shifter))
+        .run();
+}
+
+const LETTER_SIZE: f32 = 54.167; // 65 / 1.2
+const CELL_SIZE: f32 = 66.;
+const GRID_SIZE: usize = 5;
+const NUM_VISIBLE: usize = GRID_SIZE;
+
+fn create_rails() -> Rails {
     let letters = "abcdefghijklmnopqrstuvwxyz";
-    let vertical = (0..5)
+    let vertical = (0..GRID_SIZE)
         .map(|i| {
             letters
                 .chars()
@@ -25,7 +55,7 @@ fn main() {
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    let horizontal = (0..5)
+    let horizontal = (0..GRID_SIZE)
         .map(|i| {
             letters
                 .chars()
@@ -34,43 +64,12 @@ fn main() {
                 .take(letters.len())
                 .map(|letter| LetterColor {
                     letter: letter.to_string(),
-                    color: ROYGBIV[i].into(),
+                    color: ROYGBIV[i % ROYGBIV.len()].into(),
                 })
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    App::new()
-        .add_plugins(examples_plugin)
-        .insert_resource(Rails { vertical, horizontal })
-        .insert_resource(Shifted(false))
-        .insert_resource(Cells::new())
-        .add_systems(
-            Startup,
-            (
-                |world: &mut World| {
-                    let cell_data: Vec<_> = {
-                        let cells = world.resource::<Cells>();
-                        (0..5)
-                            .flat_map(|x| (0..5).map(move |y| (x, y, cells.0[x][y].clone())))
-                            .collect()
-                    };
-                    ui_root(cell_data).spawn(world);
-                },
-                camera,
-            ),
-        )
-        .add_systems(Update, (scroller.run_if(resource_exists::<HoveredCell>), shifter))
-        .run();
-}
-
-const LETTER_SIZE: f32 = 54.167; // 65 / 1.2
-const CELL_SIZE: f32 = 66.;
-const NUM_VISIBLE: usize = 5;
-
-#[derive(Clone, Copy)]
-enum Scroll {
-    Up,
-    Down,
+    Rails { vertical, horizontal }
 }
 
 #[derive(Resource)]
@@ -79,44 +78,41 @@ struct HoveredCell(usize, usize);
 #[derive(Component, Clone)]
 struct CellPosition(usize, usize);
 
-#[derive(Component, Clone, Default)]
+#[derive(Component, Clone, Default, Deref)]
 struct LetterColorComponent(LetterColor);
 
-#[rustfmt::skip]
-fn letter(
-    x: usize,
-    y: usize,
-    initial: LetterColor,
-) -> impl Element {
+fn letter((x, y): (usize, usize), initial: LetterColor) -> impl Element {
     let lazy_entity = LazyEntity::new();
-    let letter_color = SignalBuilder::from_component_lazy::<LetterColorComponent>(lazy_entity.clone())
-        .map_in(|LetterColorComponent(lc)| lc);
-    let letter = letter_color.clone().map_in(|LetterColor { letter, .. }| letter).dedupe();
+    let letter_color = signal::from_component_changed::<LetterColorComponent>(lazy_entity.clone()).map_in(deref_cloned);
+    let letter = letter_color
+        .clone()
+        .map_in(|LetterColor { letter, .. }| letter)
+        .dedupe();
     let color = letter_color.map_in(|LetterColor { color, .. }| color).dedupe();
     El::<Node>::new()
-    .lazy_entity(lazy_entity.clone())
-    .insert(CellPosition(x, y))
-    .insert(LetterColorComponent(initial))
-    .insert(Pickable::default())
-    .with_node(|mut node| {
-        node.width = Val::Px(CELL_SIZE);
-        node.height = Val::Px(CELL_SIZE);
-    })
-    .align_content(Align::center())
-    .on_hovered_change(move |In((_, data)): In<(Entity, HoverData)>, mut commands: Commands| {
-        if data.hovered {
-            commands.insert_resource(HoveredCell(x, y));
-        }
-    })
-    .child(
-        El::<Text>::new()
-        .text_font(TextFont::from_font_size(LETTER_SIZE))
-        .text_color_signal(color.map_in(TextColor).map_in(Some))
-        .text_signal(letter.map_in(Text).map_in(Some))
-    )
+        .lazy_entity(lazy_entity.clone())
+        .insert(CellPosition(x, y))
+        .insert(LetterColorComponent(initial))
+        .insert(Pickable::default())
+        .with_node(|mut node| {
+            node.width = Val::Px(CELL_SIZE);
+            node.height = Val::Px(CELL_SIZE);
+        })
+        .align_content(Align::center())
+        .on_hovered_change(move |In((_, data)): In<(Entity, HoverData)>, mut commands: Commands| {
+            if data.hovered {
+                commands.insert_resource(HoveredCell(x, y));
+            }
+        })
+        .child(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(LETTER_SIZE))
+                .text_color_signal(color.map_in(TextColor).map_in(Some))
+                .text_signal(letter.map_in(Text).map_in(Some)),
+        )
 }
 
-#[derive(Clone, Default, PartialEq)]
+#[derive(Clone, Default)]
 struct LetterColor {
     letter: String,
     color: Color,
@@ -139,17 +135,17 @@ const ROYGBIV: &[Srgba] = &[
 ];
 
 #[derive(Resource)]
-struct Cells([[LetterColor; 5]; 5]);
+struct Cells([[LetterColor; GRID_SIZE]; GRID_SIZE]);
 
 impl Cells {
     fn new() -> Self {
         let letters = "abcdefghijklmnopqrstuvwxyz";
-        let mut cells = [[(); 5]; 5].map(|row| row.map(|_| LetterColor::default()));
-        for i in 0..5 {
-            for (j, letter) in letters.chars().skip(i).take(5).enumerate() {
+        let mut cells = [[(); GRID_SIZE]; GRID_SIZE].map(|row| row.map(|_| LetterColor::default()));
+        for i in 0..GRID_SIZE {
+            for (j, letter) in letters.chars().skip(i).take(GRID_SIZE).enumerate() {
                 cells[i][j] = LetterColor {
                     letter: letter.to_string(),
-                    color: ROYGBIV[i].into(),
+                    color: ROYGBIV[i % ROYGBIV.len()].into(),
                 };
             }
         }
@@ -157,10 +153,8 @@ impl Cells {
     }
 }
 
-fn ui_root(cell_data: Vec<(usize, usize, LetterColor)>) -> impl Element {
-    let shifted = SignalBuilder::from_resource::<Shifted>()
-        .map_in(|Shifted(s)| s)
-        .dedupe();
+fn ui_root(cell_data: Vec<((usize, usize), LetterColor)>) -> impl Element {
+    let shifted = signal::from_resource_changed::<Shifted>().map_in(deref_copied);
     El::<Node>::new()
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
@@ -189,7 +183,7 @@ fn ui_root(cell_data: Vec<(usize, usize, LetterColor)>) -> impl Element {
                     node.height = Val::Px(CELL_SIZE * NUM_VISIBLE as f32);
                 })
                 .align(Align::center())
-                .cells(cell_data.into_iter().map(|(x, y, lc)| letter(x, y, lc))),
+                .cells(cell_data.into_iter().map(|((x, y), lc)| letter((x, y), lc))),
         )
 }
 
@@ -202,62 +196,55 @@ fn scroller(
     mut letter_colors: Query<(&CellPosition, &mut LetterColorComponent)>,
 ) {
     for mouse_wheel_event in mouse_wheel_events.read() {
-        let scroll = if mouse_wheel_event.y.is_sign_negative() {
-            Scroll::Up
-        } else {
-            Scroll::Down
-        };
+        let scroll_up = mouse_wheel_event.y.is_sign_negative();
         let HoveredCell(x, y) = *hovered_cell;
         let Rails { vertical, horizontal } = &mut *rails;
-        match scroll {
-            Scroll::Up => {
-                if shifted.0 {
-                    horizontal[x].rotate_left(1);
-                    for (v, h) in vertical.iter_mut().zip(horizontal[x].iter()) {
-                        v[x] = h.clone();
-                    }
-                    for (j, v) in horizontal[x].iter().take(5).enumerate() {
-                        cells.0[x][j] = v.clone();
-                    }
-                } else {
-                    vertical[y].rotate_left(1);
-                    for (h, v) in horizontal.iter_mut().zip(vertical[y].iter()) {
-                        h[y] = v.clone();
-                    }
-                    for (i, v) in vertical[y].iter().take(5).enumerate() {
-                        cells.0[i][y] = v.clone();
-                    }
+
+        if shifted.0 {
+            // Scroll horizontally (row x)
+            if scroll_up {
+                horizontal[x].rotate_left(1);
+            } else {
+                horizontal[x].rotate_right(1);
+            }
+            for (v, h) in vertical.iter_mut().zip(horizontal[x].iter()) {
+                v[x] = h.clone();
+            }
+            for (j, v) in horizontal[x].iter().take(GRID_SIZE).enumerate() {
+                cells.0[x][j] = v.clone();
+            }
+            // Update only the row that changed
+            for (pos, mut lc) in letter_colors.iter_mut() {
+                let CellPosition(px, py) = *pos;
+                if px == x {
+                    lc.0 = cells.0[px][py].clone();
                 }
             }
-            Scroll::Down => {
-                if shifted.0 {
-                    horizontal[x].rotate_right(1);
-                    for (v, h) in vertical.iter_mut().zip(horizontal[x].iter()) {
-                        v[x] = h.clone();
-                    }
-                    for (j, v) in horizontal[x].iter().take(5).enumerate() {
-                        cells.0[x][j] = v.clone();
-                    }
-                } else {
-                    vertical[y].rotate_right(1);
-                    for (h, v) in horizontal.iter_mut().zip(vertical[y].iter()) {
-                        h[y] = v.clone();
-                    }
-                    for (i, v) in vertical[y].iter().take(5).enumerate() {
-                        cells.0[i][y] = v.clone();
-                    }
+        } else {
+            // Scroll vertically (column y)
+            if scroll_up {
+                vertical[y].rotate_left(1);
+            } else {
+                vertical[y].rotate_right(1);
+            }
+            for (h, v) in horizontal.iter_mut().zip(vertical[y].iter()) {
+                h[y] = v.clone();
+            }
+            for (i, v) in vertical[y].iter().take(GRID_SIZE).enumerate() {
+                cells.0[i][y] = v.clone();
+            }
+            // Update only the column that changed
+            for (pos, mut lc) in letter_colors.iter_mut() {
+                let CellPosition(px, py) = *pos;
+                if py == y {
+                    lc.0 = cells.0[px][py].clone();
                 }
             }
-        }
-        // Update the LetterColorComponent on the ECS entities
-        for (pos, mut lc) in letter_colors.iter_mut() {
-            let CellPosition(px, py) = *pos;
-            lc.0 = cells.0[px][py].clone();
         }
     }
 }
 
-#[derive(Resource, Clone, Copy)]
+#[derive(Resource, Clone, Copy, Deref)]
 struct Shifted(bool);
 
 fn shifter(keys: Res<ButtonInput<KeyCode>>, mut shifted: ResMut<Shifted>) {

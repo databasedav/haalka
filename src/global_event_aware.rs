@@ -1,13 +1,15 @@
 //! Semantics for managing global event listeners.
 
-use std::sync::{Arc, OnceLock};
+use bevy_log::tracing_subscriber::field::debug;
+use bevy_platform::sync::{Arc, OnceLock};
 
 use super::{
     element::{BuilderWrapper, UiRoot},
-    utils::{clone, observe, register_system, remove_system_holder_on_remove},
+    utils::{clone, observe, register_system, remove_system_holder_on_despawn},
 };
 use apply::Apply;
 use bevy_ecs::{event::PropagateEntityTrigger, prelude::*, traversal::Traversal};
+use jonmo::utils::LazyEntity;
 
 /// Enables registering "global" event listeners on the [`UiRoot`] node. The [`UiRoot`] must be
 /// manually registered with [`UiRootable::ui_root`](super::element::UiRootable::ui_root) for this
@@ -27,12 +29,12 @@ pub trait GlobalEventAware: BuilderWrapper {
     {
         self.with_builder(|builder| {
             let system_holder = Arc::new(OnceLock::new());
-            let observer_holder = Arc::new(OnceLock::new());
+            let observer_holder = LazyEntity::new();
             builder
                 .on_spawn(clone!((system_holder) move |world, _| {
                     let _ = system_holder.set(register_system(world, handler));
                 }))
-                .apply(remove_system_holder_on_remove(system_holder.clone()))
+                .apply(remove_system_holder_on_despawn(system_holder.clone()))
                 .on_spawn_with_system(clone!((observer_holder, system_holder) move |In(entity), child_ofs: Query<&ChildOf>, ui_roots: Query<&UiRoot>, mut commands: Commands| {
                     for ancestor in child_ofs.iter_ancestors(entity) {
                         if ui_roots.contains(ancestor) {
@@ -40,17 +42,18 @@ pub trait GlobalEventAware: BuilderWrapper {
                                 let observer = observe(world, ancestor, clone!((system_holder) move |event: On<E>, mut commands: Commands| {
                                     commands.run_system_with(system_holder.get().copied().unwrap(), (entity, GlobalEventData { original_event_target: event.original_event_target(), event: event.clone() }));
                                 })).id();
-                                let _ = observer_holder.set(observer);
+                                observer_holder.set(observer);
                             }));
-                            break;
+                            return;
                         }
+                    }
+                    if cfg!(debug_assertions) {
+                        panic!("element must be a descendent of a `UiRoot` in order for `GlobalEventAware`ness to function; please call `.ui_root()` on your ui root")
                     }
                 }))
                 .on_despawn(move |world, _| {
                     world.commands().queue(clone!((observer_holder) move |world: &mut World| {
-                        if let Some(&observer) = observer_holder.get() {
-                            let _ = world.try_despawn(observer);
-                        }
+                        world.despawn(*observer_holder);
                     }))
                 })
         })

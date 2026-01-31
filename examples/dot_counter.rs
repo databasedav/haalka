@@ -45,13 +45,20 @@ fn main() {
              mut rng: Single<&mut WyRand, With<GlobalRng>>,
              mut meshes: ResMut<Assets<Mesh>>,
              mut materials: ResMut<Assets<ColorMaterial>>,
+             mut cached: Local<Option<(Handle<Mesh>, Handle<ColorMaterial>)>>,
              mut commands: Commands| {
+                let (mesh, material) = cached.get_or_insert_with(|| {
+                    (
+                        meshes.add(Circle::new(10.)),
+                        materials.add(ColorMaterial::from(Color::BLACK)),
+                    )
+                });
                 let translation = Vec3::new(rng.random::<f32>() * HEIGHT, rng.random::<f32>() * HEIGHT, 0.)
                     - Vec3::new(WIDTH / 2., HEIGHT / 2., -1.);
                 let color = position_to_color(translation);
                 commands.spawn((
-                    Mesh2d(meshes.add(Circle::new(10.))),
-                    MeshMaterial2d(materials.add(ColorMaterial::from(Color::BLACK))),
+                    Mesh2d(mesh.clone()),
+                    MeshMaterial2d(material.clone()),
                     Transform::from_translation(translation),
                     Dot(color),
                     RenderLayers::layer(1),
@@ -116,7 +123,13 @@ fn labeled_count(label: impl Element, count_signal: impl Signal<Item = i32> + Se
     labeled_element(label, {
         El::<Text>::new()
             .text_font(TextFont::from_font_size(FONT_SIZE))
-            .text_signal(count_signal.map_in_ref(ToString::to_string).map_in(Text).map_in(Some))
+            .text_signal(
+                count_signal
+                    .dedupe()
+                    .map_in_ref(ToString::to_string)
+                    .map_in(Text)
+                    .map_in(Some),
+            )
     })
 }
 
@@ -124,17 +137,30 @@ fn text_labeled_element(label: &str, element: impl Element) -> impl Element {
     labeled_element(
         El::<Text>::new()
             .text_font(TextFont::from_font_size(FONT_SIZE))
-            .text(Text(format!("{label}: "))),
+            .text(Text(format!("{label}:"))),
         element,
     )
 }
 
-fn text_labeled_count(label: &str, count_signal: impl Signal<Item = i32> + Send + 'static) -> impl Element {
-    text_labeled_element(label, {
+fn text_labeled_count(
+    label: &str,
+    font_size: f32,
+    count_signal: impl Signal<Item = i32> + Send + 'static,
+) -> impl Element {
+    labeled_element(
         El::<Text>::new()
-            .text_font(TextFont::from_font_size(FONT_SIZE))
-            .text_signal(count_signal.map_in_ref(ToString::to_string).map_in(Text).map_in(Some))
-    })
+            .text_font(TextFont::from_font_size(font_size))
+            .text(Text(format!("{label}:"))),
+        El::<Text>::new()
+            .text_font(TextFont::from_font_size(font_size))
+            .text_signal(
+                count_signal
+                    .dedupe()
+                    .map_in_ref(ToString::to_string)
+                    .map_in(Text)
+                    .map_in(Some),
+            ),
+    )
 }
 
 fn category_count(category: ColorCategory, count: impl Signal<Item = i32> + Send + 'static) -> impl Element {
@@ -165,23 +191,31 @@ where
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
         .with_node(|mut node| node.width = Val::Px(45.0))
+        .insert((Pickable::default(), Hoverable))
         .align_content(Align::center())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .lazy_entity(lazy_entity.clone())
         .background_color_signal(
-            SignalBuilder::from_lazy_entity(lazy_entity)
+            signal::from_entity(lazy_entity)
                 .has_component::<Hovered>()
+                .dedupe()
                 .map_bool_in(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
                 .map_in(BackgroundColor)
                 .map_in(Some),
         )
-        .on_pressing_throttled(
-            move |_: In<_>, mut rate: ResMut<R>, mut timer: Single<&mut RateTimer, With<T>>| {
-                let new_rate = (**rate + step).max(0.);
-                timer.set_rate(new_rate);
-                **rate = new_rate;
+        .on_pressed_throttled(
+            move |In((_, press_data)): In<(Entity, PressData)>,
+                  mut rate: ResMut<R>,
+                  mut timer: Single<&mut RateTimer, With<T>>| {
+                if press_data.pressed {
+                    let new_rate = (**rate + step).max(0.);
+                    if new_rate != **rate {
+                        timer.set_rate(new_rate);
+                        **rate = new_rate;
+                    }
+                }
             },
-            Duration::from_millis(50),
+            Duration::from_millis(100),
         )
         .child(
             El::<Text>::new()
@@ -202,6 +236,7 @@ where
                 .text_font(TextFont::from_font_size(FONT_SIZE))
                 .text_signal(
                     rate_signal
+                        .dedupe()
                         .map_in(|rate| format!("{rate:.1}"))
                         .map_in(Text)
                         .map_in(Some),
@@ -241,19 +276,19 @@ struct Despawner;
 const STARTING_SPAWN_RATE: f32 = 1.5;
 const STARTING_DESPAWN_RATE: f32 = 1.;
 
-#[derive(Resource, Clone, Copy, PartialEq, Default, Deref, DerefMut)]
+#[derive(Resource, Clone, Copy, Default, Deref, DerefMut)]
 struct BlueDotCount(i32);
 
-#[derive(Resource, Clone, Copy, PartialEq, Default, Deref, DerefMut)]
+#[derive(Resource, Clone, Copy, Default, Deref, DerefMut)]
 struct GreenDotCount(i32);
 
-#[derive(Resource, Clone, Copy, PartialEq, Default, Deref, DerefMut)]
+#[derive(Resource, Clone, Copy, Default, Deref, DerefMut)]
 struct RedDotCount(i32);
 
-#[derive(Resource, Clone, Copy, PartialEq, Default, Deref, DerefMut)]
+#[derive(Resource, Clone, Copy, Default, Deref, DerefMut)]
 struct YellowDotCount(i32);
 
-#[derive(Resource, Clone, Copy, PartialEq, Deref, DerefMut)]
+#[derive(Resource, Clone, Copy, Deref, DerefMut)]
 struct SpawnRate(f32);
 
 impl Default for SpawnRate {
@@ -262,13 +297,63 @@ impl Default for SpawnRate {
     }
 }
 
-#[derive(Resource, Clone, Copy, PartialEq, Deref, DerefMut)]
+#[derive(Resource, Clone, Copy, Deref, DerefMut)]
 struct DespawnRate(f32);
 
 impl Default for DespawnRate {
     fn default() -> Self {
         Self(STARTING_DESPAWN_RATE)
     }
+}
+
+fn color_boxes() -> impl Element {
+    Column::<Node>::new()
+        .with_node(|mut node| node.width = Val::Px(2. * BOX_SIZE))
+        .item(
+            Row::<Node>::new()
+                .item(box_(ColorCategory::Blue))
+                .item(box_(ColorCategory::Green)),
+        )
+        .item(
+            Row::<Node>::new()
+                .item(box_(ColorCategory::Red))
+                .item(box_(ColorCategory::Yellow)),
+        )
+}
+
+fn counts_panel() -> impl Element {
+    let blue = signal::from_resource_changed::<BlueDotCount>().map_in(deref_copied);
+    let green = signal::from_resource_changed::<GreenDotCount>().map_in(deref_copied);
+    let red = signal::from_resource_changed::<RedDotCount>().map_in(deref_copied);
+    let yellow = signal::from_resource_changed::<YellowDotCount>().map_in(deref_copied);
+    Stack::<Node>::new()
+        .layer(
+            Column::<Node>::new()
+                .align_content(Align::new().left())
+                .with_node(|mut node| node.row_gap = Val::Px(10.))
+                .item(category_count(ColorCategory::Blue, blue.clone()))
+                .item(category_count(ColorCategory::Green, green.clone()))
+                .item(category_count(ColorCategory::Red, red.clone()))
+                .item(category_count(ColorCategory::Yellow, yellow.clone())),
+        )
+        .layer(
+            text_labeled_count("total", 40., signal::sum!(blue, green, red, yellow).dedupe())
+                .with_builder(|builder| builder.with_component::<Node>(|mut node| node.padding.right = Val::Px(30.)))
+                .align(Align::new().right().center_y()),
+        )
+}
+
+fn rates_panel() -> impl Element {
+    Column::<Node>::new()
+        .with_node(|mut node| node.row_gap = Val::Px(10.))
+        .item(text_labeled_element(
+            "spawn rate",
+            rate_element::<Spawner, SpawnRate>(signal::from_resource_changed::<SpawnRate>().map_in(deref_copied)),
+        ))
+        .item(text_labeled_element(
+            "despawn rate",
+            rate_element::<Despawner, DespawnRate>(signal::from_resource_changed::<DespawnRate>().map_in(deref_copied)),
+        ))
 }
 
 fn ui_root() -> impl Element {
@@ -286,79 +371,15 @@ fn ui_root() -> impl Element {
                     node.height = Val::Px(HEIGHT);
                     node.column_gap = Val::Px(50.);
                 })
-                .item(
-                    Column::<Node>::new()
-                        .with_node(|mut node| node.width = Val::Px(2. * BOX_SIZE))
-                        .item(
-                            Row::<Node>::new()
-                                .item(box_(ColorCategory::Blue))
-                                .item(box_(ColorCategory::Green)),
-                        )
-                        .item(
-                            Row::<Node>::new()
-                                .item(box_(ColorCategory::Red))
-                                .item(box_(ColorCategory::Yellow)),
-                        ),
-                )
+                .item(color_boxes())
                 .item(
                     Column::<Node>::new()
                         .with_node(|mut node| {
                             node.row_gap = Val::Px(50.);
                             node.padding.left = Val::Px(50.);
                         })
-                        .item(
-                            Row::<Node>::new()
-                                .item(
-                                    Column::<Node>::new()
-                                        .align_content(Align::new().left())
-                                        .with_node(|mut node| node.row_gap = Val::Px(10.))
-                                        .item(category_count(
-                                            ColorCategory::Blue,
-                                            SignalBuilder::from_resource::<BlueDotCount>().map_in(deref_copied),
-                                        ))
-                                        .item(category_count(
-                                            ColorCategory::Green,
-                                            SignalBuilder::from_resource::<GreenDotCount>().map_in(deref_copied),
-                                        ))
-                                        .item(category_count(
-                                            ColorCategory::Red,
-                                            SignalBuilder::from_resource::<RedDotCount>().map_in(deref_copied),
-                                        ))
-                                        .item(category_count(
-                                            ColorCategory::Yellow,
-                                            SignalBuilder::from_resource::<YellowDotCount>().map_in(deref_copied),
-                                        )),
-                                )
-                                .item(
-                                    text_labeled_count(
-                                        "total",
-                                        signal::sum!(
-                                            SignalBuilder::from_resource::<BlueDotCount>().map_in(deref_copied),
-                                            SignalBuilder::from_resource::<GreenDotCount>().map_in(deref_copied),
-                                            SignalBuilder::from_resource::<RedDotCount>().map_in(deref_copied),
-                                            SignalBuilder::from_resource::<YellowDotCount>().map_in(deref_copied)
-                                        )
-                                        .dedupe(),
-                                    )
-                                    .align(Align::new().center_x()),
-                                ),
-                        )
-                        .item(
-                            Column::<Node>::new()
-                                .with_node(|mut node| node.row_gap = Val::Px(10.))
-                                .item(text_labeled_element(
-                                    "spawn rate",
-                                    rate_element::<Spawner, SpawnRate>(
-                                        SignalBuilder::from_resource::<SpawnRate>().map_in(deref_copied),
-                                    ),
-                                ))
-                                .item(text_labeled_element(
-                                    "despawn rate",
-                                    rate_element::<Despawner, DespawnRate>(
-                                        SignalBuilder::from_resource::<DespawnRate>().map_in(deref_copied),
-                                    ),
-                                )),
-                        ),
+                        .item(counts_panel())
+                        .item(rates_panel()),
                 ),
         )
 }
@@ -391,39 +412,21 @@ struct Dot(ColorCategory);
 
 fn update_color_count(color: ColorCategory, step: i32, world: &mut bevy::ecs::world::DeferredWorld) {
     match color {
-        ColorCategory::Blue => {
-            if let Some(mut count) = world.get_resource_mut::<BlueDotCount>() {
-                **count += step;
-            }
-        }
-        ColorCategory::Green => {
-            if let Some(mut count) = world.get_resource_mut::<GreenDotCount>() {
-                **count += step;
-            }
-        }
-        ColorCategory::Red => {
-            if let Some(mut count) = world.get_resource_mut::<RedDotCount>() {
-                **count += step;
-            }
-        }
-        ColorCategory::Yellow => {
-            if let Some(mut count) = world.get_resource_mut::<YellowDotCount>() {
-                **count += step;
-            }
-        }
+        ColorCategory::Blue => **world.resource_mut::<BlueDotCount>() += step,
+        ColorCategory::Green => **world.resource_mut::<GreenDotCount>() += step,
+        ColorCategory::Red => **world.resource_mut::<RedDotCount>() += step,
+        ColorCategory::Yellow => **world.resource_mut::<YellowDotCount>() += step,
     }
 }
 
 fn incr_color_count(mut world: bevy::ecs::world::DeferredWorld, HookContext { entity, .. }: HookContext) {
-    if let Some(Dot(color)) = world.get::<Dot>(entity).copied() {
-        update_color_count(color, 1, &mut world);
-    }
+    let Dot(color) = *world.get::<Dot>(entity).unwrap();
+    update_color_count(color, 1, &mut world);
 }
 
 fn decr_color_count(mut world: bevy::ecs::world::DeferredWorld, HookContext { entity, .. }: HookContext) {
-    if let Some(Dot(color)) = world.get::<Dot>(entity).copied() {
-        update_color_count(color, -1, &mut world);
-    }
+    let Dot(color) = *world.get::<Dot>(entity).unwrap();
+    update_color_count(color, -1, &mut world);
 }
 
 fn tick_emitter<'a, T: Component, E: Event + Default>(

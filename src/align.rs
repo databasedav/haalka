@@ -9,8 +9,9 @@
 //! [`.align_signal`](`Alignable::align_signal`) or to all children using
 //! [`.align_content`](`Alignable::align_content`) and
 //! [`.align_content_signal`](`Alignable::align_content_signal`). See the [align](https://github.com/databasedav/haalka/blob/main/examples/align.rs)
-//! example for how each [`Align`] behaves for each built-in alignable type: [`El`], [`Column`],
-//! [`Row`], [`Stack`], and [`Grid`].
+//! example for how each [`Align`] behaves for each built-in alignable type: [`El`](super::el::El),
+//! [`Column`](super::column::Column), [`Row`](super::row::Row), [`Stripe`](super::stripe::Stripe),
+//! [`Stack`](super::stack::Stack), and [`Grid`](super::grid::Grid).
 
 use bevy_app::prelude::*;
 use bevy_ecs::{lifecycle::HookContext, prelude::*, world::DeferredWorld};
@@ -118,14 +119,14 @@ pub struct ContentAlignmentHandler {
 #[derive(Component, Clone, Copy, Default, PartialEq, Eq, Debug, Hash)]
 #[component(on_insert = on_layout_direction_insert)]
 pub enum LayoutDirection {
-    /// Vertical stacking layout (like [`Column`]).
+    /// Vertical stacking layout (like [`Column`](super::column::Column)).
     ///
     /// - X-axis alignment uses `align_self`
     /// - Y-axis alignment uses `margin.top`/`margin.bottom`
     /// - Content X uses `align_items`, content Y uses `justify_content`
     #[default]
     Column,
-    /// Horizontal stacking layout (like [`Row`]).
+    /// Horizontal stacking layout (like [`Row`](super::row::Row)).
     ///
     /// - X-axis alignment uses `margin.left`/`margin.right`
     /// - Y-axis alignment uses `align_self`
@@ -141,6 +142,21 @@ pub enum LayoutDirection {
 
 /// Hook that installs appropriate handlers when [`LayoutDirection`] is inserted.
 fn on_layout_direction_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    // Reset children's alignment using the previous handler before installing the new one
+    if let Some(old_handler) = world.get::<AlignmentHandler>(entity).copied() {
+        let children: Vec<Entity> = world
+            .get::<Children>(entity)
+            .map(|c| c.iter().collect())
+            .unwrap_or_default();
+        for child in children {
+            if world.get::<Alignment>(child).is_some() {
+                if let Some(mut node) = world.get_mut::<Node>(child) {
+                    (old_handler.reset)(&mut node);
+                }
+            }
+        }
+    }
+
     let direction = world.get::<LayoutDirection>(entity).copied().unwrap();
 
     let (alignment_handler, content_alignment_handler) = match direction {
@@ -184,7 +200,7 @@ fn on_layout_direction_insert(mut world: DeferredWorld, HookContext { entity, ..
 }
 
 /// Composable alignment builder. Used with [`.align`](`Alignable::align`) and related methods.
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub struct Align {
     x: AlignX,
     y: AlignY,

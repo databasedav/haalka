@@ -4,7 +4,6 @@ use bevy_ecs::prelude::*;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use jonmo::{
-    builder::JonmoBuilder,
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
@@ -14,7 +13,7 @@ use super::{
     element::{BuilderPassThrough, BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
-    pointer_event_aware::{CursorOnHoverable, Hoverable, PointerEventAware, Pressable},
+    pointer_event_aware::{Cursorable, PointerEventAware},
     viewport_mutable::ViewportMutable,
 };
 use crate::{clone_semantics_doc, impl_element_clone};
@@ -26,20 +25,20 @@ use crate::{clone_semantics_doc, impl_element_clone};
 #[doc = clone_semantics_doc!("Grid")]
 #[derive(Default)]
 pub struct Grid<NodeType> {
-    builder: JonmoBuilder,
+    builder: jonmo::Builder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
 impl_element_clone!("Grid", Grid<NodeType>, my_grid, ".cell(El::new().name(label))");
 
-impl<NodeType: Bundle> From<JonmoBuilder> for Grid<NodeType> {
-    fn from(builder: JonmoBuilder) -> Self {
+impl<NodeType: Bundle> From<jonmo::Builder> for Grid<NodeType> {
+    fn from(builder: jonmo::Builder) -> Self {
         Self {
             builder: builder
                 .with_component::<Node>(|mut node| {
                     node.display = Display::Grid;
                 })
-                .insert((LayoutDirection::Grid, Pickable::IGNORE, Hoverable, Pressable)),
+                .insert((LayoutDirection::Grid, Pickable::IGNORE)),
             _node_type: std::marker::PhantomData,
         }
     }
@@ -51,18 +50,18 @@ impl<NodeType: Bundle + Default> Grid<NodeType> {
     /// # Notes
     /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
-        Self::from(JonmoBuilder::from(NodeType::default()))
+        Self::from(jonmo::Builder::from(NodeType::default()))
     }
 }
 
 impl<NodeType> BuilderWrapper for Grid<NodeType> {
-    fn builder_mut(&mut self) -> &mut JonmoBuilder {
+    fn builder_mut(&mut self) -> &mut jonmo::Builder {
         &mut self.builder
     }
 }
 
 impl<NodeType: Bundle> Alignable for Grid<NodeType> {}
-impl<NodeType: Bundle> CursorOnHoverable for Grid<NodeType> {}
+impl<NodeType: Bundle> Cursorable for Grid<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Grid<NodeType> {}
 impl<NodeType: Bundle> Nameable for Grid<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Grid<NodeType> {}
@@ -119,7 +118,7 @@ impl<NodeType: Bundle> Grid<NodeType> {
     ) -> Self {
         if let Some(cell_width_signal) = cell_width_signal_option.into() {
             self.with_builder(|builder| {
-                builder.on_signal_with_component::<Node, _, _, _>(cell_width_signal, |mut node, cell_width| {
+                builder.on_signal_with_component::<_, Node>(cell_width_signal, |mut node, cell_width| {
                     node.grid_template_columns = RepeatedGridTrack::px(GridTrackRepetition::AutoFill, cell_width)
                 })
             })

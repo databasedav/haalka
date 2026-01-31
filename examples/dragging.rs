@@ -4,11 +4,12 @@ mod utils;
 use utils::*;
 
 use bevy::{prelude::*, ui::Pressed};
+use bevy_rand::prelude::*;
 use haalka::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins(examples_plugin)
+        .add_plugins((examples_plugin, EntropyPlugin::<WyRand>::default()))
         .add_systems(
             Startup,
             (
@@ -65,6 +66,8 @@ fn update_z_index(entity: Entity, mut max_z_index: ResMut<MaxZIndex>, mut z_indi
 }
 
 fn ui_root() -> impl Element {
+    let any_pressed = signal::from_system(|In(_), presseds: Query<&Pressed>| !presseds.is_empty()).dedupe();
+    let any_dragged = signal::from_system(|In(_), draggeds: Query<&Dragged>| !draggeds.is_empty()).dedupe();
     El::<Node>::new()
         .with_node(|mut node| {
             node.width = Val::Percent(100.0);
@@ -73,10 +76,7 @@ fn ui_root() -> impl Element {
         .insert(Pickable::default())
         .cursor_disableable_signal(
             CursorIcon::System(SystemCursorIcon::Default),
-            signal::any!(
-                SignalBuilder::from_system(|In(_), presseds: Query<&Pressed>| !presseds.is_empty()).dedupe(),
-                SignalBuilder::from_system(|In(_), draggeds: Query<&Dragged>| !draggeds.is_empty()).dedupe(),
-            ),
+            signal::any!(any_pressed, any_dragged).dedupe(),
         )
         .align_content(Align::center())
         .child(Row::<Node>::new().items((0..=5).map(square)))
@@ -91,33 +91,44 @@ fn square(i: usize) -> impl Element {
             node.height = Val::Px(HEIGHT);
         })
         .align_content(Align::center())
-        .background_color(BackgroundColor(random_color()))
+        .with_builder(|builder| {
+            builder.on_spawn_with_system(
+                |In(entity): In<Entity>,
+                 mut rng: Single<&mut WyRand, With<GlobalRng>>,
+                 mut backgrounds: Query<&mut BackgroundColor>| {
+                    if let Ok(mut bg) = backgrounds.get_mut(entity) {
+                        *bg = BackgroundColor(random_color(rng.as_mut()));
+                    }
+                },
+            )
+        })
         .global_z_index(GlobalZIndex(1))
-        .cursor_signal(
-            signal::any!(
-                SignalBuilder::from_lazy_entity(lazy_entity.clone())
-                    .has_component::<Pressed>()
-                    .dedupe(),
-                SignalBuilder::from_lazy_entity(lazy_entity.clone())
-                    .has_component::<Dragged>()
-                    .dedupe(),
-            )
-            .dedupe()
-            .combine(
-                SignalBuilder::from_lazy_entity(lazy_entity.clone())
-                    .has_component::<Hovered>()
-                    .dedupe(),
-            )
-            .map_in(|(dragged, hovered)| match (dragged, hovered) {
-                (true, _) => SystemCursorIcon::Grabbing,
-                (false, true) => SystemCursorIcon::Grab,
-                (false, false) => SystemCursorIcon::Default,
-            })
-            .map_in(CursorIcon::System)
-            .dedupe(),
-        )
+        .cursor_signal({
+            let pressed = signal::from_entity(lazy_entity.clone())
+                .has_component::<Pressed>()
+                .dedupe();
+            let dragged = signal::from_entity(lazy_entity.clone())
+                .has_component::<Dragged>()
+                .dedupe();
+            let hovered = signal::from_entity(lazy_entity.clone())
+                .has_component::<Hovered>()
+                .dedupe();
+            signal::zip!(signal::any!(pressed, dragged).dedupe(), hovered)
+                .dedupe()
+                .map_in(|(dragged, hovered)| {
+                    if dragged {
+                        SystemCursorIcon::Grabbing
+                    } else if hovered {
+                        SystemCursorIcon::Grab
+                    } else {
+                        SystemCursorIcon::Default
+                    }
+                })
+                .map_in(CursorIcon::System)
+                .dedupe()
+        })
         .lazy_entity(lazy_entity.clone())
-        .insert((Pickable::default(), DragOffset::default()))
+        .insert((Pickable::default(), Hoverable, Pressable, DragOffset::default()))
         .observe(
             |click: On<Pointer<Press>>,
              max_z_index: ResMut<MaxZIndex>,
@@ -128,14 +139,16 @@ fn square(i: usize) -> impl Element {
                 update_z_index(click.entity, max_z_index, z_indices);
             },
         )
-        .on_dragging(
-            |In((entity, dragging_data)): In<(Entity, DraggingData)>, mut nodes: Query<(&mut Node, &DragOffset)>| {
-                if let Ok((node, drag_offset)) = nodes.get_mut(entity) {
-                    set_dragging_position(node, dragging_data.pointer_location.position, drag_offset.0);
+        .on_dragged(
+            |In((entity, drag_data)): In<(Entity, DragData)>, mut nodes: Query<(&mut Node, &DragOffset)>| {
+                if drag_data.dragged {
+                    if let Ok((node, drag_offset)) = nodes.get_mut(entity) {
+                        set_dragging_position(node, drag_data.pointer_location.position, drag_offset.0);
+                    }
                 }
             },
         )
-        .child(El::<Text>::new().text(Text::new(format!("{i}"))))
+        .child(El::<Text>::new().text(Text::new(i.to_string())))
 }
 
 fn set_dragging_position(mut node: Mut<Node>, pointer_position: Vec2, offset: Vec2) {

@@ -4,16 +4,10 @@
 use rand::seq::IndexedRandom;
 
 use bevy::{
-    app::prelude::*,
-    camera::prelude::*,
-    color::{palettes::css::*, prelude::*},
+    color::palettes::css::*,
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
-    ecs::prelude::*,
-    input::prelude::*,
-    text::prelude::*,
-    ui::prelude::*,
-    utils::prelude::*,
-    window::{WindowResolution, prelude::*},
+    prelude::*,
+    window::WindowResolution,
 };
 use haalka::prelude::*;
 
@@ -32,7 +26,7 @@ const FPS_PADDING: f32 = 5.;
 const FPS_OVERLAY_ZINDEX: i32 = i32::MAX - 32;
 
 /// Component that holds the current FPS value for display.
-#[derive(Component, Clone, Default)]
+#[derive(Component, Clone, Default, Deref)]
 struct Fps(f64);
 
 /// Resource marker that indicates the FPS overlay is enabled.
@@ -53,7 +47,7 @@ impl Plugin for FpsOverlayPlugin {
             app.add_plugins(FrameTimeDiagnosticsPlugin::default());
         }
 
-        fn fps_ui_root() -> impl Element {
+        fn fps_ui() -> impl Element {
             let fps_holder = LazyEntity::new();
             El::<Node>::new()
                 .with_node(|mut node| {
@@ -78,9 +72,8 @@ impl Plugin for FpsOverlayPlugin {
                             El::<Text>::new()
                                 .text_font(TextFont::from_font_size(FPS_FONT_SIZE))
                                 .text_signal(
-                                    SignalBuilder::from_component_lazy(fps_holder)
-                                        .map_in(|fps: Fps| fps.0)
-                                        .dedupe()
+                                    signal::from_component_changed::<Fps>(fps_holder)
+                                        .map_in(deref_copied)
                                         .map_in(|fps| format!("{fps:.2}"))
                                         .map_in(Text)
                                         .map_in(Some),
@@ -89,50 +82,37 @@ impl Plugin for FpsOverlayPlugin {
                 )
         }
 
-        fn update_fps(diagnostic: Res<DiagnosticsStore>, mut fps_query: Query<&mut Fps, With<FpsText>>) {
+        fn update_fps(diagnostic: Res<DiagnosticsStore>, mut fps: Single<&mut Fps, With<FpsText>>) {
             if let Some(fps_diagnostic) = diagnostic.get(&FrameTimeDiagnosticsPlugin::FPS)
                 && let Some(cur) = fps_diagnostic.smoothed()
             {
-                for mut fps in fps_query.iter_mut() {
-                    fps.0 = cur;
-                }
+                fps.0 = cur;
             }
         }
 
-        fn toggle_overlay(
+        fn check_toggle_input(
             input: Res<ButtonInput<KeyCode>>,
+            fps_overlay_enabled: Option<Res<FpsOverlayEnabled>>,
+            fps_overlay: Option<Single<Entity, With<FpsOverlay>>>,
             mut commands: Commands,
-            fps_overlay_enabled_option: Option<Res<FpsOverlayEnabled>>,
-            fps_overlay_query: Query<Entity, With<FpsOverlay>>,
         ) {
             if input.just_pressed(FPS_TOGGLE_KEY) {
-                let exists = fps_overlay_enabled_option.is_some();
-                if exists {
+                if fps_overlay_enabled.is_some() {
                     commands.remove_resource::<FpsOverlayEnabled>();
-                    for entity in fps_overlay_query.iter() {
-                        commands.entity(entity).despawn();
-                    }
+                    commands.entity(*fps_overlay.unwrap()).despawn();
                 } else {
                     commands.insert_resource(FpsOverlayEnabled);
+                    commands.queue(|world: &mut World| {
+                        fps_ui().with_builder(|builder| builder.insert(FpsOverlay)).spawn(world);
+                    });
                 }
             }
         }
-
-        fn spawn_fps_overlay(mut commands: Commands) {
-            commands.queue(|world: &mut World| {
-                fps_ui_root()
-                    .with_builder(|builder| builder.insert(FpsOverlay))
-                    .spawn(world);
-            });
-        }
-
         app.add_systems(
             Update,
             (
-                toggle_overlay,
+                check_toggle_input,
                 update_fps.run_if(resource_exists::<FpsOverlayEnabled>),
-                spawn_fps_overlay
-                    .run_if(resource_exists::<FpsOverlayEnabled>.and(not(any_with_component::<FpsOverlay>))),
             ),
         );
     }
@@ -332,7 +312,6 @@ static COLORS: &[Color] = &[
     bevy::prelude::Color::Srgba(YELLOW_GREEN),
 ];
 
-pub(crate) fn random_color() -> Color {
-    let mut rng = rand::rng();
-    COLORS.choose(&mut rng).copied().unwrap()
+pub(crate) fn random_color(rng: &mut impl rand::Rng) -> Color {
+    COLORS.choose(rng).copied().unwrap()
 }

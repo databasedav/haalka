@@ -28,13 +28,20 @@ fn main() {
             |_: On<SpawnPlayer>,
              mut meshes: ResMut<Assets<Mesh>>,
              mut materials: ResMut<Assets<StandardMaterial>>,
+             mut cached: Local<Option<(Handle<Mesh>, Handle<StandardMaterial>)>>,
              mut commands: Commands| {
+                let (mesh, material) = cached.get_or_insert_with(|| {
+                    (
+                        meshes.add(Mesh::from(Sphere { radius: RADIUS })),
+                        materials.add(Color::srgb_u8(228, 147, 58)),
+                    )
+                });
                 commands.spawn((
                     Player,
                     Health(PLAYER_HEALTH),
-                    Mesh3d(meshes.add(Mesh::from(Sphere { radius: RADIUS }))),
+                    Mesh3d(mesh.clone()),
                     Transform::from_translation(PLAYER_POSITION),
-                    MeshMaterial3d(materials.add(Color::srgb_u8(228, 147, 58))),
+                    MeshMaterial3d(material.clone()),
                 ));
             },
         )
@@ -136,20 +143,16 @@ fn sync_tracking_healthbar_position(
     // ui_scale.0 = starting_distance as f64 / scale as f64;
 }
 
-fn health_option_signal() -> impl Signal<Item = Option<u32>> + Clone + Send + Sync + 'static {
-    SignalBuilder::from_system(|In(_): In<()>, health: Option<Single<&Health>>| {
-        Some(health.map(deref_copied).map(|health| health.0))
+fn health_signal() -> impl Signal<Item = u32> + Clone + Send + Sync + 'static {
+    signal::from_system(|In(_): In<()>, health: Option<Single<&Health>>| {
+        health.map(deref_copied).map(|health| health.0)
     })
     .dedupe()
 }
 
 fn healthbar(max: u32, height: f32, color_gradient: impl Gradient + Send + Sync + 'static) -> Stack<Node> {
-    let health_signal = health_option_signal().map_in(|health: Option<u32>| health.unwrap_or_default());
-
-    let percent_health = health_signal
-        .clone()
-        .map_in(move |h: u32| h as f32 / max as f32)
-        .dedupe();
+    let health = health_signal();
+    let percent_health = health.clone().map_in(move |h: u32| h as f32 / max as f32).dedupe();
     Stack::<Node>::new()
         .with_node(move |mut node| {
             node.height = Val::Px(height);
@@ -167,7 +170,6 @@ fn healthbar(max: u32, height: f32, color_gradient: impl Gradient + Send + Sync 
                 )
                 .background_color_signal(
                     percent_health
-                        .clone()
                         .map_in(move |percent_health| {
                             let [r, g, b, ..] = color_gradient.at(percent_health).to_rgba8();
                             BackgroundColor(Color::srgb_u8(r, g, b))
@@ -176,37 +178,21 @@ fn healthbar(max: u32, height: f32, color_gradient: impl Gradient + Send + Sync 
                 ),
         )
         .layer(
-            // TODO: why is this wrapping node required? it wasn't required in 0.14
-            El::<Node>::new()
-                .with_node(|mut node| node.height = Val::Percent(100.))
-                .align_content(Align::new().center_y())
-                .child(
-                    El::<Text>::new()
-                        // TODO: text should be centerable vertically via flex; https://github.com/bevyengine/bevy/issues/14266
-                        // TODO: this align doesn't work
-                        // .align(Align::new().center_y())
-                        .with_node(move |mut node| {
-                            node.top = Val::Px(height / 32.);
-                            node.left = Val::Px(height / 6.); // TODO: padding doesn't work here?
-                        })
-                        .align(Align::new().left())
-                        .text_font(TextFont::from_font_size(height))
-                        .text_color(TextColor(Color::BLACK))
-                        .text_signal(
-                            health_signal
-                                .map_in_ref(ToString::to_string)
-                                .dedupe()
-                                .map_in(Text)
-                                .map_in(Some),
-                        ),
-                ),
+            El::<Text>::new()
+                .align(Align::new().center_y())
+                .with_node(move |mut node| {
+                    node.left = Val::Px(height / 6.); // TODO: padding doesn't work for Text?
+                })
+                .text_font(TextFont::from_font_size(height * 0.7))
+                .text_color(TextColor(Color::BLACK))
+                .text_signal(health.map_in_ref(ToString::to_string).map_in(Text).map_in(Some)),
         )
 }
 
 #[derive(Event)]
 struct SpawnPlayer;
 
-fn respawn_button() -> impl Element {
+fn respawn_button() -> impl Element + Clone {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
         .align(Align::center())
@@ -214,10 +200,11 @@ fn respawn_button() -> impl Element {
             node.width = Val::Px(250.);
             node.height = Val::Px(80.);
         })
+        .insert((Pickable::default(), Hoverable))
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .lazy_entity(lazy_entity.clone())
         .background_color_signal(
-            SignalBuilder::from_lazy_entity(lazy_entity)
+            signal::from_entity(lazy_entity)
                 .has_component::<Hovered>()
                 .dedupe()
                 .map_bool_in(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
@@ -239,82 +226,77 @@ fn set_dragging_position(mut node: Mut<Node>, StyleData { left, top, .. }: Style
     node.top = Val::Px(top - 30. * 2. - MINI.1 * 1.5);
 }
 
+fn tracking_healthbar() -> impl Element {
+    Column::<Node>::new()
+        .on_signal_with_node(signal::from_resource_changed::<StyleData>(), set_dragging_position)
+        .with_node(|mut node| {
+            node.row_gap = Val::Px(MINI.1 / 4.);
+        })
+        .item(
+            El::<Text>::new()
+                .with_node(|mut node| node.left = Val::Px(MINI.1 / 4.))
+                .text_font(TextFont::from_font_size(MINI.1 * 3. / 4.))
+                .text_color(TextColor(Color::WHITE))
+                .text(Text::new(NAME)),
+        )
+        .item(
+            healthbar(
+                PLAYER_HEALTH,
+                MINI.1,
+                colorgrad::GradientBuilder::new()
+                    .html_colors(&["purple", "yellow"])
+                    .build::<colorgrad::LinearGradient>()
+                    .unwrap(),
+            )
+            .with_node(|mut node| {
+                node.width = Val::Px(MINI.0);
+                node.height = Val::Px(MINI.1);
+            }),
+        )
+}
+
+fn bottom_healthbar() -> impl Element {
+    healthbar(
+        PLAYER_HEALTH,
+        MAXI.1,
+        colorgrad::GradientBuilder::new()
+            .html_colors(&["red", "green"])
+            .build::<colorgrad::LinearGradient>()
+            .unwrap(),
+    )
+    .align(Align::new().bottom().center_x())
+    .with_node(|mut node| {
+        node.width = Val::Px(MAXI.0);
+        node.height = Val::Px(MAXI.1);
+    })
+}
+
+fn player_ui() -> impl Element + Clone {
+    Stack::<Node>::new()
+        .with_node(|mut node| {
+            node.width = Val::Percent(100.);
+            node.height = Val::Percent(100.);
+            node.padding.bottom = Val::Px(10.);
+        })
+        .layer(tracking_healthbar())
+        .layer(bottom_healthbar())
+}
+
 fn ui_root() -> impl Element {
-    // let starting_distance = CAMERA_POSITION.distance(PLAYER_POSITION);
     El::<Node>::new()
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
             node.height = Val::Percent(100.);
         })
+        .insert(Pickable::default())
         .cursor(CursorIcon::default())
-        .child_signal(
-            health_option_signal()
-                .map_in(|health: Option<u32>| health.is_some_and(|health| health > 0))
-                .dedupe()
-                .map_bool_in(
-                    move || {
-                        Stack::<Node>::new()
-                            .with_node(|mut node| {
-                                node.width = Val::Percent(100.);
-                                node.height = Val::Percent(100.);
-                                node.padding.bottom = Val::Px(10.);
-                            })
-                            .layer(
-                                Column::<Node>::new()
-                                    .on_signal_with_node(
-                                        SignalBuilder::from_resource::<StyleData>().dedupe(),
-                                        set_dragging_position,
-                                    )
-                                    .with_node(|mut node| {
-                                        node.row_gap = Val::Px(MINI.1 / 4.);
-                                        set_dragging_position(node, StyleData::default());
-                                    })
-                                    // .on_signal_with_transform(style_data.signal(), move |transform,
-                                    // StyleData { scale, .. }| {
-                                    //     transform.scale = Vec3::splat(starting_distance / scale);
-                                    // })
-                                    .item(
-                                        El::<Text>::new()
-                                            .with_node(|mut node| node.left = Val::Px(MINI.1 / 4.))
-                                            .text_font(TextFont::from_font_size(MINI.1 * 3. / 4.))
-                                            .text_color(TextColor(Color::WHITE))
-                                            .text(Text::new(NAME)),
-                                    )
-                                    .item(
-                                        healthbar(
-                                            PLAYER_HEALTH,
-                                            MINI.1,
-                                            colorgrad::GradientBuilder::new()
-                                                .html_colors(&["purple", "yellow"])
-                                                .build::<colorgrad::LinearGradient>()
-                                                .unwrap(),
-                                        )
-                                        .with_node(|mut node| {
-                                            node.width = Val::Px(MINI.0);
-                                            node.height = Val::Px(MINI.1);
-                                        }),
-                                    ),
-                            )
-                            .layer(
-                                healthbar(
-                                    PLAYER_HEALTH,
-                                    MAXI.1,
-                                    colorgrad::GradientBuilder::new()
-                                        .html_colors(&["red", "green"])
-                                        .build::<colorgrad::LinearGradient>()
-                                        .unwrap(),
-                                )
-                                .align(Align::new().bottom().center_x())
-                                .with_node(|mut node| {
-                                    node.width = Val::Px(MAXI.0);
-                                    node.height = Val::Px(MAXI.1);
-                                }),
-                            )
-                            .type_erase()
-                    },
-                    || respawn_button().type_erase(),
-                ),
-        )
+        .child_signal({
+            let player_alive = signal::from_system(|In(_): In<()>, health: Option<Single<&Health>>| {
+                health.is_some_and(|health| health.0 > 0)
+            })
+            .dedupe();
+            player_alive.map_bool_in(|| player_ui().left_either(), || respawn_button().right_either())
+        })
 }
 
 #[derive(Resource)]
@@ -326,7 +308,7 @@ fn decay(mut health: Single<&mut Health>, mut health_tick_timer: ResMut<HealthTi
     }
 }
 
-fn despawn_when_dead(mut commands: Commands, query: Single<(Entity, &Health), Changed<Health>>) {
+fn despawn_when_dead(query: Single<(Entity, &Health), Changed<Health>>, mut commands: Commands) {
     let (entity, health) = *query;
     if health.0 == 0 {
         commands.entity(entity).despawn();

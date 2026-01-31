@@ -2,7 +2,6 @@ use bevy_ecs::prelude::*;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use jonmo::{
-    builder::JonmoBuilder,
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
@@ -12,7 +11,7 @@ use super::{
     element::{BuilderPassThrough, BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
-    pointer_event_aware::{CursorOnHoverable, Hoverable, PointerEventAware, Pressable},
+    pointer_event_aware::{Cursorable, PointerEventAware},
     viewport_mutable::ViewportMutable,
 };
 use crate::{clone_semantics_doc, impl_element_clone};
@@ -24,14 +23,14 @@ use crate::{clone_semantics_doc, impl_element_clone};
 #[doc = clone_semantics_doc!("Stack")]
 #[derive(Default)]
 pub struct Stack<NodeType> {
-    builder: JonmoBuilder,
+    builder: jonmo::Builder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
 impl_element_clone!("Stack", Stack<NodeType>, my_stack, ".layer(El::new().name(label))");
 
-impl<NodeType: Bundle> From<JonmoBuilder> for Stack<NodeType> {
-    fn from(builder: JonmoBuilder) -> Self {
+impl<NodeType: Bundle> From<jonmo::Builder> for Stack<NodeType> {
+    fn from(builder: jonmo::Builder) -> Self {
         Self {
             builder: builder
                 .with_component::<Node>(|mut node| {
@@ -41,7 +40,7 @@ impl<NodeType: Bundle> From<JonmoBuilder> for Stack<NodeType> {
                     node.grid_auto_rows =
                         GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
                 })
-                .insert((LayoutDirection::Grid, Pickable::IGNORE, Hoverable, Pressable)),
+                .insert((LayoutDirection::Grid, Pickable::IGNORE)),
             _node_type: std::marker::PhantomData,
         }
     }
@@ -53,18 +52,18 @@ impl<NodeType: Bundle + Default> Stack<NodeType> {
     /// # Notes
     /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
-        Self::from(JonmoBuilder::from(NodeType::default()))
+        Self::from(jonmo::Builder::from(NodeType::default()))
     }
 }
 
 impl<NodeType> BuilderWrapper for Stack<NodeType> {
-    fn builder_mut(&mut self) -> &mut JonmoBuilder {
+    fn builder_mut(&mut self) -> &mut jonmo::Builder {
         &mut self.builder
     }
 }
 
 impl<NodeType: Bundle> Alignable for Stack<NodeType> {}
-impl<NodeType: Bundle> CursorOnHoverable for Stack<NodeType> {}
+impl<NodeType: Bundle> Cursorable for Stack<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Stack<NodeType> {}
 impl<NodeType: Bundle> Nameable for Stack<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Stack<NodeType> {}
@@ -151,7 +150,7 @@ impl<NodeType: Bundle> Stack<NodeType> {
     }
 
     /// Set up a child to be placed in the stack's single grid cell.
-    fn setup_stack_child(builder: JonmoBuilder) -> JonmoBuilder {
+    fn setup_stack_child(builder: jonmo::Builder) -> jonmo::Builder {
         builder
             .with_component::<Node>(|mut node| {
                 node.grid_column = GridPlacement::start_end(1, 1);

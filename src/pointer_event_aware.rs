@@ -9,7 +9,7 @@ use std::{
 
 use apply::Apply;
 use bevy_app::prelude::*;
-use bevy_ecs::{prelude::*, system::SystemId};
+use bevy_ecs::{lifecycle::HookContext, prelude::*, system::SystemId, world::DeferredWorld};
 use bevy_log::prelude::*;
 use bevy_math::Vec2;
 use bevy_picking::{
@@ -18,19 +18,18 @@ use bevy_picking::{
     pointer::{Location, PointerMap},
     prelude::*,
 };
+use bevy_platform::collections::HashMap;
 use bevy_reflect::prelude::*;
 use bevy_time::{Time, Timer, TimerMode};
 use bevy_ui::Pressed;
 use bevy_window::*;
-use jonmo::signal::{Signal, SignalExt};
+use jonmo::prelude::*;
 
 use super::{
     element::UiRoot,
     global_event_aware::{GlobalEventAware, GlobalEventData},
-    utils::{HaalkaObserver, clone, observe, register_system, remove_system_holder_on_remove},
+    utils::{HaalkaObserver, clone, observe, register_system, remove_system_holder_on_despawn},
 };
-
-use jonmo::signal::SignalBuilder;
 
 /// Helper trait for internal data components that track pointer state.
 trait PointerDataInternal {
@@ -56,126 +55,234 @@ macro_rules! create_move_observer {
     }};
 }
 
-/// Macro to generate blockable_signal methods that add signal-based blocking.
-macro_rules! impl_blockable_signal {
-    ($(#[$attr:meta])* $method_name:ident, $blockable_method:ident, $blocked_component:ty, $data_type:ty) => {
-        $(#[$attr])*
-        fn $method_name<Marker>(
-            self,
-            handler: impl IntoSystem<In<(Entity, $data_type)>, (), Marker> + Send + Sync + 'static,
-            blocked: impl Signal<Item = bool> + Send + 'static,
-        ) -> Self {
-            self.with_builder(|builder| {
-                builder.component_signal::<$blocked_component, _>(
-                    blocked.map_true_in(|| <$blocked_component>::default()),
-                )
-            })
-            .$blockable_method::<$blocked_component, _>(handler)
-        }
-    };
+/// Component storing signal-based disabling state flags.
+#[derive(Component, Default)]
+pub(crate) struct DisableableSignalState {
+    pub(crate) flags: Vec<bool>,
 }
 
-/// Macro to generate _change methods that fire only when state changes.
-macro_rules! impl_change_handler {
-    ($(#[$attr:meta])* $method_name:ident, $blockable_method:ident, $blocked_component:ty, $data_type:ty, $state_field:ident) => {
-        $(#[$attr])*
-        fn $method_name<Marker>(
-            self,
-            handler: impl IntoSystem<In<(Entity, $data_type)>, (), Marker> + Send + Sync + 'static,
-        ) -> Self {
-            let system_holder = Arc::new(OnceLock::new());
-            self.with_builder(clone!((system_holder) move |builder| {
-                builder
-                    .on_spawn(clone!((system_holder) move |world, _| {
-                        let _ = system_holder.set(register_system(world, handler));
-                    }))
-                    .apply(remove_system_holder_on_remove(system_holder.clone()))
-            }))
-            .$blockable_method::<$blocked_component, _>(
-                move |In((entity, data)): In<(Entity, $data_type)>,
-                      mut prev: Local<Option<bool>>,
-                      mut commands: Commands| {
-                    if prev.map_or(true, |prev| prev != data.$state_field) {
-                        *prev = Some(data.$state_field);
-                        commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data));
-                    }
-                },
-            )
-        }
-    };
+/// Timer collection component for throttling events.
+#[derive(Component, Default)]
+struct ThrottleTimers {
+    timers: HashMap<usize, Timer>,
+    was_active: HashMap<usize, bool>,
+    next_id: usize,
 }
 
-/// Macro to generate throttled methods for continuous firing with rate limiting.
-/// The continuous_data_type is the type passed to handler (e.g., HoveringData),
-/// while state_data_type is the type from the blockable method (e.g., HoverData).
-macro_rules! impl_throttled_handler {
-    (
-        $(#[$attr:meta])*
-        $method_name:ident,
-        $blockable_method:ident,
-        $blocked_component:ty,
-        $timer_collection:ty,
-        $state_data_type:ty,
-        $continuous_data_type:ty,
-        $state_field:ident,
-        |$data_param:ident| $extract_continuous:expr
-    ) => {
-        $(#[$attr])*
-        fn $method_name<Marker>(
-            self,
-            handler: impl IntoSystem<In<(Entity, $continuous_data_type)>, (), Marker> + Send + Sync + 'static,
-            duration: Duration,
-        ) -> Self {
-            let system_holder = Arc::new(OnceLock::new());
-            let timer_id = Arc::new(OnceLock::new());
-            self.with_builder(clone!((system_holder, timer_id) move |builder| {
-                builder
-                    .on_spawn(
-                        clone!((system_holder, timer_id) move |world, entity| {
-                            let _ = system_holder.set(register_system(world, handler));
+impl ThrottleTimers {
+    fn add_timer(&mut self, duration: Duration) -> usize {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.timers.insert(id, Timer::new(duration, TimerMode::Once));
+        self.was_active.insert(id, false);
+        id
+    }
 
-                            // Get or insert the timer collection
-                            let id = if let Ok(mut entity_mut) = world.get_entity_mut(entity) {
-                                if let Some(mut collection) = entity_mut.get_mut::<$timer_collection>() {
-                                    collection.add_timer(duration)
-                                } else {
-                                    let mut collection = <$timer_collection>::default();
-                                    let id = collection.add_timer(duration);
-                                    entity_mut.insert(collection);
-                                    id
-                                }
-                            } else {
-                                0 // fallback, shouldn't happen
-                            };
-                            let _ = timer_id.set(id);
-                        }),
-                    )
-                    .apply(remove_system_holder_on_remove(system_holder.clone()))
+    /// Add a timer that starts finished, so the first event fires immediately.
+    fn add_timer_ready(&mut self, duration: Duration) -> usize {
+        let id = self.next_id;
+        self.next_id += 1;
+        let mut timer = Timer::new(duration, TimerMode::Once);
+        timer.tick(duration); // Start finished
+        self.timers.insert(id, timer);
+        id
+    }
+
+    /// Returns true if the handler should fire.
+    ///
+    /// Fires immediately on activation (false → true transition), then throttles while active.
+    /// Resets the timer when deactivated so the next activation fires immediately.
+    fn tick_and_check(&mut self, id: usize, delta: std::time::Duration, is_active: bool) -> bool {
+        let was_active = self.was_active.get(&id).copied().unwrap_or(false);
+        self.was_active.insert(id, is_active);
+
+        if !is_active {
+            // Reset timer on deactivation so next activation fires immediately
+            if let Some(timer) = self.timers.get_mut(&id) {
+                timer.reset();
+                // Finish the timer so the next check passes immediately
+                timer.tick(timer.duration());
+            }
+            return false;
+        }
+
+        // New activation - fire immediately
+        if !was_active {
+            if let Some(timer) = self.timers.get_mut(&id) {
+                timer.reset();
+            }
+            return true;
+        }
+
+        // Continuing to be active - throttle
+        if let Some(timer) = self.timers.get_mut(&id) {
+            if timer.tick(delta).is_finished() {
+                timer.reset();
+                return true;
+            }
+        }
+        false
+    }
+
+    /// For discrete events (like clicks): returns true if enough time has passed since last fire.
+    /// Ticks the timer and checks if it's finished. If so, resets and returns true.
+    fn check_discrete(&mut self, id: usize, delta: std::time::Duration) -> bool {
+        if let Some(timer) = self.timers.get_mut(&id) {
+            timer.tick(delta);
+            if timer.is_finished() {
+                timer.reset();
+                return true;
+            }
+        }
+        false
+    }
+}
+
+/// Helper to register a throttle timer on an entity during spawn.
+fn add_throttle_timer(world: &mut World, entity: Entity, duration: Duration) -> usize {
+    let mut entity = world.entity_mut(entity);
+    if let Some(mut collection) = entity.get_mut::<ThrottleTimers>() {
+        collection.add_timer(duration)
+    } else {
+        let mut collection = ThrottleTimers::default();
+        let id = collection.add_timer(duration);
+        entity.insert(collection);
+        id
+    }
+}
+
+/// Helper to register a throttle timer that starts ready (first event fires immediately).
+fn add_throttle_timer_ready(world: &mut World, entity: Entity, duration: Duration) -> usize {
+    let mut entity = world.entity_mut(entity);
+    if let Some(mut collection) = entity.get_mut::<ThrottleTimers>() {
+        collection.add_timer_ready(duration)
+    } else {
+        let mut collection = ThrottleTimers::default();
+        let id = collection.add_timer_ready(duration);
+        entity.insert(collection);
+        id
+    }
+}
+
+/// Returns a builder function that registers a handler system on spawn for change detection.
+fn change_setup<D: 'static, Marker>(
+    handler: impl IntoSystem<In<(Entity, D)>, (), Marker> + Send + Sync + 'static,
+    system_holder: Arc<OnceLock<SystemId<In<(Entity, D)>, ()>>>,
+) -> impl FnOnce(jonmo::Builder) -> jonmo::Builder {
+    move |builder| {
+        builder
+            .on_spawn(clone!((system_holder) move |world, _| {
+                let _ = system_holder.set(register_system(world, handler));
             }))
-            .$blockable_method::<$blocked_component, _>(
-                move |In((entity, data)): In<(Entity, $state_data_type)>,
-                      mut commands: Commands,
-                      time: Res<Time>,
-                      mut collections: Query<&mut $timer_collection>| {
-                    if data.$state_field {
-                        if let (Ok(mut collection), Some(&id)) = (collections.get_mut(entity), timer_id.get()) {
-                            if let Some(timer) = collection.get_timer_mut(id) {
-                                timer.tick(time.delta());
-                                if timer.is_finished() {
-                                    let $data_param = &data;
-                                    commands.run_system_with(
-                                        system_holder.get().copied().unwrap(),
-                                        (entity, $extract_continuous)
-                                    );
-                                    timer.reset();
-                                }
-                            }
+            .apply(remove_system_holder_on_despawn(system_holder))
+    }
+}
+
+/// Creates a change detection system that fires when the boolean field changes.
+fn change_system<D: Clone + Send + Sync + 'static>(
+    system_holder: Arc<OnceLock<SystemId<In<(Entity, D)>, ()>>>,
+    get_field: fn(&D) -> bool,
+) -> impl FnMut(In<(Entity, D)>, Local<Option<bool>>, Commands) + Send + Sync + 'static {
+    move |In((entity, data)): In<(Entity, D)>, mut prev: Local<Option<bool>>, mut commands: Commands| {
+        let field = get_field(&data);
+        if prev.map_or(true, |prev| prev != field) {
+            *prev = Some(field);
+            commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data));
+        }
+    }
+}
+
+/// Returns a builder function that registers a handler system and throttle timer on spawn.
+fn throttle_setup<D: 'static, Marker>(
+    handler: impl IntoSystem<In<(Entity, D)>, (), Marker> + Send + Sync + 'static,
+    duration: Duration,
+    system_holder: Arc<OnceLock<SystemId<In<(Entity, D)>, ()>>>,
+    timer_id: Arc<OnceLock<usize>>,
+) -> impl FnOnce(jonmo::Builder) -> jonmo::Builder {
+    move |builder| {
+        builder
+            .on_spawn(clone!((system_holder, timer_id) move |world, entity| {
+                let _ = system_holder.set(register_system(world, handler));
+                let _ = timer_id.set(add_throttle_timer(world, entity, duration));
+            }))
+            .apply(remove_system_holder_on_despawn(system_holder))
+    }
+}
+
+/// Creates a throttled system that fires immediately on activation, then throttles while active.
+fn throttle_system<D: Clone + Send + Sync + 'static>(
+    system_holder: Arc<OnceLock<SystemId<In<(Entity, D)>, ()>>>,
+    timer_id: Arc<OnceLock<usize>>,
+    get_field: fn(&D) -> bool,
+) -> impl FnMut(In<(Entity, D)>, Commands, Res<Time>, Query<&mut ThrottleTimers>) + Send + Sync + 'static {
+    move |In((entity, data)): In<(Entity, D)>,
+          mut commands: Commands,
+          time: Res<Time>,
+          mut collections: Query<&mut ThrottleTimers>| {
+        let is_active = get_field(&data);
+        if let (Ok(mut collection), Some(&id)) = (collections.get_mut(entity), timer_id.get()) {
+            if collection.tick_and_check(id, time.delta(), is_active) {
+                commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data));
+            }
+        }
+    }
+}
+
+/// Returns a builder function that sets up signal-based disabling for a handler.
+pub(crate) fn disableable_signal_setup<D: 'static, Marker>(
+    handler: impl IntoSystem<In<(Entity, D)>, (), Marker> + Send + Sync + 'static,
+    disabled: impl Signal<Item = bool> + Send + 'static,
+    system_holder: Arc<OnceLock<SystemId<In<(Entity, D)>, ()>>>,
+    state_index: Arc<OnceLock<usize>>,
+) -> impl FnOnce(jonmo::Builder) -> jonmo::Builder {
+    move |builder| {
+        builder
+            .on_spawn(clone!((system_holder, state_index) move |world, entity| {
+                let _ = system_holder.set(register_system(world, handler));
+
+                let mut entity = world.entity_mut(entity);
+                let index = if let Some(mut state) = entity.get_mut::<DisableableSignalState>() {
+                    let index = state.flags.len();
+                    state.flags.push(false);
+                    index
+                } else {
+                    entity.insert(DisableableSignalState { flags: vec![false] });
+                    0
+                };
+                let _ = state_index.set(index);
+            }))
+            .on_signal_with_entity(
+                disabled,
+                clone!((state_index) move |mut entity, disabled| {
+                    let Some(index) = state_index.get().copied() else {
+                        return;
+                    };
+                    if let Some(mut state) = entity.get_mut::<DisableableSignalState>() {
+                        if let Some(flag) = state.flags.get_mut(index) {
+                            *flag = disabled;
                         }
                     }
-                },
+                }),
             )
+            .apply(remove_system_holder_on_despawn(system_holder))
+    }
+}
+
+/// Creates a system that checks signal-based disabling before running the handler.
+pub(crate) fn disableable_signal_system<D: Send + Sync + 'static>(
+    system_holder: Arc<OnceLock<SystemId<In<(Entity, D)>, ()>>>,
+    state_index: Arc<OnceLock<usize>>,
+) -> impl FnMut(In<(Entity, D)>, Query<&DisableableSignalState>, Commands) + Send + Sync + 'static {
+    move |In((entity, data)): In<(Entity, D)>, states: Query<&DisableableSignalState>, mut commands: Commands| {
+        if let Some(index) = state_index.get().copied() {
+            if let Ok(state) = states.get(entity) {
+                if *state.flags.get(index).unwrap_or(&false) {
+                    return;
+                }
+            }
         }
-    };
+        commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data));
+    }
 }
 
 /// Handler data for hover events, containing hover state and hit information.
@@ -206,30 +313,6 @@ pub struct PressData {
     pub pointer_location: Location,
 }
 
-/// Handler data for pressing events, containing button and hit information.
-#[derive(Clone)]
-pub struct PressingData {
-    /// The button that is being pressed.
-    pub button: PointerButton,
-    /// Hit information for the pointer intersection.
-    pub hit: HitData,
-    /// The pointer ID that is being used for pressing.
-    pub pointer_id: PointerId,
-    /// The location of the pointer during this pressing event.
-    pub pointer_location: Location,
-}
-
-/// Handler data for hovering events, containing hit information.
-#[derive(Clone)]
-pub struct HoveringData {
-    /// Hit information for the pointer intersection.
-    pub hit: HitData,
-    /// The pointer ID that is hovering.
-    pub pointer_id: PointerId,
-    /// The location of the pointer during this hovering event.
-    pub pointer_location: Location,
-}
-
 /// Handler data for drag events, containing drag state and button information.
 #[derive(Clone)]
 pub struct DragData {
@@ -243,17 +326,6 @@ pub struct DragData {
     pub pointer_location: Location,
     /// Hit information for the drag intersection.
     pub hit: HitData,
-}
-
-/// Handler data for dragging events, containing button information.
-#[derive(Clone)]
-pub struct DraggingData {
-    /// The button that is being used for dragging.
-    pub button: PointerButton,
-    /// The pointer ID that is being used for dragging.
-    pub pointer_id: PointerId,
-    /// The location of the pointer during this dragging event.
-    pub pointer_location: Location,
     /// The delta movement since last frame.
     pub delta: Vec2,
 }
@@ -265,11 +337,12 @@ pub struct DraggingData {
 ///
 /// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`PointerEventAware`](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/element/ability/pointer_event_aware.rs).
 pub trait PointerEventAware: GlobalEventAware {
-    /// On frames where this element is hovered or gets unhovered and does not have a `Blocked`
+    /// On frames where this element is hovered or gets unhovered and does not have a `Disabled`
     /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`]
-    /// and [`HoverHandlerData`] containing its current hovered state and the latest [`HitData`].
-    /// While hovered, the handler will be executed every frame.
-    fn on_hovered_blockable<Blocked: Component, Marker>(
+    /// and [`HoverData`] containing its current hovered state and the latest [`HitData`].
+    /// While hovered, the handler will be executed every frame. This method can be called
+    /// repeatedly to register many such handlers.
+    fn on_hovered_disableable<Disabled: Component, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, HoverData)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
@@ -277,6 +350,7 @@ pub trait PointerEventAware: GlobalEventAware {
             let hover_handler_holder = Arc::new(OnceLock::new());
             let hovering_handler_holder = Arc::new(OnceLock::new());
             builder
+                .insert(Hoverable)
                 .on_spawn(
                     clone!((hover_handler_holder, hovering_handler_holder) move |world, entity| {
                         let hover_handler_system = register_system(world, handler);
@@ -286,18 +360,21 @@ pub trait PointerEventAware: GlobalEventAware {
                             world,
                             move |In(entity): In<Entity>,
                                   hover_datas: Query<&HoverDataInternal>,
-                                  blocked: Query<&Blocked>,
+                                  disabled: Query<&Disabled>,
                                   mut commands: Commands| {
-                                if blocked.contains(entity) {
+                                if disabled.contains(entity) {
                                     return;
                                 }
                                 if let Ok(hover_data) = hover_datas.get(entity) {
-                                    commands.run_system_with(hover_handler_system, (entity, HoverData {
-                                        hovered: true,
-                                        hit: hover_data.hit.clone(),
-                                        pointer_id: hover_data.pointer_id,
-                                        pointer_location: hover_data.pointer_location.clone(),
-                                    }));
+                                    commands.run_system_with(
+                                        hover_handler_system,
+                                        (entity, HoverData {
+                                            hovered: true,
+                                            hit: hover_data.hit.clone(),
+                                            pointer_id: hover_data.pointer_id,
+                                            pointer_location: hover_data.pointer_location.clone(),
+                                        }),
+                                    );
                                 }
                             },
                         );
@@ -307,13 +384,13 @@ pub trait PointerEventAware: GlobalEventAware {
                             world,
                             entity,
                             move |mut enter: On<Pointer<Enter>>,
-                                  blocked: Query<&Blocked>,
+                                  disabled: Query<&Disabled>,
                                   move_observers: Query<&HoverMoveObserver>,
                                   mut commands: Commands| {
                                 enter.propagate(false);
 
                                 let entity = enter.entity;
-                                if blocked.contains(entity) {
+                                if disabled.contains(entity) {
                                     return;
                                 }
 
@@ -338,22 +415,25 @@ pub trait PointerEventAware: GlobalEventAware {
                                     }
                                 }
 
-                                commands.run_system_with(hover_handler_system, (entity, HoverData {
-                                    hovered: true,
-                                    hit,
-                                    pointer_id,
-                                    pointer_location,
-                                }));
+                                commands.run_system_with(
+                                    hover_handler_system,
+                                    (entity, HoverData {
+                                        hovered: true,
+                                        hit,
+                                        pointer_id,
+                                        pointer_location,
+                                    }),
+                                );
                             },
                         );
 
                         observe(
                             world,
                             entity,
-                            move |mut leave: On<Pointer<Leave>>,
-                                  blocked: Query<&Blocked>,
-                                  move_observers: Query<&HoverMoveObserver>,
-                                  mut commands: Commands| {
+                                move |mut leave: On<Pointer<Leave>>,
+                                    disabled: Query<&Disabled>,
+                                    move_observers: Query<&HoverMoveObserver>,
+                                    mut commands: Commands| {
                                 leave.propagate(false);
                                 let entity = leave.entity;
 
@@ -361,7 +441,7 @@ pub trait PointerEventAware: GlobalEventAware {
                                 let pointer_id = leave.pointer_id;
                                 let pointer_location = leave.pointer_location.clone();
 
-                                if !blocked.contains(entity) {
+                                if !disabled.contains(entity) {
                                     commands.run_system_with(hover_handler_system, (entity, HoverData {
                                         hovered: false,
                                         hit,
@@ -375,111 +455,154 @@ pub trait PointerEventAware: GlobalEventAware {
                                 if let Ok(mut entity) = commands.get_entity(entity) {
                                     entity.remove::<HoverDataInternal>();
                                     entity.remove::<HoveredSystem>();
-                                    if move_observer.is_some() {
-                                        entity.remove::<HoverMoveObserver>();
-                                    }
                                 }
-
-                                if let Some(observer) = move_observer {
-                                    commands.entity(observer).despawn();
-                                }
+                                cleanup_move_observer::<HoverMoveObserver>(&mut commands, entity, move_observer);
                             },
                         );
                     }),
                 )
-                .apply(remove_system_holder_on_remove(hover_handler_holder))
-                .apply(remove_system_holder_on_remove(hovering_handler_holder))
+                .apply(remove_system_holder_on_despawn(hover_handler_holder))
+                .apply(remove_system_holder_on_despawn(hovering_handler_holder))
         })
     }
 
-    impl_blockable_signal!(
-        #[doc = "Like [`PointerEventAware::on_hovered_blockable`], but reactively controls whether hover handling is blocked with a [`Signal`]."]
-        on_hovered_blockable_signal,
-        on_hovered_blockable,
-        HoverHandlingBlocked,
-        HoverData
-    );
-
-    impl_change_handler!(
-        #[doc = "When this element's hovered state changes, run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and [`HoverHandlerData`]. This method can be called repeatedly to register many such handlers."]
-        on_hovered_change,
-        on_hovered_blockable,
-        HoverHandlingBlocked,
-        HoverData,
-        hovered
-    );
-
-    /// On frames where this element is hovered and does not have a `Blocked` [`Component`], run a
-    /// [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and [`HoveringData`].
-    /// This method can be called repeatedly to register many such handlers.
-    fn on_hovering_blockable<Blocked: Component, Marker>(
+    /// On frames where this element is hovered or gets unhovered, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`HoverData`]. While hovered, the
+    /// handler will be executed every frame. Whether hover handling is disabled is reactively
+    /// controlled with a [`Signal`]. This method can be called repeatedly to register many such
+    /// handlers.
+    ///
+    /// # Latency Considerations
+    ///
+    /// Because [haalka](crate) runs [jonmo]'s [`SignalProcessing`](jonmo::SignalProcessing) system
+    /// set in [`PostUpdate`] (unless configured otherwise), there may be
+    /// a 1-frame delay between the signal outputting a new disabled state and the handler
+    /// reflecting that state. For synchronous control over disabling, use
+    /// [`PointerEventAware::on_hovered_disableable`] with a custom `Disabled` component and
+    /// configure systems to run around [`hovered_system`].
+    fn on_hovered_disableable_signal<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, HoveringData)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, HoverData)>, (), Marker> + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
-        self.with_builder(clone!((system_holder) move |builder| {
-            builder
-                .on_spawn(clone!((system_holder) move |world, _| {
-                    let _ = system_holder.set(register_system(world, handler));
-                }))
-                .apply(remove_system_holder_on_remove(system_holder.clone()))
-        }))
-        .on_hovered_blockable::<Blocked, _>(
-            move |In((entity, data)): In<(Entity, HoverData)>, mut commands: Commands| {
-                if data.hovered {
-                    commands.run_system_with(
-                        system_holder.get().copied().unwrap(),
-                        (
-                            entity,
-                            HoveringData {
-                                hit: data.hit,
-                                pointer_id: data.pointer_id,
-                                pointer_location: data.pointer_location,
-                            },
-                        ),
-                    );
-                }
-            },
-        )
+        let state_index = Arc::new(OnceLock::new());
+        self.with_builder(disableable_signal_setup(
+            handler,
+            disabled,
+            system_holder.clone(),
+            state_index.clone(),
+        ))
+        .on_hovered_disableable::<HoverHandlingDisabled, _>(disableable_signal_system(system_holder, state_index))
     }
 
-    impl_blockable_signal!(
-        #[doc = "Like [`PointerEventAware::on_hovering_blockable`], but reactively controls whether hover handling is blocked with a [`Signal`]."]
-        on_hovering_blockable_signal,
-        on_hovering_blockable,
-        HoverHandlingBlocked,
-        HoveringData
-    );
-
-    /// On frames where this element is hovered, run a [`System`] which takes
-    /// [`In`](`System::In`) this element's [`Entity`] and [`HoveringData`].
-    fn on_hovering<Marker>(
+    /// On frames where this element is hovered or gets unhovered, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`HoverData`]. This method can be called
+    /// repeatedly to register many such handlers.
+    fn on_hovered<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, HoveringData)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, HoverData)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
-        self.on_hovering_blockable::<HoverHandlingBlocked, _>(handler)
+        self.on_hovered_disableable::<HoverHandlingDisabled, _>(handler)
     }
 
-    impl_throttled_handler!(
-        #[doc = "On frames where this element is hovered, run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and [`HoveringData`], throttled by `duration` before the `handler` can run again."]
-        on_hovering_throttled,
-        on_hovered_blockable,
-        HoverHandlingBlocked,
-        HoverThrottleTimers,
-        HoverData,
-        HoveringData,
-        hovered,
-        |data| HoveringData {
-            hit: data.hit.clone(),
-            pointer_id: data.pointer_id,
-            pointer_location: data.pointer_location.clone(),
-        }
-    );
+    /// When this element's hovered state changes and does not have a `Disabled` [`Component`], run
+    /// a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and [`HoverData`].
+    /// This method can be called repeatedly to register many such handlers.
+    fn on_hovered_change_disableable<Disabled: Component, Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, HoverData)>, (), Marker> + Send + Sync + 'static,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        self.with_builder(change_setup(handler, system_holder.clone()))
+            .on_hovered_disableable::<Disabled, _>(change_system(system_holder, |d| d.hovered))
+    }
 
-    /// On frames where this element is clicked and does not have a `Blocked` [`Component`],
+    /// When this element's hovered state changes, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`HoverData`]. Whether hover change
+    /// handling is disabled is reactively controlled with a [`Signal`]. This method can be called
+    /// repeatedly to register many such handlers.
+    ///
+    /// # Latency Considerations
+    ///
+    /// Because [haalka](crate) runs [jonmo]'s [`SignalProcessing`](jonmo::SignalProcessing) system
+    /// set in [`PostUpdate`] (unless configured otherwise), there may be
+    /// a 1-frame delay between the signal outputting a new disabled state and the handler
+    /// reflecting that state. For synchronous control over disabling, use
+    /// [`PointerEventAware::on_hovered_change_disableable`] with a custom `Disabled`
+    /// component and configure systems to run around [`hovered_system`].
+    fn on_hovered_change_disableable_signal<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, HoverData)>, (), Marker> + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        let state_index = Arc::new(OnceLock::new());
+        self.with_builder(disableable_signal_setup(
+            handler,
+            disabled,
+            system_holder.clone(),
+            state_index.clone(),
+        ))
+        .on_hovered_change_disableable::<HoverHandlingDisabled, _>(disableable_signal_system(
+            system_holder,
+            state_index,
+        ))
+    }
+
+    /// When this element's hovered state changes, run a [`System`] which takes [`In`](`System::In`)
+    /// this element's [`Entity`] and [`HoverData`]. This method can be called repeatedly to
+    /// register many such handlers.
+    fn on_hovered_change<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, HoverData)>, (), Marker> + Send + Sync + 'static,
+    ) -> Self {
+        self.on_hovered_change_disableable::<HoverHandlingDisabled, _>(handler)
+    }
+
+    /// On frames where this element is hovered or gets unhovered, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`HoverData`].
+    ///
+    /// The handler fires immediately when hover starts, then throttles by `duration` while
+    /// hovered. When the pointer leaves and re-enters, it fires immediately again.
+    fn on_hovered_throttled<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, HoverData)>, (), Marker> + Send + Sync + 'static,
+        duration: Duration,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        let timer_id = Arc::new(OnceLock::new());
+        self.with_builder(throttle_setup(
+            handler,
+            duration,
+            system_holder.clone(),
+            timer_id.clone(),
+        ))
+        .on_hovered_disableable::<HoverHandlingDisabled, _>(throttle_system(system_holder, timer_id, |d| d.hovered))
+    }
+
+    /// On frames where this element is clicked and does not have a `Disabled` [`Component`],
     /// run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and
     /// [`Pointer<Click>`]. This method can be called repeatedly to register many such handlers.
-    fn on_click_blockable<Blocked: Component, Marker>(
+    ///
+    /// Click event propagation cannot be stopped through this method (yet); if this is needed, use
+    /// a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// #[derive(Component)]
+    /// struct Disabled;
+    ///
+    /// El::<Node>::new()
+    ///     .on_click_disableable::<Disabled, _>(|In((_entity, _click))| {
+    ///         // handle click
+    ///     })
+    ///     .observe(|mut click: On<Pointer<Click>>| {
+    ///         click.propagate(false);
+    ///     });
+    /// ```
+    fn on_click_disableable<Disabled: Component, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
@@ -489,39 +612,137 @@ pub trait PointerEventAware: GlobalEventAware {
                 .on_spawn(clone!((system_holder) move |world, entity| {
                     let system = register_system(world, handler);
                     let _ = system_holder.set(system);
-                    observe(world, entity, move |click: On<Pointer<Click>>, blocked: Query<&Blocked>, mut commands: Commands| {
-                        if blocked.contains(click.entity) {
+                    observe(world, entity, move |click: On<Pointer<Click>>, disabled: Query<&Disabled>, mut commands: Commands| {
+                        if disabled.contains(click.entity) {
                             return;
                         }
                         commands.run_system_with(system, (click.entity, (*click).clone()));
                     });
                 }))
-                .apply(remove_system_holder_on_remove(system_holder))
+                .apply(remove_system_holder_on_despawn(system_holder))
         })
     }
 
-    /// Run a [`System`] when this element is clicked.
+    /// Run a [`System`] when this element is clicked. This method can be called repeatedly to
+    /// register many such handlers.
+    ///
+    /// Click event propagation cannot be stopped through this method (yet); if this is needed, use
+    /// a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// El::<Node>::new()
+    ///     .on_click(|In((_entity, _click))| {
+    ///         // handle click
+    ///     })
+    ///     .observe(|mut click: On<Pointer<Click>>| {
+    ///         click.propagate(false);
+    ///     });
+    /// ```
     fn on_click<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
-        self.on_click_blockable::<ClickHandlingBlocked, _>(handler)
+        self.on_click_disableable::<ClickHandlingDisabled, _>(handler)
     }
 
-    impl_blockable_signal!(
-        #[doc = "Like [`PointerEventAware::on_click_blockable`], but reactively controls whether click handling is blocked with a [`Signal`]."]
-        on_click_blockable_signal,
-        on_click_blockable,
-        ClickHandlingBlocked,
-        Pointer<Click>
-    );
+    /// Run a [`System`] when this element is clicked. Whether click handling is disabled is
+    /// reactively controlled with a [`Signal`]. This method can be called repeatedly to register
+    /// many such handlers.
+    ///
+    /// Click event propagation cannot be stopped through this method (yet); if this is needed, use
+    /// a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// El::<Node>::new()
+    ///     .on_click_disableable_signal(
+    ///         |In(_)| {
+    ///             // handle click
+    ///         },
+    ///         signal::once(false),
+    ///     )
+    ///     .observe(|mut click: On<Pointer<Click>>| {
+    ///         click.propagate(false);
+    ///     });
+    /// ```
+    ///
+    /// # Latency Considerations
+    ///
+    /// Because [haalka](crate) runs [jonmo]'s [`SignalProcessing`](jonmo::SignalProcessing) system
+    /// set in [`PostUpdate`] (unless configured otherwise), there may be
+    /// a 1-frame delay between the signal outputting a new disabled state and the handler
+    /// reflecting that state. For synchronous control over disabling, use
+    /// [`PointerEventAware::on_click_disableable`] with a custom `Disabled` component.
+    fn on_click_disableable_signal<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        let state_index = Arc::new(OnceLock::new());
+        self.with_builder(disableable_signal_setup(
+            handler,
+            disabled,
+            system_holder.clone(),
+            state_index.clone(),
+        ))
+        .on_click_disableable::<ClickHandlingDisabled, _>(disableable_signal_system(system_holder, state_index))
+    }
+
+    /// Run a [`System`] when this element is clicked, throttled by `duration` before the handler
+    /// can run again.
+    ///
+    /// Click event propagation cannot be stopped through this method (yet); if this is needed, use
+    /// a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// El::<Node>::new()
+    ///     .on_click_throttled(|In((_entity, _click))| {
+    ///         // handle click (throttled)
+    ///     }, std::time::Duration::from_millis(100))
+    ///     .observe(|mut click: On<Pointer<Click>>| {
+    ///         click.propagate(false);
+    ///     });
+    /// ```
+    fn on_click_throttled<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + Sync + 'static,
+        duration: Duration,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        let timer_id = Arc::new(OnceLock::new());
+        self.with_builder(|builder| {
+            builder
+                .on_spawn(clone!((system_holder, timer_id) move |world, entity| {
+                    let system = register_system(world, handler);
+                    let _ = system_holder.set(system);
+                    let _ = timer_id.set(add_throttle_timer_ready(world, entity, duration));
+                    observe(world, entity, move |click: On<Pointer<Click>>,
+                                                 time: Res<Time>,
+                                                 mut collections: Query<&mut ThrottleTimers>,
+                                                 mut commands: Commands| {
+                        if let (Ok(mut collection), Some(&id)) = (collections.get_mut(click.entity), timer_id.get()) {
+                            if collection.check_discrete(id, time.delta()) {
+                                commands.run_system_with(system, (click.entity, (*click).clone()));
+                            }
+                        }
+                    });
+                }))
+                .apply(remove_system_holder_on_despawn(system_holder))
+        })
+    }
 
     /// When a [`Pointer<Click>`] is received outside this [`Element`](super::element::Element)
-    /// or its descendents and the element does not have a `Blocked` [`Component`], run a
+    /// or its descendents and the element does not have a `Disabled` [`Component`], run a
     /// [`System`] that takes [`In`](`System::In`) this element's [`Entity`] and the
     /// [`Pointer<Click>`]. Will not function unless this element is a descendant of a [`UiRoot`].
     /// This method can be called repeatedly to register many such handlers.
-    fn on_click_outside_blockable<Blocked: Component, Marker>(
+    fn on_click_outside_disableable<Disabled: Component, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, GlobalEventData<Pointer<Click>>)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
@@ -531,16 +752,16 @@ pub trait PointerEventAware: GlobalEventAware {
                 .on_spawn(clone!((system_holder) move |world, _| {
                     let _ = system_holder.set(register_system(world, handler));
                 }))
-                .apply(remove_system_holder_on_remove(system_holder.clone()))
+                .apply(remove_system_holder_on_despawn(system_holder.clone()))
         })
         .on_global_event::<Pointer<Click>, _, _, _>(
             move |In((entity, click)): In<(Entity, GlobalEventData<Pointer<Click>>)>,
                   childrens: Query<&Children>,
                   child_ofs: Query<&ChildOf>,
                   ui_roots: Query<&UiRoot>,
-                  blocked: Query<&Blocked>,
+                  disabled: Query<&Disabled>,
                   mut commands: Commands| {
-                if blocked.contains(entity) {
+                if disabled.contains(entity) {
                     return;
                 }
                 for ancestor in child_ofs.iter_ancestors(entity) {
@@ -563,22 +784,107 @@ pub trait PointerEventAware: GlobalEventAware {
         self,
         handler: impl IntoSystem<In<(Entity, GlobalEventData<Pointer<Click>>)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
-        self.on_click_outside_blockable::<ClickOutsideHandlingBlocked, _>(handler)
+        self.on_click_outside_disableable::<ClickOutsideHandlingDisabled, _>(handler)
     }
 
-    impl_blockable_signal!(
-        #[doc = "Like [`PointerEventAware::on_click_outside_blockable`], but reactively controls whether click outside handling is blocked with a [`Signal`]."]
-        on_click_outside_blockable_signal,
-        on_click_outside_blockable,
-        ClickOutsideHandlingBlocked,
-        GlobalEventData<Pointer<Click>>
-    );
+    /// When a [`Pointer<Click>`] is received outside this [`Element`](super::element::Element)
+    /// or its descendents, run a [`System`] that takes [`In`](`System::In`) this element's
+    /// [`Entity`] and the [`Pointer<Click>`]. Will not function unless this element is a descendant
+    /// of a [`UiRoot`]. Whether click outside handling is disabled is reactively controlled with a
+    /// [`Signal`]. This method can be called repeatedly to register many such handlers.
+    ///
+    /// # Latency Considerations
+    ///
+    /// Because [haalka](crate) runs [jonmo]'s [`SignalProcessing`](jonmo::SignalProcessing) system
+    /// set in [`PostUpdate`] (unless configured otherwise), there may be
+    /// a 1-frame delay between the signal outputting a new disabled state and the handler
+    /// reflecting that state. For synchronous control over disabling, use
+    /// [`PointerEventAware::on_click_outside_disableable`] with a custom `Disabled` component.
+    fn on_click_outside_disableable_signal<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, GlobalEventData<Pointer<Click>>)>, (), Marker> + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        let state_index = Arc::new(OnceLock::new());
+        self.with_builder(disableable_signal_setup(
+            handler,
+            disabled,
+            system_holder.clone(),
+            state_index.clone(),
+        ))
+        .on_click_outside_disableable::<ClickOutsideHandlingDisabled, _>(disableable_signal_system(
+            system_holder,
+            state_index,
+        ))
+    }
 
-    /// On frames where this element is pressed or gets unpressed and does not have a `Blocked`
+    /// When a [`Pointer<Click>`] is received outside this [`Element`](super::element::Element)
+    /// or its descendents, run a [`System`] that takes [`In`](`System::In`) this element's
+    /// [`Entity`] and the [`Pointer<Click>`], throttled by `duration` before the handler can run
+    /// again. Will not function unless this element is a descendant of a [`UiRoot`]. This method
+    /// can be called repeatedly to register many such handlers.
+    fn on_click_outside_throttled<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, GlobalEventData<Pointer<Click>>)>, (), Marker> + Send + Sync + 'static,
+        duration: Duration,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        let timer_id = Arc::new(OnceLock::new());
+        self.with_builder(|builder| {
+            builder
+                .on_spawn(clone!((system_holder, timer_id) move |world, entity| {
+                    let _ = system_holder.set(register_system(world, handler));
+                    let _ = timer_id.set(add_throttle_timer_ready(world, entity, duration));
+                }))
+                .apply(remove_system_holder_on_despawn(system_holder.clone()))
+        })
+        .on_global_event::<Pointer<Click>, _, _, _>(
+            move |In((entity, click)): In<(Entity, GlobalEventData<Pointer<Click>>)>,
+                  childrens: Query<&Children>,
+                  child_ofs: Query<&ChildOf>,
+                  ui_roots: Query<&UiRoot>,
+                  time: Res<Time>,
+                  mut collections: Query<&mut ThrottleTimers>,
+                  mut commands: Commands| {
+                for ancestor in child_ofs.iter_ancestors(entity) {
+                    if ui_roots.contains(ancestor) {
+                        if !is_inside_or_removed_from_dom(entity, &click, ancestor, &childrens) {
+                            if let (Ok(mut collection), Some(&id)) = (collections.get_mut(entity), timer_id.get()) {
+                                if collection.check_discrete(id, time.delta()) {
+                                    commands.run_system_with(system_holder.get().copied().unwrap(), (entity, click));
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            },
+        )
+    }
+
+    /// On frames where this element is pressed or gets unpressed and does not have a `Disabled`
     /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`]
-    /// and [`PressHandlerData`]. This method can be called repeatedly to register many such
-    /// handlers.
-    fn on_pressed_blockable<Blocked: Component, Marker>(
+    /// and [`PressData`]. This method can be called repeatedly to register many such handlers.
+    ///
+    /// Press event propagation cannot be stopped through this method (yet); if this is needed,
+    /// use a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// #[derive(Component)]
+    /// struct Disabled;
+    ///
+    /// El::<Node>::new()
+    ///     .on_pressed_disableable::<Disabled, _>(|In((_entity, _press))| {
+    ///         // handle press
+    ///     })
+    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///         press.propagate(false);
+    ///     });
+    /// ```
+    fn on_pressed_disableable<Disabled: Component, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, PressData)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
@@ -586,6 +892,7 @@ pub trait PointerEventAware: GlobalEventAware {
             let press_handler_holder = Arc::new(OnceLock::new());
             let pressing_handler_holder = Arc::new(OnceLock::new());
             builder
+                .insert(Pressable)
                 .on_spawn(
                     clone!((press_handler_holder, pressing_handler_holder) move |world, entity| {
                         let press_handler_system = register_system(world, handler);
@@ -595,9 +902,9 @@ pub trait PointerEventAware: GlobalEventAware {
                             world,
                             move |In(entity): In<Entity>,
                                   press_datas: Query<&PressDataInternal>,
-                                  blocked: Query<&Blocked>,
+                                  disabled: Query<&Disabled>,
                                   mut commands: Commands| {
-                                if blocked.contains(entity) {
+                                if disabled.contains(entity) {
                                     return;
                                 }
                                 if let Ok(press_data) = press_datas.get(entity) {
@@ -620,11 +927,11 @@ pub trait PointerEventAware: GlobalEventAware {
                             world,
                             entity,
                             move |press: On<Pointer<Press>>,
-                                  blocked: Query<&Blocked>,
+                                  disabled: Query<&Disabled>,
                                   move_observers: Query<&PressMoveObserver>,
                                   mut commands: Commands| {
                                 let entity = press.entity;
-                                if blocked.contains(entity) {
+                                if disabled.contains(entity) {
                                     return;
                                 }
 
@@ -650,24 +957,27 @@ pub trait PointerEventAware: GlobalEventAware {
                                     }
                                 }
 
-                                commands.run_system_with(press_handler_system, (entity, PressData {
-                                    pressed: true,
-                                    button,
-                                    hit,
-                                    pointer_id,
-                                    pointer_location,
-                                }));
+                                commands.run_system_with(
+                                    press_handler_system,
+                                    (entity, PressData {
+                                        pressed: true,
+                                        button,
+                                        hit,
+                                        pointer_id,
+                                        pointer_location,
+                                    }),
+                                );
                             },
                         );
 
                         observe(
                             world,
                             entity,
-                            move |release: On<Pointer<Release>>,
-                                  blocked: Query<&Blocked>,
-                                  move_observers: Query<&PressMoveObserver>,
-                                  press_datas: Query<&PressDataInternal>,
-                                  mut commands: Commands| {
+                                move |release: On<Pointer<Release>>,
+                                    disabled: Query<&Disabled>,
+                                    move_observers: Query<&PressMoveObserver>,
+                                    press_datas: Query<&PressDataInternal>,
+                                    mut commands: Commands| {
                                 let entity = release.entity;
 
                                 if let Ok(press_data) = press_datas.get(entity) {
@@ -685,7 +995,7 @@ pub trait PointerEventAware: GlobalEventAware {
 
                                 let move_observer = move_observers.get(entity).ok().map(|o| o.0);
 
-                                if !blocked.contains(entity) {
+                                if !disabled.contains(entity) {
                                     commands.run_system_with(press_handler_system, (entity, PressData {
                                         pressed: false,
                                         button,
@@ -698,459 +1008,644 @@ pub trait PointerEventAware: GlobalEventAware {
                                 if let Ok(mut entity) = commands.get_entity(entity) {
                                     entity.remove::<PressDataInternal>();
                                     entity.remove::<PressedSystem>();
-                                    if move_observer.is_some() {
-                                        entity.remove::<PressMoveObserver>();
-                                    }
                                 }
-
-                                if let Some(observer) = move_observer {
-                                    commands.entity(observer).despawn();
-                                }
+                                cleanup_move_observer::<PressMoveObserver>(&mut commands, entity, move_observer);
                             },
                         );
                     }),
                 )
-                .apply(remove_system_holder_on_remove(press_handler_holder))
-                .apply(remove_system_holder_on_remove(pressing_handler_holder))
+                .apply(remove_system_holder_on_despawn(press_handler_holder))
+                .apply(remove_system_holder_on_despawn(pressing_handler_holder))
         })
         .on_hovered_change(
             |In((entity, data)): In<(Entity, HoverData)>,
              move_observers: Query<&PressMoveObserver>,
              mut commands: Commands| {
                 if !data.hovered {
-                    if let Ok(&PressMoveObserver(observer)) = move_observers.get(entity) {
-                        commands.entity(observer).despawn();
-                    }
+                    let move_observer = move_observers.get(entity).ok().map(|o| o.0);
                     if let Ok(mut entity) = commands.get_entity(entity) {
-                        entity.remove::<PressMoveObserver>();
                         entity.remove::<PressDataInternal>();
                         entity.remove::<PressedSystem>();
                     }
+                    cleanup_move_observer::<PressMoveObserver>(&mut commands, entity, move_observer);
                 }
             },
         )
     }
 
-    impl_blockable_signal!(
-        #[doc = "Like [`PointerEventAware::on_pressed_blockable`], but reactively controls whether press handling is blocked with a [`Signal`]."]
-        on_pressed_blockable_signal,
-        on_pressed_blockable,
-        PressHandlingBlocked,
-        PressData
-    );
-
-    impl_change_handler!(
-        #[doc = "When this element's pressed state changes, run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and [`PressHandlerData`]. This method can be called repeatedly to register many such handlers."]
-        on_pressed_change,
-        on_pressed_blockable,
-        PressHandlingBlocked,
-        PressData,
-        pressed
-    );
-
-    /// On frames where this element is being pressed and does not have a `Blocked`
-    /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's
-    /// [`Entity`] and [`PressingData`]. This method can be called repeatedly
-    /// to register many such handlers.
-    fn on_pressing_blockable<Blocked: Component, Marker>(
+    /// On frames where this element is pressed or gets unpressed, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`PressData`]. Whether press handling
+    /// is disabled is reactively controlled with a [`Signal`]. This method can be called
+    /// repeatedly to register many such handlers.
+    ///
+    /// Press event propagation cannot be stopped through this method (yet); if this is needed, use
+    /// a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// El::<Node>::new()
+    ///     .on_pressed_disableable_signal(
+    ///         |In(_)| {
+    ///             // handle press
+    ///         },
+    ///         signal::once(false),
+    ///     )
+    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///         press.propagate(false);
+    ///     });
+    /// ```
+    ///
+    /// # Latency Considerations
+    ///
+    /// Because [haalka](crate) runs [jonmo]'s [`SignalProcessing`](jonmo::SignalProcessing) system
+    /// set in [`PostUpdate`] (unless configured otherwise), there may be
+    /// a 1-frame delay between the signal outputting a new disabled state and the handler
+    /// reflecting that state. For synchronous control over disabling, use
+    /// [`PointerEventAware::on_pressed_disableable`] with a custom `Disabled` component and
+    /// configure systems to run around [`pressed_system`].
+    fn on_pressed_disableable_signal<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, PressingData)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, PressData)>, (), Marker> + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
-        self.with_builder(clone!(
-            (system_holder) | builder | {
-                builder
-                    .on_spawn(clone!((system_holder) move |world, _| {
-                        let _ = system_holder.set(register_system(world, handler));
-                    }))
-                    .apply(remove_system_holder_on_remove(system_holder.clone()))
-            }
+        let state_index = Arc::new(OnceLock::new());
+        self.with_builder(disableable_signal_setup(
+            handler,
+            disabled,
+            system_holder.clone(),
+            state_index.clone(),
         ))
-        .on_pressed_blockable::<Blocked, _>(
-            move |In((entity, data)): In<(Entity, PressData)>, mut commands: Commands| {
-                if data.pressed {
-                    commands.run_system_with(
-                        system_holder.get().copied().unwrap(),
-                        (
-                            entity,
-                            PressingData {
-                                button: data.button,
-                                hit: data.hit,
-                                pointer_id: data.pointer_id,
-                                pointer_location: data.pointer_location,
-                            },
-                        ),
-                    );
-                }
-            },
-        )
+        .on_pressed_disableable::<PressHandlingDisabled, _>(disableable_signal_system(system_holder, state_index))
     }
 
-    impl_blockable_signal!(
-        #[doc = "On frames where this element is being pressed, run a [`System`], reactively controlling whether the press is blocked with a [`Signal`]."]
-        on_pressing_blockable_signal,
-        on_pressing_blockable,
-        PressHandlingBlocked,
-        PressingData
-    );
-
-    /// When this element is being pressed, run a [`System`] which takes [`In`](`System::In`) this
-    /// element's [`Entity`] and [`PressingData`].
-    fn on_pressing<Marker>(
+    /// On frames where this element is pressed or gets unpressed, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`PressData`]. This method can be called
+    /// repeatedly to register many such handlers.
+    ///
+    /// Press event propagation cannot be stopped through this method (yet); if this is needed,
+    /// use a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// El::<Node>::new()
+    ///     .on_pressed(|In((_entity, _press))| {
+    ///         // handle press
+    ///     })
+    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///         press.propagate(false);
+    ///     });
+    /// ```
+    fn on_pressed<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, PressingData)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, PressData)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
-        self.on_pressing_blockable::<PressHandlingBlocked, _>(handler)
+        self.on_pressed_disableable::<PressHandlingDisabled, _>(handler)
     }
 
-    impl_throttled_handler!(
-        #[doc = "When this element is being pressed, run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and [`PressingData`], throttled by `duration` before the `handler` can run again."]
-        on_pressing_throttled,
-        on_pressed_blockable,
-        PressHandlingBlocked,
-        PressThrottleTimers,
-        PressData,
-        PressingData,
-        pressed,
-        |data| PressingData {
-            button: data.button,
-            hit: data.hit.clone(),
-            pointer_id: data.pointer_id,
-            pointer_location: data.pointer_location.clone(),
-        }
-    );
+    /// When this element's pressed state changes and does not have a `Disabled` [`Component`], run
+    /// a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and [`PressData`].
+    /// This method can be called repeatedly to register many such handlers.
+    ///
+    /// Press event propagation cannot be stopped through this method (yet); if this is needed, use
+    /// a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// #[derive(Component)]
+    /// struct Disabled;
+    ///
+    /// El::<Node>::new()
+    ///     .on_pressed_change_disableable::<Disabled, _>(|In((_entity, _press))| {
+    ///         // handle pressed state changes
+    ///     })
+    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///         press.propagate(false);
+    ///     });
+    /// ```
+    fn on_pressed_change_disableable<Disabled: Component, Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, PressData)>, (), Marker> + Send + Sync + 'static,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        self.with_builder(change_setup(handler, system_holder.clone()))
+            .on_pressed_disableable::<Disabled, _>(change_system(system_holder, |d| d.pressed))
+    }
 
-    /// On frames where this element is dragged or gets undragged and does not have a `Blocked`
+    /// When this element's pressed state changes, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`PressData`]. Whether press change
+    /// handling is disabled is reactively controlled with a [`Signal`]. This method can be called
+    /// repeatedly to register many such handlers.
+    ///
+    /// Press event propagation cannot be stopped through this method (yet); if this is needed, use
+    /// a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// El::<Node>::new()
+    ///     .on_pressed_change_disableable_signal(
+    ///         |In((_entity, _press))| {
+    ///             // handle pressed state changes
+    ///         },
+    ///         signal::once(false),
+    ///     )
+    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///         press.propagate(false);
+    ///     });
+    /// ```
+    ///
+    /// # Latency Considerations
+    ///
+    /// Because [haalka](crate) runs [jonmo]'s [`SignalProcessing`](jonmo::SignalProcessing) system
+    /// set in [`PostUpdate`] (unless configured otherwise), there may be
+    /// a 1-frame delay between the signal outputting a new disabled state and the handler
+    /// reflecting that state. For synchronous control over disabling, use
+    /// [`PointerEventAware::on_pressed_change_disableable`] with a custom `Disabled`
+    /// component and configure systems to run around [`pressed_system`].
+    fn on_pressed_change_disableable_signal<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, PressData)>, (), Marker> + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        let state_index = Arc::new(OnceLock::new());
+        self.with_builder(disableable_signal_setup(
+            handler,
+            disabled,
+            system_holder.clone(),
+            state_index.clone(),
+        ))
+        .on_pressed_change_disableable::<PressHandlingDisabled, _>(disableable_signal_system(
+            system_holder,
+            state_index,
+        ))
+    }
+
+    /// When this element's pressed state changes, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`PressData`]. This method can be
+    /// called repeatedly to register many such handlers.
+    ///
+    /// Press event propagation cannot be stopped through this method (yet); if this is needed,
+    /// use a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// El::<Node>::new()
+    ///     .on_pressed_change(|In((_entity, _press))| {
+    ///         // handle pressed state changes
+    ///     })
+    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///         press.propagate(false);
+    ///     });
+    /// ```
+    fn on_pressed_change<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, PressData)>, (), Marker> + Send + Sync + 'static,
+    ) -> Self {
+        self.on_pressed_change_disableable::<PressHandlingDisabled, _>(handler)
+    }
+
+    /// On frames where this element is pressed or gets unpressed, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`PressData`].
+    ///
+    /// The handler fires immediately when pressed, then throttles by `duration` while held.
+    /// When released and pressed again, it fires immediately again.
+    ///
+    /// Press event propagation cannot be stopped through this method (yet); if this is needed, use
+    /// a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// El::<Node>::new()
+    ///     .on_pressed_throttled(|In((_entity, _press))| {
+    ///         // handle pressing (throttled)
+    ///     }, std::time::Duration::from_millis(100))
+    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///         press.propagate(false);
+    ///     });
+    /// ```
+    fn on_pressed_throttled<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, PressData)>, (), Marker> + Send + Sync + 'static,
+        duration: Duration,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        let timer_id = Arc::new(OnceLock::new());
+        self.with_builder(throttle_setup(
+            handler,
+            duration,
+            system_holder.clone(),
+            timer_id.clone(),
+        ))
+        .on_pressed_disableable::<PressHandlingDisabled, _>(throttle_system(system_holder, timer_id, |d| d.pressed))
+    }
+
+    /// On frames where this element is dragged or gets undragged and does not have a `Disabled`
     /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`]
     /// and [`DragData`]. This method can be called repeatedly to register many such handlers.
-    fn on_dragged_blockable<Blocked: Component, Marker>(
+    ///
+    /// Drag event propagation cannot be stopped through this method (yet); if this is needed,
+    /// use a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// #[derive(Component)]
+    /// struct Disabled;
+    ///
+    /// El::<Node>::new()
+    ///     .on_dragged_disableable::<Disabled, _>(|In((_entity, _drag))| {
+    ///         // handle drag start/end
+    ///     })
+    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///         drag_start.propagate(false);
+    ///     });
+    /// ```
+    fn on_dragged_disableable<Disabled: Component, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, DragData)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
         self.with_builder(|builder| {
             let drag_handler_holder = Arc::new(OnceLock::new());
-            builder
-                .on_spawn(clone!((drag_handler_holder) move |world, entity| {
-                    let drag_handler_system = register_system(world, handler);
-                    let _ = drag_handler_holder.set(drag_handler_system);
-
-                    observe(
-                        world,
-                        entity,
-                        move |drag_start: On<Pointer<DragStart>>,
-                              blocked: Query<&Blocked>,
-                              drag_observers: Query<&DragMoveObserver>,
-                              mut commands: Commands| {
-                            let entity = drag_start.entity;
-                            if blocked.contains(entity) {
-                                return;
-                            }
-
-                            let button = drag_start.button;
-                            let hit = drag_start.hit.clone();
-                            let pointer_id = drag_start.pointer_id;
-                            let pointer_location = drag_start.pointer_location.clone();
-
-                            let drag_observer = (!drag_observers.contains(entity)).then(|| {
-                                create_move_observer!(&mut commands, entity, DragDataInternal)
-                            });
-
-                            if let Ok(mut entity) = commands.get_entity(entity) {
-                                entity.insert(DragDataInternal {
-                                    button,
-                                    hit: hit.clone(),
-                                    pointer_id,
-                                    pointer_location: pointer_location.clone(),
-                                    delta: Vec2::ZERO,
-                                });
-                                entity.insert(Dragged);
-                                if let Some(drag_observer) = drag_observer {
-                                    entity.insert(DragMoveObserver(drag_observer));
-                                }
-                            }
-
-                            commands.run_system_with(drag_handler_system, (entity, DragData {
-                                dragged: true,
-                                button,
-                                hit,
-                                pointer_id,
-                                pointer_location,
-                            }));
-                        },
-                    );
-
-                    observe(
-                        world,
-                        entity,
-                        move |drag_end: On<Pointer<DragEnd>>,
-                              blocked: Query<&Blocked>,
-                              drag_observers: Query<&DragMoveObserver>,
-                              drag_datas: Query<&DragDataInternal>,
-                              mut commands: Commands| {
-                            let entity = drag_end.entity;
-
-                            let stored_hit = if let Ok(drag_data) = drag_datas.get(entity) {
-                                if drag_data.button != drag_end.button {
-                                    return;
-                                }
-                                drag_data.hit.clone()
-                            } else {
-                                return;
-                            };
-
-                            let button = drag_end.button;
-                            let pointer_id = drag_end.pointer_id;
-                            let pointer_location = drag_end.pointer_location.clone();
-
-                            let drag_observer = drag_observers.get(entity).ok().map(|o| o.0);
-
-                            if !blocked.contains(entity) {
-                                commands.run_system_with(drag_handler_system, (entity, DragData {
-                                    dragged: false,
-                                    button,
-                                    hit: stored_hit,
-                                    pointer_id,
-                                    pointer_location,
-                                }));
-                            }
-
-                            if let Ok(mut entity) = commands.get_entity(entity) {
-                                entity.remove::<DragDataInternal>();
-                                entity.remove::<Dragged>();
-                                if drag_observer.is_some() {
-                                    entity.remove::<DragMoveObserver>();
-                                }
-                            }
-
-                            if let Some(observer) = drag_observer {
-                                commands.entity(observer).despawn();
-                            }
-                        },
-                    );
-                }))
-                .apply(remove_system_holder_on_remove(drag_handler_holder))
-        })
-    }
-
-    impl_blockable_signal!(
-        #[doc = "Like [`PointerEventAware::on_dragged_blockable`], but reactively controls whether drag handling is blocked with a [`Signal`]."]
-        on_dragged_blockable_signal,
-        on_dragged_blockable,
-        DragHandlingBlocked,
-        DragData
-    );
-
-    impl_change_handler!(
-        #[doc = "When this element's dragged state changes, run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and [`DragData`]. This method can be called repeatedly to register many such handlers."]
-        on_dragged_change,
-        on_dragged_blockable,
-        DragHandlingBlocked,
-        DragData,
-        dragged
-    );
-
-    /// On frames where this element is being dragged and does not have a `Blocked`
-    /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's
-    /// [`Entity`] and [`DraggingData`]. This method can be called repeatedly
-    /// to register many such handlers.
-    fn on_dragging_blockable<Blocked: Component, Marker>(
-        self,
-        handler: impl IntoSystem<In<(Entity, DraggingData)>, (), Marker> + Send + Sync + 'static,
-    ) -> Self {
-        self.with_builder(|builder| {
             let dragging_handler_holder = Arc::new(OnceLock::new());
             builder
-                .on_spawn(clone!((dragging_handler_holder) move |world, entity| {
-                    let dragging_handler = register_system(world, handler);
-                    let _ = dragging_handler_holder.set(dragging_handler);
+                .insert(Draggable)
+                .on_spawn(
+                    clone!((drag_handler_holder, dragging_handler_holder) move |world, entity| {
+                        let drag_handler_system = register_system(world, handler);
+                        let _ = drag_handler_holder.set(drag_handler_system);
 
-                    let per_entity_dragging_system = world.register_system(
-                        move |In(entity): In<Entity>,
-                              mut commands: Commands,
-                              blocked_query: Query<(), With<Blocked>>,
-                              drag_state_query: Query<&DragDataInternal>| {
-                            if blocked_query.contains(entity) {
-                                return;
-                            }
-                            if let Ok(drag_data) = drag_state_query.get(entity) {
-                                let dragging_data = DraggingData {
-                                    button: drag_data.button,
-                                    pointer_id: drag_data.pointer_id,
-                                    pointer_location: drag_data.pointer_location.clone(),
-                                    delta: drag_data.delta,
-                                };
-                                commands.run_system_with(dragging_handler, (entity, dragging_data));
-                            }
-                        },
-                    );
-
-                    observe(
-                        world,
-                        entity,
-                        move |drag_start: On<Pointer<DragStart>>,
-                              blocked: Query<&Blocked>,
-                              drag_observers: Query<&DragMoveObserver>,
-                              dragged_systems: Query<&DraggedSystem>,
-                              mut commands: Commands| {
-                            let entity = drag_start.entity;
-                            if blocked.contains(entity) {
-                                return;
-                            }
-
-                            let button = drag_start.button;
-                            let hit = drag_start.hit.clone();
-                            let pointer_id = drag_start.pointer_id;
-                            let pointer_location = drag_start.pointer_location.clone();
-
-                            let drag_observer = (!drag_observers.contains(entity)).then(|| {
-                                commands
-                                    .spawn((
-                                        Observer::new(
-                                            move |drag_event: On<Pointer<Drag>>,
-                                                  mut drag_datas: Query<&mut DragDataInternal>| {
-                                                let entity = drag_event.entity;
-                                                if let Ok(mut drag_data) = drag_datas.get_mut(entity)
-                                                    && drag_data.button == drag_event.button {
-                                                        drag_data.pointer_location = drag_event.pointer_location.clone();
-                                                        drag_data.delta = drag_event.delta;
-                                                    }
-                                            },
-                                        )
-                                        .with_entity(entity),
-                                        HaalkaObserver,
-                                    ))
-                                    .id()
-                            });
-
-                            if let Ok(mut entity) = commands.get_entity(entity) {
-                                entity.insert(DragDataInternal {
-                                    button,
-                                    hit: hit.clone(),
-                                    pointer_id,
-                                    pointer_location: pointer_location.clone(),
-                                    delta: Vec2::ZERO,
-                                });
-                                entity.insert(Dragged);
-                                if let Some(drag_observer) = drag_observer {
-                                    entity.insert(DragMoveObserver(drag_observer));
-                                }
-                                if !dragged_systems.contains(entity.id()) {
-                                    entity.insert(DraggedSystem(per_entity_dragging_system));
-                                }
-                            }
-                        },
-                    );
-
-                    observe(
-                        world,
-                        entity,
-                        move |drag_end: On<Pointer<DragEnd>>,
-                              drag_observers: Query<&DragMoveObserver>,
-                              drag_datas: Query<&DragDataInternal>,
-                              mut commands: Commands| {
-                            let entity = drag_end.entity;
-
-                            if let Ok(drag_data) = drag_datas.get(entity) {
-                                if drag_data.button != drag_end.button {
+                        let dragging_handler_system = register_system(
+                            world,
+                            move |In(entity): In<Entity>,
+                                  disabled: Query<&Disabled>,
+                                  mut drag_datas: Query<&mut DragDataInternal>,
+                                  mut commands: Commands| {
+                                if disabled.contains(entity) {
                                     return;
                                 }
-                            } else {
-                                return;
-                            }
-
-                            let drag_observer = drag_observers.get(entity).ok().map(|o| o.0);
-
-                            if let Ok(mut entity) = commands.get_entity(entity) {
-                                entity.remove::<DragDataInternal>();
-                                entity.remove::<Dragged>();
-                                entity.remove::<DraggedSystem>();
-                                if drag_observer.is_some() {
-                                    entity.remove::<DragMoveObserver>();
+                                if let Ok(mut drag_data) = drag_datas.get_mut(entity) {
+                                    if !drag_data.has_new_delta {
+                                        return;
+                                    }
+                                    drag_data.has_new_delta = false;
+                                    commands.run_system_with(
+                                        drag_handler_system,
+                                        (
+                                            entity,
+                                            DragData {
+                                                dragged: true,
+                                                button: drag_data.button,
+                                                pointer_id: drag_data.pointer_id,
+                                                pointer_location: drag_data.pointer_location.clone(),
+                                                hit: drag_data.hit.clone(),
+                                                delta: drag_data.delta,
+                                            },
+                                        ),
+                                    );
                                 }
-                            }
+                            },
+                        );
+                        let _ = dragging_handler_holder.set(dragging_handler_system);
 
-                            if let Some(observer) = drag_observer {
-                                commands.entity(observer).despawn();
-                            }
-                        },
-                    );
-                }))
-                .apply(remove_system_holder_on_remove(dragging_handler_holder))
+                        observe(
+                            world,
+                            entity,
+                            move |drag_start: On<Pointer<DragStart>>,
+                                  disabled: Query<&Disabled>,
+                                  drag_observers: Query<&DragMoveObserver>,
+                                  dragged_systems: Query<&DraggedSystem>,
+                                  mut commands: Commands| {
+                                let entity = drag_start.entity;
+                                if disabled.contains(entity) {
+                                    return;
+                                }
+
+                                let button = drag_start.button;
+                                let hit = drag_start.hit.clone();
+                                let pointer_id = drag_start.pointer_id;
+                                let pointer_location = drag_start.pointer_location.clone();
+
+                                let drag_observer = (!drag_observers.contains(entity)).then(|| {
+                                    commands
+                                        .spawn((
+                                            Observer::new(
+                                                move |drag_event: On<Pointer<Drag>>,
+                                                      mut drag_datas: Query<&mut DragDataInternal>| {
+                                                    let entity = drag_event.entity;
+                                                    if let Ok(mut drag_data) = drag_datas.get_mut(entity)
+                                                        && drag_data.button == drag_event.button
+                                                    {
+                                                        drag_data.pointer_location =
+                                                            drag_event.pointer_location.clone();
+                                                        drag_data.delta = drag_event.delta;
+                                                        drag_data.has_new_delta = true;
+                                                    }
+                                                },
+                                            )
+                                            .with_entity(entity),
+                                            HaalkaObserver,
+                                        ))
+                                        .id()
+                                });
+
+                                if let Ok(mut entity) = commands.get_entity(entity) {
+                                    entity.insert(DragDataInternal {
+                                        button,
+                                        hit: hit.clone(),
+                                        pointer_id,
+                                        pointer_location: pointer_location.clone(),
+                                        delta: Vec2::ZERO,
+                                        has_new_delta: false,
+                                    });
+                                    entity.insert(Dragged);
+                                    if let Some(drag_observer) = drag_observer {
+                                        entity.insert(DragMoveObserver(drag_observer));
+                                    }
+                                    if !dragged_systems.contains(entity.id()) {
+                                        entity.insert(DraggedSystem(dragging_handler_system));
+                                    }
+                                }
+
+                                commands.run_system_with(
+                                    drag_handler_system,
+                                    (entity, DragData {
+                                        dragged: true,
+                                        button,
+                                        hit,
+                                        pointer_id,
+                                        pointer_location,
+                                        delta: Vec2::ZERO,
+                                    }),
+                                );
+                            },
+                        );
+
+                        observe(
+                            world,
+                            entity,
+                            move |drag_end: On<Pointer<DragEnd>>,
+                                disabled: Query<&Disabled>,
+                                drag_observers: Query<&DragMoveObserver>,
+                                drag_datas: Query<&DragDataInternal>,
+                                mut commands: Commands| {
+                                let entity = drag_end.entity;
+
+                                let stored_hit = if let Ok(drag_data) = drag_datas.get(entity) {
+                                    if drag_data.button != drag_end.button {
+                                        return;
+                                    }
+                                    drag_data.hit.clone()
+                                } else {
+                                    return;
+                                };
+
+                                let button = drag_end.button;
+                                let pointer_id = drag_end.pointer_id;
+                                let pointer_location = drag_end.pointer_location.clone();
+
+                                let drag_observer = drag_observers.get(entity).ok().map(|o| o.0);
+
+                                if !disabled.contains(entity) {
+                                    commands.run_system_with(drag_handler_system, (entity, DragData {
+                                        dragged: false,
+                                        button,
+                                        hit: stored_hit,
+                                        pointer_id,
+                                        pointer_location,
+                                        delta: Vec2::ZERO,
+                                    }));
+                                }
+
+                                if let Ok(mut entity) = commands.get_entity(entity) {
+                                    entity.remove::<DragDataInternal>();
+                                    entity.remove::<Dragged>();
+                                    entity.remove::<DraggedSystem>();
+                                }
+                                cleanup_move_observer::<DragMoveObserver>(&mut commands, entity, drag_observer);
+                            },
+                        );
+                    }),
+                )
+                .apply(remove_system_holder_on_despawn(drag_handler_holder))
+                .apply(remove_system_holder_on_despawn(dragging_handler_holder))
         })
     }
 
-    impl_blockable_signal!(
-        #[doc = "On frames where this element is being dragged, run a [`System`], reactively controlling whether the drag is blocked with a [`Signal`]."]
-        on_dragging_blockable_signal,
-        on_dragging_blockable,
-        DragHandlingBlocked,
-        DraggingData
-    );
-
-    /// When this element is being dragged, run a [`System`] which takes [`In`](`System::In`) this
-    /// element's [`Entity`] and [`DraggingData`].
-    fn on_dragging<Marker>(
+    /// On frames where this element is dragged or gets undragged, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`DragData`]. Whether drag handling
+    /// is disabled is reactively controlled with a [`Signal`]. This method can be called
+    /// repeatedly to register many such handlers.
+    ///
+    /// Drag event propagation cannot be stopped through this method (yet); if this is needed, use
+    /// a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// El::<Node>::new()
+    ///     .on_dragged_disableable_signal(
+    ///         |In(_)| {
+    ///             // handle drag start/end
+    ///         },
+    ///         signal::once(false),
+    ///     )
+    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///         drag_start.propagate(false);
+    ///     });
+    /// ```
+    ///
+    /// # Latency Considerations
+    ///
+    /// Because [haalka](crate) runs [jonmo]'s [`SignalProcessing`](jonmo::SignalProcessing) system
+    /// set in [`PostUpdate`] (unless configured otherwise), there may be
+    /// a 1-frame delay between the signal outputting a new disabled state and the handler
+    /// reflecting that state. For synchronous control over disabling, use
+    /// [`PointerEventAware::on_dragged_disableable`] with a custom `Disabled` component and
+    /// configure systems to run around [`dragged_system`].
+    fn on_dragged_disableable_signal<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, DraggingData)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, DragData)>, (), Marker> + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.on_dragging_blockable::<DragHandlingBlocked, _>(handler)
+        let system_holder = Arc::new(OnceLock::new());
+        let state_index = Arc::new(OnceLock::new());
+        self.with_builder(disableable_signal_setup(
+            handler,
+            disabled,
+            system_holder.clone(),
+            state_index.clone(),
+        ))
+        .on_dragged_disableable::<DragHandlingDisabled, _>(disableable_signal_system(system_holder, state_index))
     }
 
-    impl_throttled_handler!(
-        #[doc = "When this element is being dragged, run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and [`DraggingData`], throttled by `duration` before the `handler` can run again."]
-        on_dragging_throttled,
-        on_dragged_blockable,
-        DragHandlingBlocked,
-        DragThrottleTimers,
-        DragData,
-        DraggingData,
-        dragged,
-        |data| DraggingData {
-            button: data.button,
-            pointer_id: data.pointer_id,
-            pointer_location: data.pointer_location.clone(),
-            delta: Vec2::ZERO,
-        }
-    );
-}
-
-/// Timer collection component for throttling press events.
-#[derive(Component, Default)]
-struct PressThrottleTimers {
-    timers: std::collections::HashMap<usize, Timer>,
-    next_id: usize,
-}
-
-impl PressThrottleTimers {
-    fn add_timer(&mut self, duration: Duration) -> usize {
-        let id = self.next_id;
-        self.next_id += 1;
-        self.timers.insert(id, Timer::new(duration, TimerMode::Once));
-        id
+    /// On frames where this element is dragged or gets undragged, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`DragData`]. This method can be called
+    /// repeatedly to register many such handlers.
+    ///
+    /// Drag event propagation cannot be stopped through this method (yet); if this is needed,
+    /// use a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// El::<Node>::new()
+    ///     .on_dragged(|In((_entity, _drag))| {
+    ///         // handle drag
+    ///     })
+    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///         drag_start.propagate(false);
+    ///     });
+    /// ```
+    fn on_dragged<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, DragData)>, (), Marker> + Send + Sync + 'static,
+    ) -> Self {
+        self.on_dragged_disableable::<DragHandlingDisabled, _>(handler)
     }
 
-    fn get_timer_mut(&mut self, id: usize) -> Option<&mut Timer> {
-        self.timers.get_mut(&id)
+    /// When this element's dragged state changes and does not have a `Disabled` [`Component`], run
+    /// a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and [`DragData`].
+    /// This method can be called repeatedly to register many such handlers.
+    ///
+    /// Drag event propagation cannot be stopped through this method (yet); if this is needed, use
+    /// a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// #[derive(Component)]
+    /// struct Disabled;
+    ///
+    /// El::<Node>::new()
+    ///     .on_dragged_change_disableable::<Disabled, _>(|In((_entity, _drag))| {
+    ///         // handle dragged state changes
+    ///     })
+    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///         drag_start.propagate(false);
+    ///     });
+    /// ```
+    fn on_dragged_change_disableable<Disabled: Component, Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, DragData)>, (), Marker> + Send + Sync + 'static,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        self.with_builder(change_setup(handler, system_holder.clone()))
+            .on_dragged_disableable::<Disabled, _>(change_system(system_holder, |d| d.dragged))
     }
-}
 
-/// Timer collection component for throttling hover events.
-#[derive(Component, Default)]
-struct HoverThrottleTimers {
-    timers: std::collections::HashMap<usize, Timer>,
-    next_id: usize,
-}
-
-impl HoverThrottleTimers {
-    fn add_timer(&mut self, duration: Duration) -> usize {
-        let id = self.next_id;
-        self.next_id += 1;
-        self.timers.insert(id, Timer::new(duration, TimerMode::Once));
-        id
+    /// When this element's dragged state changes, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`DragData`]. Whether drag change
+    /// handling is disabled is reactively controlled with a [`Signal`]. This method can be called
+    /// repeatedly to register many such handlers.
+    ///
+    /// Drag event propagation cannot be stopped through this method (yet); if this is needed, use
+    /// a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// El::<Node>::new()
+    ///     .on_dragged_change_disableable_signal(
+    ///         |In((_entity, _drag))| {
+    ///             // handle dragged state changes
+    ///         },
+    ///         signal::once(false),
+    ///     )
+    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///         drag_start.propagate(false);
+    ///     });
+    /// ```
+    ///
+    /// # Latency Considerations
+    ///
+    /// Because [haalka](crate) runs [jonmo]'s [`SignalProcessing`](jonmo::SignalProcessing) system
+    /// set in [`PostUpdate`] (unless configured otherwise), there may be
+    /// a 1-frame delay between the signal outputting a new disabled state and the handler
+    /// reflecting that state. For synchronous control over disabling, use
+    /// [`PointerEventAware::on_dragged_change_disableable`] with a custom `Disabled`
+    /// component and configure systems to run around [`dragged_system`].
+    fn on_dragged_change_disableable_signal<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, DragData)>, (), Marker> + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        let state_index = Arc::new(OnceLock::new());
+        self.with_builder(disableable_signal_setup(
+            handler,
+            disabled,
+            system_holder.clone(),
+            state_index.clone(),
+        ))
+        .on_dragged_change_disableable::<DragHandlingDisabled, _>(disableable_signal_system(system_holder, state_index))
     }
 
-    fn get_timer_mut(&mut self, id: usize) -> Option<&mut Timer> {
-        self.timers.get_mut(&id)
+    /// When this element's dragged state changes, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`DragData`]. This method can be called
+    /// repeatedly to register many such handlers.
+    ///
+    /// Drag event propagation cannot be stopped through this method (yet); if this is needed,
+    /// use a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// El::<Node>::new()
+    ///     .on_dragged_change(|In((_entity, _drag))| {
+    ///         // handle dragged state changes
+    ///     })
+    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///         drag_start.propagate(false);
+    ///     });
+    /// ```
+    fn on_dragged_change<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, DragData)>, (), Marker> + Send + Sync + 'static,
+    ) -> Self {
+        self.on_dragged_change_disableable::<DragHandlingDisabled, _>(handler)
+    }
+
+    /// On frames where this element is dragged or gets undragged, run a [`System`] which takes
+    /// [`In`](`System::In`) this element's [`Entity`] and [`DragData`].
+    ///
+    /// The handler fires immediately when dragging starts, then throttles by `duration` while
+    /// dragged. When the drag ends and starts again, it fires immediately again.
+    ///
+    /// Drag event propagation cannot be stopped through this method (yet); if this is needed, use
+    /// a separate observer, e.g.
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// El::<Node>::new()
+    ///     .on_dragged_throttled(|In((_entity, _drag))| {
+    ///         // handle dragging (throttled)
+    ///     }, std::time::Duration::from_millis(100))
+    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///         drag_start.propagate(false);
+    ///     });
+    /// ```
+    fn on_dragged_throttled<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, DragData)>, (), Marker> + Send + Sync + 'static,
+        duration: Duration,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        let timer_id = Arc::new(OnceLock::new());
+        self.with_builder(throttle_setup(
+            handler,
+            duration,
+            system_holder.clone(),
+            timer_id.clone(),
+        ))
+        .on_dragged_disableable::<DragHandlingDisabled, _>(throttle_system(system_holder, timer_id, |d| d.dragged))
     }
 }
 
@@ -1163,39 +1658,19 @@ pub struct Hovered;
 pub struct Dragged;
 
 #[derive(Component, Default, Clone)]
-struct PressHandlingBlocked;
+struct PressHandlingDisabled;
 
 #[derive(Component, Default, Clone)]
-struct HoverHandlingBlocked;
+struct HoverHandlingDisabled;
 
 #[derive(Component, Default, Clone)]
-struct DragHandlingBlocked;
+struct DragHandlingDisabled;
 
 #[derive(Component, Default, Clone)]
-struct ClickHandlingBlocked;
+struct ClickHandlingDisabled;
 
 #[derive(Component, Default, Clone)]
-struct ClickOutsideHandlingBlocked;
-
-/// Timer collection component for throttling drag events.
-#[derive(Component, Default)]
-struct DragThrottleTimers {
-    timers: std::collections::HashMap<usize, Timer>,
-    next_id: usize,
-}
-
-impl DragThrottleTimers {
-    fn add_timer(&mut self, duration: Duration) -> usize {
-        let id = self.next_id;
-        self.next_id += 1;
-        self.timers.insert(id, Timer::new(duration, TimerMode::Once));
-        id
-    }
-
-    fn get_timer_mut(&mut self, id: usize) -> Option<&mut Timer> {
-        self.timers.get_mut(&id)
-    }
-}
+struct ClickOutsideHandlingDisabled;
 
 /// Fires when a the pointer crosses into the bounds of the `target` entity, ignoring children.
 #[derive(Clone, PartialEq, Debug, Reflect, Event)]
@@ -1218,7 +1693,6 @@ pub struct Leave {
 #[derive(Component, Clone)]
 struct LastSubtreeHoverHit(HitData);
 
-// TODO: integrate with bubbling observers and upstreamed event listener
 #[allow(clippy::type_complexity)]
 fn update_hover_states(
     pointer_map: Res<PointerMap>,
@@ -1332,11 +1806,81 @@ struct HoverMoveObserver(Entity);
 #[derive(Component, Clone, Copy)]
 struct HoveredSystem(SystemId<In<Entity>, ()>);
 
+/// Marker component that enables hover state management for an entity.
+///
+/// When this component is present on an entity, the [`Hovered`] component will be
+/// automatically inserted when the entity (or any of its descendants) is hovered,
+/// and removed when it's no longer hovered. This allows using [`Hovered`] in queries
+/// and signals without needing to use the [`PointerEventAware::on_hovered`] methods.
 #[derive(Component)]
-pub(crate) struct Hoverable;
+pub struct Hoverable;
 
+/// Marker component that enables press state management for an entity.
+///
+/// When this component is present on an entity, the [`Pressed`] component
+/// will be automatically inserted when the entity is pressed, and removed when released.
+/// This allows using `Pressed` in queries and signals without needing to use the
+/// [`PointerEventAware::on_pressed`] methods.
 #[derive(Component)]
-pub(crate) struct Pressable;
+pub struct Pressable;
+
+/// Marker component that enables drag state management for an entity.
+///
+/// When this component is present on an entity, the [`Dragged`] component will be
+/// automatically inserted when the entity starts being dragged, and removed when
+/// dragging ends. This allows using [`Dragged`] in queries and signals without
+/// needing to use the [`PointerEventAware::on_dragged`] methods.
+#[derive(Component)]
+#[component(on_add = on_draggable_add, on_remove = on_draggable_remove)]
+pub struct Draggable;
+
+/// Stores the observer entities created for a [`Draggable`] component.
+#[derive(Component)]
+struct DraggableObservers {
+    drag_start: Entity,
+    drag_end: Entity,
+}
+
+fn on_draggable_add(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    world.commands().queue(move |world: &mut World| {
+        let drag_start = world
+            .entity_mut(entity)
+            .observe(|drag_start: On<Pointer<DragStart>>, mut commands: Commands| {
+                if let Ok(mut entity) = commands.get_entity(drag_start.entity) {
+                    entity.insert(Dragged);
+                }
+            })
+            .id();
+        let drag_end = world
+            .entity_mut(entity)
+            .observe(|drag_end: On<Pointer<DragEnd>>, mut commands: Commands| {
+                if let Ok(mut entity) = commands.get_entity(drag_end.entity) {
+                    entity.remove::<Dragged>();
+                }
+            })
+            .id();
+        world
+            .entity_mut(entity)
+            .insert(DraggableObservers { drag_start, drag_end });
+    });
+}
+
+fn on_draggable_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    if let Some(observers) = world.get::<DraggableObservers>(entity) {
+        let drag_start = observers.drag_start;
+        let drag_end = observers.drag_end;
+        world.commands().queue(move |world: &mut World| {
+            world.despawn(drag_start);
+            world.despawn(drag_end);
+        });
+    }
+    world.commands().queue(move |world: &mut World| {
+        if let Ok(mut entity) = world.get_entity_mut(entity) {
+            entity.remove::<DraggableObservers>();
+            entity.remove::<Dragged>();
+        }
+    });
+}
 
 #[derive(Component)]
 struct PressedSystem(SystemId<In<Entity>, ()>);
@@ -1348,6 +1892,7 @@ struct DragDataInternal {
     pointer_id: PointerId,
     pointer_location: Location,
     delta: Vec2,
+    has_new_delta: bool,
 }
 
 impl PointerDataInternal for DragDataInternal {
@@ -1363,13 +1908,25 @@ struct DragMoveObserver(Entity);
 #[derive(Component, Clone, Copy)]
 struct DraggedSystem(SystemId<In<Entity>, ()>);
 
-fn pressed_system(mut interaction_query: Query<(Entity, &PressedSystem), With<Pressed>>, mut commands: Commands) {
+/// System that runs registered press handlers for pressed entities.
+///
+/// This system is exposed publicly so users can order their own systems around it
+/// when using [`PointerEventAware::on_pressed_disableable`] with custom `Disabled` components.
+/// Runs in [`Update`].
+#[allow(private_interfaces)]
+pub fn pressed_system(mut interaction_query: Query<(Entity, &PressedSystem), With<Pressed>>, mut commands: Commands) {
     for (entity, &PressedSystem(system)) in &mut interaction_query {
         commands.run_system_with(system, entity);
     }
 }
 
-fn dragged_system(mut interaction_query: Query<(Entity, &DraggedSystem), With<Dragged>>, mut commands: Commands) {
+/// System that runs registered drag handlers for dragged entities.
+///
+/// This system is exposed publicly so users can order their own systems around it
+/// when using [`PointerEventAware::on_dragged_disableable`] with custom `Disabled` components.
+/// Runs in [`Update`].
+#[allow(private_interfaces)]
+pub fn dragged_system(mut interaction_query: Query<(Entity, &DraggedSystem), With<Dragged>>, mut commands: Commands) {
     for (entity, &DraggedSystem(system)) in &mut interaction_query {
         commands.run_system_with(system, entity);
     }
@@ -1397,9 +1954,28 @@ fn pressable_system(
     }
 }
 
-fn hovered_system(mut hovering_query: Query<(Entity, &HoveredSystem), With<Hovered>>, mut commands: Commands) {
+/// System that runs registered hover handlers for hovered entities.
+///
+/// This system is exposed publicly so users can order their own systems around it
+/// when using [`PointerEventAware::on_hovered_disableable`] with custom `Disabled` components.
+/// Runs in [`Update`].
+#[allow(private_interfaces)]
+pub fn hovered_system(mut hovering_query: Query<(Entity, &HoveredSystem), With<Hovered>>, mut commands: Commands) {
     for (entity, &HoveredSystem(system)) in &mut hovering_query {
         commands.run_system_with(system, entity);
+    }
+}
+
+/// Helper to clean up a move observer: removes the observer component from the entity
+/// and despawns the observer entity if it exists.
+fn cleanup_move_observer<T: Component>(commands: &mut Commands, entity: Entity, observer: Option<Entity>) {
+    if let Ok(mut entity_commands) = commands.get_entity(entity) {
+        if observer.is_some() {
+            entity_commands.remove::<T>();
+        }
+    }
+    if let Some(observer_entity) = observer {
+        commands.entity(observer_entity).despawn();
     }
 }
 
@@ -1430,29 +2006,29 @@ struct CursorOver;
 #[derive(Component, Default, Clone)]
 struct CursorDisabled;
 
-/// When this [`Resource`] exists in the [`World`], [`CursorOnHoverable`]
+/// When this [`Resource`] exists in the [`World`], [`Cursorable`]
 /// [`Element`]s will not trigger updates to the window's cursor when they
 /// receive a [`Pointer<Over>`] event. When this [`Resource`] is removed, the last
-/// [`Option<CursorIcon>`] queued by a [`CursorOnHoverable`] [`Element`] will be set as the window's
+/// [`Option<CursorIcon>`] queued by a [`Cursorable`] [`Element`] will be set as the window's
 /// cursor. Adding this [`Resource`] to the [`World`] will *not* unset any [`Option<CursorIcon>`]s
-/// previously set by a [`CursorOnHoverable`] [`Element`].
+/// previously set by a [`Cursorable`] [`Element`].
 ///
 /// [`Element`]: super::element::Element
 #[derive(Resource)]
-pub struct CursorOnHoverDisabled;
+pub struct CursorableDisabled;
 
 /// A [`Component`] which stores the [`Option<CursorIcon>`] to set the window's cursor to when an
 /// [`Element`](super::element::Element) receives a [`Pointer<Over>`] event; when [`None`], the
 /// cursor will be hidden.
 #[derive(Component, Clone)]
-pub struct CursorOnHover(Option<CursorIcon>);
+pub struct Cursor(Option<CursorIcon>);
 
 /// Enables managing the window's [`CursorIcon`] when a [`Pickable`]
 /// [`Element`](super::element::Element) receives an [`Pointer<Over>`] event.
 ///
 /// **Note:** These methods will only function for [`Pickable`] entities (e.g., those with
 /// [`Pickable::default()`]).
-pub trait CursorOnHoverable: PointerEventAware {
+pub trait Cursorable: PointerEventAware {
     /// When this [`Element`] receives a [`Pointer<Over>`] event, set the window's cursor to
     /// [`Some`] [`CursorIcon`] in the [`CursorOnHover`] [`Component`] or hide it if [`None`].
     /// If the [`Pointer`] is [`Over`] this element when it is disabled with a `Disabled`
@@ -1467,12 +2043,12 @@ pub trait CursorOnHoverable: PointerEventAware {
                 .insert(CursorOverPropagationStopped)
                 .observe(
                     |event: On<Insert, CursorOver>,
-                     cursor_on_hovers: Query<&CursorOnHover>,
+                     cursor_on_hovers: Query<&Cursor>,
                      disabled: Query<&Disabled>,
-                     cursor_over_disabled_option: Option<Res<CursorOnHoverDisabled>>,
+                     cursor_over_disabled_option: Option<Res<CursorableDisabled>>,
                      mut commands: Commands| {
                         let entity = event.entity;
-                        if let Ok(CursorOnHover(cursor_option)) = cursor_on_hovers.get(entity).cloned() {
+                        if let Ok(Cursor(cursor_option)) = cursor_on_hovers.get(entity).cloned() {
                             if cursor_over_disabled_option.is_none() {
                                 if disabled.contains(entity).not() {
                                     commands.trigger(SetCursor(cursor_option));
@@ -1484,7 +2060,7 @@ pub trait CursorOnHoverable: PointerEventAware {
                     },
                 )
                 .observe(
-                    |event: On<Insert, CursorOnHover>, cursor_overs: Query<&CursorOver>, mut commands: Commands| {
+                    |event: On<Insert, Cursor>, cursor_overs: Query<&CursorOver>, mut commands: Commands| {
                         let entity = event.entity;
                         if cursor_overs.contains(entity)
                             && let Ok(mut entity) = commands.get_entity(entity)
@@ -1493,14 +2069,13 @@ pub trait CursorOnHoverable: PointerEventAware {
                         }
                     },
                 )
-                .insert(CursorOnHover(cursor_option))
+                .insert(Cursor(cursor_option))
                 .observe(
-                    move |event: On<Add, Disabled>,
+                    move |event: On<Insert, Disabled>,
                           cursor_over: Query<&CursorOver>,
                           pointer_map: Res<PointerMap>,
                           pointers: Query<&PointerLocation>,
                           hover_map: Res<HoverMap>,
-                          mut pointer_over: MessageWriter<Pointer<Over>>,
                           child_ofs: Query<&ChildOf>,
                           mut commands: Commands| {
                         let entity = event.event().entity;
@@ -1519,7 +2094,7 @@ pub trait CursorOnHoverable: PointerEventAware {
                                 .zip(child_ofs.get(entity).ok())
                             && let Some(hit) = hover_map.get(&entity).cloned()
                         {
-                            pointer_over.write(Pointer::new(PointerId::Mouse, location, Over { hit }, parent));
+                            commands.trigger(Pointer::new(PointerId::Mouse, location, Over { hit }, parent));
                         }
                     },
                 )
@@ -1575,8 +2150,8 @@ pub trait CursorOnHoverable: PointerEventAware {
         cursor_option_signal: impl Signal<Item = impl Into<Option<CursorIcon>> + 'static> + Send + Sync + 'static,
     ) -> Self {
         self.with_builder(|builder| {
-            builder.component_signal::<CursorOnHover, _>(
-                cursor_option_signal.map_in(|into_option_cursor| Some(CursorOnHover(into_option_cursor.into()))),
+            builder.component_signal::<Cursor>(
+                cursor_option_signal.map_in(|into_option_cursor| Some(Cursor(into_option_cursor.into()))),
             )
         })
         .cursor_disableable::<Disabled>(None)
@@ -1594,10 +2169,8 @@ pub trait CursorOnHoverable: PointerEventAware {
         cursor_option_signal: impl Signal<Item = impl Into<Option<CursorIcon>> + 'static> + Send + Sync + 'static,
         disabled: impl Signal<Item = bool> + Send + Sync + 'static,
     ) -> Self {
-        self.with_builder(|builder| {
-            builder.component_signal::<CursorDisabled, _>(disabled.map_true_in(|| CursorDisabled))
-        })
-        .cursor_signal_disableable::<CursorDisabled>(cursor_option_signal)
+        self.with_builder(|builder| builder.component_signal(disabled.map_true_in(|| CursorDisabled)))
+            .cursor_signal_disableable::<CursorDisabled>(cursor_option_signal)
     }
 
     /// When this [`Element`](super::element::Element) receives a [`Pointer<Over>`] event, set the
@@ -1625,7 +2198,7 @@ pub trait CursorOnHoverable: PointerEventAware {
         cursor_option: impl Into<Option<CursorIcon>>,
         disabled: impl Signal<Item = bool> + Send + Sync + 'static,
     ) -> Self {
-        self.cursor_signal_disableable_signal(SignalBuilder::always(cursor_option.into()).first(), disabled)
+        self.cursor_signal_disableable_signal(signal::once(cursor_option.into()), disabled)
     }
 }
 
@@ -1671,42 +2244,28 @@ fn on_set_cursor(
 #[derive(Resource)]
 pub struct UpdateHoverStatesDisabled;
 
-fn stop_enter_leave_propagation(mut enter: On<Pointer<Enter>>) {
-    enter.propagate(false);
-}
-
-fn stop_leave_propagation(mut leave: On<Pointer<Leave>>) {
-    leave.propagate(false);
-}
-
 pub(super) fn plugin(app: &mut App) {
-    // Our `Enter`/`Leave` semantics are subtree-based (self OR descendants). We compute that
-    // explicitly in `update_hover_states`, so we must *not* rely on `Pointer<E>` bubbling.
-    // Otherwise a child's `Leave` would be observed by parents as their own leave.
-    app.add_observer(stop_enter_leave_propagation)
-        .add_observer(stop_leave_propagation)
-        .add_observer(on_set_cursor)
-        .add_systems(
-            Update,
+    app.add_observer(on_set_cursor).add_systems(
+        Update,
+        (
             (
-                (
-                    pressable_system.run_if(any_with_component::<Pressable>),
-                    pressed_system.run_if(any_with_component::<PressedSystem>),
-                )
-                    .chain(),
-                dragged_system.run_if(any_with_component::<DraggedSystem>),
-                (
-                    update_hover_states.run_if(
-                        any_with_component::<Hoverable>
-                            // TODO: apparently this updates every frame no matter what, if so, remove this condition
-                            // TODO: remove when native `Enter` and `Leave` available
-                            .and(resource_exists_and_changed::<HoverMap>)
-                            .and(not(resource_exists::<UpdateHoverStatesDisabled>)),
-                    ),
-                    hovered_system.run_if(any_with_component::<HoveredSystem>),
-                )
-                    .chain(),
-                consume_queued_cursor.run_if(resource_removed::<CursorOnHoverDisabled>),
-            ),
-        );
+                pressable_system.run_if(any_with_component::<Pressable>),
+                pressed_system.run_if(any_with_component::<PressedSystem>),
+            )
+                .chain(),
+            dragged_system.run_if(any_with_component::<DraggedSystem>),
+            (
+                update_hover_states.run_if(
+                    any_with_component::<Hoverable>
+                        // TODO: apparently this updates every frame no matter what, if so, remove this condition
+                        // TODO: remove when native `Enter` and `Leave` available
+                        .and(resource_exists_and_changed::<HoverMap>)
+                        .and(not(resource_exists::<UpdateHoverStatesDisabled>)),
+                ),
+                hovered_system.run_if(any_with_component::<HoveredSystem>),
+            )
+                .chain(),
+            consume_queued_cursor.run_if(resource_removed::<CursorableDisabled>),
+        ),
+    );
 }

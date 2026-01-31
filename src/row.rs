@@ -2,7 +2,6 @@ use bevy_ecs::prelude::*;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use jonmo::{
-    builder::JonmoBuilder,
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
@@ -12,7 +11,7 @@ use super::{
     element::{BuilderPassThrough, BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
-    pointer_event_aware::{CursorOnHoverable, Hoverable, PointerEventAware, Pressable},
+    pointer_event_aware::{Cursorable, PointerEventAware},
     viewport_mutable::ViewportMutable,
 };
 use crate::{clone_semantics_doc, impl_element_clone};
@@ -23,14 +22,14 @@ use crate::{clone_semantics_doc, impl_element_clone};
 #[doc = clone_semantics_doc!("Row")]
 #[derive(Default)]
 pub struct Row<NodeType> {
-    builder: JonmoBuilder,
+    builder: jonmo::Builder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
 impl_element_clone!("Row", Row<NodeType>, my_row, ".item(El::new().name(label))");
 
-impl<NodeType: Bundle> From<JonmoBuilder> for Row<NodeType> {
-    fn from(builder: JonmoBuilder) -> Self {
+impl<NodeType: Bundle> From<jonmo::Builder> for Row<NodeType> {
+    fn from(builder: jonmo::Builder) -> Self {
         Self {
             builder: builder
                 .with_component::<Node>(|mut node| {
@@ -38,7 +37,7 @@ impl<NodeType: Bundle> From<JonmoBuilder> for Row<NodeType> {
                     node.flex_direction = FlexDirection::Row;
                     node.align_items = AlignItems::Center;
                 })
-                .insert((LayoutDirection::Row, Pickable::IGNORE, Hoverable, Pressable)),
+                .insert((LayoutDirection::Row, Pickable::IGNORE)),
             _node_type: std::marker::PhantomData,
         }
     }
@@ -50,18 +49,18 @@ impl<NodeType: Bundle + Default> Row<NodeType> {
     /// # Notes
     /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
-        Self::from(JonmoBuilder::from(NodeType::default()))
+        Self::from(jonmo::Builder::from(NodeType::default()))
     }
 }
 
 impl<NodeType: Bundle> BuilderWrapper for Row<NodeType> {
-    fn builder_mut(&mut self) -> &mut JonmoBuilder {
+    fn builder_mut(&mut self) -> &mut jonmo::Builder {
         &mut self.builder
     }
 }
 
 impl<NodeType: Bundle> Alignable for Row<NodeType> {}
-impl<NodeType: Bundle> CursorOnHoverable for Row<NodeType> {}
+impl<NodeType: Bundle> Cursorable for Row<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Row<NodeType> {}
 impl<NodeType: Bundle> Nameable for Row<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Row<NodeType> {}
@@ -158,7 +157,7 @@ impl<NodeType: Bundle> Row<NodeType> {
         S: Signal<Item = bool> + Send + Sync + 'static,
     {
         self.with_builder(|builder| {
-            builder.on_signal_with_component::<Node, _, _, _>(multiline_signal.dedupe(), |mut node, multiline| {
+            builder.on_signal_with_component::<_, Node>(multiline_signal.dedupe(), |mut node, multiline| {
                 if multiline {
                     node.flex_wrap = FlexWrap::Wrap;
                     node.flex_basis = Val::Px(0.);

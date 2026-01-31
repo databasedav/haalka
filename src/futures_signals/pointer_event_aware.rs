@@ -552,12 +552,11 @@ pub trait CursorOnHoverable: PointerEventAware {
                 )
                 .insert(CursorOnHover(cursor_option))
                 .observe(
-                    move |event: On<Add, Disabled>,
+                    move |event: On<Insert, Disabled>,
                           cursor_over: Query<&CursorOver>,
                           pointer_map: Res<PointerMap>,
                           pointers: Query<&PointerLocation>,
                           hover_map: Res<HoverMap>,
-                          mut pointer_over: MessageWriter<Pointer<Over>>,
                           child_ofs: Query<&ChildOf>,
                           mut commands: Commands| {
                         let entity = event.event().entity;
@@ -576,7 +575,7 @@ pub trait CursorOnHoverable: PointerEventAware {
                                 .zip(child_ofs.get(entity).ok())
                             && let Some(hit) = hover_map.get(&entity).cloned()
                         {
-                            pointer_over.write(Pointer::new(PointerId::Mouse, location, Over { hit }, parent));
+                            commands.trigger(Pointer::new(PointerId::Mouse, location, Over { hit }, parent));
                         }
                     },
                 )

@@ -7,13 +7,13 @@ pub use jonmo::prelude::clone as jonmo_clone;
 
 use bevy_ecs::{
     event::EntityEvent,
+    observer::Observer,
     prelude::*,
     system::{IntoObserverSystem, SystemId, SystemInput},
 };
 use bevy_math::Vec2;
+use bevy_platform::sync::{Arc, OnceLock};
 use bevy_ui::ComputedNode;
-use jonmo::builder::JonmoBuilder;
-use std::sync::{Arc, OnceLock};
 
 pub(crate) fn max_scroll_offset(node: &ComputedNode) -> Vec2 {
     (node.content_size - node.size() + node.scrollbar_size).max(Vec2::ZERO)
@@ -40,29 +40,25 @@ pub fn register_system<I: SystemInput + 'static, O: 'static, Marker, S: IntoSyst
     system: S,
 ) -> SystemId<I, O> {
     let system = world.register_system(system);
-    if let Ok(mut entity) = world.get_entity_mut(system.entity()) {
-        entity.insert(HaalkaOneShotSystem);
-    }
+    world.entity_mut(system.entity()).insert(HaalkaOneShotSystem);
     system
 }
 
-/// Attach an observer to an entity with a marker component for filtering.
+/// Attach an observer to an entity with a marker component for filtering. Returns the observer
+/// entity.
 pub fn observe<E: EntityEvent, B: Bundle, Marker>(
     world: &mut World,
     entity: Entity,
     observer: impl IntoObserverSystem<E, B, Marker>,
 ) -> EntityWorldMut<'_> {
-    let mut entity = world.entity_mut(entity);
-    entity.insert(HaalkaObserver);
-    entity.observe(observer);
-    entity
+    world.spawn((Observer::new(observer).with_entity(entity), HaalkaObserver))
 }
 
 /// If [`Some`] [`System`] is returned by the `getter`, remove it from the [`World`] on element
 /// removal.
-pub fn remove_system_on_remove<I: SystemInput + 'static, O: 'static>(
+pub fn remove_system_on_despawn<I: SystemInput + 'static, O: 'static>(
     getter: impl FnOnce() -> Option<SystemId<I, O>> + Send + Sync + 'static,
-) -> impl FnOnce(JonmoBuilder) -> JonmoBuilder {
+) -> impl FnOnce(jonmo::Builder) -> jonmo::Builder {
     |builder| {
         builder.on_despawn(move |world, _| {
             if let Some(system) = getter() {
@@ -75,10 +71,10 @@ pub fn remove_system_on_remove<I: SystemInput + 'static, O: 'static>(
 }
 
 /// Remove the held system from the [`World`] on element removal.
-pub fn remove_system_holder_on_remove<I: SystemInput + 'static, O: 'static>(
+pub fn remove_system_holder_on_despawn<I: SystemInput + 'static, O: 'static>(
     system_holder: Arc<OnceLock<SystemId<I, O>>>,
-) -> impl FnOnce(JonmoBuilder) -> JonmoBuilder {
-    remove_system_on_remove(move || system_holder.get().copied())
+) -> impl FnOnce(jonmo::Builder) -> jonmo::Builder {
+    remove_system_on_despawn(move || system_holder.get().copied())
 }
 
 cfg_if::cfg_if! {

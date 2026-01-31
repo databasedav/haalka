@@ -22,8 +22,8 @@ use super::{
     element::{BuilderWrapper, ElementWrapper, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
-    pointer_event_aware::{CursorOnHoverable, PointerEventAware},
-    utils::{clone, observe, register_system, remove_system_holder_on_remove},
+    pointer_event_aware::{Cursorable, PointerEventAware},
+    utils::{clone, observe, register_system, remove_system_holder_on_despawn},
     viewport_mutable::ViewportMutable,
 };
 use apply::Apply;
@@ -53,7 +53,7 @@ impl PointerEventAware for TextInput {}
 impl MouseWheelScrollable for TextInput {}
 impl UiRootable for TextInput {}
 impl ViewportMutable for TextInput {}
-impl CursorOnHoverable for TextInput {}
+impl Cursorable for TextInput {}
 
 // TODO: allow managing multiple spans reactively
 impl TextInput {
@@ -66,7 +66,6 @@ impl TextInput {
                     ..default()
                 },
                 Pickable::default(),
-                LastSignalText::default(),
             ))
         });
         Self { el }
@@ -135,23 +134,31 @@ impl TextInput {
     ) -> Self {
         if let Some(text_option_signal) = text_option_signal_option.into() {
             self = self.with_builder(|builder| {
-                builder.on_signal(
-                    text_option_signal.map_in(|text_option: T| text_option.into().unwrap_or_default()),
-                    |In((entity, text)): In<(Entity, String)>,
-                     mut last_text_query: Query<&mut LastSignalText>,
-                     mut text_input_queues: Query<&mut TextInputQueue>| {
-                        if let Ok(mut last_text) = last_text_query.get_mut(entity) {
-                            // only queue an update if the incoming signal value is different
-                            // from the last value we set from a signal. This prevents redundant updates.
-                            if last_text.0 != text {
-                                last_text.0 = text.clone();
+                builder
+                    .with_entity(|mut entity| {
+                        entity.insert_if_new(TextInputContents::default());
+                    })
+                    .on_signal(
+                        text_option_signal.map_in(|text_option: T| text_option.into().unwrap_or_default()),
+                        |In((entity, text)): In<(Entity, String)>,
+                         contents_query: Query<&TextInputContents>,
+                         mut text_input_queues: Query<&mut TextInputQueue>| {
+                            // only queue an update if the current buffer text is different
+                            // from the incoming signal value, preventing redundant updates and
+                            // unexpected hijacking of the cursor when a two-way binding is in use
+                            let should_update = contents_query
+                                .get(entity)
+                                .ok()
+                                .map(|contents| contents.get() != text.as_str())
+                                .unwrap_or(true);
+
+                            if should_update {
                                 if let Ok(mut queue) = text_input_queues.get_mut(entity) {
                                     queue_set_text_actions(&mut queue, text);
                                 }
                             }
-                        }
-                    },
-                )
+                        },
+                    )
             });
         }
         self
@@ -176,7 +183,7 @@ impl TextInput {
                         commands.run_system_with(system, (entity, event.event().focused))
                     });
                 }))
-                .apply(remove_system_holder_on_remove(system_holder.clone()))
+                .apply(remove_system_holder_on_despawn(system_holder.clone()))
         })
     }
 
@@ -241,16 +248,10 @@ impl TextInput {
                 .with_entity(|mut entity| {
                     entity.insert_if_new((ListenToChanges, TextInputContents::default()));
                 })
-                .apply(remove_system_holder_on_remove(system_holder))
+                .apply(remove_system_holder_on_despawn(system_holder))
         })
     }
 }
-
-/// A component to store the last text value that was successfully applied by
-/// [`TextInput::text_signal`]. This is used to prevent echo updates from
-/// [`TextInput::on_change_sync`] when a two-way binding is active.
-#[derive(Component, Default)]
-struct LastSignalText(String);
 
 fn queue_set_text_actions(text_input_queue: &mut TextInputQueue, text: String) {
     for action in [

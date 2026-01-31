@@ -130,7 +130,6 @@ pub mod prelude {
             pub use super::utils::*;
             #[doc(no_inline)]
             pub use apply::{Also, Apply};
-            pub use std::sync::LazyLock;
         }
     }
 }

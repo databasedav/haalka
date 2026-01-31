@@ -7,8 +7,6 @@
 mod utils;
 use utils::*;
 
-use std::sync::OnceLock;
-
 use bevy::{
     prelude::*,
     ui::{Pressed, widget::NodeImageMode},
@@ -31,53 +29,49 @@ fn main() {
         .run();
 }
 
-#[derive(Resource, Clone, Copy, PartialEq, Deref, DerefMut)]
+#[derive(Resource, Clone, Copy, Deref, DerefMut)]
 struct Width(f32);
+
+#[derive(Resource, Clone, Deref, DerefMut)]
+struct NineSliceTexture(Handle<Image>);
+
+#[derive(Resource, Clone, Deref, DerefMut)]
+struct NineSliceTextureAtlasLayout(Handle<TextureAtlasLayout>);
+
+#[derive(Resource, Clone, Deref, DerefMut)]
+struct MenuImage(Handle<Image>);
 
 const BASE_SIZE: f32 = 600.;
 const GAP: f32 = 10.;
 const FONT_SIZE: f32 = 33.33;
 
-static NINE_SLICE_TEXTURE: OnceLock<Handle<Image>> = OnceLock::new();
-
-fn nine_slice_texture() -> &'static Handle<Image> {
-    NINE_SLICE_TEXTURE
-        .get()
-        .expect("expected NINE_SLICE_TEXTURE_ATLAS to be initialized")
-}
-
-static NINE_SLICE_TEXTURE_ATLAS_LAYOUT: OnceLock<Handle<TextureAtlasLayout>> = OnceLock::new();
-
-fn nine_slice_texture_atlas_layout() -> &'static Handle<TextureAtlasLayout> {
-    NINE_SLICE_TEXTURE_ATLAS_LAYOUT
-        .get()
-        .expect("expected NINE_SLICE_TEXTURE_ATLAS_LAYOUT to be initialized")
-}
-
-static IMAGE: OnceLock<Handle<Image>> = OnceLock::new();
-
-fn image() -> &'static Handle<Image> {
-    IMAGE.get().expect("expected IMAGE to be initialized")
-}
-
 fn nine_slice_el(frame_signal: impl Signal<Item = usize> + Send + Sync + 'static) -> El<ImageNode> {
     El::<ImageNode>::new()
-        .image_node(
-            ImageNode::from_atlas_image(
-                nine_slice_texture().clone(),
-                TextureAtlas {
-                    layout: nine_slice_texture_atlas_layout().clone(),
-                    index: 0,
+        .with_builder(|builder| {
+            builder.on_spawn_with_system(
+                |In(entity): In<Entity>,
+                 mut commands: Commands,
+                 texture: Res<NineSliceTexture>,
+                 layout: Res<NineSliceTextureAtlasLayout>| {
+                    commands.entity(entity).insert(
+                        ImageNode::from_atlas_image(
+                            texture.0.clone(),
+                            TextureAtlas {
+                                layout: layout.0.clone(),
+                                index: 0,
+                            },
+                        )
+                        .with_mode(NodeImageMode::Sliced(TextureSlicer {
+                            border: BorderRect::all(24.0),
+                            center_scale_mode: SliceScaleMode::Stretch,
+                            sides_scale_mode: SliceScaleMode::Stretch,
+                            max_corner_scale: 1.0,
+                        })),
+                    );
                 },
             )
-            .with_mode(NodeImageMode::Sliced(TextureSlicer {
-                border: BorderRect::all(24.0),
-                center_scale_mode: SliceScaleMode::Stretch,
-                sides_scale_mode: SliceScaleMode::Stretch,
-                max_corner_scale: 1.0,
-            })),
-        )
-        .on_signal_with_image_node(frame_signal, move |mut image, frame| {
+        })
+        .on_signal_with_image_node(frame_signal.dedupe(), move |mut image, frame| {
             if let Some(atlas) = &mut image.texture_atlas {
                 atlas.index = frame;
             }
@@ -86,17 +80,13 @@ fn nine_slice_el(frame_signal: impl Signal<Item = usize> + Send + Sync + 'static
 
 fn nine_slice_button() -> impl Element {
     let lazy_entity = LazyEntity::new();
-    let pressed_hovered_signal = SignalBuilder::from_lazy_entity(lazy_entity.clone())
-        .map(|In(entity), presseds: Query<&Pressed>| presseds.contains(entity))
-        .dedupe()
-        .combine(
-            SignalBuilder::from_lazy_entity(lazy_entity.clone())
-                .has_component::<Hovered>()
-                .dedupe(),
-        )
+    let pressed = signal::from_entity(lazy_entity.clone())
+        .has_component::<Pressed>()
         .dedupe();
-
-    nine_slice_el(pressed_hovered_signal.clone().map_in(|(pressed, hovered)| {
+    let hovered = signal::from_entity(lazy_entity.clone())
+        .has_component::<Hovered>()
+        .dedupe();
+    nine_slice_el(signal::zip!(pressed, hovered).dedupe().map_in(|(pressed, hovered)| {
         if pressed {
             2
         } else if hovered {
@@ -110,15 +100,23 @@ fn nine_slice_button() -> impl Element {
         node.width = Val::Px(100.);
         node.height = Val::Px(50.);
     })
-    .insert(Pickable::default())
+    .insert((Pickable::default(), Hoverable, Pressable))
     .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
 }
 
 fn menu() -> impl Element {
-    let width = SignalBuilder::from_resource::<Width>().dedupe().map_in(deref_copied);
+    let width = signal::from_resource_changed::<Width>().map_in(deref_copied);
     let is_wide = width.clone().map_in(|width| width > 400.).dedupe();
-    let image_el = || El::<ImageNode>::new().image_node(ImageNode::new(image().clone()));
-    nine_slice_el(SignalBuilder::always(3))
+    let image_el = || {
+        El::<ImageNode>::new().with_builder(|builder| {
+            builder.on_spawn_with_system(
+                |In(entity): In<Entity>, mut commands: Commands, menu_image: Res<MenuImage>| {
+                    commands.entity(entity).insert(ImageNode::new(menu_image.0.clone()));
+                },
+            )
+        })
+    };
+    nine_slice_el(signal::once(3))
         .with_node(|mut node| {
             node.height = Val::Px(BASE_SIZE);
             node.padding = UiRect::all(Val::Px(GAP));
@@ -193,9 +191,9 @@ fn ui_root() -> impl Element {
                             El::<Text>::new()
                                 .text_font(TextFont::from_font_size(FONT_SIZE))
                                 .text_signal(
-                                    SignalBuilder::from_resource::<Width>()
+                                    signal::from_resource_changed::<Width>()
                                         .map_in(deref_copied)
-                                        .map_in_ref(|width: &f32| width.to_string())
+                                        .map_in_ref(ToString::to_string)
                                         .map_in(Text)
                                         .map_in(Some),
                                 ),
@@ -210,15 +208,11 @@ fn setup(
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlasLayout>>,
 ) {
-    NINE_SLICE_TEXTURE
-        .set(asset_server.load("panels.png"))
-        .expect("failed to initialize NINE_SLICE_TEXTURE");
-    NINE_SLICE_TEXTURE_ATLAS_LAYOUT
-        .set(texture_atlases.add(TextureAtlasLayout::from_grid(UVec2::new(32, 32), 4, 1, None, None)))
-        .expect("failed to initialize NINE_SLICE_TEXTURE_ATLAS_LAYOUT");
-    IMAGE
-        .set(asset_server.load("icon.png"))
-        .expect("failed to initialize IMAGE");
+    commands.insert_resource(NineSliceTexture(asset_server.load("panels.png")));
+    commands.insert_resource(NineSliceTextureAtlasLayout(
+        texture_atlases.add(TextureAtlasLayout::from_grid(UVec2::new(32, 32), 4, 1, None, None)),
+    ));
+    commands.insert_resource(MenuImage(asset_server.load("icon.png")));
     commands.spawn(Camera2d);
 }
 

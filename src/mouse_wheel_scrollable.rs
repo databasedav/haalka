@@ -2,8 +2,8 @@
 //! mouse wheel events.
 
 use super::{
-    pointer_event_aware::{HoverData, PointerEventAware},
-    utils::{clamp_scroll_position, clone, observe, register_system, remove_system_holder_on_remove},
+    pointer_event_aware::{HoverData, PointerEventAware, disableable_signal_setup, disableable_signal_system},
+    utils::{clamp_scroll_position, clone, observe, register_system, remove_system_holder_on_despawn},
     viewport_mutable::ViewportMutable,
 };
 use apply::Apply;
@@ -11,9 +11,9 @@ use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use bevy_input::{mouse::*, prelude::*};
 use bevy_math::Vec2;
+use bevy_platform::sync::{Arc, OnceLock};
 use bevy_ui::prelude::*;
-use jonmo::signal::{Signal, SignalExt};
-use std::sync::{Arc, OnceLock};
+use jonmo::signal::Signal;
 
 /// Marker [`Component`] that disables an element's viewport from reacting to mouse wheel events.
 #[derive(Component, Default, Clone)]
@@ -54,7 +54,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
                         commands.run_system_with(system, (entity, mouse_wheel));
                     });
                 }))
-                .apply(remove_system_holder_on_remove(system_holder))
+                .apply(remove_system_holder_on_despawn(system_holder))
         })
     }
 
@@ -75,34 +75,74 @@ pub trait MouseWheelScrollable: ViewportMutable {
     fn on_scroll_disableable_signal<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
-        blocked: impl Signal<Item = bool> + Send + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
     ) -> Self {
-        self.with_builder(|builder| builder.component_signal(blocked.map_true_in(|| ScrollDisabled)))
-            .on_scroll_disableable::<ScrollDisabled, _>(handler)
+        let system_holder = Arc::new(OnceLock::new());
+        let state_index = Arc::new(OnceLock::new());
+        self.with_builder(disableable_signal_setup(
+            handler,
+            disabled,
+            system_holder.clone(),
+            state_index.clone(),
+        ))
+        .on_scroll_disableable::<ScrollDisabled, _>(disableable_signal_system(system_holder, state_index))
     }
 }
 
 /// Convenience trait for enabling scrollability when hovering over an element.
 pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware {
-    /// When this element receives a [`MouseWheel`] event while it is hovered, if it does not have a
-    /// [`ScrollDisabled`] component, run a [`System`] which takes [`In`](`System::In`) this
-    /// element's [`Entity`] and the [`MouseWheel`]. This method can be called repeatedly to
-    /// register many such handlers.
-    fn on_scroll_on_hover<Marker>(
+    /// When this element receives a [`MouseWheel`] event while it is hovered and does not have a
+    /// `Disabled` component, run a [`System`] which takes [`In`](`System::In`) this element's
+    /// [`Entity`] and the [`MouseWheel`]. This method can be called repeatedly to register many
+    /// such handlers.
+    fn on_scroll_on_hover_disableable<Disabled: Component + Default, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
         self.on_hovered_change(|In((entity, data)): In<(Entity, HoverData)>, mut commands: Commands| {
             if let Ok(mut entity) = commands.get_entity(entity) {
                 if data.hovered {
-                    entity.remove::<ScrollDisabled>();
+                    entity.remove::<Disabled>();
                 } else {
-                    entity.try_insert(ScrollDisabled);
+                    entity.try_insert(Disabled::default());
                 }
             }
         })
-        .on_scroll_disableable::<ScrollDisabled, _>(handler)
-        .with_builder(|builder| builder.insert(ScrollDisabled))
+        .on_scroll_disableable::<Disabled, _>(handler)
+        .with_builder(|builder| builder.insert(Disabled::default()))
+    }
+
+    /// When this element receives a [`MouseWheel`] event while it is hovered, run a [`System`]
+    /// which takes [`In`](`System::In`) this element's [`Entity`] and the [`MouseWheel`]. This
+    /// method can be called repeatedly to register many such handlers.
+    fn on_scroll_on_hover<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
+    ) -> Self {
+        self.on_scroll_on_hover_disableable::<ScrollDisabled, _>(handler)
+    }
+
+    /// When this element receives a [`MouseWheel`] event while it is hovered, run a [`System`]
+    /// which takes [`In`](`System::In`) this element's [`Entity`] and the [`MouseWheel`],
+    /// reactively controlling whether the handling is disabled with a [`Signal`]. This method
+    /// can be called repeatedly to register many such handlers.
+    ///
+    /// Uses [`ScrollDisableableSignalState`] internally to allow multiple calls without
+    /// conflicting disable states.
+    fn on_scroll_on_hover_disableable_signal<Marker>(
+        self,
+        handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + Send + 'static,
+    ) -> Self {
+        let system_holder = Arc::new(OnceLock::new());
+        let state_index = Arc::new(OnceLock::new());
+        self.with_builder(disableable_signal_setup(
+            handler,
+            disabled,
+            system_holder.clone(),
+            state_index.clone(),
+        ))
+        .on_scroll_on_hover_disableable::<ScrollDisabled, _>(disableable_signal_system(system_holder, state_index))
     }
 }
 

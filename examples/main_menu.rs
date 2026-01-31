@@ -7,12 +7,16 @@
 //!   - Keyboard/Controller: Separate styles for currently focused element.
 
 mod utils;
-use haalka::impl_haalka_methods;
+use bevy_ecs::entity;
+use jonmo::graph::{downcast_any_clone, poll_signal};
 use utils::*;
 
 use bevy::{prelude::*, ui::Pressed};
-use haalka::prelude::*;
-use strum::{Display, EnumIter, IntoEnumIterator};
+use haalka::{impl_haalka_methods, prelude::*};
+use std::{fmt::Display, i32};
+use strum::{Display as StrumDisplay, EnumIter, IntoEnumIterator};
+
+// Note: For actual serialization, add serde as a dependency and derive Serialize/Deserialize
 
 fn main() {
     App::new()
@@ -29,8 +33,21 @@ fn main() {
         .add_systems(Update, (keyboard_menu_input_events, gamepad_menu_input_events))
         .init_resource::<SubMenuSelected>()
         .init_resource::<ShowSubMenu>()
-        .init_resource::<SubMenuHoveredIndex>()
-        .insert_resource(FocusedEntity(Entity::PLACEHOLDER))
+        .insert_resource(AudioSettings {
+            dropdown: None,
+            radio_group: None,
+            checkbox: false,
+            iterable_option: "option 1".to_string(),
+            master_volume: 100.,
+            effect_volume: 50.,
+            music_volume: 50.,
+            voice_volume: 50.,
+        })
+        .insert_resource(GraphicsSettings {
+            texture_quality: Quality::Medium,
+            shadow_quality: Quality::Medium,
+            bloom_quality: Quality::Medium,
+        })
         .insert_resource(MenuInputRateLimiter(Timer::from_seconds(
             MENU_INPUT_RATE_LIMIT,
             TimerMode::Repeating,
@@ -56,28 +73,47 @@ const BASE_BORDER_WIDTH: f32 = 5.;
 const MENU_ITEM_HEIGHT: f32 = DEFAULT_BUTTON_HEIGHT + BASE_PADDING;
 const LIL_BABY_BUTTON_SIZE: f32 = 30.;
 
-#[derive(Clone, Copy, PartialEq, Display, EnumIter)]
+#[derive(Clone, Copy, PartialEq, StrumDisplay, EnumIter)]
 enum SubMenu {
     Audio,
     Graphics,
 }
 
-#[derive(Resource, Clone, Copy, PartialEq, Default)]
+#[derive(Resource, Clone, Copy, PartialEq, Default, Deref)]
 struct ShowSubMenu(Option<SubMenu>);
 
-#[derive(Resource, Clone, Copy, PartialEq, Default)]
+#[derive(Resource, Clone, Copy, PartialEq, Default, Deref)]
 struct SubMenuSelected(Option<SubMenu>);
+
+/// Resource for audio settings - easily serializable
+#[derive(Resource, Clone, PartialEq, Default)]
+struct AudioSettings {
+    dropdown: Option<String>,
+    radio_group: Option<usize>,
+    checkbox: bool,
+    iterable_option: String,
+    master_volume: f32,
+    effect_volume: f32,
+    music_volume: f32,
+    voice_volume: f32,
+}
+
+/// Resource for graphics settings - easily serializable
+#[derive(Resource, Clone, PartialEq, Default)]
+struct GraphicsSettings {
+    texture_quality: Quality,
+    shadow_quality: Quality,
+    bloom_quality: Quality,
+}
 
 /// Component to mark a button as selected (for external control)
 #[derive(Component, Clone, Default)]
 struct Selected;
 
 // core widget, pretty much every other widget uses the `Button`
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Button {
     el: El<Node>,
-    #[allow(dead_code)]
-    lazy_entity: LazyEntity,
 }
 
 // implementing `ElementWrapper` allows the struct to be passed directly to .child methods
@@ -107,30 +143,25 @@ impl Button {
     fn new() -> Self {
         let lazy_entity = LazyEntity::new();
 
-        let pressed_signal = SignalBuilder::from_lazy_entity(lazy_entity.clone())
+        let pressed = signal::from_entity(lazy_entity.clone())
             .map(|In(entity), presseds: Query<&Pressed>| presseds.contains(entity))
             .dedupe();
 
-        let hovered_signal = SignalBuilder::from_lazy_entity(lazy_entity.clone())
+        let hovered = signal::from_entity(lazy_entity.clone())
             .has_component::<Hovered>()
             .dedupe();
 
-        let selected_signal = SignalBuilder::from_lazy_entity(lazy_entity.clone())
+        let selected = signal::from_entity(lazy_entity.clone())
             .has_component::<Selected>()
             .dedupe();
 
-        let selected_hovered_signal = selected_signal
-            .clone()
-            .combine(pressed_signal)
-            .map_in(|(selected, pressed)| selected || pressed)
-            .combine(hovered_signal.clone())
-            .dedupe();
+        let selected_hovered = signal::zip!(signal::any!(selected.clone(), pressed), hovered.clone()).dedupe();
 
         Self {
             el: {
                 El::<Node>::new()
                     .lazy_entity(lazy_entity.clone())
-                    .insert(Pickable::default())
+                    .insert((Pickable::default(), Hoverable, Pressable))
                     .with_node(|mut node| {
                         node.height = Val::Px(DEFAULT_BUTTON_HEIGHT);
                         node.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH));
@@ -138,7 +169,7 @@ impl Button {
                     .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
                     .align_content(Align::center())
                     .border_color_signal(
-                        selected_hovered_signal
+                        selected_hovered
                             .clone()
                             .map_in(|(selected, hovered)| {
                                 if selected {
@@ -153,7 +184,7 @@ impl Button {
                             .map_in(Some),
                     )
                     .background_color_signal(
-                        selected_hovered_signal
+                        selected_hovered
                             .map_in(|(selected, hovered)| {
                                 if selected {
                                     CLICKED_BUTTON
@@ -167,7 +198,6 @@ impl Button {
                             .map_in(Some),
                     )
             },
-            lazy_entity,
         }
     }
 
@@ -176,17 +206,13 @@ impl Button {
         self
     }
 
-    fn selected_signal(mut self, selected_signal: impl Signal<Item = bool> + Clone + Send + 'static) -> Self {
-        self.el = self
-            .el
-            .with_builder(|builder| builder.component_signal::<Selected, _>(selected_signal.map_true_in(|| Selected)));
+    fn selected_signal(mut self, selected: impl Signal<Item = bool> + Clone + Send + 'static) -> Self {
+        self.el = self.el.component_signal(selected.map_true_in(|| Selected));
         self
     }
 
-    fn hovered_signal(mut self, hovered_signal: impl Signal<Item = bool> + Clone + Send + 'static) -> Self {
-        self.el = self
-            .el
-            .with_builder(|builder| builder.component_signal::<Hovered, _>(hovered_signal.map_true_in(|| Hovered)));
+    fn hovered_signal(mut self, hovered: impl Signal<Item = bool> + Clone + Send + 'static) -> Self {
+        self.el = self.el.component_signal(hovered.map_true_in(|| Hovered));
         self
     }
 }
@@ -199,7 +225,8 @@ fn text_button<Marker>(
         .body(
             El::<Text>::new()
                 .text_font(TextFont::from_font_size(FONT_SIZE))
-                .text_signal(text_signal.map_in(Text).map_in(Some)),
+                .text(Text::new("test"))
+                // .text_signal(text_signal.map_in(Text).map_in(Some)),
         )
         .on_click(on_click)
         .with_node(|mut node| node.width = Val::Px(200.))
@@ -249,139 +276,190 @@ fn lil_baby_button() -> Button {
     })
 }
 
-/// Component marker for entities that are being controlled (focused)
+/// Component marker for the currently focused widget (receives MenuInputEvents)
 #[derive(Component, Clone, Default)]
-struct Controlling;
+struct Focused;
 
-#[allow(dead_code)]
-trait Controllable: ElementWrapper + BuilderPassThrough
-where
-    Self: Sized + 'static,
-{
-    fn lazy_entity(&self) -> LazyEntity;
+/// Component on ancestor containers that determines which child index is focused
+#[derive(Component, Clone, Default, Deref, DerefMut)]
+struct FocusedIndex(Option<usize>);
 
-    fn controlling_signal(self, controlling_signal: impl Signal<Item = bool> + Clone + Send + 'static) -> Self {
-        self.with_builder(|builder| {
-            builder.component_signal::<Controlling, _>(controlling_signal.map_true_in(|| Controlling))
+/// Walks up the hierarchy to find an ancestor with `FocusedIndex`, caches it, then returns
+/// a signal that watches that ancestor's `FocusedIndex` component.
+fn signal_from_ancestor_focused_index(lazy_entity: LazyEntity) -> impl Signal<Item = Option<usize>> + Clone {
+    signal::from_entity(lazy_entity)
+        .map(
+            |In(entity): In<Entity>, child_ofs: Query<&ChildOf>, focused_indices: Query<(), With<FocusedIndex>>| {
+                child_ofs
+                    .iter_ancestors(entity)
+                    .find(|&ancestor| focused_indices.contains(ancestor))
+                    .unwrap()
+            },
+        )
+        .first()
+        .switch(|In(ancestor): In<Entity>| {
+            signal::from_component_changed::<FocusedIndex>(ancestor).map_in(deref_copied)
         })
-    }
 }
-
-#[derive(Component, Clone, PartialEq)]
-struct MenuInputDisabled;
 
 /// Component to store checkbox checked state
 #[derive(Component, Clone, Default)]
 struct Checked;
 
-/// Component to store the checkbox's LazyEntity reference
-#[derive(Component, Clone)]
-struct CheckboxEntity(LazyEntity);
-
 struct Checkbox {
-    el: Button,
-    #[allow(dead_code)]
+    el: El<Node>,
     lazy_entity: LazyEntity,
+    initially_checked: bool,
+    external_sync_task: Option<Box<dyn SignalTask>>,
+    on_change_task: Option<Box<dyn SignalTask>>,
 }
 
 impl Checkbox {
-    fn new(initially_checked: bool) -> Self {
-        let lazy_entity = LazyEntity::new();
-        let controlling_signal = SignalBuilder::from_lazy_entity(lazy_entity.clone())
-            .has_component::<Controlling>()
-            .dedupe();
+    fn new() -> Self {
         Self {
-            el: {
-                lil_baby_button()
-                    .apply(|element| focus_on_signal(element, controlling_signal.clone()))
-                    .with_builder(clone!((lazy_entity) move |builder| {
-                        builder
-                            .lazy_entity(lazy_entity.clone())
-                            .insert(CheckboxEntity(lazy_entity.clone()))
-                            .component_signal::<MenuInputDisabled, _>(
-                                controlling_signal.clone().not().map_true_in(|| MenuInputDisabled),
-                            )
-                    }))
-                    .observe(
-                        move |event: On<MenuInputEvent>,
-                              disabled: Query<&MenuInputDisabled>,
-                              checkeds: Query<&Checked>,
-                              checkbox_entities: Query<&CheckboxEntity>,
-                              mut commands: Commands| {
-                            if disabled.contains(event.entity) {
-                                return;
-                            }
-                            let Ok(CheckboxEntity(lazy_entity)) = checkbox_entities.get(event.entity) else {
-                                return;
-                            };
-                            let entity = **lazy_entity;
-                            let is_checked = checkeds.contains(entity);
-                            match event.input {
-                                MenuInput::Select => {
-                                    if is_checked {
-                                        commands.entity(entity).remove::<Checked>();
-                                    } else {
-                                        commands.entity(entity).insert(Checked);
-                                    }
-                                }
-                                MenuInput::Delete => {
-                                    commands.entity(entity).remove::<Checked>();
-                                }
-                                _ => (),
-                            }
-                        },
-                    )
-                    .on_click(
-                        clone!((lazy_entity) move |_: In<_>, checkeds: Query<&Checked>, mut commands: Commands| {
-                            let entity = *lazy_entity;
-                            if checkeds.contains(entity) {
-                                commands.entity(entity).remove::<Checked>();
-                            } else {
-                                commands.entity(entity).insert(Checked);
-                            }
-                        }),
-                    )
-                    .selected_signal(
-                        SignalBuilder::from_lazy_entity(lazy_entity.clone())
-                            .has_component::<Checked>()
-                            .dedupe(),
-                    )
-            }
-            .also(|el| {
-                if initially_checked {
-                    el.el = el.el.clone().insert(Checked);
-                }
-            }),
-            lazy_entity,
+            el: El::<Node>::new(),
+            lazy_entity: LazyEntity::new(),
+            initially_checked: false,
+            external_sync_task: None,
+            on_change_task: None,
         }
+    }
+
+    fn checked(mut self, checked: bool) -> Self {
+        self.initially_checked = checked;
+        self
+    }
+
+    /// Sync the checkbox state from an external signal
+    fn checked_signal(mut self, signal: impl Signal<Item = bool> + Clone + Send + 'static) -> Self {
+        let lazy_entity = self.lazy_entity.clone();
+        let task = signal
+            .dedupe()
+            .map(
+                clone!((lazy_entity) move |In(checked): In<bool>, checkeds: Query<&Checked>, mut commands: Commands| {
+                    let entity = *lazy_entity;
+                    let is_checked = checkeds.contains(entity);
+                    if checked && !is_checked {
+                        commands.entity(entity).insert(Checked);
+                    } else if !checked && is_checked {
+                        commands.entity(entity).remove::<Checked>();
+                    }
+                }),
+            )
+            .task();
+        self.external_sync_task = Some(task);
+        self
+    }
+
+    /// Called when the checkbox state changes
+    fn on_change<M>(mut self, handler: impl IntoSystem<In<bool>, (), M> + Send + Sync + 'static) -> Self {
+        let lazy_entity = self.lazy_entity.clone();
+        let task = signal::from_component_changed::<Checked>(lazy_entity.clone())
+            .map_in(|_| ())
+            .switch(clone!((lazy_entity) move |_: In<()>| {
+                signal::from_entity(lazy_entity.clone())
+                    .has_component::<Checked>()
+                    .first()
+            }))
+            .map(handler)
+            .task();
+        self.on_change_task = Some(task);
+        self
     }
 }
 
 impl ElementWrapper for Checkbox {
-    type EL = Button;
+    type EL = El<Node>;
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
+    }
+
+    fn into_el(self) -> Self::EL {
+        let Self {
+            el: _,
+            lazy_entity,
+            initially_checked,
+            external_sync_task,
+            on_change_task,
+        } = self;
+
+        lil_baby_button()
+            .with_builder(clone!((lazy_entity) move |builder| {
+                let mut b = builder.lazy_entity(lazy_entity.clone());
+                if initially_checked {
+                    b = b.insert(Checked);
+                }
+                if let Some(task) = external_sync_task {
+                    b = b.hold_tasks([task]);
+                }
+                if let Some(task) = on_change_task {
+                    b = b.hold_tasks([task]);
+                }
+                b
+            }))
+            .observe(clone!((lazy_entity) move |event: On<MenuInputEvent>,
+                  checkeds: Query<&Checked>,
+                  mut commands: Commands| {
+                let entity = *lazy_entity;
+                let is_checked = checkeds.contains(entity);
+                match event.input {
+                    MenuInput::Select => {
+                        if is_checked {
+                            commands.entity(entity).remove::<Checked>();
+                        } else {
+                            commands.entity(entity).insert(Checked);
+                        }
+                    }
+                    MenuInput::Delete => {
+                        commands.entity(entity).remove::<Checked>();
+                    }
+                    _ => (),
+                }
+            }))
+            .on_click(
+                clone!((lazy_entity) move |_: In<_>, checkeds: Query<&Checked>, mut commands: Commands| {
+                    let entity = *lazy_entity;
+                    if checkeds.contains(entity) {
+                        commands.entity(entity).remove::<Checked>();
+                    } else {
+                        commands.entity(entity).insert(Checked);
+                    }
+                }),
+            )
+            .selected_signal(
+                signal::from_entity(lazy_entity.clone())
+                    .has_component::<Checked>()
+                    .dedupe(),
+            )
+            .el
     }
 }
 
 impl BuilderPassThrough for Checkbox {}
 
-impl Controllable for Checkbox {
-    fn lazy_entity(&self) -> LazyEntity {
-        self.lazy_entity.clone()
-    }
-}
-
-#[derive(Clone, Copy, EnumIter, PartialEq, Display)]
+#[derive(Clone, Copy, EnumIter, PartialEq, StrumDisplay, Default)]
 enum Quality {
     Low,
+    #[default]
     Medium,
     High,
     Ultra,
 }
 
+impl Quality {
+    fn from_string(s: &str) -> Option<Self> {
+        match s {
+            "Low" => Some(Quality::Low),
+            "Medium" => Some(Quality::Medium),
+            "High" => Some(Quality::High),
+            "Ultra" => Some(Quality::Ultra),
+            _ => None,
+        }
+    }
+}
+
 /// Component to store radio group selection
-#[derive(Component, Clone, Default)]
+#[derive(Component, Clone, Default, Deref)]
 struct RadioSelection(Option<usize>);
 
 /// Component to store the radio group's options
@@ -390,85 +468,56 @@ struct RadioOptions(Vec<String>);
 
 struct RadioGroup {
     el: Row<Node>,
-    #[allow(dead_code)]
     lazy_entity: LazyEntity,
+    options: Vec<String>,
+    initial_selection: Option<usize>,
+    external_sync_task: Option<Box<dyn SignalTask>>,
+    on_change_task: Option<Box<dyn SignalTask>>,
 }
 
 impl RadioGroup {
-    fn new(options: Vec<String>, initial_selection: Option<usize>) -> Self {
-        let lazy_entity = LazyEntity::new();
-        let controlling_signal = SignalBuilder::from_lazy_entity(lazy_entity.clone())
-            .has_component::<Controlling>()
-            .dedupe();
-        let opts = options.clone();
-        let _opts_len = options.len();
+    fn new(options: Vec<String>) -> Self {
         Self {
-            el: {
-                Row::<Node>::new()
-                    .apply(|element| focus_on_signal(element, controlling_signal.clone()))
-                    .with_builder(clone!((lazy_entity, options) move |builder| {
-                        builder
-                            .lazy_entity(lazy_entity.clone())
-                            .insert(RadioSelection(initial_selection))
-                            .insert(RadioOptions(options))
-                            .component_signal::<MenuInputDisabled, _>(
-                                controlling_signal.clone().not().map_true_in(|| MenuInputDisabled),
-                            )
-                    }))
-                    .observe(clone!((lazy_entity) move |event: On<MenuInputEvent>,
-                          disabled: Query<&MenuInputDisabled>,
-                          mut selections: Query<(&mut RadioSelection, &RadioOptions)>| {
-                        if disabled.contains(event.entity) {
-                            return;
-                        }
-                        let Ok((mut selection, options)) = selections.get_mut(*lazy_entity) else {
-                            return;
-                        };
-                        match event.input {
-                            MenuInput::Left | MenuInput::Right => {
-                                let selected_option = selection.0;
-                                let (mut i, step) = if matches!(event.input, MenuInput::Left) {
-                                    (selected_option.unwrap_or(options.0.len() - 1) as isize, -1)
-                                } else {
-                                    (selected_option.unwrap_or(0) as isize, 1)
-                                };
-                                if selected_option.is_some() {
-                                    i = (i + step + options.0.len() as isize) % options.0.len() as isize;
-                                }
-                                selection.0 = Some(i as usize);
-                            }
-                            MenuInput::Delete => {
-                                selection.0 = None;
-                            }
-                            _ => (),
-                        }
-                    }))
-                    .items(
-                        opts.into_iter()
-                            .enumerate()
-                            .map(clone!((lazy_entity) move |(i, option)| {
-                                text_button(
-                                    SignalBuilder::always(option.clone()),
-                                    clone!((lazy_entity) move |_: In<_>, mut selections: Query<&mut RadioSelection>| {
-                                        if let Ok(mut selection) = selections.get_mut(*lazy_entity) {
-                                            if selection.0 == Some(i) {
-                                                selection.0 = None;
-                                            } else {
-                                                selection.0 = Some(i);
-                                            }
-                                        }
-                                    }),
-                                )
-                                .selected_signal(
-                                    SignalBuilder::from_component_lazy::<RadioSelection>(lazy_entity.clone())
-                                        .map_in(move |RadioSelection(sel)| sel == Some(i))
-                                        .dedupe(),
-                                )
-                            })),
-                    )
-            },
-            lazy_entity,
+            el: Row::<Node>::new(),
+            lazy_entity: LazyEntity::new(),
+            options,
+            initial_selection: None,
+            external_sync_task: None,
+            on_change_task: None,
         }
+    }
+
+    fn selection(mut self, selection: impl Into<Option<usize>>) -> Self {
+        self.initial_selection = selection.into();
+        self
+    }
+
+    /// Sync the selection from an external signal
+    fn selection_signal(mut self, signal: impl Signal<Item = Option<usize>> + Clone + Send + 'static) -> Self {
+        let lazy_entity = self.lazy_entity.clone();
+        let task = signal
+            .dedupe()
+            .map(clone!((lazy_entity) move |In(selection): In<Option<usize>>, mut selections: Query<&mut RadioSelection>| {
+                if let Ok(mut sel) = selections.get_mut(*lazy_entity) {
+                    if sel.0 != selection {
+                        sel.0 = selection;
+                    }
+                }
+            }))
+            .task();
+        self.external_sync_task = Some(task);
+        self
+    }
+
+    /// Called when the selection changes
+    fn on_change<M>(mut self, handler: impl IntoSystem<In<Option<usize>>, (), M> + Send + Sync + 'static) -> Self {
+        let lazy_entity = self.lazy_entity.clone();
+        let task = signal::from_component_changed::<RadioSelection>(lazy_entity)
+            .map_in(deref_copied)
+            .map(handler)
+            .task();
+        self.on_change_task = Some(task);
+        self
     }
 }
 
@@ -477,15 +526,82 @@ impl ElementWrapper for RadioGroup {
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
+
+    fn into_el(self) -> Self::EL {
+        let Self {
+            el,
+            lazy_entity,
+            options,
+            initial_selection,
+            external_sync_task,
+            on_change_task,
+        } = self;
+
+        let opts = options.clone();
+        el.with_builder(clone!((lazy_entity, options) move |builder| {
+            let mut b = builder
+                .lazy_entity(lazy_entity.clone())
+                .insert(RadioSelection(initial_selection))
+                .insert(RadioOptions(options));
+            if let Some(task) = external_sync_task {
+                b = b.hold_tasks([task]);
+            }
+            if let Some(task) = on_change_task {
+                b = b.hold_tasks([task]);
+            }
+            b
+        }))
+        .observe(clone!((lazy_entity) move |event: On<MenuInputEvent>,
+              mut selections: Query<(&mut RadioSelection, &RadioOptions)>| {
+            let Ok((mut selection, options)) = selections.get_mut(*lazy_entity) else {
+                return;
+            };
+            match event.input {
+                MenuInput::Left | MenuInput::Right => {
+                    let selected_option = selection.0;
+                    let (mut i, step) = if matches!(event.input, MenuInput::Left) {
+                        (selected_option.unwrap_or(options.0.len() - 1) as isize, -1)
+                    } else {
+                        (selected_option.unwrap_or(0) as isize, 1)
+                    };
+                    if selected_option.is_some() {
+                        i = (i + step + options.0.len() as isize) % options.0.len() as isize;
+                    }
+                    selection.0 = Some(i as usize);
+                }
+                MenuInput::Delete => {
+                    selection.0 = None;
+                }
+                _ => (),
+            }
+        }))
+        .items(
+            opts.into_iter()
+                .enumerate()
+                .map(clone!((lazy_entity) move |(i, option)| {
+                    text_button(
+                        signal::always(option.clone()),
+                        clone!((lazy_entity) move |_: In<_>, mut selections: Query<&mut RadioSelection>| {
+                            if let Ok(mut selection) = selections.get_mut(*lazy_entity) {
+                                if selection.0 == Some(i) {
+                                    selection.0 = None;
+                                } else {
+                                    selection.0 = Some(i);
+                                }
+                            }
+                        }),
+                    )
+                    .selected_signal(
+                        signal::from_component_changed::<RadioSelection>(lazy_entity.clone())
+                            .map_in(deref_copied)
+                            .eq(Some(i)),
+                    )
+                })),
+        )
+    }
 }
 
 impl BuilderPassThrough for RadioGroup {}
-
-impl Controllable for RadioGroup {
-    fn lazy_entity(&self) -> LazyEntity {
-        self.lazy_entity.clone()
-    }
-}
 
 enum LeftRight {
     Left,
@@ -502,7 +618,7 @@ fn arrow_text(direction: LeftRight) -> El<Text> {
 }
 
 /// Component to store iterable options current selection
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Deref)]
 struct IterableSelection(String);
 
 /// Component to store the iterable options
@@ -527,117 +643,59 @@ const FLASH_MS: f32 = 50.; // TODO: address background/border color desyncing
 
 struct IterableOptions {
     el: Row<Node>,
-    #[allow(dead_code)]
     lazy_entity: LazyEntity,
+    options: Vec<String>,
+    initial_selection: String,
+    external_sync_task: Option<Box<dyn SignalTask>>,
+    on_change_task: Option<Box<dyn SignalTask>>,
 }
 
 impl IterableOptions {
-    fn new(options: Vec<String>, initial_selection: String) -> Self {
-        let lazy_entity = LazyEntity::new();
-        let controlling_signal = SignalBuilder::from_lazy_entity(lazy_entity.clone())
-            .has_component::<Controlling>()
-            .dedupe();
-        let opts = options.clone();
+    fn new(options: Vec<String>) -> Self {
+        let initial_selection = options.first().cloned().unwrap_or_default();
         Self {
-            el: {
-                Row::<Node>::new()
-                    .apply(|element| focus_on_signal(element, controlling_signal.clone()))
-                    .with_builder(clone!((lazy_entity, options, initial_selection) move |builder| {
-                        builder
-                            .lazy_entity(lazy_entity.clone())
-                            .insert(IterableSelection(initial_selection))
-                            .insert(IterableOptionsList(options))
-                            .component_signal::<MenuInputDisabled, _>(
-                                controlling_signal.clone().not().map_true_in(|| MenuInputDisabled),
-                            )
-                    }))
-                    .observe(
-                        clone!((lazy_entity) move |event: On<MenuInputEvent>,
-                              disabled: Query<&MenuInputDisabled>,
-                              mut iterables: Query<(&mut IterableSelection, &IterableOptionsList)>,
-                              mut commands: Commands| {
-                            if disabled.contains(event.entity) {
-                                return;
-                            }
-                            let Ok((mut selection, options)) = iterables.get_mut(*lazy_entity) else {
-                                return;
-                            };
-                            match event.input {
-                                MenuInput::Left | MenuInput::Right => {
-                                    let i_option = options.0.iter().position(|opt| opt == &selection.0).map(|i| i as isize);
-                                    if let Some(mut i) = i_option {
-                                        let step = if matches!(event.input, MenuInput::Left) {
-                                            commands.entity(*lazy_entity).insert((
-                                                LeftPressed,
-                                                LeftPressedTimer(Timer::from_seconds(FLASH_MS / 1000., TimerMode::Once)),
-                                            ));
-                                            -1
-                                        } else {
-                                            commands.entity(*lazy_entity).insert((
-                                                RightPressed,
-                                                RightPressedTimer(Timer::from_seconds(FLASH_MS / 1000., TimerMode::Once)),
-                                            ));
-                                            1
-                                        };
-                                        i = (i + step + options.0.len() as isize) % options.0.len() as isize;
-                                        selection.0 = options.0[i as usize].clone();
-                                    }
-                                }
-                                _ => (),
-                            }
-                        }),
-                    )
-                    .with_node(|mut node| node.column_gap = Val::Px(BASE_PADDING * 2.))
-                    .item({
-                        lil_baby_button()
-                            .selected_signal(
-                                SignalBuilder::from_lazy_entity(lazy_entity.clone())
-                                    .has_component::<LeftPressed>()
-                                    .dedupe(),
-                            )
-                            .on_click(clone!((lazy_entity, opts) move |_: In<_>, mut iterables: Query<(&mut IterableSelection, &IterableOptionsList)>| {
-                                let Ok((mut selection, options)) = iterables.get_mut(*lazy_entity) else {
-                                    return;
-                                };
-                                if let Some(i) = options.0.iter().position(|opt| opt == &selection.0) {
-                                    let new_i = if i == 0 { options.0.len() - 1 } else { i - 1 };
-                                    selection.0 = options.0[new_i].clone();
-                                }
-                            }))
-                            .body(arrow_text(LeftRight::Left))
-                    })
-                    .item(
-                        El::<Text>::new()
-                            .text_font(TextFont::from_font_size(FONT_SIZE))
-                            .text_signal(
-                                SignalBuilder::from_component_lazy::<IterableSelection>(lazy_entity.clone())
-                                    .map_in(|IterableSelection(s)| s)
-                                    .dedupe()
-                                    .map_in(Text)
-                                    .map_in(Some),
-                            ),
-                    )
-                    .item({
-                        lil_baby_button()
-                            .selected_signal(
-                                SignalBuilder::from_lazy_entity(lazy_entity.clone())
-                                    .has_component::<RightPressed>()
-                                    .dedupe(),
-                            )
-                            .on_click(clone!((lazy_entity, opts) move |_: In<_>, mut iterables: Query<(&mut IterableSelection, &IterableOptionsList)>| {
-                                let Ok((mut selection, options)) = iterables.get_mut(*lazy_entity) else {
-                                    return;
-                                };
-                                if let Some(i) = options.0.iter().position(|opt| opt == &selection.0) {
-                                    let new_i = (i + 1) % options.0.len();
-                                    selection.0 = options.0[new_i].clone();
-                                }
-                            }))
-                            .body(arrow_text(LeftRight::Right))
-                    })
-            },
-            lazy_entity,
+            el: Row::<Node>::new(),
+            lazy_entity: LazyEntity::new(),
+            options,
+            initial_selection,
+            external_sync_task: None,
+            on_change_task: None,
         }
+    }
+
+    fn selection(mut self, selection: impl Into<String>) -> Self {
+        self.initial_selection = selection.into();
+        self
+    }
+
+    /// Sync the selection from an external signal
+    fn selection_signal(mut self, signal: impl Signal<Item = String> + Clone + Send + 'static) -> Self {
+        let lazy_entity = self.lazy_entity.clone();
+        let task = signal
+            .dedupe()
+            .map(
+                clone!((lazy_entity) move |In(selection): In<String>, mut iterables: Query<&mut IterableSelection>| {
+                    if let Ok(mut sel) = iterables.get_mut(*lazy_entity) {
+                        if sel.0 != selection {
+                            sel.0 = selection;
+                        }
+                    }
+                }),
+            )
+            .task();
+        self.external_sync_task = Some(task);
+        self
+    }
+
+    /// Called when the selection changes
+    fn on_change<M>(mut self, handler: impl IntoSystem<In<String>, (), M> + Send + Sync + 'static) -> Self {
+        let lazy_entity = self.lazy_entity.clone();
+        let task = signal::from_component_changed::<IterableSelection>(lazy_entity)
+            .map_in(deref_cloned)
+            .map(handler)
+            .task();
+        self.on_change_task = Some(task);
+        self
     }
 }
 
@@ -646,135 +704,181 @@ impl ElementWrapper for IterableOptions {
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
+
+    fn into_el(self) -> Self::EL {
+        let Self {
+            el,
+            lazy_entity,
+            options,
+            initial_selection,
+            external_sync_task,
+            on_change_task,
+        } = self;
+
+        let opts = options.clone();
+        el
+            .with_builder(clone!((lazy_entity, options, initial_selection) move |builder| {
+                let mut b = builder
+                    .lazy_entity(lazy_entity.clone())
+                    .insert(IterableSelection(initial_selection))
+                    .insert(IterableOptionsList(options));
+                if let Some(task) = external_sync_task {
+                    b = b.hold_tasks([task]);
+                }
+                if let Some(task) = on_change_task {
+                    b = b.hold_tasks([task]);
+                }
+                b
+            }))
+            .observe(
+                clone!((lazy_entity) move |event: On<MenuInputEvent>,
+                      mut iterables: Query<(&mut IterableSelection, &IterableOptionsList)>,
+                      mut commands: Commands| {
+                    let Ok((mut selection, options)) = iterables.get_mut(*lazy_entity) else {
+                        return;
+                    };
+                    match event.input {
+                        MenuInput::Left | MenuInput::Right => {
+                            let i_option = options.0.iter().position(|opt| opt == &selection.0).map(|i| i as isize);
+                            if let Some(mut i) = i_option {
+                                let step = if matches!(event.input, MenuInput::Left) {
+                                    commands.entity(*lazy_entity).insert((
+                                        LeftPressed,
+                                        LeftPressedTimer(Timer::from_seconds(FLASH_MS / 1000., TimerMode::Once)),
+                                    ));
+                                    -1
+                                } else {
+                                    commands.entity(*lazy_entity).insert((
+                                        RightPressed,
+                                        RightPressedTimer(Timer::from_seconds(FLASH_MS / 1000., TimerMode::Once)),
+                                    ));
+                                    1
+                                };
+                                i = (i + step + options.0.len() as isize) % options.0.len() as isize;
+                                selection.0 = options.0[i as usize].clone();
+                            }
+                        }
+                        _ => (),
+                    }
+                }),
+            )
+            .with_node(|mut node| node.column_gap = Val::Px(BASE_PADDING * 2.))
+            .item({
+                lil_baby_button()
+                    .selected_signal(
+                        signal::from_entity(lazy_entity.clone())
+                            .has_component::<LeftPressed>()
+                            .dedupe(),
+                    )
+                    .on_click(clone!((lazy_entity, opts) move |_: In<_>, mut iterables: Query<(&mut IterableSelection, &IterableOptionsList)>| {
+                        let Ok((mut selection, options)) = iterables.get_mut(*lazy_entity) else {
+                            return;
+                        };
+                        if let Some(i) = options.0.iter().position(|opt| opt == &selection.0) {
+                            let new_i = if i == 0 { options.0.len() - 1 } else { i - 1 };
+                            selection.0 = options.0[new_i].clone();
+                        }
+                    }))
+                    .body(arrow_text(LeftRight::Left))
+            })
+            .item(
+                El::<Text>::new()
+                    .text_font(TextFont::from_font_size(FONT_SIZE))
+                    .text_signal(
+                        signal::from_component_changed::<IterableSelection>(lazy_entity.clone())
+                            .map_in(deref_cloned)
+                            .map_in(Text)
+                            .map_in(Some),
+                    ),
+            )
+            .item({
+                lil_baby_button()
+                    .selected_signal(
+                        signal::from_entity(lazy_entity.clone())
+                            .has_component::<RightPressed>()
+                            .dedupe(),
+                    )
+                    .on_click(clone!((lazy_entity, opts) move |_: In<_>, mut iterables: Query<(&mut IterableSelection, &IterableOptionsList)>| {
+                        let Ok((mut selection, options)) = iterables.get_mut(*lazy_entity) else {
+                            return;
+                        };
+                        if let Some(i) = options.0.iter().position(|opt| opt == &selection.0) {
+                            let new_i = (i + 1) % options.0.len();
+                            selection.0 = options.0[new_i].clone();
+                        }
+                    }))
+                    .body(arrow_text(LeftRight::Right))
+            })
+    }
 }
 
 impl BuilderPassThrough for IterableOptions {}
 
-impl Controllable for IterableOptions {
-    fn lazy_entity(&self) -> LazyEntity {
-        self.lazy_entity.clone()
-    }
-}
-
 /// Component to store slider value
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Deref)]
 struct SliderValue(f32);
-
-/// Component to store slider left position
-#[derive(Component, Clone)]
-struct SliderLeft(f32);
 
 /// Component marker for slider being dragged
 #[derive(Component, Clone, Default)]
 struct SliderDragging;
 
+const SLIDER_WIDTH: f32 = 400.;
+const SLIDER_PADDING: f32 = 5.;
+const SLIDER_MAX: f32 = SLIDER_WIDTH - SLIDER_PADDING - LIL_BABY_BUTTON_SIZE - BASE_BORDER_WIDTH;
+
 struct Slider {
     el: Row<Node>,
-    #[allow(dead_code)]
     lazy_entity: LazyEntity,
+    initial_value: f32,
+    external_sync_task: Option<Box<dyn SignalTask>>,
+    on_change_task: Option<Box<dyn SignalTask>>,
 }
 
 impl Slider {
-    fn new(initial_value: f32) -> Self {
-        let lazy_entity = LazyEntity::new();
-        let controlling_signal = SignalBuilder::from_lazy_entity(lazy_entity.clone())
-            .has_component::<Controlling>()
-            .dedupe();
-        let slider_width = 400.;
-        let slider_padding = 5.;
-        let max = slider_width - slider_padding - LIL_BABY_BUTTON_SIZE - BASE_BORDER_WIDTH;
-        let initial_left = initial_value / 100. * max;
-
+    fn new() -> Self {
         Self {
-            el: {
-                Row::<Node>::new()
-                    .insert(SliderTag)
-                    .apply(|element| focus_on_signal(element, controlling_signal.clone()))
-                    .with_builder(clone!((lazy_entity) move |builder| {
-                        builder
-                            .lazy_entity(lazy_entity.clone())
-                            .insert(SliderValue(initial_value))
-                            .insert(SliderLeft(initial_left))
-                            .component_signal::<MenuInputDisabled, _>(
-                                controlling_signal.clone().not().map_true_in(|| MenuInputDisabled),
-                            )
-                    }))
-                    .observe(
-                        clone!((lazy_entity) move |event: On<MenuInputEvent>,
-                              disabled: Query<&MenuInputDisabled>,
-                              mut sliders: Query<(&mut SliderLeft, &mut SliderValue)>| {
-                            if disabled.contains(event.entity) {
-                                return;
-                            }
-                            let Ok((mut left, mut value)) = sliders.get_mut(*lazy_entity) else {
-                                return;
-                            };
-                            match event.input {
-                                MenuInput::Left | MenuInput::Right => {
-                                    let dir = if matches!(event.input, MenuInput::Left) { -1. } else { 1. };
-                                    left.0 = (left.0 + dir * max * 0.001).max(0.).min(max);
-                                    value.0 = left.0 / max * 100.;
-                                }
-                                _ => (),
-                            }
-                        }),
-                    )
-                    .with_node(|mut node| node.column_gap = Val::Px(10.))
-                    .item(
-                        El::<Text>::new()
-                            .text_font(TextFont::from_font_size(FONT_SIZE))
-                            .text_signal(
-                                SignalBuilder::from_component_lazy::<SliderValue>(lazy_entity.clone())
-                                    .map_in(|SliderValue(v)| v)
-                                    .dedupe()
-                                    .map_in(|value| Text(format!("{value:.1}")))
-                                    .map_in(Some),
-                            ),
-                    )
-                    .item(
-                        Stack::<Node>::new()
-                            .with_node(move |mut node| {
-                                node.width = Val::Px(slider_width);
-                                node.height = Val::Px(5.);
-                                node.padding = UiRect::horizontal(Val::Px(slider_padding));
-                            })
-                            .background_color(BackgroundColor(Color::BLACK))
-                            .layer({
-                                let knob_entity = LazyEntity::new();
-                                lil_baby_button()
-                                    .selected_signal(
-                                        SignalBuilder::from_lazy_entity(knob_entity.clone())
-                                            .has_component::<SliderDragging>()
-                                            .dedupe(),
-                                    )
-                                    .el // we need lower level access now
-                                    .lazy_entity(knob_entity.clone())
-                                    .insert(Pickable::default())
-                                    .on_signal_with_node(
-                                        SignalBuilder::from_component_lazy::<SliderLeft>(lazy_entity.clone())
-                                            .map_in(|SliderLeft(l)| l)
-                                            .dedupe(),
-                                        |mut node, left| node.left = Val::Px(left),
-                                    )
-                                    .align(Align::new().center_y())
-                                    .observe(clone!((knob_entity) move |_: On<Pointer<DragStart>>, mut commands: Commands| {
-                                        commands.entity(*knob_entity).insert(SliderDragging);
-                                    }))
-                                    .observe(clone!((knob_entity) move |_: On<Pointer<DragEnd>>, mut commands: Commands| {
-                                        commands.entity(*knob_entity).remove::<SliderDragging>();
-                                    }))
-                                    .observe(clone!((lazy_entity) move |drag: On<Pointer<Drag>>, mut sliders: Query<(&mut SliderLeft, &mut SliderValue)>| {
-                                        let Ok((mut left, mut value)) = sliders.get_mut(*lazy_entity) else {
-                                            return;
-                                        };
-                                        left.0 = (left.0 + drag.delta.x).max(0.).min(max);
-                                        value.0 = left.0 / max * 100.;
-                                    }))
-                            }),
-                    )
-            },
-            lazy_entity,
+            el: Row::<Node>::new(),
+            lazy_entity: LazyEntity::new(),
+            initial_value: 0.,
+            external_sync_task: None,
+            on_change_task: None,
         }
+    }
+
+    fn value(mut self, value: f32) -> Self {
+        self.initial_value = value;
+        self
+    }
+
+    /// Sync the slider value from an external signal
+    fn value_signal(mut self, signal: impl Signal<Item = f32> + Clone + Send + 'static) -> Self {
+        let lazy_entity = self.lazy_entity.clone();
+        let task = signal
+            .dedupe()
+            .map(
+                clone!((lazy_entity) move |In(value): In<f32>, mut sliders: Query<&mut SliderValue>| {
+                    let Ok(mut slider_value) = sliders.get_mut(*lazy_entity) else {
+                        return;
+                    };
+                    if (slider_value.0 - value).abs() > 0.01 {
+                        slider_value.0 = value;
+                    }
+                }),
+            )
+            .task();
+        self.external_sync_task = Some(task);
+        self
+    }
+
+    /// Called when the slider value changes
+    fn on_change<M>(mut self, handler: impl IntoSystem<In<f32>, (), M> + Send + Sync + 'static) -> Self {
+        let lazy_entity = self.lazy_entity.clone();
+        let task = signal::from_component_changed::<SliderValue>(lazy_entity)
+            .map_in(deref_copied)
+            .map(handler)
+            .task();
+        self.on_change_task = Some(task);
+        self
     }
 }
 
@@ -783,15 +887,101 @@ impl ElementWrapper for Slider {
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
+
+    fn into_el(self) -> Self::EL {
+        let Self {
+            el,
+            lazy_entity,
+            initial_value,
+            external_sync_task,
+            on_change_task,
+        } = self;
+
+        let max = SLIDER_MAX;
+
+        el
+            .insert(SliderTag)
+            .with_builder(clone!((lazy_entity) move |builder| {
+                let mut b = builder
+                    .lazy_entity(lazy_entity.clone())
+                    .insert(SliderValue(initial_value));
+                if let Some(task) = external_sync_task {
+                    b = b.hold_tasks([task]);
+                }
+                if let Some(task) = on_change_task {
+                    b = b.hold_tasks([task]);
+                }
+                b
+            }))
+            .observe(
+                clone!((lazy_entity) move |event: On<MenuInputEvent>,
+                      mut sliders: Query<&mut SliderValue>| {
+                    let Ok(mut value) = sliders.get_mut(*lazy_entity) else {
+                        return;
+                    };
+                    match event.input {
+                        MenuInput::Left | MenuInput::Right => {
+                            let dir = if matches!(event.input, MenuInput::Left) { -1. } else { 1. };
+                            value.0 = (value.0 + dir * 0.1).clamp(0., 100.);
+                        }
+                        _ => (),
+                    }
+                }),
+            )
+            .with_node(|mut node| node.column_gap = Val::Px(10.))
+            .item(
+                El::<Text>::new()
+                    .text_font(TextFont::from_font_size(FONT_SIZE))
+                    .text_signal(
+                        signal::from_component_changed::<SliderValue>(lazy_entity.clone())
+                            .map_in(deref_copied)
+                            .map_in(|value| format!("{value:.1}"))
+                            .map_in(Text)
+                            .map_in(Some),
+                    ),
+            )
+            .item(
+                Stack::<Node>::new()
+                    .with_node(move |mut node| {
+                        node.width = Val::Px(SLIDER_WIDTH);
+                        node.height = Val::Px(5.);
+                        node.padding = UiRect::horizontal(Val::Px(SLIDER_PADDING));
+                    })
+                    .background_color(BackgroundColor(Color::BLACK))
+                    .layer({
+                        let knob_entity = LazyEntity::new();
+                        lil_baby_button()
+                            .selected_signal(
+                                signal::from_entity(knob_entity.clone())
+                                    .has_component::<SliderDragging>()
+                                    .dedupe(),
+                            )
+                            .el // we need lower level access now
+                            .lazy_entity(knob_entity.clone())
+                            .insert(Pickable::default())
+                            .on_signal_with_node(
+                                signal::from_component_changed::<SliderValue>(lazy_entity.clone())
+                                    .map_in(deref_copied),
+                                move |mut node, value| node.left = Val::Px(value / 100. * max),
+                            )
+                            .align(Align::new().center_y())
+                            .on_dragged(clone!((knob_entity, lazy_entity) move |In((_, drag)): In<(Entity, DragData)>, mut sliders: Query<&mut SliderValue>, mut commands: Commands| {
+                                if drag.dragged {
+                                    commands.entity(*knob_entity).insert(SliderDragging);
+                                    let Ok(mut value) = sliders.get_mut(*lazy_entity) else {
+                                        return;
+                                    };
+                                    value.0 = (value.0 + drag.delta.x / max * 100.).clamp(0., 100.);
+                                } else {
+                                    commands.entity(*knob_entity).remove::<SliderDragging>();
+                                }
+                            }))
+                    }),
+            )
+    }
 }
 
 impl BuilderPassThrough for Slider {}
-
-impl Controllable for Slider {
-    fn lazy_entity(&self) -> LazyEntity {
-        self.lazy_entity.clone()
-    }
-}
 
 fn options(n: usize) -> Vec<String> {
     (1..=n).map(|i| format!("option {i}")).collect()
@@ -799,28 +989,25 @@ fn options(n: usize) -> Vec<String> {
 
 /// Component marker for menu items that are hovered
 #[derive(Component, Clone, Default)]
-struct MenuItemHovered;
+struct MenuItemFocused;
 
-fn menu_item(label: &str, body: impl Element, item_entity: LazyEntity) -> Stack<Node> {
+fn menu_item(label: &str, body: impl Element) -> Stack<Node> {
+    let lazy_entity = LazyEntity::new();
+    let hovered = signal::from_entity(lazy_entity.clone())
+        .has_component::<Hovered>()
+        .dedupe();
+    let focused = signal::from_entity(lazy_entity.clone())
+        .has_component::<MenuItemFocused>()
+        .dedupe();
     Stack::<Node>::new()
-        .lazy_entity(item_entity.clone())
-        .insert(Pickable::default())
+        .lazy_entity(lazy_entity)
+        .insert((Pickable::default(), Hoverable))
         .background_color_signal(
-            SignalBuilder::from_lazy_entity(item_entity.clone())
-                .has_component::<MenuItemHovered>()
+            signal::any!(hovered, focused)
                 .dedupe()
                 .map_bool_in(|| NORMAL_BUTTON.lighter(0.05), || NORMAL_BUTTON)
                 .map_in(BackgroundColor)
                 .map_in(Some),
-        )
-        .on_hovered_change(
-            clone!((item_entity) move |In((_, data)): In<(Entity, HoverData)>, mut commands: Commands| {
-                if data.hovered {
-                    commands.entity(*item_entity).insert(MenuItemHovered);
-                } else {
-                    commands.entity(*item_entity).remove::<MenuItemHovered>();
-                }
-            }),
         )
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
@@ -836,453 +1023,590 @@ fn menu_item(label: &str, body: impl Element, item_entity: LazyEntity) -> Stack<
         .layer(body.align(Align::new().right().center_y()))
 }
 
-/// Component to store dropdown selection (as string for simplicity)
-#[derive(Component, Clone, Default)]
-struct DropdownSelection(Option<String>);
-
-/// Component to store dropdown options
-#[derive(Component, Clone)]
-struct DropdownOptions(Vec<String>);
+/// Component to store dropdown selection index
+#[derive(Component, Clone, Default, Deref)]
+struct DropdownSelectionIndex(Option<usize>);
 
 /// Component marker for dropdown being shown
 #[derive(Component, Clone, Default)]
 struct DropdownShowing;
 
 /// Component to mark which option index is hovered in dropdown
-#[derive(Component, Clone, Default)]
+#[derive(Component, Clone, Default, Deref)]
 struct DropdownHoveredIndex(Option<usize>);
 
 /// Component marker for dropdown being clearable
 #[derive(Component, Clone, Default)]
 struct DropdownClearable;
 
-struct Dropdown {
+/// Component to store number of options in dropdown
+#[derive(Component, Clone, Default, Deref)]
+struct DropdownNumOptions(usize);
+
+struct Dropdown<T: Display + Clone + PartialEq + Send + Sync + 'static> {
     el: El<Node>,
     lazy_entity: LazyEntity,
+    options: Vec<T>,
+    initial_selection: Option<T>,
+    clearable: bool,
+    external_sync_task: Option<Box<dyn SignalTask>>,
+    on_change_task: Option<Box<dyn SignalTask>>,
 }
 
-fn focus_on_signal<E: Element>(element: E, signal: impl Signal<Item = bool> + Clone + Send + 'static) -> E {
-    element.with_builder(|builder| {
-        builder.on_signal(signal.dedupe(), |In((entity, focus)), mut commands: Commands| {
-            if focus {
-                commands.insert_resource(FocusedEntity(entity));
-            }
-        })
-    })
-}
+impl<T: Display + Clone + PartialEq + Send + Sync + 'static> Dropdown<T> {
+    fn new(options: Vec<T>) -> Self {
+        Self {
+            el: El::<Node>::new(),
+            lazy_entity: LazyEntity::new(),
+            options,
+            initial_selection: None,
+            clearable: false,
+            external_sync_task: None,
+            on_change_task: None,
+        }
+    }
 
-impl Dropdown {
-    fn new(options: Vec<String>, initial_selection: Option<String>, clearable: bool) -> Self {
-        let lazy_entity = LazyEntity::new();
-        let controlling_signal = SignalBuilder::from_lazy_entity(lazy_entity.clone())
-            .has_component::<Controlling>()
-            .dedupe();
-        let show_signal = SignalBuilder::from_lazy_entity(lazy_entity.clone())
-            .has_component::<DropdownShowing>()
-            .dedupe();
-        let opts = options.clone();
-        let _opts_len = options.len();
+    fn selection(mut self, selection: impl Into<Option<T>>) -> Self {
+        self.initial_selection = selection.into();
+        self
+    }
 
-        let el = El::<Node>::new()
-            .apply(|element| focus_on_signal(element, controlling_signal.clone()))
-            .with_builder(clone!((lazy_entity, options, initial_selection) move |builder| {
-                let mut b = builder
-                    .lazy_entity(lazy_entity.clone())
-                    .insert(DropdownSelection(initial_selection))
-                    .insert(DropdownOptions(options))
-                    .insert(DropdownHoveredIndex(None))
-                    .component_signal::<MenuInputDisabled, _>(
-                        controlling_signal.clone().not().map_true_in(|| MenuInputDisabled),
-                    );
-                if clearable {
-                    b = b.insert(DropdownClearable);
+    fn clearable(mut self) -> Self {
+        self.clearable = true;
+        self
+    }
+
+    /// Sync the selection from an external signal
+    fn selection_signal(mut self, signal: impl Signal<Item = Option<T>> + Clone + Send + 'static) -> Self {
+        let lazy_entity = self.lazy_entity.clone();
+        let options = self.options.clone();
+        let task = signal
+            .dedupe()
+            .map(clone!((lazy_entity, options) move |In(selection): In<Option<T>>, mut dropdowns: Query<&mut DropdownSelectionIndex>| {
+                if let Ok(mut sel) = dropdowns.get_mut(*lazy_entity) {
+                    let new_idx = selection.and_then(|s| options.iter().position(|o| *o == s));
+                    if sel.0 != new_idx {
+                        sel.0 = new_idx;
+                    }
                 }
-                b
             }))
-            .observe(
-                clone!((lazy_entity) move |mut event: On<MenuInputEvent>,
-                      controlleds: Query<&Controlling>,
-                      showings: Query<&DropdownShowing>,
-                      clearables: Query<&DropdownClearable>,
-                      mut dropdowns: Query<(&mut DropdownSelection, &DropdownOptions, &mut DropdownHoveredIndex)>,
-                      mut commands: Commands| {
-                    if !controlleds.contains(*lazy_entity) {
-                        return;
-                    }
-                    let Ok((mut selection, options, mut hovered_idx)) = dropdowns.get_mut(*lazy_entity) else {
-                        return;
-                    };
-                    let is_showing = showings.contains(*lazy_entity);
-                    let is_clearable = clearables.contains(*lazy_entity);
+            .task();
+        self.external_sync_task = Some(task);
+        self
+    }
 
-                    match event.input {
-                        MenuInput::Up | MenuInput::Down => {
-                            if is_showing {
-                                event.propagate(false);
-                                let step = if matches!(event.input, MenuInput::Up) { -1isize } else { 1isize };
-                                let mut i = hovered_idx.0.unwrap_or(if step < 0 { options.0.len() - 1 } else { 0 }) as isize;
-                                if hovered_idx.0.is_some() {
-                                    i = (i + step + options.0.len() as isize) % options.0.len() as isize;
-                                }
-                                // Skip currently selected option
-                                if selection.0.as_ref() == Some(&options.0[i as usize]) {
-                                    i = (i + step + options.0.len() as isize) % options.0.len() as isize;
-                                }
-                                hovered_idx.0 = Some(i as usize);
-                            }
-                        }
-                        MenuInput::Select => {
-                            if let Some(i) = hovered_idx.0 {
-                                selection.0 = Some(options.0[i].clone());
-                                hovered_idx.0 = None;
-                            }
-                            if is_showing {
-                                commands.entity(*lazy_entity).remove::<DropdownShowing>();
-                            } else {
-                                commands.entity(*lazy_entity).insert(DropdownShowing);
-                            }
-                        }
-                        MenuInput::Back => {
-                            if is_showing {
-                                event.propagate(false);
-                                hovered_idx.0 = None;
-                                commands.entity(*lazy_entity).remove::<DropdownShowing>();
-                            }
-                        }
-                        MenuInput::Delete => {
-                            if is_clearable {
-                                selection.0 = None;
-                            }
-                        }
-                        _ => (),
-                    }
-                }),
-            )
-            .child(
-                Button::new()
-                    .with_node(|mut node| node.width = Val::Px(300.))
-                    .body(
-                        Stack::<Node>::new()
-                            .with_node(|mut node| {
-                                node.width = Val::Percent(100.);
-                                node.padding = UiRect::horizontal(Val::Px(BASE_PADDING));
-                            })
-                            .layer(
-                                El::<Text>::new()
-                                    .align(Align::new().left())
-                                    .text_font(TextFont::from_font_size(FONT_SIZE))
-                                    .text_signal(
-                                        SignalBuilder::from_component_lazy::<DropdownSelection>(lazy_entity.clone())
-                                            .map_in(|DropdownSelection(s)| s.clone().unwrap_or_default())
-                                            .dedupe()
-                                            .map_in(Text)
-                                            .map_in(Some),
-                                    ),
-                            )
-                            .layer(
-                                Row::<Node>::new()
-                                    .with_node(|mut node| node.column_gap = Val::Px(BASE_PADDING))
-                                    .align(Align::new().right())
-                                    .item_signal(if clearable {
-                                        SignalBuilder::from_component_lazy::<DropdownSelection>(lazy_entity.clone())
-                                            .map_in(|DropdownSelection(s)| s.is_some())
-                                            .dedupe()
-                                            .map_true_in(clone!((lazy_entity) move || {
-                                                x_button(clone!((lazy_entity) move |_: In<_>, mut selections: Query<&mut DropdownSelection>| {
-                                                    if let Ok(mut sel) = selections.get_mut(*lazy_entity) {
-                                                        sel.0 = None;
-                                                    }
-                                                }))
-                                            }))
-                                            .left_either()
-                                    } else {
-                                        SignalBuilder::always(None::<El<Node>>).right_either()
-                                    })
-                                    .item(
-                                        El::<Text>::new()
-                                            .text_font(TextFont::from_font_size(FONT_SIZE))
-                                            .text(Text::new("v")),
-                                    ),
-                            ),
-                    )
-                    .on_click(clone!((lazy_entity) move |_: In<_>, showings: Query<&DropdownShowing>, mut commands: Commands| {
-                        if showings.contains(*lazy_entity) {
-                            commands.entity(*lazy_entity).remove::<DropdownShowing>();
-                        } else {
-                            commands.entity(*lazy_entity).insert(DropdownShowing);
-                        }
-                    })),
-            )
-            .child_signal(
-                show_signal.map_true_in(clone!((lazy_entity, opts) move || {
-                    Column::<Node>::new()
-                        .with_node(|mut node| {
-                            node.width = Val::Percent(100.);
-                            node.position_type = PositionType::Absolute;
-                            node.top = Val::Percent(100.);
-                        })
-                        .items(opts.clone().into_iter().enumerate().map(clone!((lazy_entity) move |(i, opt)| {
-                            text_button(
-                                SignalBuilder::always(opt.clone()),
-                                clone!((lazy_entity, opt) move |_: In<_>, mut dropdowns: Query<&mut DropdownSelection>, showings: Query<&DropdownShowing>, mut commands: Commands| {
-                                    if let Ok(mut sel) = dropdowns.get_mut(*lazy_entity) {
-                                        sel.0 = Some(opt.clone());
-                                    }
-                                    if showings.contains(*lazy_entity) {
-                                        commands.entity(*lazy_entity).remove::<DropdownShowing>();
-                                    }
-                                }),
-                            )
-                            .with_node(|mut node| node.width = Val::Percent(100.))
-                            .selected_signal(
-                                SignalBuilder::from_component_lazy::<DropdownHoveredIndex>(lazy_entity.clone())
-                                    .map_in(move |DropdownHoveredIndex(idx)| idx == Some(i))
-                                    .dedupe(),
-                            )
-                        })))
-                })),
-            );
-
-        Self { el, lazy_entity }
+    /// Called when the selection changes
+    fn on_change<M>(mut self, handler: impl IntoSystem<In<Option<T>>, (), M> + Send + Sync + 'static) -> Self {
+        let lazy_entity = self.lazy_entity.clone();
+        let options = self.options.clone();
+        let task = signal::from_component_changed::<DropdownSelectionIndex>(lazy_entity)
+            .map_in(deref_copied)
+            .map_in(clone!((options) move |idx: Option<usize>| idx.and_then(|i| options.get(i).cloned())))
+            .map(handler)
+            .task();
+        self.on_change_task = Some(task);
+        self
     }
 }
 
-impl ElementWrapper for Dropdown {
+impl<T: Display + Clone + PartialEq + Send + Sync + 'static> ElementWrapper for Dropdown<T> {
     type EL = El<Node>;
     fn element_mut(&mut self) -> &mut Self::EL {
         &mut self.el
     }
-}
 
-impl BuilderPassThrough for Dropdown {}
+    fn into_el(self) -> Self::EL {
+        let Self {
+            el,
+            lazy_entity,
+            options,
+            initial_selection,
+            clearable,
+            external_sync_task,
+            on_change_task,
+        } = self;
 
-impl Controllable for Dropdown {
-    fn lazy_entity(&self) -> LazyEntity {
-        self.lazy_entity.clone()
+        let show = signal::from_entity(lazy_entity.clone())
+            .has_component::<DropdownShowing>()
+            .dedupe();
+        let opts = options.clone();
+        let num_options = options.len();
+        let initial_idx = initial_selection.and_then(|s| options.iter().position(|o| *o == s));
+
+        el
+        .lazy_entity(lazy_entity.clone())
+        .with_builder(move |builder| {
+            let mut b = builder
+                .insert(DropdownSelectionIndex(initial_idx))
+                .insert(DropdownNumOptions(num_options))
+                .insert(DropdownHoveredIndex(None));
+            if clearable {
+                b = b.insert(DropdownClearable);
+            }
+            if let Some(task) = external_sync_task {
+                b = b.hold_tasks([task]);
+            }
+            if let Some(task) = on_change_task {
+                b = b.hold_tasks([task]);
+            }
+            b
+        })
+        // .on_click_outside(clone!((lazy_entity) move |_: In<_>, mut commands: Commands| {
+        //     commands.entity(*lazy_entity).remove::<DropdownShowing>();
+        // }))
+        .observe(
+            clone!((lazy_entity) move |mut event: On<MenuInputEvent>,
+                  showings: Query<&DropdownShowing>,
+                  clearables: Query<&DropdownClearable>,
+                  mut dropdowns: Query<(&mut DropdownSelectionIndex, &DropdownNumOptions, &mut DropdownHoveredIndex)>,
+                  mut commands: Commands| {
+                let Ok((mut selection, num_opts, mut hovered_idx)) = dropdowns.get_mut(*lazy_entity) else {
+                    return;
+                };
+                let is_showing = showings.contains(*lazy_entity);
+                let is_clearable = clearables.contains(*lazy_entity);
+
+                match event.input {
+                    MenuInput::Up | MenuInput::Down => {
+                        if is_showing {
+                            event.propagate(false);
+                            let step = if matches!(event.input, MenuInput::Up) { -1isize } else { 1isize };
+                            let mut i = hovered_idx.0.unwrap_or(if step < 0 { num_opts.0 - 1 } else { 0 }) as isize;
+                            if hovered_idx.0.is_some() {
+                                i = (i + step + num_opts.0 as isize) % num_opts.0 as isize;
+                            }
+                            // Skip currently selected option
+                            if selection.0 == Some(i as usize) {
+                                i = (i + step + num_opts.0 as isize) % num_opts.0 as isize;
+                            }
+                            hovered_idx.0 = Some(i as usize);
+                        }
+                    }
+                    MenuInput::Select => {
+                        if let Some(i) = hovered_idx.0 {
+                            selection.0 = Some(i);
+                            hovered_idx.0 = None;
+                        }
+                        if is_showing {
+                            commands.entity(*lazy_entity).remove::<DropdownShowing>();
+                        } else {
+                            commands.entity(*lazy_entity).insert(DropdownShowing);
+                        }
+                    }
+                    MenuInput::Back => {
+                        if is_showing {
+                            event.propagate(false);
+                            hovered_idx.0 = None;
+                            commands.entity(*lazy_entity).remove::<DropdownShowing>();
+                        }
+                    }
+                    MenuInput::Delete => {
+                        if is_clearable {
+                            selection.0 = None;
+                        }
+                    }
+                    _ => (),
+                }
+            }),
+        )
+        .child(
+            Button::new()
+                .with_node(|mut node| node.width = Val::Px(300.))
+                .body(
+                    Stack::<Node>::new()
+                        .with_node(|mut node| {
+                            node.width = Val::Percent(100.);
+                            node.padding = UiRect::horizontal(Val::Px(BASE_PADDING));
+                        })
+                        .layer({
+                            let opts = opts.clone();
+                            El::<Text>::new()
+                                .align(Align::new().left())
+                                .text_font(TextFont::from_font_size(FONT_SIZE))
+                                .text_signal(
+                                    signal::from_component_changed::<DropdownSelectionIndex>(lazy_entity.clone())
+                                        .map_in(deref_copied)
+                                        .map_some_in(move |i| opts[i].to_string())
+                                        .map_in(Option::unwrap_or_default)
+                                        .map_in(Text)
+                                        .map_in(Some)
+                                )
+                        })
+                        .layer({
+                            let x_button = || signal::from_component_changed::<DropdownSelectionIndex>(lazy_entity.clone())
+                                .map_in(deref_copied)
+                                .map_in_ref(Option::is_some)
+                                .map_true_in(clone!((lazy_entity) move || {
+                                    x_button()
+                                    .on_click(clone!((lazy_entity) move |_: In<_>, mut selections: Query<&mut DropdownSelectionIndex>| {
+                                        if let Ok(mut sel) = selections.get_mut(*lazy_entity) {
+                                            sel.0 = None;
+                                        }
+                                    }))
+                                    .observe(|mut click: On<Pointer<Click>>| click.propagate(false))
+                                }));
+                            let mut el = Row::<Node>::new()
+                                .with_node(|mut node| node.column_gap = Val::Px(BASE_PADDING))
+                                .align(Align::new().right());
+                                // TODO: this should work but type inference fails, may need polonius ?
+                                // .item_signal(clearable.then(x_button))
+                            if clearable {
+                                el = el.item_signal(x_button());
+                            }
+                            el
+                                .item(
+                                    El::<Text>::new()
+                                        .text_font(TextFont::from_font_size(FONT_SIZE))
+                                        .text(Text::new("v")))
+                        }),
+                )
+                .on_click(clone!((lazy_entity) move |_: In<_>, world: &mut World| {
+                    if world.entity_mut(*lazy_entity).contains::<DropdownShowing>() {
+                        world.entity_mut(*lazy_entity).remove::<DropdownShowing>();
+                    } else {
+                        for entity in world.query_filtered::<Entity, With<DropdownShowing>>().iter(world).collect::<Vec<_>>() {
+                            world.entity_mut(entity).remove::<DropdownShowing>();
+                        }
+                        world.entity_mut(*lazy_entity).insert(DropdownShowing);
+                    }
+                })),
+        )
+        .child_signal(
+            show.map_true_in(clone!((lazy_entity, opts) move || {
+                Column::<Node>::new()
+                    .with_node(|mut node| {
+                        node.width = Val::Percent(100.);
+                        node.top = Val::Percent(100.);
+                        node.position_type = PositionType::Absolute;
+                    })
+                    .items(
+                        opts.iter().cloned().enumerate().collect::<Vec<_>>().into_iter()
+                        .map(clone!((lazy_entity) move |(i, opt)| {
+                            text_button(
+                                    signal::once(opt.to_string()),
+                                    clone!((lazy_entity) move |_: In<_>, mut dropdowns: Query<&mut DropdownSelectionIndex>, mut commands: Commands| {
+                                        dropdowns.get_mut(*lazy_entity).unwrap().0 = Some(i);
+                                        commands.entity(*lazy_entity).remove::<DropdownShowing>();
+                                    }),
+                                )
+                                .with_node(|mut node| node.width = Val::Percent(100.))
+                                .selected_signal(
+                                    signal::from_component_changed::<DropdownHoveredIndex>(lazy_entity.clone())
+                                        .map_in(deref_copied)
+                                        .eq(Some(i)),
+                                )
+                        }))
+                    )
+                    // .items_signal_vec(
+                    //     MutableVec::builder().values(opts.iter().cloned().enumerate().collect::<Vec<_>>()).spawn(world)
+                    //         .signal_vec()
+                    //         .filter_signal(clone!((lazy_entity) move |In((i, _)): In<(usize, T)>| {
+                    //             signal::from_component::<DropdownSelectionIndex>(lazy_entity.clone())
+                    //                 .map_in(deref_copied)
+                    //                 .map_in(move |selected_idx: Option<usize>| selected_idx != Some(i))
+                    //                 .dedupe()
+                    //         }))
+                    //         .map_in(clone!((lazy_entity) move |(i, opt): (usize, T)| {
+                    //             text_button(
+                    //                 signal::once(opt.to_string()),
+                    //                 clone!((lazy_entity) move |_: In<_>, mut dropdowns: Query<&mut DropdownSelectionIndex>, mut commands: Commands| {
+                    //                     dropdowns.get_mut(*lazy_entity).unwrap().0 = Some(i);
+                    //                     commands.entity(*lazy_entity).remove::<DropdownShowing>();
+                    //                 }),
+                    //             )
+                    //             .with_node(|mut node| node.width = Val::Percent(100.))
+                    //             .selected_signal(
+                    //                 signal::from_component_changed::<DropdownHoveredIndex>(lazy_entity.clone())
+                    //                     .map_in(deref_copied)
+                    //                     .eq(Some(i)),
+                    //             )
+                    //         })),
+                    // )
+            })),
+        )
     }
 }
 
-/// Resource to track which menu items are hovered by index
-#[derive(Resource, Clone, Default)]
-struct SubMenuHoveredIndex(Option<usize>);
+impl<T: Display + Clone + PartialEq + Send + Sync + 'static> BuilderPassThrough for Dropdown<T> {}
 
-fn sub_menu_child_hover_manager<E: Element + BuilderPassThrough>(element: E, num_items: usize) -> E {
-    element.observe(
-        move |event: On<MenuInputEvent>, mut hovered_idx: ResMut<SubMenuHoveredIndex>, mut commands: Commands| {
-            match event.input {
-                MenuInput::Up | MenuInput::Down => {
-                    let step = if matches!(event.input, MenuInput::Up) {
-                        -1isize
-                    } else {
-                        1isize
-                    };
-                    let i = match hovered_idx.0 {
-                        Some(cur) => ((cur as isize + step + num_items as isize) % num_items as isize) as usize,
-                        None => {
-                            if step < 0 {
-                                num_items - 1
-                            } else {
-                                0
+/// Component to store the focusable item's index within its parent container
+#[derive(Component, Clone, Default, Deref)]
+struct FocusableItemIndex(usize);
+
+fn sub_menu_child_focus_manager<E: Element + BuilderPassThrough>(element: E) -> E {
+    let lazy_entity = LazyEntity::new();
+    let none_focused = signal::from_component_changed::<FocusedIndex>(lazy_entity.clone())
+        .map_in(deref_copied)
+        .map_in_ref(Option::is_none);
+    element
+        .lazy_entity(lazy_entity.clone())
+        .insert(FocusedIndex::default())
+        .component_signal(none_focused.map_true_in(|| Focused))
+        .observe(clone!((lazy_entity) move |event: On<MenuInputEvent>,
+            children_query: Query<&Children>,
+            mut focused_indices: Query<&mut FocusedIndex>,
+            mut commands: Commands| {
+                let entity = *lazy_entity;
+                let Ok(mut focused_idx) = focused_indices.get_mut(entity) else { return };
+                let num_items = children_query.get(entity).map(|c| c.len()).unwrap_or(0);
+                if num_items == 0 { return; }
+                match event.input {
+                    MenuInput::Up | MenuInput::Down => {
+                        let step = if matches!(event.input, MenuInput::Up) {
+                            -1isize
+                        } else {
+                            1isize
+                        };
+                        let i = match focused_idx.0 {
+                            Some(cur) => ((cur as isize + step + num_items as isize) % num_items as isize) as usize,
+                            None => {
+                                if step < 0 {
+                                    num_items - 1
+                                } else {
+                                    0
+                                }
                             }
-                        }
-                    };
-                    hovered_idx.0 = Some(i);
-                }
-                MenuInput::Back => {
-                    if hovered_idx.0.is_some() {
-                        hovered_idx.0 = None;
-                    } else {
-                        commands.insert_resource(ShowSubMenu(None));
+                        };
+                        focused_idx.0 = Some(i);
                     }
+                    MenuInput::Back => {
+                        if focused_idx.0.is_some() {
+                            focused_idx.0 = None;
+                        } else {
+                            commands.insert_resource(ShowSubMenu(None));
+                        }
+                    }
+                    _ => (),
                 }
-                _ => (),
             }
-        },
-    )
+        ))
 }
 
-fn make_controlling_menu_item(label: &str, el: impl Controllable + Element, item_index: usize) -> Stack<Node> {
+fn focusable_menu_item(label: &str, el: impl Element) -> Stack<Node> {
     let item_entity = LazyEntity::new();
-    let hovered_signal = SignalBuilder::from_resource::<SubMenuHoveredIndex>()
-        .map_in(move |SubMenuHoveredIndex(idx)| idx == Some(item_index))
-        .dedupe();
+    let focused = signal::eq!(
+        signal::from_parent(item_entity.clone())
+            .component_changed::<FocusedIndex>()
+            .map_in::<Option<usize>, _, _>(deref_copied),
+        signal::from_component_changed::<FocusableItemIndex>(item_entity.clone())
+            .map_in(deref_copied)
+            .map_in(Some)
+    )
+    .dedupe();
     menu_item(
         label,
-        el.controlling_signal(hovered_signal.clone()),
-        item_entity.clone(),
+        el.with_builder(|builder| builder.component_signal(focused.clone().map_true_in(|| Focused))),
     )
-    .with_builder(|builder| {
-        builder.component_signal::<MenuItemHovered, _>(hovered_signal.map_true_in(|| MenuItemHovered))
-    })
+    .lazy_entity(item_entity)
+    .component_signal(focused.map_true_in(|| MenuItemFocused))
 }
 
-fn audio_menu() -> Column<Node> {
-    let items = [
-        make_controlling_menu_item("dropdown", Dropdown::new(options(4), None, true), 0),
-        make_controlling_menu_item("radio group", RadioGroup::new(options(3), None), 1),
-        make_controlling_menu_item("checkbox", Checkbox::new(false), 2),
-        make_controlling_menu_item(
-            "iterable options",
-            IterableOptions::new(options(4), "option 1".to_string()),
-            3,
-        ),
-        make_controlling_menu_item("master volume", Slider::new(100.), 4),
-        make_controlling_menu_item("effect volume", Slider::new(50.), 5),
-        make_controlling_menu_item("music volume", Slider::new(50.), 6),
-        make_controlling_menu_item("voice volume", Slider::new(50.), 7),
-    ];
-    let l = items.len();
-    let no_child_hovered = SignalBuilder::from_resource::<SubMenuHoveredIndex>()
-        .map_in(|SubMenuHoveredIndex(idx)| idx.is_none())
-        .dedupe();
+fn audio_menu() -> impl Element {
     menu_base(SUB_MENU_WIDTH, SUB_MENU_HEIGHT, "audio menu")
-        .apply(|element| focus_on_signal(element, no_child_hovered))
-        .apply(|element| sub_menu_child_hover_manager(element, l))
+        .apply(sub_menu_child_focus_manager)
         .items(
-            items
-                .into_iter()
-                .enumerate()
-                .map(move |(i, item)| item.z_index(ZIndex((l - i) as i32))),
+            [
+                (
+                    "dropdown",
+                    Dropdown::new(options(4))
+                        .clearable()
+                        .selection_signal(
+                            signal::from_resource_changed::<AudioSettings>().map_in(|s: AudioSettings| s.dropdown),
+                        )
+                        .on_change(|In(v): In<Option<String>>, mut settings: ResMut<AudioSettings>| {
+                            settings.dropdown = v;
+                        })
+                        .type_erase(),
+                ),
+                (
+                    "radio group",
+                    RadioGroup::new(options(3))
+                        .selection_signal(
+                            signal::from_resource_changed::<AudioSettings>().map_in(|s: AudioSettings| s.radio_group),
+                        )
+                        .on_change(|In(v): In<Option<usize>>, mut settings: ResMut<AudioSettings>| {
+                            settings.radio_group = v;
+                        })
+                        .type_erase(),
+                ),
+                (
+                    "checkbox",
+                    Checkbox::new()
+                        .checked_signal(
+                            signal::from_resource_changed::<AudioSettings>().map_in(|s: AudioSettings| s.checkbox),
+                        )
+                        .on_change(|In(v): In<bool>, mut settings: ResMut<AudioSettings>| {
+                            settings.checkbox = v;
+                        })
+                        .type_erase(),
+                ),
+                (
+                    "iterable options",
+                    IterableOptions::new(options(4))
+                        .selection_signal(
+                            signal::from_resource_changed::<AudioSettings>()
+                                .map_in(|s: AudioSettings| s.iterable_option),
+                        )
+                        .on_change(|In(v): In<String>, mut settings: ResMut<AudioSettings>| {
+                            settings.iterable_option = v;
+                        })
+                        .type_erase(),
+                ),
+                (
+                    "master volume",
+                    Slider::new()
+                        // .value_signal(
+                        //     signal::from_resource_changed::<AudioSettings>().map_in(|s: AudioSettings|
+                        // s.master_volume), )
+                        .on_change(|In(v): In<f32>, mut settings: ResMut<AudioSettings>| {
+                            settings.master_volume = v;
+                        })
+                        .type_erase(),
+                ),
+                (
+                    "effect volume",
+                    Slider::new()
+                        .value_signal(
+                            signal::from_resource_changed::<AudioSettings>().map_in(|s: AudioSettings| s.effect_volume),
+                        )
+                        .on_change(|In(v): In<f32>, mut settings: ResMut<AudioSettings>| {
+                            settings.effect_volume = v;
+                        })
+                        .type_erase(),
+                ),
+                (
+                    "music volume",
+                    Slider::new()
+                        .value_signal(
+                            signal::from_resource_changed::<AudioSettings>().map_in(|s: AudioSettings| s.music_volume),
+                        )
+                        .on_change(|In(v): In<f32>, mut settings: ResMut<AudioSettings>| {
+                            settings.music_volume = v;
+                        })
+                        .type_erase(),
+                ),
+                (
+                    "voice volume",
+                    Slider::new()
+                        .value_signal(
+                            signal::from_resource_changed::<AudioSettings>().map_in(|s: AudioSettings| s.voice_volume),
+                        )
+                        .on_change(|In(v): In<f32>, mut settings: ResMut<AudioSettings>| {
+                            settings.voice_volume = v;
+                        })
+                        .type_erase(),
+                ),
+            ]
+            .into_iter()
+            .enumerate()
+            .map(|(i, (label, el))| {
+                focusable_menu_item(label, el).insert((FocusableItemIndex(i), ZIndex(i32::MAX - i as i32)))
+            }),
         )
 }
 
-fn graphics_menu() -> Column<Node> {
-    let l = 4usize;
-
-    // Create dropdowns with their lazy entities exposed for signal sync
-    let preset_dropdown = Dropdown::new(
-        Quality::iter().map(|q| q.to_string()).collect::<Vec<_>>(),
-        Some(Quality::Medium.to_string()),
-        true,
-    );
-    let preset_entity = preset_dropdown.lazy_entity.clone();
-
-    let texture_dropdown = Dropdown::new(
-        Quality::iter().map(|q| q.to_string()).collect::<Vec<_>>(),
-        Some(Quality::Medium.to_string()),
-        false,
-    );
-    let texture_entity = texture_dropdown.lazy_entity.clone();
-
-    let shadow_dropdown = Dropdown::new(
-        Quality::iter().map(|q| q.to_string()).collect::<Vec<_>>(),
-        Some(Quality::Medium.to_string()),
-        false,
-    );
-    let shadow_entity = shadow_dropdown.lazy_entity.clone();
-
-    let bloom_dropdown = Dropdown::new(
-        Quality::iter().map(|q| q.to_string()).collect::<Vec<_>>(),
-        Some(Quality::Medium.to_string()),
-        false,
-    );
-    let bloom_entity = bloom_dropdown.lazy_entity.clone();
-
-    // Signal: When preset changes, propagate to all individual qualities
-    #[allow(clippy::type_complexity)]
-    let preset_broadcaster = SignalBuilder::from_component_lazy::<DropdownSelection>(preset_entity.clone())
-        .map_in(|DropdownSelection(sel)| sel)
-        .dedupe()
-        .map(clone!((texture_entity, shadow_entity, bloom_entity) move |In(preset_quality): In<Option<String>>, mut selections: Query<&mut DropdownSelection>| {
-            if let Some(ref quality) = preset_quality {
-                if let Ok(mut texture) = selections.get_mut(*texture_entity)
-                    && texture.0.as_ref() != Some(quality)
-                {
-                    texture.0 = Some(quality.clone());
-                }
-                if let Ok(mut shadow) = selections.get_mut(*shadow_entity)
-                    && shadow.0.as_ref() != Some(quality)
-                {
-                    shadow.0 = Some(quality.clone());
-                }
-                if let Ok(mut bloom) = selections.get_mut(*bloom_entity)
-                    && bloom.0.as_ref() != Some(quality)
-                {
-                    bloom.0 = Some(quality.clone());
-                }
-            }
-        }))
-        .hold();
-
-    // Signal: When individual qualities change, update preset if they all match
-    #[allow(clippy::type_complexity)]
-    let preset_controller = SignalBuilder::from_component_lazy::<DropdownSelection>(texture_entity.clone())
-        .map_in(|DropdownSelection(sel)| sel)
-        .combine(
-            SignalBuilder::from_component_lazy::<DropdownSelection>(shadow_entity.clone())
-                .map_in(|DropdownSelection(sel)| sel)
-        )
-        .combine(
-            SignalBuilder::from_component_lazy::<DropdownSelection>(bloom_entity.clone())
-                .map_in(|DropdownSelection(sel)| sel)
-        )
-        .dedupe()
-        .map(clone!((preset_entity) move |In(((texture, shadow), bloom)): In<((Option<String>, Option<String>), Option<String>)>, mut selections: Query<&mut DropdownSelection>| {
-            let Ok(mut preset) = selections.get_mut(*preset_entity) else { return };
-
-            // Check if all three individual qualities match
-            if texture.is_some() && texture == shadow && shadow == bloom {
-                // All match - set preset to this value if different
-                if preset.0 != texture {
-                    preset.0 = texture;
-                }
+fn graphics_menu() -> impl Element {
+    let computed_preset = signal::from_resource::<GraphicsSettings>()
+        .map_in(|settings| {
+            if settings.texture_quality == settings.shadow_quality && settings.shadow_quality == settings.bloom_quality
+            {
+                Some(settings.texture_quality)
             } else {
-                // They don't all match - clear preset if it's set
-                if preset.0.is_some() {
-                    preset.0 = None;
-                }
+                None
             }
-        }))
-        .hold();
-
-    menu_base(SUB_MENU_WIDTH, SUB_MENU_HEIGHT, "graphics menu")
-        .apply(|element| {
-            focus_on_signal(
-                element,
-                SignalBuilder::from_resource::<SubMenuHoveredIndex>()
-                    .map_in(|SubMenuHoveredIndex(index)| index.is_none())
-                    .dedupe(),
-            )
         })
-        .apply(|element| sub_menu_child_hover_manager(element, l))
-        .item(make_controlling_menu_item("preset quality", preset_dropdown, 0).z_index(ZIndex(4)))
-        .item(make_controlling_menu_item("texture quality", texture_dropdown, 1).z_index(ZIndex(3)))
-        .item(make_controlling_menu_item("shadow quality", shadow_dropdown, 2).z_index(ZIndex(2)))
-        .item(make_controlling_menu_item("bloom quality", bloom_dropdown, 3).z_index(ZIndex(1)))
-        .item(
-            // solely here to dehover dropdown menu items  // TODO: this can also be solved by
-            // allowing setting Over/Out order at runtime or implementing .on_hovered_outside, i
-            // should do both of these
-            El::<Node>::new()
-                .with_node(move |mut node| {
-                    node.height = Val::Px(SUB_MENU_HEIGHT - (l + 1) as f32 * MENU_ITEM_HEIGHT - BASE_PADDING * 2.)
-                })
-                .on_hovered_change(
-                    |In((_, data)): In<(Entity, HoverData)>, mut hovered_index: ResMut<SubMenuHoveredIndex>| {
-                        if data.hovered {
-                            hovered_index.0 = None;
+        .dedupe();
+
+    let quality_options = Quality::iter().collect::<Vec<_>>();
+    let items = [
+        (
+            "preset quality",
+            Dropdown::new(quality_options.clone())
+                .clearable()
+                .selection_signal(computed_preset)
+                .on_change(
+                    |In(quality_option): In<Option<Quality>>, mut settings: ResMut<GraphicsSettings>| {
+                        if let Some(quality) = quality_option {
+                            settings.texture_quality = quality;
+                            settings.shadow_quality = quality;
+                            settings.bloom_quality = quality;
                         }
                     },
                 ),
-        )
-        .with_builder(|b| b.hold_signals([preset_broadcaster, preset_controller]))
+        ),
+        (
+            "texture quality",
+            Dropdown::new(quality_options.clone())
+                .selection_signal(
+                    signal::from_resource_changed::<GraphicsSettings>()
+                        .map_in(|settings| settings.texture_quality)
+                        .map_in(Some)
+                        .dedupe(),
+                )
+                .on_change(
+                    |In(quality_option): In<Option<Quality>>, mut settings: ResMut<GraphicsSettings>| {
+                        if let Some(quality) = quality_option {
+                            settings.texture_quality = quality;
+                        }
+                    },
+                ),
+        ),
+        (
+            "shadow quality",
+            Dropdown::new(quality_options.clone())
+                .selection_signal(
+                    signal::from_resource::<GraphicsSettings>()
+                        .map_in(|settings| settings.shadow_quality)
+                        .map_in(Some)
+                        .dedupe(),
+                )
+                .on_change(
+                    |In(quality_option): In<Option<Quality>>, mut settings: ResMut<GraphicsSettings>| {
+                        if let Some(quality) = quality_option {
+                            settings.shadow_quality = quality;
+                        }
+                    },
+                ),
+        ),
+        (
+            "bloom quality",
+            Dropdown::new(quality_options.clone())
+                .selection_signal(
+                    signal::from_resource::<GraphicsSettings>()
+                        .map_in(|settings| settings.bloom_quality)
+                        .map_in(Some)
+                        .dedupe(),
+                )
+                .on_change(
+                    |In(quality_option): In<Option<Quality>>, mut settings: ResMut<GraphicsSettings>| {
+                        if let Some(quality) = quality_option {
+                            settings.bloom_quality = quality;
+                        }
+                    },
+                ),
+        ),
+    ];
+
+    menu_base(SUB_MENU_WIDTH, SUB_MENU_HEIGHT, "graphics menu")
+        .apply(sub_menu_child_focus_manager)
+        .items(items.into_iter().enumerate().map(|(i, (label, el))| {
+            focusable_menu_item(label, el).insert((FocusableItemIndex(i), ZIndex(i32::MAX - i as i32)))
+        }))
 }
 
-fn x_button<Marker>(
-    on_click: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + Sync + 'static,
-) -> El<Node> {
+fn x_button() -> El<Node> {
     let lazy = LazyEntity::new();
     El::<Node>::new()
         .lazy_entity(lazy.clone())
         .background_color(BackgroundColor(Color::NONE))
-        .insert(Pickable::default())
-        .on_click(on_click)
+        .insert((Pickable::default(), Hoverable))
+        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .child(
             El::<Text>::new()
                 .text_font(TextFont::from_font_size(FONT_SIZE))
                 .text(Text::new("x"))
                 .text_color_signal(
-                    SignalBuilder::from_lazy_entity(lazy)
+                    signal::from_entity(lazy)
                         .has_component::<Hovered>()
                         .map_bool_in(|| bevy::color::palettes::basic::RED.into(), || TEXT_COLOR)
                         .map_in(TextColor)
@@ -1291,114 +1615,103 @@ fn x_button<Marker>(
         )
 }
 
-fn menu() -> impl Element {
-    Stack::<Node>::new()
-        .layer(
-            menu_base(MAIN_MENU_SIDES, MAIN_MENU_SIDES, "main menu")
-                .apply(|element| {
-                    focus_on_signal(
-                        element,
-                        SignalBuilder::from_resource::<ShowSubMenu>()
-                            .map_in(|ShowSubMenu(option)| option.is_none())
-                            .dedupe(),
-                    )
-                })
-                .with_builder(|b| {
-                    b.component_signal::<MenuInputDisabled, _>(
-                        SignalBuilder::from_resource::<ShowSubMenu>()
-                            .map_in(|ShowSubMenu(option)| option.is_some())
-                            .dedupe()
-                            .map_true_in(|| MenuInputDisabled),
-                    )
-                })
-                .observe(
-                    move |event: On<MenuInputEvent>,
-                          disabled: Query<&MenuInputDisabled>,
-                          sub_menu_selected: Res<SubMenuSelected>,
-                          mut commands: Commands| {
-                        if disabled.contains(event.entity) {
-                            return;
-                        }
-                        match event.input {
-                            MenuInput::Up | MenuInput::Down => {
-                                if let Some(cur_sub_menu) = sub_menu_selected.0 {
-                                    if let Some(i) = SubMenu::iter().position(|sub_menu| cur_sub_menu == sub_menu) {
-                                        let sub_menus = SubMenu::iter().collect::<Vec<_>>();
-                                        commands.insert_resource(SubMenuSelected(
-                                            if matches!(event.input, MenuInput::Down) {
-                                                sub_menus.iter().rev().cycle().nth(sub_menus.len() - i).copied()
-                                            } else {
-                                                sub_menus.iter().cycle().nth(i + 1).copied()
-                                            },
-                                        ));
-                                    }
+fn main_menu() -> impl Element + Clone {
+    menu_base(MAIN_MENU_SIDES, MAIN_MENU_SIDES, "main menu")
+        .insert(Focused)
+        .observe(
+            move |event: On<MenuInputEvent>,
+                  focuseds: Query<&Focused>,
+                  sub_menu_selected: Res<SubMenuSelected>,
+                  mut commands: Commands| {
+                if !focuseds.contains(event.entity) {
+                    return;
+                }
+                match event.input {
+                    MenuInput::Up | MenuInput::Down => {
+                        if let Some(cur_sub_menu) = sub_menu_selected.0 {
+                            if let Some(i) = SubMenu::iter().position(|sub_menu| cur_sub_menu == sub_menu) {
+                                let sub_menus = SubMenu::iter().collect::<Vec<_>>();
+                                commands.insert_resource(SubMenuSelected(if matches!(event.input, MenuInput::Down) {
+                                    sub_menus.iter().rev().cycle().nth(sub_menus.len() - i).copied()
                                 } else {
-                                    commands.insert_resource(SubMenuSelected(Some(
-                                        if matches!(event.input, MenuInput::Up) {
-                                            SubMenu::iter().next_back().unwrap()
-                                        } else {
-                                            SubMenu::iter().next().unwrap()
-                                        },
-                                    )));
-                                }
+                                    sub_menus.iter().cycle().nth(i + 1).copied()
+                                }));
                             }
-                            MenuInput::Select => {
-                                if let Some(sub_menu) = sub_menu_selected.0 {
-                                    commands.insert_resource(ShowSubMenu(Some(sub_menu)));
-                                }
-                            }
-                            MenuInput::Back => {
-                                commands.insert_resource(SubMenuSelected(None));
-                            }
-                            _ => (),
+                        } else {
+                            commands.insert_resource(SubMenuSelected(Some(if matches!(event.input, MenuInput::Up) {
+                                SubMenu::iter().next_back().unwrap()
+                            } else {
+                                SubMenu::iter().next().unwrap()
+                            })));
                         }
-                    },
-                )
-                .with_node(|mut node| node.row_gap = Val::Px(BASE_PADDING * 2.))
-                .item(
-                    Column::<Node>::new()
-                        .with_node(|mut node| node.row_gap = Val::Px(BASE_PADDING))
-                        .align_content(Align::center())
-                        .items(SubMenu::iter().map(|sub_menu| {
-                            sub_menu_button(sub_menu).hovered_signal(
-                                SignalBuilder::from_resource::<SubMenuSelected>()
-                                    .map_in(move |SubMenuSelected(selected_option)| selected_option == Some(sub_menu))
-                                    .dedupe(),
-                            )
-                        })),
-                ),
+                    }
+                    MenuInput::Select => {
+                        if let Some(sub_menu) = sub_menu_selected.0 {
+                            commands.insert_resource(ShowSubMenu(Some(sub_menu)));
+                        }
+                    }
+                    MenuInput::Back => {
+                        commands.insert_resource(SubMenuSelected(None));
+                    }
+                    _ => (),
+                }
+            },
         )
-        .layer_signal(
-            SignalBuilder::from_resource::<ShowSubMenu>()
-                .map_in(|ShowSubMenu(option)| option)
-                .dedupe()
-                .map_some_in(move |sub_menu| {
-                    let menu: Column<Node> = match sub_menu {
-                        SubMenu::Audio => audio_menu(),
-                        SubMenu::Graphics => graphics_menu(),
-                    };
-                    Stack::<Node>::new()
-                        .with_node(|mut node| {
-                            node.width = Val::Px(SUB_MENU_WIDTH);
-                            node.height = Val::Px(SUB_MENU_HEIGHT);
-                            // TODO: without absolute there's some weird bouncing when switching between
-                            // menus, perhaps due to the layout system having to figure stuff out ?
-                            node.position_type = PositionType::Absolute;
-                        })
-                        .align(Align::center())
-                        .layer(menu.align(Align::center()))
-                        .layer(
-                            x_button(|_: In<_>, mut commands: Commands| {
-                                commands.insert_resource(ShowSubMenu(None));
-                            })
-                            .align(Align::new().top().right())
-                            .with_node(|mut node| {
-                                node.padding.right = Val::Px(BASE_PADDING);
-                                node.padding.top = Val::Px(BASE_PADDING / 2.);
-                            }),
-                        )
+        .with_node(|mut node| node.row_gap = Val::Px(BASE_PADDING * 2.))
+        .item(
+            Column::<Node>::new()
+                .with_node(|mut node| node.row_gap = Val::Px(BASE_PADDING))
+                .align_content(Align::center())
+                .items(SubMenu::iter().map(|sub_menu| {
+                    sub_menu_button(sub_menu).hovered_signal(
+                        signal::from_resource_changed::<SubMenuSelected>()
+                            .map_in(deref_copied)
+                            .eq(Some(sub_menu)),
+                    )
+                })),
+        )
+}
+
+fn sub_menu_x(element: impl Element) -> impl Element + Clone {
+    Stack::<Node>::new()
+        .with_node(|mut node| {
+            node.width = Val::Px(SUB_MENU_WIDTH);
+            node.height = Val::Px(SUB_MENU_HEIGHT);
+            // TODO: without absolute there's some weird bouncing when switching between
+            // menus, perhaps due to the layout system having to figure stuff out ?
+            node.position_type = PositionType::Absolute;
+        })
+        .align(Align::center())
+        .layer(element.align(Align::center()))
+        .layer(
+            x_button()
+                .on_click(|_: In<_>, mut commands: Commands| {
+                    commands.insert_resource(ShowSubMenu(None));
+                })
+                .align(Align::new().top().right())
+                .with_node(|mut node| {
+                    node.padding.right = Val::Px(BASE_PADDING);
+                    node.padding.top = Val::Px(BASE_PADDING / 2.);
                 }),
         )
+}
+
+fn menu() -> impl Element {
+    Stack::<Node>::new().layer_signal(
+        signal::from_resource_changed::<ShowSubMenu>()
+            .map_in(deref_copied)
+            .map_option_in(
+                |sub_menu| {
+                    match sub_menu {
+                        SubMenu::Audio => audio_menu().left_either(),
+                        SubMenu::Graphics => graphics_menu().right_either(),
+                    }
+                    .apply(sub_menu_x)
+                    .left_either()
+                },
+                || main_menu().right_either(),
+            ),
+    )
 }
 
 fn camera(mut commands: Commands) {
@@ -1465,13 +1778,16 @@ struct SliderTag;
 
 fn keyboard_menu_input_events(
     sliders: Query<Entity, With<SliderTag>>,
-    focused_entity: Res<FocusedEntity>,
+    focused: Option<Single<Entity, With<Focused>>>,
     keys: Res<ButtonInput<KeyCode>>,
     mut menu_input_rate_limiter: ResMut<MenuInputRateLimiter>,
     mut slider_rate_limiter: ResMut<SliderRateLimiter>,
     time: Res<Time>,
     mut commands: Commands,
 ) {
+    let Some(focused_entity) = focused.map(|f| *f) else {
+        return;
+    };
     if keys.pressed(KeyCode::ShiftLeft) {
         let pressed_type = if keys.just_pressed(KeyCode::Tab) {
             PressedType::JustPressed
@@ -1483,7 +1799,7 @@ fn keyboard_menu_input_events(
         let handled = rate_limited_menu_input(
             pressed_type,
             MenuInput::Up,
-            focused_entity.0,
+            focused_entity,
             &mut menu_input_rate_limiter.0,
             &time,
             &mut commands,
@@ -1492,7 +1808,7 @@ fn keyboard_menu_input_events(
             return;
         }
     }
-    let slider_focused = sliders.get(focused_entity.0).is_ok();
+    let slider_focused = sliders.get(focused_entity).is_ok();
     for (key, input) in [
         (KeyCode::ArrowUp, MenuInput::Up),
         (KeyCode::ArrowDown, MenuInput::Down),
@@ -1523,28 +1839,24 @@ fn keyboard_menu_input_events(
         } else {
             PressedType::Neither
         };
-        rate_limited_menu_input(
-            pressed_type,
-            input,
-            focused_entity.0,
-            rate_limiter,
-            &time,
-            &mut commands,
-        );
+        rate_limited_menu_input(pressed_type, input, focused_entity, rate_limiter, &time, &mut commands);
     }
 }
 
 #[allow(clippy::too_many_arguments)]
 fn gamepad_menu_input_events(
     sliders: Query<Entity, With<SliderTag>>,
-    focused_entity: Res<FocusedEntity>,
+    focused: Option<Single<Entity, With<Focused>>>,
     gamepads: Query<&Gamepad>,
     mut menu_input_rate_limiter: ResMut<MenuInputRateLimiter>,
     mut slider_rate_limiter: ResMut<SliderRateLimiter>,
     time: Res<Time>,
     mut commands: Commands,
 ) {
-    let slider_focused = sliders.get(focused_entity.0).is_ok();
+    let Some(focused_entity) = focused.map(|f| *f) else {
+        return;
+    };
+    let slider_focused = sliders.get(focused_entity).is_ok();
     for gamepad in gamepads.iter() {
         for (button, input) in [
             (GamepadButton::DPadUp, MenuInput::Up),
@@ -1569,26 +1881,17 @@ fn gamepad_menu_input_events(
             } else {
                 PressedType::Neither
             };
-            rate_limited_menu_input(
-                pressed_type,
-                input,
-                focused_entity.0,
-                rate_limiter,
-                &time,
-                &mut commands,
-            );
+            rate_limited_menu_input(pressed_type, input, focused_entity, rate_limiter, &time, &mut commands);
         }
     }
 }
-
-#[derive(Resource)]
-struct FocusedEntity(Entity);
 
 const MENU_INPUT_RATE_LIMIT: f32 = 0.15;
 const SLIDER_RATE_LIMIT: f32 = 0.001;
 
 fn ui_root() -> impl Element {
     El::<Node>::new()
+        .ui_root()
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
             node.height = Val::Percent(100.);

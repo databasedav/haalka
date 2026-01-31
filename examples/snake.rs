@@ -3,7 +3,7 @@
 mod utils;
 use utils::*;
 
-use std::{collections::HashMap, time::Duration};
+use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy_rand::prelude::*;
@@ -31,8 +31,8 @@ fn main() {
             FixedUpdate,
             ((consume_queued_direction, tick)
                 .chain()
-                .run_if(not(resource_exists::<Paused>)),)
-                .chain(),
+                .run_if(not(resource_exists::<Paused>)))
+            .chain(),
         )
         .insert_resource(DirectionResource(Direction::Right))
         .insert_resource(Time::<Fixed>::from_seconds(1. / STARTING_TICKS_PER_SECOND as f64))
@@ -77,36 +77,41 @@ impl From<Cell> for BackgroundColor {
     }
 }
 
-#[derive(Resource, Clone, Copy, PartialEq, Deref, DerefMut)]
+#[derive(Resource, Clone, Copy, Deref, DerefMut)]
 struct TickRate(u32);
 
-#[derive(Resource, Clone, Copy, PartialEq, Default, Deref, DerefMut)]
+#[derive(Resource, Clone, Copy, Default, Deref, DerefMut)]
 struct Score(u32);
 
-#[derive(Resource, Clone, Copy, PartialEq, Deref, DerefMut)]
+#[derive(Resource, Clone, Copy, Deref, DerefMut)]
 struct GridSize(usize);
 
-#[derive(Resource, Clone, Copy, PartialEq, Default, Deref, DerefMut)]
+#[derive(Resource, Clone, Copy, Default, Deref, DerefMut)]
 struct GameOver(bool);
 
 #[derive(Resource, Clone)]
 struct Cells(MutableVec<Cell>);
 
-/// Convert (x, y) grid position to linear index in display order (top-left to bottom-right).
-/// Display order is: row by row from top (y=size-1) to bottom (y=0), left (x=0) to right.
+/// Convert (x, y) grid position to linear index in the flattened 1D cells array.
+///
+/// Grid coordinates: x increases right (0 to size-1), y increases down (0 to size-1).
+/// Array layout: index 0 is top-left, then proceeds row-by-row left-to-right, top-to-bottom.
+/// Example for 3x3 grid:
+///   indices:  0 1 2    coords: (0,0) (1,0) (2,0)
+///             3 4 5            (0,1) (1,1) (2,1)
+///             6 7 8            (0,2) (1,2) (2,2)
 fn pos_to_index(x: usize, y: usize, size: usize) -> usize {
-    (size - 1 - y) * size + x
+    y * size + x
 }
 
 fn init_cells(world: &mut World, size: usize) -> MutableVec<Cell> {
     let initial: Vec<Cell> = vec![Cell::Empty; size * size];
-    MutableVecBuilder::from(initial).spawn(world)
+    MutableVec::builder().values(initial).spawn(world)
 }
 
 fn grid(cells: MutableVec<Cell>) -> impl Element {
-    let cell_size_signal = SignalBuilder::from_resource::<GridSize>()
+    let cell_size = signal::from_resource_changed::<GridSize>()
         .map_in(deref_copied)
-        .dedupe()
         // TODO: see https://github.com/bevyengine/bevy/issues/12152 for why this slack is necessary
         .map_in(|size| (SIDE as f32 - GRID_TRACK_FLOAT_PRECISION_SLACK) / size as f32);
 
@@ -115,12 +120,88 @@ fn grid(cells: MutableVec<Cell>) -> impl Element {
             node.width = Val::Px(SIDE as f32);
             node.height = Val::Px(SIDE as f32);
         })
-        .row_wrap_cell_width_signal(cell_size_signal.clone())
+        .row_wrap_cell_width_signal(cell_size.clone())
         .cells_signal_vec(
             cells
                 .signal_vec()
-                .map(|In(cell): In<Cell>| El::<Node>::new().background_color(BackgroundColor::from(cell))),
+                .map_in(|cell| El::<Node>::new().background_color(BackgroundColor::from(cell))),
         )
+}
+
+fn grid_size_control() -> impl Element {
+    Row::<Node>::new()
+        .with_node(|mut node| node.column_gap = Val::Px(10.))
+        .item(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(FONT_SIZE))
+                .text(Text::new("grid size:")),
+        )
+        .item(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(FONT_SIZE))
+                .text_signal(
+                    signal::from_resource_changed::<GridSize>()
+                        .map_in(deref_copied)
+                        .map_in_ref(ToString::to_string)
+                        .map_in(Text)
+                        .map_in(Some),
+                ),
+        )
+        .item(text_button("-").on_pressed_throttled(
+            |In((_, press_data)): In<(Entity, PressData)>, mut commands: Commands| {
+                if press_data.pressed {
+                    commands.trigger(GridSizeChange::Decr);
+                }
+            },
+            Duration::from_millis(100),
+        ))
+        .item(text_button("+").on_pressed_throttled(
+            |In((_, press_data)): In<(Entity, PressData)>, mut commands: Commands| {
+                if press_data.pressed {
+                    commands.trigger(GridSizeChange::Incr);
+                }
+            },
+            Duration::from_millis(100),
+        ))
+}
+
+fn tick_rate_control() -> impl Element {
+    Row::<Node>::new()
+        .with_node(|mut node| node.column_gap = Val::Px(10.))
+        .item(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(FONT_SIZE))
+                .text(Text::new("tick rate:")),
+        )
+        .item(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(FONT_SIZE))
+                .text_signal(
+                    signal::from_resource_changed::<TickRate>()
+                        .map_in(deref_copied)
+                        .map_in_ref(ToString::to_string)
+                        .map_in(Text)
+                        .map_in(Some),
+                ),
+        )
+        .item(text_button("-").on_pressed_throttled(
+            |In((_, press_data)): In<(Entity, PressData)>, mut tick_rate: ResMut<TickRate>, mut commands: Commands| {
+                if press_data.pressed && **tick_rate > 1 {
+                    **tick_rate -= 1;
+                    commands.insert_resource(Time::<Fixed>::from_seconds(1. / **tick_rate as f64));
+                }
+            },
+            Duration::from_millis(100),
+        ))
+        .item(text_button("+").on_pressed_throttled(
+            |In((_, press_data)): In<(Entity, PressData)>, mut tick_rate: ResMut<TickRate>, mut commands: Commands| {
+                if press_data.pressed {
+                    **tick_rate += 1;
+                    commands.insert_resource(Time::<Fixed>::from_seconds(1. / **tick_rate as f64));
+                }
+            },
+            Duration::from_millis(100),
+        ))
 }
 
 fn hud() -> impl Element {
@@ -132,84 +213,15 @@ fn hud() -> impl Element {
         .align_content(Align::center())
         .item(
             El::<Text>::new().text_font(TextFont::from_font_size(250.)).text_signal(
-                SignalBuilder::from_resource::<Score>()
+                signal::from_resource_changed::<Score>()
                     .map_in(deref_copied)
-                    .dedupe()
                     .map_in_ref(ToString::to_string)
                     .map_in(Text)
                     .map_in(Some),
             ),
         )
-        .item(
-            Row::<Node>::new()
-                .with_node(|mut node| node.column_gap = Val::Px(10.))
-                .item(
-                    El::<Text>::new()
-                        .text_font(TextFont::from_font_size(FONT_SIZE))
-                        .text(Text::new("grid size:")),
-                )
-                .item(
-                    El::<Text>::new()
-                        .text_font(TextFont::from_font_size(FONT_SIZE))
-                        .text_signal(
-                            SignalBuilder::from_resource::<GridSize>()
-                                .map_in(deref_copied)
-                                .dedupe()
-                                .map_in_ref(ToString::to_string)
-                                .map_in(Text)
-                                .map_in(Some),
-                        ),
-                )
-                .item(text_button("-").on_pressing_throttled(
-                    |_: In<_>, mut commands: Commands| {
-                        commands.trigger(GridSizeChange::Decr);
-                    },
-                    Duration::from_millis(100),
-                ))
-                .item(text_button("+").on_pressing_throttled(
-                    |_: In<_>, mut commands: Commands| {
-                        commands.trigger(GridSizeChange::Incr);
-                    },
-                    Duration::from_millis(100),
-                )),
-        )
-        .item(
-            Row::<Node>::new()
-                .with_node(|mut node| node.column_gap = Val::Px(10.))
-                .item(
-                    El::<Text>::new()
-                        .text_font(TextFont::from_font_size(FONT_SIZE))
-                        .text(Text::new("tick rate:")),
-                )
-                .item(
-                    El::<Text>::new()
-                        .text_font(TextFont::from_font_size(FONT_SIZE))
-                        .text_signal(
-                            SignalBuilder::from_resource::<TickRate>()
-                                .map_in(deref_copied)
-                                .dedupe()
-                                .map_in_ref(ToString::to_string)
-                                .map_in(Text)
-                                .map_in(Some),
-                        ),
-                )
-                .item(text_button("-").on_pressing_throttled(
-                    |_: In<_>, mut tick_rate: ResMut<TickRate>, mut commands: Commands| {
-                        if **tick_rate > 1 {
-                            **tick_rate -= 1;
-                            commands.insert_resource(Time::<Fixed>::from_seconds(1. / **tick_rate as f64));
-                        }
-                    },
-                    Duration::from_millis(100),
-                ))
-                .item(text_button("+").on_pressing_throttled(
-                    |_: In<_>, mut tick_rate: ResMut<TickRate>, mut commands: Commands| {
-                        **tick_rate += 1;
-                        commands.insert_resource(Time::<Fixed>::from_seconds(1. / **tick_rate as f64));
-                    },
-                    Duration::from_millis(100),
-                )),
-        )
+        .item(grid_size_control())
+        .item(tick_rate_control())
 }
 
 fn ui_root(cells: MutableVec<Cell>) -> impl Element {
@@ -218,20 +230,20 @@ fn ui_root(cells: MutableVec<Cell>) -> impl Element {
             node.width = Val::Percent(100.);
             node.height = Val::Percent(100.);
         })
+        .insert(Pickable::default())
         .cursor(CursorIcon::default())
         .layer(Row::<Node>::new().align(Align::center()).item(grid(cells)).item(hud()))
         .layer_signal(
-            SignalBuilder::from_resource::<GameOver>()
+            signal::from_resource_changed::<GameOver>()
                 .map_in(deref_copied)
-                .dedupe()
-                .map_true_in(|| restart_button().type_erase()),
+                .map_true_in(restart_button),
         )
 }
 
-fn restart_button() -> impl Element {
+fn restart_button() -> impl Element + Clone {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
-        .insert(Pickable::default())
+        .insert((Pickable::default(), Hoverable))
         .align(Align::center())
         .with_node(|mut node| {
             node.width = Val::Px(250.);
@@ -240,7 +252,7 @@ fn restart_button() -> impl Element {
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .lazy_entity(lazy_entity.clone())
         .background_color_signal(
-            SignalBuilder::from_lazy_entity(lazy_entity)
+            signal::from_entity(lazy_entity)
                 .has_component::<Hovered>()
                 .dedupe()
                 .map_bool_in(|| bevy::color::palettes::basic::GRAY.into(), || Color::BLACK)
@@ -257,16 +269,33 @@ fn restart_button() -> impl Element {
         )
 }
 
+/// Event for dynamically resizing the grid during gameplay.
+///
+/// The grid uses a 1D array to store cells in row-major order (see [`pos_to_index`]).
+/// Resizing requires careful index manipulation to maintain the visual layout.
 #[derive(Event, Clone, Copy)]
 enum GridSizeChange {
+    /// Grow the grid by one row (at top) and one column (on right).
     Incr,
+    /// Shrink the grid by removing the top row and right column.
+    /// Only succeeds if the snake doesn't occupy those edges.
     Decr,
 }
 
+/// Handles grid resize events, adjusting the cell array and snake coordinates.
+///
+/// # Grid Layout Reminder
+/// The cells array is stored in row-major order:
+/// - Index 0 is top-left corner
+/// - Indices increase left-to-right, then top-to-bottom
+///
+/// # Coordinate System
+/// - `x` increases rightward (column index)
+/// - `y` increases downward (row index)
 fn on_grid_size_change(
     event: On<GridSizeChange>,
     cells: Res<Cells>,
-    snake: Res<Snake>,
+    mut snake: ResMut<Snake>,
     mut grid_size: ResMut<GridSize>,
     mut vec_datas: Query<&mut MutableVecData<Cell>>,
     mut commands: Commands,
@@ -275,62 +304,109 @@ fn on_grid_size_change(
     let cur_size = **grid_size;
     match event {
         GridSizeChange::Incr => {
+            // Strategy: Add new row at top and new column on right
+            //
+            // Example: 3x3 -> 4x4
+            //
+            //   Before:       After:
+            //    0 1 2        [.]  [.]  [.]  [.]
+            //    3 4 5         4    5    6   [.]
+            //    6 7 8         8    9   10   [.]
+            //                 12   13   14   [.]
+            //
             let new_size = cur_size + 1;
-            let mut cells_write = cells.0.write(&mut vec_datas);
+            let mut guard = cells.0.write(&mut vec_datas);
 
-            // Insert new top row (new_size empty cells at indices 0..new_size-1)
+            // Insert entire new top row at indices 0..new_size.
+            // Each insert at index i shifts existing elements right by 1.
             for i in 0..new_size {
-                cells_write.insert(i, Cell::Empty);
+                guard.insert(i, Cell::Empty);
             }
 
-            // Insert new right column cell at end of each old row
-            // After inserting top row, old row k's end is at index: new_size + (k+1)*cur_size + k - 1
-            // We insert at: new_size + (k+1)*cur_size + k = new_size + k*new_size + cur_size
+            // Insert new right column cell at the end of each original row.
+            //
+            // After inserting the top row (new_size cells), original row k is now at:
+            //   start_of_row_k = new_size + k * cur_size + k
+            //                               ^^^^^^^^^^^^   ^
+            //                               original pos   cells we've inserted so far
+            //
+            // Insert position (after last cell of row k):
+            //   insert_idx = start_of_row_k + cur_size = new_size + (k + 1) * cur_size + k
             for k in 0..cur_size {
-                let insert_idx = new_size + k * new_size + cur_size;
-                cells_write.insert(insert_idx, Cell::Empty);
+                let insert_idx = new_size + (k + 1) * cur_size + k;
+                guard.insert(insert_idx, Cell::Empty);
+            }
+
+            // Update snake coordinates: adding top row shifts all y-coordinates down by 1
+            for (_, y) in snake.0.iter_mut() {
+                *y += 1;
             }
 
             **grid_size = new_size;
         }
         GridSizeChange::Decr => {
-            if cur_size > 2 {
-                let new_size = cur_size - 1;
-                // Check if any snake segments are on the edges being removed
-                let can_shrink = !snake.0.iter().any(|&(x, y)| x == new_size || y == new_size);
+            // Minimum grid size is 2x2 (need room for snake to move)
+            if cur_size <= 2 {
+                return;
+            }
 
-                if can_shrink {
-                    let mut cells_write = cells.0.write(&mut vec_datas);
+            // Strategy: Remove top row and rightmost column
+            //
+            // Example: 4x4 -> 3x3
+            //
+            //   Before:                   After:
+            //   [x] [x] [x] [x]
+            //    4   5   6  [x]           0  1  2
+            //    8   9  10  [x]           3  4  5
+            //   12  13  14  [x]           6  7  8
+            //
+            let new_size = cur_size - 1;
 
-                    // Check if food is on the edges being removed (top row or right column)
-                    let had_food = (0..cur_size).any(|i| {
-                        // Top row: indices 0..cur_size
-                        // Right column: indices cur_size-1, 2*cur_size-1, 3*cur_size-1, ...
-                        let top_idx = i;
-                        let right_idx = (i + 1) * cur_size - 1;
-                        matches!(cells_write.get(top_idx), Some(Cell::Food))
-                            || matches!(cells_write.get(right_idx), Some(Cell::Food))
-                    });
+            // Safety check: snake must not occupy edges being removed.
+            //   Top row: y == 0
+            //   Right column: x == cur_size - 1 (which equals new_size)
+            let snake_on_removed_edge = snake.0.iter().any(|&(x, y)| x == new_size || y == 0);
+            if snake_on_removed_edge {
+                return;
+            }
 
-                    // Remove from highest index to lowest to preserve indices
-                    // Right column cells: (cur_size * cur_size - 1), minus cur_size each time
-                    // For cur_size=4: indices 15, 11, 7 (but not 3, that's in top row)
-                    for k in 0..new_size {
-                        let remove_idx = cur_size * cur_size - 1 - k * cur_size;
-                        cells_write.remove(remove_idx);
-                    }
+            let mut guard = cells.0.write(&mut vec_datas);
 
-                    // Top row: indices cur_size-1 down to 0
-                    for i in (0..cur_size).rev() {
-                        cells_write.remove(i);
-                    }
+            // Check if food will be removed (need to respawn it afterward).
+            // Food could be on:
+            //   - Top row: indices 0, 1, ..., cur_size-1
+            //   - Right column: indices cur_size-1, 2*cur_size-1, ..., cur_size*cur_size-1
+            // Note: top-right corner (index cur_size-1) is counted in both, but that's fine.
+            let had_food = (0..cur_size).any(|i| {
+                let top_row_idx = i;
+                let right_col_idx = (i + 1) * cur_size - 1;
+                matches!(guard.get(top_row_idx), Some(Cell::Food))
+                    || matches!(guard.get(right_col_idx), Some(Cell::Food))
+            });
 
-                    **grid_size = new_size;
+            // Remove right column cells (bottom to top to preserve indices).
+            // For 4x4: remove indices 15, 11, 7 (not 3 - that's in top row, removed next)
+            for k in 0..new_size {
+                let remove_idx = cur_size * cur_size - 1 - k * cur_size;
+                guard.remove(remove_idx);
+            }
 
-                    if had_food {
-                        commands.trigger(SpawnFood);
-                    }
-                }
+            // Remove entire top row (right to left to preserve indices).
+            // For 4x4: remove indices 3, 2, 1, 0
+            for i in (0..cur_size).rev() {
+                guard.remove(i);
+            }
+
+            **grid_size = new_size;
+
+            // Update snake coordinates (top row removed, so all y values shift up by 1)
+            for (_, y) in snake.0.iter_mut() {
+                *y -= 1;
+            }
+
+            // Respawn food if it was on a removed edge
+            if had_food {
+                commands.trigger(SpawnFood);
             }
         }
     }
@@ -339,13 +415,13 @@ fn on_grid_size_change(
 fn text_button(text_: &str) -> impl Element + PointerEventAware {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
-        .insert(Pickable::default())
+        .insert((Pickable::default(), Hoverable))
         .with_node(|mut node| node.width = Val::Px(45.0))
         .align_content(Align::center())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .lazy_entity(lazy_entity.clone())
         .background_color_signal(
-            SignalBuilder::from_lazy_entity(lazy_entity)
+            signal::from_entity(lazy_entity)
                 .has_component::<Hovered>()
                 .dedupe()
                 .map_bool_in(|| SNAKE_COLOR, || EMPTY_COLOR)
@@ -399,16 +475,16 @@ fn tick(
     let (mut x, mut y) = snake.0.front().copied().unwrap();
     let size = **grid_size;
     (x, y) = match direction.0 {
-        Direction::Up => (x, if y == size - 1 { 0 } else { y + 1 }),
-        Direction::Down => (x, y.checked_sub(1).unwrap_or(size - 1)),
+        Direction::Up => (x, y.checked_sub(1).unwrap_or(size - 1)),
+        Direction::Down => (x, if y == size - 1 { 0 } else { y + 1 }),
         Direction::Left => (x.checked_sub(1).unwrap_or(size - 1), y),
         Direction::Right => (if x == size - 1 { 0 } else { x + 1 }, y),
     };
     snake.0.push_front((x, y));
 
     let head_idx = pos_to_index(x, y, size);
-    let mut cells_write = cells.0.write(&mut vec_datas);
-    let cell = cells_write[head_idx];
+    let mut guard = cells.0.write(&mut vec_datas);
+    let cell = guard[head_idx];
 
     match cell {
         Cell::Snake => {
@@ -416,18 +492,16 @@ fn tick(
             commands.insert_resource(Paused);
         }
         cell @ (Cell::Food | Cell::Empty) => {
-            cells_write.set(head_idx, Cell::Snake);
+            guard.set(head_idx, Cell::Snake);
             match cell {
                 Cell::Food => {
-                    #[allow(clippy::drop_non_drop)]
-                    drop(cells_write);
                     **score += 1;
                     commands.trigger(SpawnFood);
                 }
                 Cell::Empty => {
                     if let Some((tail_x, tail_y)) = snake.0.pop_back() {
                         let tail_idx = pos_to_index(tail_x, tail_y, size);
-                        cells_write.set(tail_idx, Cell::Empty);
+                        guard.set(tail_idx, Cell::Empty);
                     }
                 }
                 _ => (),
@@ -445,15 +519,15 @@ fn on_spawn_food(
     mut rng: Single<&mut WyRand, With<GlobalRng>>,
     mut vec_datas: Query<&mut MutableVecData<Cell>>,
 ) {
-    let mut cells_write = cells.0.write(&mut vec_datas);
-    let empty_indices: Vec<_> = cells_write
+    let mut guard = cells.0.write(&mut vec_datas);
+    if let Some(idx) = guard
         .iter()
         .enumerate()
         .filter_map(|(idx, cell)| matches!(cell, Cell::Empty).then_some(idx))
-        .collect();
-
-    if let Some(idx) = empty_indices.into_iter().choose(rng.as_mut()) {
-        cells_write.set(idx, Cell::Food);
+        .into_iter()
+        .choose(rng.as_mut())
+    {
+        guard.set(idx, Cell::Food);
     }
 }
 
@@ -472,7 +546,6 @@ fn on_restart(
     let size = **grid_size;
     let init_snake = vec![(size / 2, size / 2 - 1), (size / 2 - 1, size / 2 - 1)];
 
-    // Create fresh grid with snake cells
     let mut new_cells = vec![Cell::Empty; size * size];
     for &(x, y) in init_snake.iter() {
         let idx = pos_to_index(x, y, size);
@@ -498,21 +571,20 @@ fn on_restart(
 struct QueuedDirectionOption(Option<Direction>);
 
 fn direction(keys: ResMut<ButtonInput<KeyCode>>, mut queued_direction_option: ResMut<QueuedDirectionOption>) {
-    let map = HashMap::from([
-        (KeyCode::KeyW, Direction::Up),
-        (KeyCode::KeyA, Direction::Left),
-        (KeyCode::KeyS, Direction::Down),
-        (KeyCode::KeyD, Direction::Right),
-        (KeyCode::ArrowUp, Direction::Up),
-        (KeyCode::ArrowLeft, Direction::Left),
-        (KeyCode::ArrowDown, Direction::Down),
-        (KeyCode::ArrowRight, Direction::Right),
-    ]);
-    for (key, key_dir) in map.iter() {
-        if keys.pressed(*key) {
-            queued_direction_option.0 = Some(*key_dir);
-            return;
-        }
+    let dir = if keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) {
+        Some(Direction::Up)
+    } else if keys.pressed(KeyCode::KeyS) || keys.pressed(KeyCode::ArrowDown) {
+        Some(Direction::Down)
+    } else if keys.pressed(KeyCode::KeyA) || keys.pressed(KeyCode::ArrowLeft) {
+        Some(Direction::Left)
+    } else if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) {
+        Some(Direction::Right)
+    } else {
+        None
+    };
+
+    if let Some(key_dir) = dir {
+        queued_direction_option.0 = Some(key_dir);
     }
 }
 

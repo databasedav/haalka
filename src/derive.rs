@@ -8,7 +8,7 @@ use paste::paste;
 
 use super::{column::Column, el::El, element::BuilderWrapper, grid::Grid, row::Row, stack::Stack, stripe::Stripe};
 
-// TODO: add link to usage in example challenge 4
+// TODO: add link to usage in some example
 /// Implement [haalka](crate)-esque methods for any [`BuilderWrapper`] over the named components,
 /// enabling one to quickly add high level signals-powered reactivity to any [`Bundle`], not just [bevy_ui nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs).
 ///
@@ -51,8 +51,8 @@ use super::{column::Column, el::El, element::BuilderWrapper, grid::Grid, row::Ro
 /// MyEl::default()
 ///     .my_component_a(MyComponentA(1))
 ///     .with_some_other_component_idk(|mut some_other_component_idk| some_other_component_idk.data = 2)
-///     .my_component_a_signal(SignalBuilder::always(Some(MyComponentA(3))))
-///     .on_signal_with_some_other_component_idk(SignalBuilder::always(4), |mut some_other_component_idk, data| some_other_component_idk.data = data);
+///     .my_component_a_signal(signal::always(Some(MyComponentA(3))))
+///     .on_signal_with_some_other_component_idk(signal::always(4), |mut some_other_component_idk, data| some_other_component_idk.data = data);
 /// ```
 ///
 /// # Skipping `_signal` Derivation
@@ -115,7 +115,7 @@ macro_rules! impl_haalka_methods {
                 f: impl FnMut(Mut<$field_type>, T) + Send + Sync + 'static,
             ) -> Self {
                 self.with_builder(|builder| {
-                    builder.on_signal_with_component::<$field_type, T, _, _>(signal, f)
+                    builder.on_signal_with_component::<T, $field_type>(signal, f)
                 })
             }
         }

@@ -1,6 +1,6 @@
 //! Semantics for managing global event listeners.
 
-use std::sync::{Arc, OnceLock};
+use bevy_platform::sync::{Arc, OnceLock};
 
 use super::{
     element::UiRoot,

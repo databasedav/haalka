@@ -15,14 +15,7 @@ fn main() {
             Startup,
             (
                 |world: &mut World| {
-                    let error_clearer = SignalBuilder::from_resource::<Output>()
-                        .map_in(deref_cloned)
-                        .dedupe()
-                        .map(|_: In<_>, mut commands: Commands| commands.remove_resource::<Error>())
-                        .hold();
-                    ui_root()
-                        .with_builder(|builder| builder.hold_signals([error_clearer]))
-                        .spawn(world);
+                    ui_root().spawn(world);
                 },
                 camera,
             ),
@@ -69,7 +62,7 @@ fn buttons() -> [&'static str; 16] {
 }
 
 fn button(symbol: &'static str) -> El<Node> {
-    textable_element(SignalBuilder::always(symbol))
+    textable_element(signal::always(symbol))
         .with_node(|mut node| {
             node.width = Val::Px(BUTTON_SIZE);
             node.height = Val::Px(BUTTON_SIZE);
@@ -80,18 +73,19 @@ fn button(symbol: &'static str) -> El<Node> {
 fn input_button(symbol: &'static str) -> impl Element {
     let lazy_entity = LazyEntity::new();
     button(symbol)
+        .insert((Pickable::default(), Hoverable))
         .lazy_entity(lazy_entity.clone())
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .background_color_signal(
-            SignalBuilder::from_lazy_entity(lazy_entity)
+            signal::from_entity(lazy_entity)
                 .has_component::<Hovered>()
+                .dedupe()
                 .map_bool_in(|| BLUE, || PINK)
                 .map_in(BackgroundColor)
                 .map_in(Some),
         )
         .on_click(move |In(_), mut output: ResMut<Output>, mut commands: Commands| {
             if symbol == "=" {
-                // TryInto::<f64>::try_into(Context::default().evaluate(&output).unwrap()).unwrap();
                 if let Ok(result) = Context::<f64>::default().evaluate(&output)
                     && let Some(result) = Decimal::from_f64((result * 100.).round() / 100.)
                 {
@@ -106,10 +100,10 @@ fn input_button(symbol: &'static str) -> impl Element {
 }
 
 fn display() -> impl Element {
-    textable_element(SignalBuilder::from_resource::<Output>().map_in(deref_cloned))
+    textable_element(signal::from_resource_changed::<Output>().map_in(deref_cloned))
         .with_builder(|builder| {
-            builder.component_signal::<Outline, _>(
-                SignalBuilder::from_resource_option::<Error>()
+            builder.component_signal(
+                signal::from_resource_option::<Error>()
                     .map_in_ref(Option::is_some)
                     .dedupe()
                     .map_true_in(|| Outline::new(Val::Px(4.0), Val::ZERO, bevy::color::palettes::basic::RED.into())),
@@ -126,20 +120,18 @@ fn display() -> impl Element {
 }
 
 fn clear_button() -> impl Element {
-    let output_empty = SignalBuilder::from_resource::<Output>()
+    let lazy_entity = LazyEntity::new();
+    let output_empty = signal::from_resource_changed::<Output>()
         .map_in(deref_cloned)
         .map_in_ref(String::is_empty);
-    let lazy_entity = LazyEntity::new();
+    let hovered = signal::from_entity(lazy_entity.clone())
+        .has_component::<Hovered>()
+        .dedupe();
     button("c")
+        .insert((Pickable::default(), Hoverable))
         .lazy_entity(lazy_entity.clone())
         .background_color_signal(
-            output_empty
-                .clone()
-                .combine(
-                    SignalBuilder::from_lazy_entity(lazy_entity)
-                        .has_component::<Hovered>()
-                        .dedupe(),
-                )
+            signal::zip!(output_empty.clone(), hovered)
                 .map_in(|(output_empty, hovered)| {
                     if output_empty {
                         BLUE
@@ -158,11 +150,16 @@ fn clear_button() -> impl Element {
 }
 
 fn ui_root() -> impl Element {
+    let error_clearer = signal::from_resource_changed::<Output>()
+        .map(|In(_), mut commands: Commands| commands.remove_resource::<Error>())
+        .task();
     El::<Node>::new()
+        .with_builder(|builder| builder.hold_tasks([error_clearer]))
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
             node.height = Val::Percent(100.);
         })
+        .insert(Pickable::default())
         .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(

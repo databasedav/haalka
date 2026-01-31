@@ -118,23 +118,37 @@ impl TextInput {
     ) -> Self {
         if let Some(text_option_signal) = text_option_signal_option.into() {
             self = self.update_raw_el(|raw_el| {
-                raw_el.on_signal_with_system(
-                    text_option_signal.map(|text_option| text_option.into().unwrap_or_default()),
-                    |In((entity, text)): In<(Entity, String)>,
-                     mut last_text_query: Query<&mut LastSignalText>,
-                     mut text_input_queues: Query<&mut TextInputQueue>| {
-                        if let Ok(mut last_text) = last_text_query.get_mut(entity) {
-                            // only queue an update if the incoming signal value is different
-                            // from the last value we set from a signal. This prevents redundant updates.
-                            if last_text.0 != text {
-                                last_text.0 = text.clone();
-                                if let Ok(mut queue) = text_input_queues.get_mut(entity) {
-                                    queue_set_text_actions(&mut queue, text);
+                raw_el
+                    .with_entity(|mut entity| {
+                        entity.insert_if_new(TextInputContents::default());
+                    })
+                    .on_signal_with_system(
+                        text_option_signal.map(|text_option| text_option.into().unwrap_or_default()),
+                        |In((entity, text)): In<(Entity, String)>,
+                         mut last_text_query: Query<&mut LastSignalText>,
+                         contents_query: Query<&TextInputContents>,
+                         mut text_input_queues: Query<&mut TextInputQueue>| {
+                            if let Ok(mut last_text) = last_text_query.get_mut(entity) {
+                                // only queue an update if the incoming signal value is different
+                                // from both the last value we set from a signal and the current buffer text,
+                                // preventing redundant updates and echo loops in two-way bindings
+                                if last_text.0 != text {
+                                    let should_update = contents_query
+                                        .get(entity)
+                                        .ok()
+                                        .map(|contents| contents.get() != text.as_str())
+                                        .unwrap_or(true);
+
+                                    if should_update {
+                                        last_text.0 = text.clone();
+                                        if let Ok(mut queue) = text_input_queues.get_mut(entity) {
+                                            queue_set_text_actions(&mut queue, text);
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    },
-                )
+                        },
+                    )
             });
         }
         self

@@ -1,17 +1,14 @@
 use bevy_ecs::prelude::*;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
-use jonmo::{
-    builder::JonmoBuilder,
-    signal::{Signal, SignalExt},
-};
+use jonmo::signal::{Signal, SignalExt};
 
 use super::{
     align::{Alignable, LayoutDirection},
     element::{BuilderPassThrough, BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
-    pointer_event_aware::{CursorOnHoverable, Hoverable, PointerEventAware, Pressable},
+    pointer_event_aware::{Cursorable, PointerEventAware},
     viewport_mutable::ViewportMutable,
 };
 use crate::{clone_semantics_doc, impl_element_clone};
@@ -28,21 +25,21 @@ use crate::{clone_semantics_doc, impl_element_clone};
 #[doc = clone_semantics_doc!("El")]
 #[derive(Default)]
 pub struct El<NodeType> {
-    builder: JonmoBuilder,
+    builder: jonmo::Builder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
 impl_element_clone!("El", El<NodeType>, my_el, ".name(label)");
 
-impl<NodeType: Bundle> From<JonmoBuilder> for El<NodeType> {
-    fn from(builder: JonmoBuilder) -> Self {
+impl<NodeType: Bundle> From<jonmo::Builder> for El<NodeType> {
+    fn from(builder: jonmo::Builder) -> Self {
         Self {
             builder: builder
                 .with_component::<Node>(|mut node| {
                     node.display = Display::Flex;
                     node.flex_direction = FlexDirection::Column;
                 })
-                .insert((LayoutDirection::Column, Pickable::IGNORE, Hoverable, Pressable)),
+                .insert((LayoutDirection::Column, Pickable::IGNORE)),
             _node_type: std::marker::PhantomData,
         }
     }
@@ -54,18 +51,18 @@ impl<NodeType: Bundle + Default> El<NodeType> {
     /// # Notes
     /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
-        Self::from(JonmoBuilder::from(NodeType::default()))
+        Self::from(jonmo::Builder::from(NodeType::default()))
     }
 }
 
 impl<NodeType> BuilderWrapper for El<NodeType> {
-    fn builder_mut(&mut self) -> &mut JonmoBuilder {
+    fn builder_mut(&mut self) -> &mut jonmo::Builder {
         &mut self.builder
     }
 }
 
 impl<NodeType: Bundle> Alignable for El<NodeType> {}
-impl<NodeType: Bundle> CursorOnHoverable for El<NodeType> {}
+impl<NodeType: Bundle> Cursorable for El<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for El<NodeType> {}
 impl<NodeType: Bundle> Nameable for El<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for El<NodeType> {}

@@ -13,6 +13,9 @@ content = ''.join(lines)
 # Replace `example_plugin` with `((DefaultPlugins, HaalkaPlugin))`
 content = re.sub(r'examples_plugin', '(DefaultPlugins, HaalkaPlugin)', content)
 
+# Remove `#[rustfmt::skip]` lines
+content = re.sub(r'\s*#\[rustfmt::skip\]\n', '', content)
+
 # Read the content of README.md
 with open('README.md', 'r') as file:
     readme_content = file.read()

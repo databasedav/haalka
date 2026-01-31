@@ -6,7 +6,6 @@ use bevy_ecs::prelude::*;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
 use jonmo::{
-    builder::JonmoBuilder,
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
@@ -16,7 +15,7 @@ use super::{
     element::{BuilderPassThrough, BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
-    pointer_event_aware::{CursorOnHoverable, Hoverable, PointerEventAware, Pressable},
+    pointer_event_aware::{Cursorable, PointerEventAware},
     viewport_mutable::ViewportMutable,
 };
 use crate::{clone_semantics_doc, impl_element_clone};
@@ -56,21 +55,21 @@ impl From<Direction> for LayoutDirection {
 #[doc = clone_semantics_doc!("Stripe")]
 #[derive(Default)]
 pub struct Stripe<NodeType> {
-    builder: JonmoBuilder,
+    builder: jonmo::Builder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
 impl_element_clone!("Stripe", Stripe<NodeType>, my_stripe, ".item(El::new().name(label))");
 
-impl<NodeType: Bundle> From<JonmoBuilder> for Stripe<NodeType> {
-    fn from(builder: JonmoBuilder) -> Self {
+impl<NodeType: Bundle> From<jonmo::Builder> for Stripe<NodeType> {
+    fn from(builder: jonmo::Builder) -> Self {
         Self {
             builder: builder
                 .with_component::<Node>(|mut node| {
                     node.display = Display::Flex;
                     node.flex_direction = FlexDirection::Column;
                 })
-                .insert((LayoutDirection::Column, Pickable::IGNORE, Hoverable, Pressable)),
+                .insert((LayoutDirection::Column, Pickable::IGNORE)),
             _node_type: std::marker::PhantomData,
         }
     }
@@ -82,18 +81,18 @@ impl<NodeType: Bundle + Default> Stripe<NodeType> {
     /// # Notes
     /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
-        Self::from(JonmoBuilder::from(NodeType::default()))
+        Self::from(jonmo::Builder::from(NodeType::default()))
     }
 }
 
 impl<NodeType: Bundle> BuilderWrapper for Stripe<NodeType> {
-    fn builder_mut(&mut self) -> &mut JonmoBuilder {
+    fn builder_mut(&mut self) -> &mut jonmo::Builder {
         &mut self.builder
     }
 }
 
 impl<NodeType: Bundle> Alignable for Stripe<NodeType> {}
-impl<NodeType: Bundle> CursorOnHoverable for Stripe<NodeType> {}
+impl<NodeType: Bundle> Cursorable for Stripe<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Stripe<NodeType> {}
 impl<NodeType: Bundle> Nameable for Stripe<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Stripe<NodeType> {}
@@ -229,7 +228,7 @@ impl<NodeType: Bundle> Stripe<NodeType> {
         S: Signal<Item = bool> + Send + Sync + 'static,
     {
         self.with_builder(|builder| {
-            builder.on_signal_with_component::<Node, _, _, _>(multiline_signal.dedupe(), |mut node, multiline| {
+            builder.on_signal_with_component::<_, Node>(multiline_signal.dedupe(), |mut node, multiline| {
                 if node.flex_direction == FlexDirection::Row && multiline {
                     node.flex_wrap = FlexWrap::Wrap;
                     node.flex_basis = Val::Px(0.);

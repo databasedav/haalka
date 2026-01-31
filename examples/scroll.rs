@@ -27,7 +27,7 @@ const LETTER_SIZE: f32 = 54.167; // 65 / 1.2
 const CELL_SIZE: f32 = 66.;
 const NUM_VISIBLE_COLUMNS: usize = 5;
 
-#[derive(Resource, Clone, Copy, PartialEq, Deref, DerefMut)]
+#[derive(Resource, Clone, Copy, Deref, DerefMut)]
 struct Shifted(bool);
 
 fn letter(letter: String, color: Color) -> impl Element {
@@ -47,13 +47,13 @@ fn letter(letter: String, color: Color) -> impl Element {
 
 fn letter_column(rotate: usize, color: Color) -> impl Element {
     let lazy_entity = LazyEntity::new();
-    let hovered = SignalBuilder::from_lazy_entity(lazy_entity.clone())
+    let hovered = signal::from_entity(lazy_entity.clone())
         .has_component::<Hovered>()
         .dedupe();
-    let shifted = SignalBuilder::from_resource::<Shifted>().map_in(deref_copied).dedupe();
+    let shifted = signal::from_resource_changed::<Shifted>().map_in(deref_copied);
     Column::<Node>::new()
         .lazy_entity(lazy_entity)
-        .insert(Pickable::default())
+        .insert((Pickable::default(), Hoverable))
         .with_node(|mut node| {
             node.width = Val::Px(CELL_SIZE);
             node.height = Val::Px(5. * CELL_SIZE);
@@ -64,7 +64,7 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
                 .direction(ScrollDirection::Vertical)
                 .pixels(CELL_SIZE)
                 .into_system(),
-            signal::any!(hovered.clone().not(), shifted.clone()),
+            signal::any!(hovered.not(), shifted.clone()),
         )
         .cursor_signal(
             shifted
@@ -82,10 +82,10 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
 
 fn ui_root() -> impl Element {
     let lazy_entity = LazyEntity::new();
-    let hovered = SignalBuilder::from_lazy_entity(lazy_entity.clone())
+    let hovered = signal::from_entity(lazy_entity.clone())
         .has_component::<Hovered>()
         .dedupe();
-    let shifted = SignalBuilder::from_resource::<Shifted>().map_in(deref_copied).dedupe();
+    let shifted = signal::from_resource_changed::<Shifted>().map_in(deref_copied);
     El::<Node>::new()
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
@@ -97,7 +97,7 @@ fn ui_root() -> impl Element {
         .child(
             Row::<Node>::new()
                 .lazy_entity(lazy_entity)
-                .insert(Pickable::default())
+                .insert((Pickable::default(), Hoverable))
                 .with_node(|mut node| {
                     node.width = Val::Px(CELL_SIZE * NUM_VISIBLE_COLUMNS as f32);
                 })

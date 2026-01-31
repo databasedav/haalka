@@ -5,17 +5,14 @@ use std::borrow::Cow;
 use super::align::Alignable;
 use bevy_ecs::{component::*, lifecycle::HookContext, prelude::*, system::RunSystemOnce, world::DeferredWorld};
 use bevy_log::warn;
-use jonmo::{
-    builder::JonmoBuilder,
-    signal::{Signal, SignalExt},
-};
+use jonmo::prelude::*;
 
 use bevy_ecs::system::IntoObserverSystem;
 
-/// [`Element`]s are types that wrap [`JonmoBuilder`] and can be aligned using [haalka](crate)'s
-/// [simple alignability semantics](super::align::Align) and granted UI-specific abilities like
-/// [pointer event awareness](super::pointer_event_aware::PointerEventAware), [viewport
-/// mutability](super::viewport_mutable::ViewportMutable),
+/// [`Element`]s are types that wrap [`jonmo::Builder`](jonmo::Builder) and can be aligned using
+/// [haalka](crate)'s [simple alignability semantics](super::align::Align) and granted UI-specific
+/// abilities like [pointer event awareness](super::pointer_event_aware::PointerEventAware),
+/// [viewport mutability](super::viewport_mutable::ViewportMutable),
 /// [scrollability](super::mouse_wheel_scrollable::MouseWheelScrollable), etc.
 pub trait Element: BuilderWrapper + Alignable {}
 
@@ -71,28 +68,28 @@ impl<E: Element, IE: IntoElement<EL = E>> IntoOptionElement for IE {
 }
 
 /// The core trait for all UI element types in haalka. Types implementing this trait wrap a
-/// [`JonmoBuilder`] and can be used with haalka's UI abilities like
+/// [`jonmo::Builder`] and can be used with haalka's UI abilities like
 /// [`PointerEventAware`](super::pointer_event_aware::PointerEventAware),
 /// [`ViewportMutable`](super::viewport_mutable::ViewportMutable), etc.
 ///
 /// **For primitive elements** (like [`El`](super::el::El), [`Column`](super::column::Column), etc.)
-/// that directly hold a [`JonmoBuilder`], implement this trait directly.
+/// that directly hold a [`jonmo::Builder`], implement this trait directly.
 ///
 /// **For widgets** that wrap other elements, implement [`ElementWrapper`] instead, which provides
 /// a blanket implementation of `BuilderWrapper` automatically.
 pub trait BuilderWrapper: Sized {
-    /// Mutable reference to the [`JonmoBuilder`] that this wrapper wraps.
-    fn builder_mut(&mut self) -> &mut JonmoBuilder;
+    /// Mutable reference to the [`jonmo::Builder`] that this wrapper wraps.
+    fn builder_mut(&mut self) -> &mut jonmo::Builder;
 
-    /// Process the wrapped [`JonmoBuilder`] directly.
-    fn with_builder(mut self, f: impl FnOnce(JonmoBuilder) -> JonmoBuilder) -> Self {
+    /// Process the wrapped [`jonmo::Builder`] directly.
+    fn with_builder(mut self, f: impl FnOnce(jonmo::Builder) -> jonmo::Builder) -> Self {
         let builder = std::mem::take(self.builder_mut());
         *self.builder_mut() = f(builder);
         self
     }
 
-    /// Consume this wrapper, returning the wrapped [`JonmoBuilder`].
-    fn into_builder(mut self) -> JonmoBuilder {
+    /// Consume this wrapper, returning the wrapped [`jonmo::Builder`].
+    fn into_builder(mut self) -> jonmo::Builder {
         std::mem::take(self.builder_mut())
     }
 }
@@ -157,11 +154,11 @@ pub trait ElementWrapper: Sized {
 }
 
 impl<EW: ElementWrapper> BuilderWrapper for EW {
-    fn builder_mut(&mut self) -> &mut JonmoBuilder {
+    fn builder_mut(&mut self) -> &mut jonmo::Builder {
         self.element_mut().builder_mut()
     }
 
-    fn into_builder(self) -> JonmoBuilder {
+    fn into_builder(self) -> jonmo::Builder {
         self.into_el().into_builder()
     }
 }
@@ -223,24 +220,32 @@ pub trait Nameable: BuilderWrapper {
     }
 }
 
-/// Pass-through convenience trait for commonly used [`JonmoBuilder`] methods.
+/// Pass-through convenience trait for commonly used [`jonmo::Builder`] methods.
 pub trait BuilderPassThrough: BuilderWrapper {
-    /// Pass-through for [`JonmoBuilder::lazy_entity`].
+    /// Pass-through for [`jonmo::Builder::lazy_entity`].
     fn lazy_entity(self, entity: jonmo::utils::LazyEntity) -> Self {
         self.with_builder(|builder| builder.lazy_entity(entity))
     }
 
-    /// Pass-through for [`JonmoBuilder::insert`].
+    /// Pass-through for [`jonmo::Builder::insert`].
     fn insert<T: Bundle>(self, bundle: T) -> Self {
         self.with_builder(|builder| builder.insert(bundle))
     }
 
-    /// Pass-through for [`JonmoBuilder::observe`].
+    /// Pass-through for [`jonmo::Builder::observe`].
     fn observe<E: EntityEvent, B: Bundle, Marker>(
         self,
         observer: impl IntoObserverSystem<E, B, Marker> + Sync,
     ) -> Self {
         self.with_builder(|builder| builder.observe(observer))
+    }
+
+    /// Pass-through for [`jonmo::Builder::component_signal`].
+    fn component_signal<C>(self, signal: impl Signal<Item = Option<C>>) -> Self
+    where
+        C: Component + Clone,
+    {
+        self.with_builder(|builder| builder.component_signal(signal))
     }
 }
 
@@ -266,30 +271,28 @@ macro_rules! clone_semantics_doc {
     };
 }
 
-/// Generates the base warning text for clone documentation (without trailing punctuation).
+/// Generates the base error text for clone documentation (without trailing punctuation).
 #[macro_export]
-macro_rules! clone_warning_doc_base {
+macro_rules! clone_error_doc_base {
     ($type_name:literal) => {
         concat!(
-            "# Warning\n\n",
+            "# Error\n\n",
             "This clone implementation exists **only** to satisfy trait bounds required by signal\n",
             "combinators. **Cloning `",
             $type_name,
             "`s at runtime is a bug and will lead to unexpected behavior.**\n\n",
-            "Clones share internal on-spawn hooks via the underlying [`JonmoBuilder`]. These hooks are\n",
-            "one-shot ([`FnOnce`]) and are consumed when the element is spawned. Spawning one clone will\n",
-            "affect all other clones.\n\n",
+            "Clones produce an empty element with no on-spawn hooks.\n\n",
             "Use factory functions instead if you need reusable UI templates"
         )
     };
 }
 
-/// Generates the warning docstring for a `Clone::clone` method on element types.
+/// Generates the error docstring for a `Clone::clone` method on element types.
 ///
 /// # Usage
 /// ```ignore
 /// impl Clone for MyType {
-///     #[doc = clone_warning_doc!("MyType")]
+///     #[doc = clone_error_doc!("MyType")]
 ///     fn clone(&self) -> Self { ... }
 /// }
 /// ```
@@ -297,20 +300,20 @@ macro_rules! clone_warning_doc_base {
 /// Or with a code example:
 /// ```ignore
 /// impl Clone for MyType {
-///     #[doc = clone_warning_doc!("MyType", my_fn, ".method()")]
+///     #[doc = clone_error_doc!("MyType", my_fn, ".method()")]
 ///     fn clone(&self) -> Self { ... }
 /// }
 /// ```
 #[macro_export]
-macro_rules! clone_warning_doc {
+macro_rules! clone_error_doc {
     // Without example
     ($type_name:literal) => {
-        concat!($crate::clone_warning_doc_base!($type_name), ".")
+        concat!($crate::clone_error_doc_base!($type_name), ".")
     };
     // With example
     ($type_name:literal, $example_fn:ident, $example_method:literal) => {
         concat!(
-            $crate::clone_warning_doc_base!($type_name),
+            $crate::clone_error_doc_base!($type_name),
             ":\n\n",
             "```ignore\n",
             "use bevy_ui::prelude::*;\n",
@@ -338,27 +341,22 @@ macro_rules! clone_warning_doc {
     };
 }
 
-/// Generates the runtime warning message for cloning an element type.
+/// Generates the runtime error message for cloning an element type.
 #[macro_export]
-macro_rules! clone_warning_msg {
+macro_rules! clone_error_msg {
     ($type_name:literal) => {
         concat!(
             "Cloning `",
             $type_name,
-            "` at {} is a bug! `",
-            $type_name,
-            "` wraps `JonmoBuilder`, whose `Clone` shares ",
-            "internal on-spawn hook queues. These hooks are one-shot (`FnOnce`) and are consumed on ",
-            "spawn. Spawning one clone will affect all other clones. Use factory functions instead ",
-            "if you need reusable UI templates."
+            "` at {} is a bug! Use a factory function instead."
         )
     };
 }
 
-/// Implements [`Clone`] for element types with appropriate warnings.
+/// Implements [`Clone`] for element types with appropriate errors.
 ///
 /// This macro generates a `Clone` implementation that:
-/// - Logs a warning at runtime when cloned (since cloning elements is typically a bug)
+/// - Logs an error at runtime when cloned (since cloning elements is typically a bug)
 /// - Has complete documentation explaining the clone semantics
 ///
 /// # Forms
@@ -373,7 +371,7 @@ macro_rules! clone_warning_msg {
 /// }
 /// ```
 ///
-/// ## Non-generic tuple struct wrapping `JonmoBuilder`:
+/// ## Non-generic tuple struct wrapping `jonmo::Builder`:
 /// ```ignore
 /// impl_element_clone!(simple "AlignabilityFacade", AlignabilityFacade);
 /// ```
@@ -382,13 +380,18 @@ macro_rules! impl_element_clone {
     // Generic element type with builder + _node_type fields and example
     ($type_name:literal, $type:ty, $example_fn:ident, $example_method:literal) => {
         impl<NodeType> Clone for $type {
-            #[doc = $crate::clone_warning_doc!($type_name, $example_fn, $example_method)]
+            #[doc = $crate::clone_error_doc!($type_name, $example_fn, $example_method)]
             #[track_caller]
             fn clone(&self) -> Self {
-                bevy_log::warn!(
-                    $crate::clone_warning_msg!($type_name),
+                let msg = format!(
+                    $crate::clone_error_msg!($type_name),
                     std::panic::Location::caller()
                 );
+                if cfg!(debug_assertions) {
+                    let backtrace = std::backtrace::Backtrace::force_capture();
+                    panic!("{}\nBacktrace:\n{}", msg, backtrace);
+                }
+                bevy_log::error!("{}", msg);
 
                 Self {
                     builder: self.builder.clone(),
@@ -397,16 +400,21 @@ macro_rules! impl_element_clone {
             }
         }
     };
-    // Simple non-generic tuple struct wrapping JonmoBuilder
+    // Simple non-generic tuple struct wrapping jonmo::Builder
     (simple $type_name:literal, $type:ty) => {
         impl Clone for $type {
-            #[doc = $crate::clone_warning_doc!($type_name)]
+            #[doc = $crate::clone_error_doc!($type_name)]
             #[track_caller]
             fn clone(&self) -> Self {
-                bevy_log::warn!(
-                    $crate::clone_warning_msg!($type_name),
+                let msg = format!(
+                    $crate::clone_error_msg!($type_name),
                     std::panic::Location::caller()
                 );
+                if cfg!(debug_assertions) {
+                    let backtrace = std::backtrace::Backtrace::force_capture();
+                    panic!("{}\nBacktrace:\n{}", msg, backtrace);
+                }
+                bevy_log::error!("{}", msg);
 
                 Self(self.0.clone())
             }
@@ -439,15 +447,159 @@ impl<T: Alignable> TypeEraseable for T {
 /// Created via [`TypeEraseable::type_erase`]. The underlying alignment components
 /// are preserved from the original element, so alignment behavior works correctly.
 #[doc = crate::clone_semantics_doc!("AlignabilityFacade")]
-/// [`LayoutDirection`]: super::align::LayoutDirection
-pub struct AlignabilityFacade(JonmoBuilder);
+pub struct AlignabilityFacade(jonmo::Builder);
 
 impl_element_clone!(simple "AlignabilityFacade", AlignabilityFacade);
 
 impl BuilderWrapper for AlignabilityFacade {
-    fn builder_mut(&mut self) -> &mut JonmoBuilder {
+    fn builder_mut(&mut self) -> &mut jonmo::Builder {
         &mut self.0
     }
 }
 
 impl Alignable for AlignabilityFacade {}
+
+/// Enables returning different concrete [`Element`] types from branching logic without type
+/// erasure via [`TypeEraseable::type_erase`].
+///
+/// Inspired by <https://github.com/rayon-rs/either>.
+///
+/// # Example
+///
+/// ```
+/// use bevy::prelude::*;
+/// use haalka::prelude::*;
+///
+/// fn conditional_element(use_column: bool) -> impl Element {
+///     if use_column {
+///         Column::<Node>::new().left_either()
+///     } else {
+///         Row::<Node>::new().right_either()
+///     }
+/// }
+/// ```
+#[allow(missing_docs)]
+pub enum ElementEither<L, R>
+where
+    L: Element,
+    R: Element,
+{
+    Left(L),
+    Right(R),
+}
+
+impl<L, R> Clone for ElementEither<L, R>
+where
+    L: Element + Clone,
+    R: Element + Clone,
+{
+    #[doc = crate::clone_error_doc!("ElementEither")]
+    #[track_caller]
+    fn clone(&self) -> Self {
+        let msg = format!(crate::clone_error_msg!("ElementEither"), std::panic::Location::caller());
+        if cfg!(debug_assertions) {
+            panic!("{}", msg);
+        }
+        bevy_log::error!("{}", msg);
+
+        match self {
+            Self::Left(left) => Self::Left(left.clone()),
+            Self::Right(right) => Self::Right(right.clone()),
+        }
+    }
+}
+
+impl<L, R> BuilderWrapper for ElementEither<L, R>
+where
+    L: Element,
+    R: Element,
+{
+    fn builder_mut(&mut self) -> &mut jonmo::Builder {
+        match self {
+            ElementEither::Left(left) => left.builder_mut(),
+            ElementEither::Right(right) => right.builder_mut(),
+        }
+    }
+
+    fn into_builder(self) -> jonmo::Builder {
+        match self {
+            ElementEither::Left(left) => left.into_builder(),
+            ElementEither::Right(right) => right.into_builder(),
+        }
+    }
+}
+
+impl<L, R> Alignable for ElementEither<L, R>
+where
+    L: Element,
+    R: Element,
+{
+}
+
+/// Blanket trait for transforming [`Element`]s into [`ElementEither::Left`] or
+/// [`ElementEither::Right`].
+pub trait IntoElementEither: Sized
+where
+    Self: Element,
+{
+    /// Wrap this [`Element`] in the [`ElementEither::Left`] variant.
+    ///
+    /// Useful for conditional branching where different [`Element`] types need to be returned
+    /// from the same function or closure.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// fn conditional_child(use_column: bool) -> impl Element {
+    ///     if use_column {
+    ///         Column::<Node>::new()
+    ///             .item(El::<Node>::new())
+    ///             .left_either()
+    ///     } else {
+    ///         Row::<Node>::new()
+    ///             .item(El::<Node>::new())
+    ///             .right_either()
+    ///     }
+    /// }
+    /// ```
+    fn left_either<R>(self) -> ElementEither<Self, R>
+    where
+        R: Element,
+    {
+        ElementEither::Left(self)
+    }
+
+    /// Wrap this [`Element`] in the [`ElementEither::Right`] variant.
+    ///
+    /// Useful for conditional branching where different [`Element`] types need to be returned
+    /// from the same function or closure.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// fn conditional_child(use_stack: bool) -> impl Element {
+    ///     if use_stack {
+    ///         Stack::<Node>::new()
+    ///             .layer(El::<Node>::new())
+    ///             .left_either()
+    ///     } else {
+    ///         El::<Node>::new()
+    ///             .right_either()
+    ///     }
+    /// }
+    /// ```
+    fn right_either<L>(self) -> ElementEither<L, Self>
+    where
+        L: Element,
+    {
+        ElementEither::Right(self)
+    }
+}
+
+impl<T: Element> IntoElementEither for T {}

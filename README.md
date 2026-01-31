@@ -79,7 +79,7 @@ fn ui_root() -> impl Element {
                 .item(counter_button(counter_holder.clone(), "-", -1))
                 .item(
                     El::<Text>::new().text_font(TextFont::from_font_size(25.)).text_signal(
-                        SignalBuilder::from_component_lazy::<Counter>(counter_holder.clone())
+                        signal::from_component_lazy::<Counter>(counter_holder.clone())
                             .map_in(deref_copied)
                             .dedupe()
                             .map_in_ref(ToString::to_string)
@@ -100,7 +100,7 @@ fn counter_button(counter_holder: LazyEntity, label: &'static str, step: i32) ->
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .lazy_entity(button_holder.clone())
         .background_color_signal(
-            SignalBuilder::from_lazy_entity(button_holder)
+            signal::from_entity(button_holder)
                 .has_component::<Hovered>()
                 .map_bool_in(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
                 .map_in(BackgroundColor)
