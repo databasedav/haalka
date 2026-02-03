@@ -130,7 +130,7 @@ impl<NodeType: Bundle> Stack<NodeType> {
 
     /// Declare reactive z-axis stacked children.
     pub fn layers_signal_vec<
-        IOE: IntoOptionElement + Clone + 'static,
+        IOE: IntoOptionElement + Clone + Send + Sync + 'static,
         S: SignalVec<Item = IOE> + Send + Sync + 'static,
     >(
         self,

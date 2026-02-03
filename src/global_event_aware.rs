@@ -1,6 +1,5 @@
 //! Semantics for managing global event listeners.
 
-use bevy_log::tracing_subscriber::field::debug;
 use bevy_platform::sync::{Arc, OnceLock};
 
 use super::{

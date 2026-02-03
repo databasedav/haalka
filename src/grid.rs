@@ -177,7 +177,7 @@ impl<NodeType: Bundle> Grid<NodeType> {
 
     /// Declare reactive grid children.
     pub fn cells_signal_vec<
-        IOE: IntoOptionElement + Clone + 'static,
+        IOE: IntoOptionElement + Clone + Send + Sync + 'static,
         S: SignalVec<Item = IOE> + Send + Sync + 'static,
     >(
         self,

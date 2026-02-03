@@ -1295,6 +1295,9 @@ pub trait PointerEventAware: GlobalEventAware {
                                         return;
                                     }
                                     drag_data.has_new_delta = false;
+                                    // Extract accumulated delta and reset for next frame
+                                    let delta = drag_data.delta;
+                                    drag_data.delta = Vec2::ZERO;
                                     commands.run_system_with(
                                         drag_handler_system,
                                         (
@@ -1305,7 +1308,7 @@ pub trait PointerEventAware: GlobalEventAware {
                                                 pointer_id: drag_data.pointer_id,
                                                 pointer_location: drag_data.pointer_location.clone(),
                                                 hit: drag_data.hit.clone(),
-                                                delta: drag_data.delta,
+                                                delta,
                                             },
                                         ),
                                     );
@@ -1344,7 +1347,8 @@ pub trait PointerEventAware: GlobalEventAware {
                                                     {
                                                         drag_data.pointer_location =
                                                             drag_event.pointer_location.clone();
-                                                        drag_data.delta = drag_event.delta;
+                                                        // Accumulate deltas to handle multiple events per frame
+                                                        drag_data.delta += drag_event.delta;
                                                         drag_data.has_new_delta = true;
                                                     }
                                                 },
@@ -1720,7 +1724,7 @@ fn update_hover_states(
         if let Some(hit) = hit_data_option {
             let should_update_cache = last_subtree_hit.is_none_or(|cached| cached.0 != *hit);
             if should_update_cache && let Ok(mut entity_commands) = commands.get_entity(entity) {
-                entity_commands.insert(LastSubtreeHoverHit(hit.clone()));
+                entity_commands.try_insert(LastSubtreeHoverHit(hit.clone()));
             }
         }
 
@@ -1746,7 +1750,7 @@ fn update_hover_states(
             if let Some(hit) = hit_data_option.cloned() {
                 commands.trigger(Pointer::new(pointer_id, location, Enter { hit }, entity));
                 if let Ok(mut entity_commands) = commands.get_entity(entity) {
-                    entity_commands.insert(Hovered);
+                    entity_commands.try_insert(Hovered);
                 }
                 continue;
             }
@@ -2246,7 +2250,7 @@ pub struct UpdateHoverStatesDisabled;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_observer(on_set_cursor).add_systems(
-        Update,
+        PreUpdate,
         (
             (
                 pressable_system.run_if(any_with_component::<Pressable>),
@@ -2266,6 +2270,7 @@ pub(super) fn plugin(app: &mut App) {
             )
                 .chain(),
             consume_queued_cursor.run_if(resource_removed::<CursorableDisabled>),
-        ),
+        )
+            .after(PickingSystems::Last),
     );
 }

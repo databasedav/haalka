@@ -11,6 +11,3 @@ export_nickels := "ci build_example pr_previews examples_on_main cleanup_pr_prev
 
 sync_readme_example:
   uv run python sync_counter_example_readme.py
-
-repo_prompt:
-  @nickel eval repo_prompt.ncl | sed 's/^"//; s/"$//; s/\\"/"/g; s/\\n/\n/g'

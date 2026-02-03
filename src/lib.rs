@@ -39,12 +39,75 @@ pub mod utils;
 pub mod futures_signals;
 
 /// Includes the plugins and systems required for [haalka](crate) to function.
-pub struct HaalkaPlugin;
+///
+/// By default, this plugin adds [`JonmoPlugin`](jonmo::JonmoPlugin) with `PostUpdate` as the
+/// default schedule. Use [`with_jonmo`](Self::with_jonmo) to add additional schedules:
+///
+/// ```no_run
+/// use bevy::prelude::*;
+/// use haalka::prelude::*;
+///
+/// App::new()
+///     .add_plugins(HaalkaPlugin::new().with_jonmo(|jonmo| jonmo.with_schedule::<Update>()));
+/// ```
+///
+/// **Note**: If `JonmoPlugin` is already added, `HaalkaPlugin` will warn and skip adding it.
+/// Ensure `JonmoPlugin` is configured with at least `PostUpdate` for proper UI behavior.
+pub struct HaalkaPlugin {
+    jonmo_configurator:
+        std::sync::Mutex<Option<Box<dyn FnOnce(jonmo::JonmoPlugin) -> jonmo::JonmoPlugin + Send + Sync>>>,
+}
+
+impl Default for HaalkaPlugin {
+    fn default() -> Self {
+        Self {
+            jonmo_configurator: std::sync::Mutex::new(None),
+        }
+    }
+}
+
+impl HaalkaPlugin {
+    /// Create a new `HaalkaPlugin` with default configuration.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Configure the [`JonmoPlugin`](jonmo::JonmoPlugin) with additional schedules.
+    ///
+    /// The configurator receives a `JonmoPlugin` already set up with `PostUpdate` as
+    /// the default schedule. Use this to add additional schedules:
+    ///
+    /// ```no_run
+    /// use bevy::prelude::*;
+    /// use haalka::prelude::*;
+    ///
+    /// HaalkaPlugin::new().with_jonmo(|jonmo| jonmo.with_schedule::<Update>());
+    /// ```
+    ///
+    /// **Note**: This has no effect if `JonmoPlugin` was already added to the app.
+    pub fn with_jonmo(
+        self,
+        configurator: impl FnOnce(jonmo::JonmoPlugin) -> jonmo::JonmoPlugin + Send + Sync + 'static,
+    ) -> Self {
+        *self.jonmo_configurator.lock().unwrap() = Some(Box::new(configurator));
+        self
+    }
+}
 
 impl Plugin for HaalkaPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<jonmo::JonmoPlugin>() {
-            app.add_plugins(jonmo::JonmoPlugin::new().in_schedule(PostUpdate));
+        if app.is_plugin_added::<jonmo::JonmoPlugin>() {
+            bevy_log::warn!(
+                "JonmoPlugin was already added before HaalkaPlugin. \
+                 Ensure it is configured with at least the PostUpdate schedule for proper UI behavior. \
+                 Any .with_jonmo() configuration will not be applied."
+            );
+        } else {
+            let mut jonmo_plugin = jonmo::JonmoPlugin::new::<PostUpdate>();
+            if let Some(configurator) = self.jonmo_configurator.lock().unwrap().take() {
+                jonmo_plugin = configurator(jonmo_plugin);
+            }
+            app.add_plugins(jonmo_plugin);
         }
         app.add_plugins((
             align::plugin,
@@ -56,7 +119,7 @@ impl Plugin for HaalkaPlugin {
             PostUpdate,
             jonmo::SignalProcessing
                 .before(bevy_ui::UiSystems::Prepare)
-                .before(bevy_text::Text2dUpdateSystems)
+                .before(bevy_text::Text2dUpdateSystems),
         );
         #[cfg(feature = "text_input")]
         app.add_plugins(text_input::plugin);

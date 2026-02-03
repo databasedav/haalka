@@ -156,7 +156,7 @@ impl<NodeType: Bundle> Stripe<NodeType> {
     /// Declare reactive dynamically directioned items.
     pub fn items_signal_vec<IOE, S>(self, items_options_signal_vec_option: impl Into<Option<S>>) -> Self
     where
-        IOE: IntoOptionElement + Clone + 'static,
+        IOE: IntoOptionElement + Clone + Send + Sync + 'static,
         S: SignalVec<Item = IOE> + Send + Sync + 'static,
     {
         if let Some(items_options_signal_vec) = items_options_signal_vec_option.into() {

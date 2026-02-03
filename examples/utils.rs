@@ -144,12 +144,15 @@ pub(crate) fn examples_plugin(app: &mut App) {
             }),
             ..default()
         }),
-        HaalkaPlugin,
         FpsOverlayPlugin,
         #[cfg(feature = "debug")]
         DebugUiPlugin,
-    ))
-    .add_systems(
+    ));
+    // Add HaalkaPlugin if not already added (allows examples to configure it first)
+    if !app.is_plugin_added::<HaalkaPlugin>() {
+        app.add_plugins(HaalkaPlugin::new());
+    }
+    app.add_systems(
         PostStartup,
         (
             mark_default_ui_camera.run_if(not(any_with_component::<IsDefaultUiCamera>)),
