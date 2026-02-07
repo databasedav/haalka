@@ -152,10 +152,9 @@ impl TextInput {
                                 .map(|contents| contents.get() != text.as_str())
                                 .unwrap_or(true);
 
-                            if should_update
-                                && let Ok(mut queue) = text_input_queues.get_mut(entity) {
-                                    queue_set_text_actions(&mut queue, text);
-                                }
+                            if should_update && let Ok(mut queue) = text_input_queues.get_mut(entity) {
+                                queue_set_text_actions(&mut queue, text);
+                            }
                         },
                     )
             });

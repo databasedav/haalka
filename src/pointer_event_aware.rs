@@ -116,10 +116,11 @@ impl ThrottleTimers {
 
         // Continuing to be active, throttle
         if let Some(timer) = self.timers.get_mut(&id)
-            && timer.tick(delta).is_finished() {
-                timer.reset();
-                return true;
-            }
+            && timer.tick(delta).is_finished()
+        {
+            timer.reset();
+            return true;
+        }
         false
     }
 
@@ -224,9 +225,10 @@ fn throttle_system<D: Clone + Send + Sync + 'static>(
           mut collections: Query<&mut ThrottleTimers>| {
         let is_active = get_field(&data);
         if let (Ok(mut collection), Some(&id)) = (collections.get_mut(entity), timer_id.get())
-            && collection.tick_and_check(id, time.delta(), is_active) {
-                commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data));
-            }
+            && collection.tick_and_check(id, time.delta(), is_active)
+        {
+            commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data));
+        }
     }
 }
 
@@ -279,9 +281,10 @@ pub(crate) fn disableable_signal_system<D: Send + Sync + 'static>(
     move |In((entity, data)): In<(Entity, D)>, states: Query<&DisableableSignalState>, mut commands: Commands| {
         if let Some(index) = state_index.get().copied()
             && let Ok(state) = states.get(entity)
-                && *state.flags.get(index).unwrap_or(&false) {
-                    return;
-                }
+            && *state.flags.get(index).unwrap_or(&false)
+        {
+            return;
+        }
         commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data));
     }
 }
@@ -851,9 +854,10 @@ pub trait PointerEventAware: GlobalEventAware {
                     if ui_roots.contains(ancestor) {
                         if !is_inside_or_removed_from_dom(entity, &click, ancestor, &childrens)
                             && let (Ok(mut collection), Some(&id)) = (collections.get_mut(entity), timer_id.get())
-                                && collection.check_discrete(id, time.delta()) {
-                                    commands.run_system_with(system_holder.get().copied().unwrap(), (entity, click));
-                                }
+                            && collection.check_discrete(id, time.delta())
+                        {
+                            commands.run_system_with(system_holder.get().copied().unwrap(), (entity, click));
+                        }
                         break;
                     }
                 }
@@ -1970,9 +1974,10 @@ pub fn hovered_system(mut hovering_query: Query<(Entity, &HoveredSystem), With<H
 
 fn cleanup_move_observer<T: Component>(commands: &mut Commands, entity: Entity, observer: Option<Entity>) {
     if let Ok(mut entity_commands) = commands.get_entity(entity)
-        && observer.is_some() {
-            entity_commands.remove::<T>();
-        }
+        && observer.is_some()
+    {
+        entity_commands.remove::<T>();
+    }
     if let Some(observer_entity) = observer {
         commands.entity(observer_entity).despawn();
     }
@@ -2197,7 +2202,6 @@ pub trait Cursorable: PointerEventAware {
         self,
         cursor_option: impl Into<Option<CursorIcon>>,
         disabled: impl Signal<Item = bool> + 'static,
-
     ) -> Self {
         self.cursor_signal_disableable_signal(signal::once(cursor_option.into()), disabled)
     }
