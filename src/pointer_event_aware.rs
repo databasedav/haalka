@@ -1874,8 +1874,8 @@ fn on_draggable_remove(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
         let drag_start = observers.drag_start;
         let drag_end = observers.drag_end;
         world.commands().queue(move |world: &mut World| {
-            world.despawn(drag_start);
-            world.despawn(drag_end);
+            let _ = world.try_despawn(drag_start);
+            let _ = world.try_despawn(drag_end);
         });
     }
     world.commands().queue(move |world: &mut World| {

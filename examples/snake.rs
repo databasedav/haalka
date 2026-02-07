@@ -331,10 +331,10 @@ fn on_grid_size_change(
             //                               original pos   cells we've inserted so far
             //
             // Insert position (after last cell of row k):
-            //   insert_idx = start_of_row_k + cur_size = new_size + (k + 1) * cur_size + k
+            //   insert_i = start_of_row_k + cur_size = new_size + (k + 1) * cur_size + k
             for k in 0..cur_size {
-                let insert_idx = new_size + (k + 1) * cur_size + k;
-                guard.insert(insert_idx, Cell::Empty);
+                let insert_i = new_size + (k + 1) * cur_size + k;
+                guard.insert(insert_i, Cell::Empty);
             }
 
             // Update snake coordinates: adding top row shifts all y-coordinates down by 1
@@ -378,17 +378,17 @@ fn on_grid_size_change(
             //   - Right column: indices cur_size-1, 2*cur_size-1, ..., cur_size*cur_size-1
             // Note: top-right corner (index cur_size-1) is counted in both, but that's fine.
             let had_food = (0..cur_size).any(|i| {
-                let top_row_idx = i;
-                let right_col_idx = (i + 1) * cur_size - 1;
-                matches!(guard.get(top_row_idx), Some(Cell::Food))
-                    || matches!(guard.get(right_col_idx), Some(Cell::Food))
+                let top_row_i = i;
+                let right_col_i = (i + 1) * cur_size - 1;
+                matches!(guard.get(top_row_i), Some(Cell::Food))
+                    || matches!(guard.get(right_col_i), Some(Cell::Food))
             });
 
             // Remove right column cells (bottom to top to preserve indices).
             // For 4x4: remove indices 15, 11, 7 (not 3 - that's in top row, removed next)
             for k in 0..new_size {
-                let remove_idx = cur_size * cur_size - 1 - k * cur_size;
-                guard.remove(remove_idx);
+                let remove_i = cur_size * cur_size - 1 - k * cur_size;
+                guard.remove(remove_i);
             }
 
             // Remove entire top row (right to left to preserve indices).
@@ -482,9 +482,9 @@ fn tick(
     };
     snake.0.push_front((x, y));
 
-    let head_idx = pos_to_index(x, y, size);
+    let head_i = pos_to_index(x, y, size);
     let mut guard = cells.0.write(&mut vec_datas);
-    let cell = guard[head_idx];
+    let cell = guard[head_i];
 
     match cell {
         Cell::Snake => {
@@ -492,7 +492,7 @@ fn tick(
             commands.insert_resource(Paused);
         }
         cell @ (Cell::Food | Cell::Empty) => {
-            guard.set(head_idx, Cell::Snake);
+            guard.set(head_i, Cell::Snake);
             match cell {
                 Cell::Food => {
                     **score += 1;
@@ -500,8 +500,8 @@ fn tick(
                 }
                 Cell::Empty => {
                     if let Some((tail_x, tail_y)) = snake.0.pop_back() {
-                        let tail_idx = pos_to_index(tail_x, tail_y, size);
-                        guard.set(tail_idx, Cell::Empty);
+                        let tail_i = pos_to_index(tail_x, tail_y, size);
+                        guard.set(tail_i, Cell::Empty);
                     }
                 }
                 _ => (),
@@ -520,14 +520,14 @@ fn on_spawn_food(
     mut vec_datas: Query<&mut MutableVecData<Cell>>,
 ) {
     let mut guard = cells.0.write(&mut vec_datas);
-    if let Some(idx) = guard
+    if let Some(i) = guard
         .iter()
         .enumerate()
-        .filter_map(|(idx, cell)| matches!(cell, Cell::Empty).then_some(idx))
+        .filter_map(|(i, cell)| matches!(cell, Cell::Empty).then_some(i))
         .into_iter()
         .choose(rng.as_mut())
     {
-        guard.set(idx, Cell::Food);
+        guard.set(i, Cell::Food);
     }
 }
 
@@ -548,8 +548,8 @@ fn on_restart(
 
     let mut new_cells = vec![Cell::Empty; size * size];
     for &(x, y) in init_snake.iter() {
-        let idx = pos_to_index(x, y, size);
-        new_cells[idx] = Cell::Snake;
+        let i = pos_to_index(x, y, size);
+        new_cells[i] = Cell::Snake;
     }
     cells.0.write(&mut vec_datas).replace(new_cells);
 

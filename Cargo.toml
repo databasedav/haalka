@@ -51,7 +51,7 @@ document-features = { version = "0.2", optional = true }
 # aalo = { path = "../aalo", version = "0.0", optional = true }
 
 # TODO: use MoonZoon's futures-signals/futures-util extensions directly when it is published as a crate
-haalka_futures_signals_ext = { version = "0.0.3", path = "MoonZoon/crates/futures_signals_ext", optional = true }
+haalka_futures_signals_ext = { version = "0.0.3", path = "MoonZoon/crates/futures_signals_ext", optional = false }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-io = { version = "2.4", optional = true }
