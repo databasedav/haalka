@@ -111,7 +111,7 @@ macro_rules! impl_haalka_methods {
             #[doc = concat!("Reactively run a function with mutable access (via [`Mut`]) to this element's [`", stringify!($field_type), "`] [`Component`] and the output of the [`Signal`].")]
             pub fn [<on_signal_with_ $field>]<T: Clone + Send + Sync + 'static>(
                 self,
-                signal: impl Signal<Item = T> + Send + 'static,
+                signal: impl Signal<Item = T> + 'static,
                 f: impl FnMut(Mut<$field_type>, T) + Send + Sync + 'static,
             ) -> Self {
                 self.with_builder(|builder| {

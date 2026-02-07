@@ -149,11 +149,10 @@ fn on_layout_direction_insert(mut world: DeferredWorld, HookContext { entity, ..
             .map(|c| c.iter().collect())
             .unwrap_or_default();
         for child in children {
-            if world.get::<Alignment>(child).is_some() {
-                if let Some(mut node) = world.get_mut::<Node>(child) {
+            if world.get::<Alignment>(child).is_some()
+                && let Some(mut node) = world.get_mut::<Node>(child) {
                     (old_handler.reset)(&mut node);
                 }
-            }
         }
     }
 

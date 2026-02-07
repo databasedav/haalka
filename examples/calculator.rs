@@ -39,7 +39,7 @@ struct Error;
 #[derive(Resource, Clone, Deref, DerefMut)]
 struct Output(String);
 
-fn textable_element(text_signal: impl Signal<Item = impl Into<String> + 'static> + Send + 'static) -> El<Node> {
+fn textable_element(text_signal: impl Signal<Item = impl Into<String> + 'static> + 'static) -> El<Node> {
     El::<Node>::new()
         .with_node(|mut node| node.border = UiRect::all(Val::Px(2.0)))
         .border_color(BorderColor::all(Color::WHITE))

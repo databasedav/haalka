@@ -143,7 +143,7 @@ fn sync_tracking_healthbar_position(
     // ui_scale.0 = starting_distance as f64 / scale as f64;
 }
 
-fn health_signal() -> impl Signal<Item = u32> + Clone + Send + Sync + 'static {
+fn health_signal() -> impl Signal<Item = u32> + Clone + 'static {
     signal::from_system(|In(_), health: Option<Single<&Health>>| health.map(deref_copied).map(|health| health.0))
         .dedupe()
 }

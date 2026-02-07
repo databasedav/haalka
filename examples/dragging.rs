@@ -141,10 +141,10 @@ fn square(i: usize) -> impl Element {
         )
         .on_dragged(
             |In((entity, drag_data)): In<(Entity, DragData)>, mut nodes: Query<(&mut Node, &DragOffset)>| {
-                if drag_data.dragged {
-                    if let Ok((node, drag_offset)) = nodes.get_mut(entity) {
-                        set_dragging_position(node, drag_data.pointer_location.position, drag_offset.0);
-                    }
+                if drag_data.dragged
+                    && let Ok((node, drag_offset)) = nodes.get_mut(entity)
+                {
+                    set_dragging_position(node, drag_data.pointer_location.position, drag_offset.0);
                 }
             },
         )

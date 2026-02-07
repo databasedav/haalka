@@ -9,9 +9,7 @@ use std::{
 
 use apply::Apply;
 use bevy_app::prelude::*;
-use bevy_ecs::{
-    component::Mutable, lifecycle::HookContext, prelude::*, system::SystemId, world::DeferredWorld,
-};
+use bevy_ecs::{component::Mutable, lifecycle::HookContext, prelude::*, system::SystemId, world::DeferredWorld};
 use bevy_log::prelude::*;
 use bevy_math::Vec2;
 use bevy_picking::{
@@ -108,7 +106,7 @@ impl ThrottleTimers {
             return false;
         }
 
-        // New activation - fire immediately
+        // New activation, fire immediately
         if !was_active {
             if let Some(timer) = self.timers.get_mut(&id) {
                 timer.reset();
@@ -116,13 +114,12 @@ impl ThrottleTimers {
             return true;
         }
 
-        // Continuing to be active - throttle
-        if let Some(timer) = self.timers.get_mut(&id) {
-            if timer.tick(delta).is_finished() {
+        // Continuing to be active, throttle
+        if let Some(timer) = self.timers.get_mut(&id)
+            && timer.tick(delta).is_finished() {
                 timer.reset();
                 return true;
             }
-        }
         false
     }
 
@@ -167,6 +164,7 @@ fn add_throttle_timer_ready(world: &mut World, entity: Entity, duration: Duratio
 }
 
 /// Returns a builder function that registers a handler system on spawn for change detection.
+#[allow(clippy::type_complexity)]
 fn change_setup<D: 'static, Marker>(
     handler: impl IntoSystem<In<(Entity, D)>, (), Marker> + Send + Sync + 'static,
     system_holder: Arc<OnceLock<SystemId<In<(Entity, D)>, ()>>>,
@@ -181,13 +179,14 @@ fn change_setup<D: 'static, Marker>(
 }
 
 /// Creates a change detection system that fires when the boolean field changes.
+#[allow(clippy::type_complexity)]
 fn change_system<D: Clone + Send + Sync + 'static>(
     system_holder: Arc<OnceLock<SystemId<In<(Entity, D)>, ()>>>,
     get_field: fn(&D) -> bool,
 ) -> impl FnMut(In<(Entity, D)>, Local<Option<bool>>, Commands) + Send + Sync + 'static {
     move |In((entity, data)): In<(Entity, D)>, mut prev: Local<Option<bool>>, mut commands: Commands| {
         let field = get_field(&data);
-        if prev.map_or(true, |prev| prev != field) {
+        if prev.is_none_or(|prev| prev != field) {
             *prev = Some(field);
             commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data));
         }
@@ -195,6 +194,7 @@ fn change_system<D: Clone + Send + Sync + 'static>(
 }
 
 /// Returns a builder function that registers a handler system and throttle timer on spawn.
+#[allow(clippy::type_complexity)]
 fn throttle_setup<D: 'static, Marker>(
     handler: impl IntoSystem<In<(Entity, D)>, (), Marker> + Send + Sync + 'static,
     duration: Duration,
@@ -212,6 +212,7 @@ fn throttle_setup<D: 'static, Marker>(
 }
 
 /// Creates a throttled system that fires immediately on activation, then throttles while active.
+#[allow(clippy::type_complexity)]
 fn throttle_system<D: Clone + Send + Sync + 'static>(
     system_holder: Arc<OnceLock<SystemId<In<(Entity, D)>, ()>>>,
     timer_id: Arc<OnceLock<usize>>,
@@ -222,18 +223,18 @@ fn throttle_system<D: Clone + Send + Sync + 'static>(
           time: Res<Time>,
           mut collections: Query<&mut ThrottleTimers>| {
         let is_active = get_field(&data);
-        if let (Ok(mut collection), Some(&id)) = (collections.get_mut(entity), timer_id.get()) {
-            if collection.tick_and_check(id, time.delta(), is_active) {
+        if let (Ok(mut collection), Some(&id)) = (collections.get_mut(entity), timer_id.get())
+            && collection.tick_and_check(id, time.delta(), is_active) {
                 commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data));
             }
-        }
     }
 }
 
 /// Returns a builder function that sets up signal-based disabling for a handler.
+#[allow(clippy::type_complexity)]
 pub(crate) fn disableable_signal_setup<D: 'static, Marker>(
     handler: impl IntoSystem<In<(Entity, D)>, (), Marker> + Send + Sync + 'static,
-    disabled: impl Signal<Item = bool> + Send + 'static,
+    disabled: impl Signal<Item = bool> + 'static,
     system_holder: Arc<OnceLock<SystemId<In<(Entity, D)>, ()>>>,
     state_index: Arc<OnceLock<usize>>,
 ) -> impl FnOnce(jonmo::Builder) -> jonmo::Builder {
@@ -259,11 +260,10 @@ pub(crate) fn disableable_signal_setup<D: 'static, Marker>(
                     let Some(index) = state_index.get().copied() else {
                         return;
                     };
-                    if let Some(mut state) = entity.get_mut::<DisableableSignalState>() {
-                        if let Some(flag) = state.flags.get_mut(index) {
+                    if let Some(mut state) = entity.get_mut::<DisableableSignalState>()
+                        && let Some(flag) = state.flags.get_mut(index) {
                             *flag = disabled;
                         }
-                    }
                 }),
             )
             .apply(remove_system_holder_on_despawn(system_holder))
@@ -271,18 +271,17 @@ pub(crate) fn disableable_signal_setup<D: 'static, Marker>(
 }
 
 /// Creates a system that checks signal-based disabling before running the handler.
+#[allow(clippy::type_complexity)]
 pub(crate) fn disableable_signal_system<D: Send + Sync + 'static>(
     system_holder: Arc<OnceLock<SystemId<In<(Entity, D)>, ()>>>,
     state_index: Arc<OnceLock<usize>>,
 ) -> impl FnMut(In<(Entity, D)>, Query<&DisableableSignalState>, Commands) + Send + Sync + 'static {
     move |In((entity, data)): In<(Entity, D)>, states: Query<&DisableableSignalState>, mut commands: Commands| {
-        if let Some(index) = state_index.get().copied() {
-            if let Ok(state) = states.get(entity) {
-                if *state.flags.get(index).unwrap_or(&false) {
+        if let Some(index) = state_index.get().copied()
+            && let Ok(state) = states.get(entity)
+                && *state.flags.get(index).unwrap_or(&false) {
                     return;
                 }
-            }
-        }
         commands.run_system_with(system_holder.get().copied().unwrap(), (entity, data));
     }
 }
@@ -485,7 +484,7 @@ pub trait PointerEventAware: GlobalEventAware {
     fn on_hovered_disableable_signal<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, HoverData)>, (), Marker> + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
+        disabled: impl Signal<Item = bool> + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         let state_index = Arc::new(OnceLock::new());
@@ -536,7 +535,7 @@ pub trait PointerEventAware: GlobalEventAware {
     fn on_hovered_change_disableable_signal<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, HoverData)>, (), Marker> + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
+        disabled: impl Signal<Item = bool> + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         let state_index = Arc::new(OnceLock::new());
@@ -681,7 +680,7 @@ pub trait PointerEventAware: GlobalEventAware {
     fn on_click_disableable_signal<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
+        disabled: impl Signal<Item = bool> + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         let state_index = Arc::new(OnceLock::new());
@@ -728,11 +727,10 @@ pub trait PointerEventAware: GlobalEventAware {
                                                  time: Res<Time>,
                                                  mut collections: Query<&mut ThrottleTimers>,
                                                  mut commands: Commands| {
-                        if let (Ok(mut collection), Some(&id)) = (collections.get_mut(click.entity), timer_id.get()) {
-                            if collection.check_discrete(id, time.delta()) {
+                        if let (Ok(mut collection), Some(&id)) = (collections.get_mut(click.entity), timer_id.get())
+                            && collection.check_discrete(id, time.delta()) {
                                 commands.run_system_with(system, (click.entity, (*click).clone()));
                             }
-                        }
                     });
                 }))
                 .apply(remove_system_holder_on_despawn(system_holder))
@@ -805,7 +803,7 @@ pub trait PointerEventAware: GlobalEventAware {
     fn on_click_outside_disableable_signal<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, GlobalEventData<Pointer<Click>>)>, (), Marker> + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
+        disabled: impl Signal<Item = bool> + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         let state_index = Arc::new(OnceLock::new());
@@ -851,13 +849,11 @@ pub trait PointerEventAware: GlobalEventAware {
                   mut commands: Commands| {
                 for ancestor in child_ofs.iter_ancestors(entity) {
                     if ui_roots.contains(ancestor) {
-                        if !is_inside_or_removed_from_dom(entity, &click, ancestor, &childrens) {
-                            if let (Ok(mut collection), Some(&id)) = (collections.get_mut(entity), timer_id.get()) {
-                                if collection.check_discrete(id, time.delta()) {
+                        if !is_inside_or_removed_from_dom(entity, &click, ancestor, &childrens)
+                            && let (Ok(mut collection), Some(&id)) = (collections.get_mut(entity), timer_id.get())
+                                && collection.check_discrete(id, time.delta()) {
                                     commands.run_system_with(system_holder.get().copied().unwrap(), (entity, click));
                                 }
-                            }
-                        }
                         break;
                     }
                 }
@@ -1069,7 +1065,7 @@ pub trait PointerEventAware: GlobalEventAware {
     fn on_pressed_disableable_signal<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, PressData)>, (), Marker> + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
+        disabled: impl Signal<Item = bool> + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         let state_index = Arc::new(OnceLock::new());
@@ -1171,7 +1167,7 @@ pub trait PointerEventAware: GlobalEventAware {
     fn on_pressed_change_disableable_signal<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, PressData)>, (), Marker> + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
+        disabled: impl Signal<Item = bool> + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         let state_index = Arc::new(OnceLock::new());
@@ -1478,7 +1474,7 @@ pub trait PointerEventAware: GlobalEventAware {
     fn on_dragged_disableable_signal<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, DragData)>, (), Marker> + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
+        disabled: impl Signal<Item = bool> + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         let state_index = Arc::new(OnceLock::new());
@@ -1580,7 +1576,7 @@ pub trait PointerEventAware: GlobalEventAware {
     fn on_dragged_change_disableable_signal<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, DragData)>, (), Marker> + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
+        disabled: impl Signal<Item = bool> + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         let state_index = Arc::new(OnceLock::new());
@@ -1973,11 +1969,10 @@ pub fn hovered_system(mut hovering_query: Query<(Entity, &HoveredSystem), With<H
 }
 
 fn cleanup_move_observer<T: Component>(commands: &mut Commands, entity: Entity, observer: Option<Entity>) {
-    if let Ok(mut entity_commands) = commands.get_entity(entity) {
-        if observer.is_some() {
+    if let Ok(mut entity_commands) = commands.get_entity(entity)
+        && observer.is_some() {
             entity_commands.remove::<T>();
         }
-    }
     if let Some(observer_entity) = observer {
         commands.entity(observer_entity).despawn();
     }
@@ -2151,7 +2146,7 @@ pub trait Cursorable: PointerEventAware {
     /// [`Element`]: super::element::Element
     fn cursor_signal_disableable<Disabled: Component>(
         self,
-        cursor_option_signal: impl Signal<Item = impl Into<Option<CursorIcon>> + 'static> + Send + Sync + 'static,
+        cursor_option_signal: impl Signal<Item = impl Into<Option<CursorIcon>> + 'static> + 'static,
     ) -> Self {
         self.with_builder(|builder| {
             builder.component_signal::<Cursor>(
@@ -2170,8 +2165,9 @@ pub trait Cursorable: PointerEventAware {
     /// [`Element`]: super::element::Element
     fn cursor_signal_disableable_signal(
         self,
-        cursor_option_signal: impl Signal<Item = impl Into<Option<CursorIcon>> + 'static> + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + Sync + 'static,
+        cursor_option_signal: impl Signal<Item = impl Into<Option<CursorIcon>> + 'static> + 'static,
+
+        disabled: impl Signal<Item = bool> + 'static,
     ) -> Self {
         self.with_builder(|builder| builder.component_signal(disabled.map_true_in(|| CursorDisabled)))
             .cursor_signal_disableable::<CursorDisabled>(cursor_option_signal)
@@ -2200,7 +2196,8 @@ pub trait Cursorable: PointerEventAware {
     fn cursor_disableable_signal(
         self,
         cursor_option: impl Into<Option<CursorIcon>>,
-        disabled: impl Signal<Item = bool> + Send + Sync + 'static,
+        disabled: impl Signal<Item = bool> + 'static,
+
     ) -> Self {
         self.cursor_signal_disableable_signal(signal::once(cursor_option.into()), disabled)
     }

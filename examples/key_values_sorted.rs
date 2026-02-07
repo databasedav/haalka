@@ -351,16 +351,15 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
                         });
 
                         // Move each entity to its correct position
-                        for target in 0..sorted.len() {
-                            let target_entity = sorted[target];
+                        for (target, entity) in sorted.into_iter().enumerate() {
                             // Find where this entity currently is
-                            let current = guard.iter().position(|&e| e == target_entity).unwrap();
+                            let current = guard.iter().position(|&e| e == entity).unwrap();
                             if current != target {
                                 guard.move_item(current, target);
                             }
                         }
                     },
-                    selected.clone(),
+                    selected,
                 )
                 .child(
                     El::<Text>::new()

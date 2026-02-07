@@ -119,7 +119,7 @@ fn labeled_element(label: impl Element, element: impl Element) -> impl Element {
         .item(element.align(Align::new().center_y()))
 }
 
-fn labeled_count(label: impl Element, count_signal: impl Signal<Item = i32> + Send + 'static) -> impl Element {
+fn labeled_count(label: impl Element, count_signal: impl Signal<Item = i32> + 'static) -> impl Element {
     labeled_element(label, {
         El::<Text>::new()
             .text_font(TextFont::from_font_size(FONT_SIZE))
@@ -142,11 +142,7 @@ fn text_labeled_element(label: &str, element: impl Element) -> impl Element {
     )
 }
 
-fn text_labeled_count(
-    label: &str,
-    font_size: f32,
-    count_signal: impl Signal<Item = i32> + Send + 'static,
-) -> impl Element {
+fn text_labeled_count(label: &str, font_size: f32, count_signal: impl Signal<Item = i32> + 'static) -> impl Element {
     labeled_element(
         El::<Text>::new()
             .text_font(TextFont::from_font_size(font_size))
@@ -163,7 +159,7 @@ fn text_labeled_count(
     )
 }
 
-fn category_count(category: ColorCategory, count: impl Signal<Item = i32> + Send + 'static) -> impl Element {
+fn category_count(category: ColorCategory, count: impl Signal<Item = i32> + 'static) -> impl Element {
     labeled_count(
         {
             El::<Node>::new()
@@ -224,7 +220,7 @@ where
         )
 }
 
-fn rate_element<T: Component, R>(rate_signal: impl Signal<Item = f32> + Send + 'static) -> impl Element
+fn rate_element<T: Component, R>(rate_signal: impl Signal<Item = f32> + 'static) -> impl Element
 where
     R: Resource + Clone + Copy + Deref<Target = f32> + DerefMut,
 {

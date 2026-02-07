@@ -523,7 +523,6 @@ fn on_spawn_food(
         .iter()
         .enumerate()
         .filter_map(|(i, cell)| matches!(cell, Cell::Empty).then_some(i))
-        .into_iter()
         .choose(rng.as_mut())
     {
         guard.set(i, Cell::Food);

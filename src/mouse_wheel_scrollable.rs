@@ -75,7 +75,7 @@ pub trait MouseWheelScrollable: ViewportMutable {
     fn on_scroll_disableable_signal<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
+        disabled: impl Signal<Item = bool> + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         let state_index = Arc::new(OnceLock::new());
@@ -132,7 +132,7 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
     fn on_scroll_on_hover_disableable_signal<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
-        disabled: impl Signal<Item = bool> + Send + 'static,
+        disabled: impl Signal<Item = bool> + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         let state_index = Arc::new(OnceLock::new());

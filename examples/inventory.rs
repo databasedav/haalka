@@ -198,8 +198,8 @@ struct RpgIconSheet {
 }
 
 fn icon(
-    index_signal: impl Signal<Item = usize> + Send + 'static,
-    count_signal: impl Signal<Item = usize> + Send + 'static,
+    index_signal: impl Signal<Item = usize> + 'static,
+    count_signal: impl Signal<Item = usize> + 'static,
 ) -> Stack<Node> {
     Stack::new()
         .layer(
@@ -546,10 +546,10 @@ fn random_cell(probability: f64, insertable: bool) -> impl Element {
             move |In(entity): In<Entity>,
                   mut rng: Single<&mut WyRand, With<GlobalRng>>,
                   mut contents: Query<&mut CellContent>| {
-                if rng.random_bool(probability) {
-                    if let Ok(mut content) = contents.get_mut(entity) {
-                        content.0 = Some(random_cell_data(rng.as_mut()));
-                    }
+                if rng.random_bool(probability)
+                    && let Ok(mut content) = contents.get_mut(entity)
+                {
+                    content.0 = Some(random_cell_data(rng.as_mut()));
                 }
             },
         )

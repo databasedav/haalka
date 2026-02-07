@@ -45,7 +45,7 @@ const BASE_SIZE: f32 = 600.;
 const GAP: f32 = 10.;
 const FONT_SIZE: f32 = 33.33;
 
-fn nine_slice_el(frame_signal: impl Signal<Item = usize> + Send + Sync + 'static) -> El<ImageNode> {
+fn nine_slice_el(frame_signal: impl Signal<Item = usize> + 'static) -> El<ImageNode> {
     El::<ImageNode>::new()
         .with_builder(|builder| {
             builder.on_spawn_with_system(

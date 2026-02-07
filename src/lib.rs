@@ -54,8 +54,9 @@ pub mod futures_signals;
 /// **Note**: If `JonmoPlugin` is already added, `HaalkaPlugin` will warn and skip adding it.
 /// Ensure `JonmoPlugin` is configured with at least `PostUpdate` for proper UI behavior.
 pub struct HaalkaPlugin {
+    #[allow(clippy::type_complexity)]
     jonmo_configurator:
-        std::sync::Mutex<Option<Box<dyn FnOnce(jonmo::JonmoPlugin) -> jonmo::JonmoPlugin + Send + Sync>>>,
+        bevy_platform::sync::Mutex<Option<Box<dyn FnOnce(jonmo::JonmoPlugin) -> jonmo::JonmoPlugin + Send + Sync>>>,
 }
 
 impl Default for HaalkaPlugin {

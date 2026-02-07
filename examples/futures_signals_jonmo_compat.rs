@@ -9,8 +9,8 @@ use bevy::{prelude::*, ui::Pressed};
 use haalka::{
     futures_signals::prelude::*,
     prelude::{
-        Align as jAlign, Alignable as _, BuilderPassThrough, BuilderWrapper, Draggable, El as jEl,
-        Element as jElement, Hoverable, Hovered, LazyEntity, Pressable, SignalExt as _, signal,
+        Align as jAlign, Alignable as _, BuilderPassThrough, BuilderWrapper, Draggable, El as jEl, Element as jElement,
+        Hoverable, Hovered, LazyEntity, Pressable, SignalExt as _, signal,
     },
 };
 

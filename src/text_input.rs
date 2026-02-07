@@ -98,7 +98,7 @@ impl TextInput {
     /// [`Signal`] with access to [`ResMut<TextInputPipeline>`].
     pub fn on_signal_with_buffer<T: Clone + Send + Sync + 'static>(
         self,
-        signal: impl Signal<Item = T> + Send + 'static,
+        signal: impl Signal<Item = T> + 'static,
         mut f: impl FnMut(Mut<TextInputBuffer>, ResMut<TextInputPipeline>, T) + Send + Sync + 'static,
     ) -> Self {
         self.with_builder(move |builder| {
@@ -152,11 +152,10 @@ impl TextInput {
                                 .map(|contents| contents.get() != text.as_str())
                                 .unwrap_or(true);
 
-                            if should_update {
-                                if let Ok(mut queue) = text_input_queues.get_mut(entity) {
+                            if should_update
+                                && let Ok(mut queue) = text_input_queues.get_mut(entity) {
                                     queue_set_text_actions(&mut queue, text);
                                 }
-                            }
                         },
                     )
             });

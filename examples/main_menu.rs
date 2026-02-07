@@ -11,7 +11,7 @@ use utils::*;
 
 use bevy::{prelude::*, ui::Pressed};
 use haalka::{impl_haalka_methods, prelude::*};
-use std::{fmt::Display, i32};
+use std::fmt::Display;
 use strum::{Display as StrumDisplay, EnumIter, IntoEnumIterator};
 
 fn main() {
@@ -50,7 +50,7 @@ fn main() {
             resolution: Resolution::R1920x1080,
             texture_quality: Quality::Medium,
             shadow_quality: Quality::Medium,
-            anti_aliasing: Some(AntiAliasing::TAA),
+            anti_aliasing: Some(AntiAliasing::Taa),
         })
         .run();
 }
@@ -392,10 +392,10 @@ enum Resolution {
 
 #[derive(Clone, Copy, PartialEq, StrumDisplay, EnumIter, Default)]
 enum AntiAliasing {
-    FXAA,
+    Fxaa,
     #[default]
-    TAA,
-    SMAA,
+    Taa,
+    Smaa,
 }
 
 /// Component to mark a button as selected (for external control)
@@ -508,20 +508,20 @@ impl Button {
         self
     }
 
-    fn selected_signal(mut self, selected: impl Signal<Item = bool> + Clone + Send + 'static) -> Self {
+    fn selected_signal(mut self, selected: impl Signal<Item = bool> + Clone + 'static) -> Self {
         self.el = self
             .el
             .component_signal(selected.map_true_in(|| Selected).schedule::<Update>());
         self
     }
 
-    fn hovered_signal(mut self, hovered: impl Signal<Item = bool> + Clone + Send + 'static) -> Self {
+    fn hovered_signal(mut self, hovered: impl Signal<Item = bool> + Clone + 'static) -> Self {
         self.el = self.el.component_signal(hovered.map_true_in(|| VirtualHovered));
         self
     }
 }
 
-fn text_button(text_signal: impl Signal<Item = String> + Clone + Send + 'static) -> Button {
+fn text_button(text_signal: impl Signal<Item = String> + Clone + 'static) -> Button {
     Button::new()
         .body(
             El::<Text>::new()
@@ -644,7 +644,7 @@ impl Checkbox {
         }
     }
 
-    fn checked_signal(mut self, signal: impl Signal<Item = bool> + Clone + Send + 'static) -> Self {
+    fn checked_signal(mut self, signal: impl Signal<Item = bool> + Clone + 'static) -> Self {
         let task = signal
             .map(
                 clone!((self.lazy_entity => lazy_entity) move |In(checked), checkeds: Query<&Checked>, mut commands: Commands| {
@@ -665,8 +665,9 @@ impl Checkbox {
     fn on_change<M>(mut self, handler: impl IntoSystem<In<bool>, (), M> + Send + Sync + 'static) -> Self {
         let task = signal::from_entity(self.lazy_entity.clone())
             .has_component::<Checked>()
-            .skip(1) // otherwise, view will thrash between external value signal and widget-internal default, prioritizes
+            // otherwise, view will thrash between external value signal and widget-internal default, prioritizes
             // external sync
+            .skip(1)
             .dedupe()
             .map(handler)
             .task();
@@ -800,7 +801,7 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> RadioGroup<T> {
         }
     }
 
-    fn selection_signal(mut self, signal: impl Signal<Item = Option<T>> + Clone + Send + 'static) -> Self {
+    fn selection_signal(mut self, signal: impl Signal<Item = Option<T>> + Clone + 'static) -> Self {
         let task = signal
             .map(
                 clone!((self.lazy_entity => lazy_entity, self.options => options) move |In(selection_option): In<Option<T>>,
@@ -821,8 +822,9 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> RadioGroup<T> {
         let task = signal::from_component_changed::<RadioSelection>(self.lazy_entity.clone())
             .map_in(deref_copied)
             .map_in(clone!((self.options => options) move |i: Option<usize>| i.and_then(|i| options.get(i).cloned())))
-            .skip(1) // otherwise, view will thrash between external value signal and widget-internal default, prioritizes
+            // otherwise, view will thrash between external value signal and widget-internal default, prioritizes
             // external sync
+            .skip(1)
             .dedupe()
             .map(handler)
             .task();
@@ -1011,17 +1013,16 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> Spinner<T> {
         self
     }
 
-    fn selection_signal(mut self, signal: impl Signal<Item = T> + Clone + Send + 'static) -> Self {
+    fn selection_signal(mut self, signal: impl Signal<Item = T> + Clone + 'static) -> Self {
         let task = signal
             .map(
                 clone!((self.lazy_entity => lazy_entity, self.options => options) move |In(selection): In<T>,
                        mut spinners: Query<&mut SpinnerSelection>| {
                     let mut selected = spinners.get_mut(*lazy_entity).unwrap();
-                    if let Some(i) = options.iter().position(|option| *option == selection) {
-                        if selected.0 != i {
+                    if let Some(i) = options.iter().position(|option| *option == selection)
+                        && selected.0 != i {
                             selected.0 = i;
                         }
-                    }
                 }),
             )
             .task();
@@ -1032,8 +1033,9 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> Spinner<T> {
     fn on_change<M>(mut self, handler: impl IntoSystem<In<T>, (), M> + Send + Sync + 'static) -> Self {
         let task = signal::from_component_changed::<SpinnerSelection>(self.lazy_entity.clone())
             .map_in(deref_copied)
-            .skip(1) // otherwise, view will thrash between external value signal and widget-internal default, prioritizes
+            // otherwise, view will thrash between external value signal and widget-internal default, prioritizes
             // external sync
+            .skip(1)
             .dedupe()
             .map_in(clone!((self.options => options) move |i: usize| options.get(i).cloned().unwrap()))
             .map(handler)
@@ -1077,8 +1079,7 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> ElementWrapper for 
         }))
         .observe(spinner_input_observer)
         .with_node(|mut node| node.column_gap = Val::Px(BASE_PADDING * 2.))
-        .item({
-            let num_options = num_options;
+        .item(
             lil_button()
                 .apply(register_as_spinner_button(LeftRight::Left))
                 .on_click(
@@ -1089,8 +1090,8 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> ElementWrapper for 
                         }
                     }),
                 )
-                .body(arrow_text(LeftRight::Left))
-        })
+                .body(arrow_text(LeftRight::Left)),
+        )
         .item({
             let options = options.clone();
             let mut text_el = El::<Text>::new()
@@ -1109,8 +1110,7 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> ElementWrapper for 
             }
             text_el
         })
-        .item({
-            let num_options = num_options;
+        .item(
             lil_button()
                 .apply(register_as_spinner_button(LeftRight::Right))
                 .on_click(
@@ -1121,8 +1121,8 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> ElementWrapper for 
                         }
                     }),
                 )
-                .body(arrow_text(LeftRight::Right))
-        })
+                .body(arrow_text(LeftRight::Right)),
+        )
     }
 }
 
@@ -1160,7 +1160,7 @@ impl Slider {
         }
     }
 
-    fn value_signal(mut self, signal: impl Signal<Item = f32> + Clone + Send + 'static) -> Self {
+    fn value_signal(mut self, signal: impl Signal<Item = f32> + Clone + 'static) -> Self {
         let task = signal
             .map(clone!((self.lazy_entity => lazy_entity) move |In(value): In<f32>,
                    mut sliders: Query<&mut SliderValue>,
@@ -1187,8 +1187,9 @@ impl Slider {
     fn on_change<M>(mut self, handler: impl IntoSystem<In<f32>, (), M> + Send + Sync + 'static) -> Self {
         let task = signal::from_component_changed::<SliderValue>(self.lazy_entity.clone())
             .map_in(|slider| slider.value)
-            .skip(1) // otherwise, view will thrash between external value signal and widget-internal default, prioritizes
+            // otherwise, view will thrash between external value signal and widget-internal default, prioritizes
             // external sync
+            .skip(1)
             .dedupe()
             .map(handler)
             .task();
@@ -1430,8 +1431,7 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> Dropdown<T> {
         self
     }
 
-    /// Sync the selection from an external signal
-    fn selection_signal(mut self, signal: impl Signal<Item = Option<T>> + Clone + Send + 'static) -> Self {
+    fn selection_signal(mut self, signal: impl Signal<Item = Option<T>> + Clone + 'static) -> Self {
         let task = signal
             .map(
                 clone!((self.lazy_entity => lazy_entity, self.options => options) move |In(selection_option): In<Option<T>>,
@@ -1448,7 +1448,6 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> Dropdown<T> {
         self
     }
 
-    /// Called when the selection changes
     fn on_change<M>(mut self, handler: impl IntoSystem<In<Option<T>>, (), M> + Send + Sync + 'static) -> Self {
         let task = signal::from_component_changed::<DropdownSelectionIndex>(self.lazy_entity.clone())
             .map_in(deref_copied)
