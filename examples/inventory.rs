@@ -281,7 +281,7 @@ struct PressHandlingDisabled;
 struct TooltipOrigin(Option<Vec2>);
 
 fn is_dragging() -> impl Signal<Item = bool> + Clone {
-    signal::from_system(|_: In<()>, dragging: Option<Res<Dragging>>| dragging.is_some()).dedupe()
+    signal::from_system(|In(_), dragging: Option<Res<Dragging>>| dragging.is_some()).dedupe()
 }
 
 fn pointer_position_signal() -> impl Signal<Item = Vec2> + Clone {
@@ -644,7 +644,7 @@ fn arrow() -> impl Element {
 
 fn craft_output_cell() -> impl Element {
     let output_action = signal::from_system(
-        |_: In<()>,
+        |In(_),
          mut prev_filled: Local<Option<bool>>,
          changed: Query<(), (With<CraftInputCell>, Changed<CellContent>)>,
          input_cells: Query<&CellContent, With<CraftInputCell>>,
@@ -690,7 +690,7 @@ fn craft_output_cell() -> impl Element {
         )
         .task();
     let output_empty =
-        signal::from_system(|_: In<()>, output: Single<&CellContent, With<CraftOutputSlot>>| output.is_none()).dedupe();
+        signal::from_system(|In(_), output: Single<&CellContent, With<CraftOutputSlot>>| output.is_none()).dedupe();
     let press_disabled = signal::any!(is_dragging(), output_empty.clone()).dedupe();
     cell(false)
         .insert(CraftOutputSlot)
@@ -855,11 +855,11 @@ fn ui_root() -> impl Element {
         .layer(inventory())
         // dragging icon
         .layer_signal(is_dragging().dedupe().map_true_in(move || {
-            let index = signal::from_system(|_: In<()>, dragging: Option<Res<Dragging>>| {
+            let index = signal::from_system(|In(_), dragging: Option<Res<Dragging>>| {
                 dragging.map(|d| d.item.index).unwrap_or(0)
             })
             .dedupe();
-            let count = signal::from_system(|_: In<()>, dragging: Option<Res<Dragging>>| {
+            let count = signal::from_system(|In(_), dragging: Option<Res<Dragging>>| {
                 dragging.map(|d| d.item.count).unwrap_or(0)
             })
             .dedupe();

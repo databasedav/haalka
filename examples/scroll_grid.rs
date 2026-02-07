@@ -244,14 +244,14 @@ fn scroller(
     }
 }
 
-#[derive(Resource, Clone, Copy, Deref)]
+#[derive(Resource, Clone, Copy, Deref, DerefMut)]
 struct Shifted(bool);
 
 fn shifter(keys: Res<ButtonInput<KeyCode>>, mut shifted: ResMut<Shifted>) {
     if keys.just_pressed(KeyCode::ShiftLeft) || keys.just_pressed(KeyCode::ShiftRight) {
-        shifted.0 = true;
+        **shifted = true;
     } else if keys.just_released(KeyCode::ShiftLeft) || keys.just_released(KeyCode::ShiftRight) {
-        shifted.0 = false;
+        **shifted = false;
     }
 }
 

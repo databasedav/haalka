@@ -144,10 +144,8 @@ fn sync_tracking_healthbar_position(
 }
 
 fn health_signal() -> impl Signal<Item = u32> + Clone + Send + Sync + 'static {
-    signal::from_system(|In(_): In<()>, health: Option<Single<&Health>>| {
-        health.map(deref_copied).map(|health| health.0)
-    })
-    .dedupe()
+    signal::from_system(|In(_), health: Option<Single<&Health>>| health.map(deref_copied).map(|health| health.0))
+        .dedupe()
 }
 
 fn healthbar(max: u32, height: f32, color_gradient: impl Gradient + Send + Sync + 'static) -> Stack<Node> {

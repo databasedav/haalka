@@ -6,8 +6,6 @@
 //!   - Mouse: Separate styles for hover and press.
 //!   - Keyboard/Controller: Separate styles for currently focused element.
 
-// TODO: still dubious on slider dragging stuff and spinner flashing strategy, SliderKeyboardControlled also sucks
-
 mod utils;
 use utils::*;
 
@@ -34,8 +32,7 @@ fn main() {
             (
                 keyboard_menu_input_events,
                 gamepad_menu_input_events,
-                spinner_press_timer_system,
-                clear_slider_keyboard_controlled,
+                virtual_pressed_timer_system,
             ),
         )
         .init_resource::<ShowSubMenu>()
@@ -444,6 +441,9 @@ impl Button {
         let pressed = signal::from_entity(lazy_entity.clone())
             .has_component::<Pressed>()
             .dedupe();
+        let virtual_pressed = signal::from_entity(lazy_entity.clone())
+            .has_component::<VirtualPressed>()
+            .dedupe();
         let mouse_hovered = signal::from_entity(lazy_entity.clone())
             .has_component::<Hovered>()
             .dedupe();
@@ -454,7 +454,7 @@ impl Button {
             .has_component::<Selected>()
             .dedupe();
         let selected_hovered = signal::zip!(
-            signal::any!(selected.clone(), pressed).dedupe(),
+            signal::any!(selected.clone(), pressed, virtual_pressed).dedupe(),
             signal::any!(mouse_hovered, virtual_hovered).dedupe()
         )
         .dedupe();
@@ -665,7 +665,8 @@ impl Checkbox {
     fn on_change<M>(mut self, handler: impl IntoSystem<In<bool>, (), M> + Send + Sync + 'static) -> Self {
         let task = signal::from_entity(self.lazy_entity.clone())
             .has_component::<Checked>()
-            .skip(1) // otherwise, view will thrash between external value signal and widget-internal default, prioritizes external sync
+            .skip(1) // otherwise, view will thrash between external value signal and widget-internal default, prioritizes
+            // external sync
             .dedupe()
             .map(handler)
             .task();
@@ -820,7 +821,8 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> RadioGroup<T> {
         let task = signal::from_component_changed::<RadioSelection>(self.lazy_entity.clone())
             .map_in(deref_copied)
             .map_in(clone!((self.options => options) move |i: Option<usize>| i.and_then(|i| options.get(i).cloned())))
-            .skip(1) // otherwise, view will thrash between external value signal and widget-internal default, prioritizes external sync
+            .skip(1) // otherwise, view will thrash between external value signal and widget-internal default, prioritizes
+            // external sync
             .dedupe()
             .map(handler)
             .task();
@@ -887,6 +889,7 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> ElementWrapper for 
 
 impl<T: Display + Clone + PartialEq + Send + Sync + 'static> BuilderPassThrough for RadioGroup<T> {}
 
+#[derive(Clone, Copy)]
 enum LeftRight {
     Left,
     Right,
@@ -909,65 +912,73 @@ struct SpinnerSelection(usize);
 #[derive(Component, Clone, Deref)]
 struct SpinnerOptions(usize);
 
-/// Marker components for left/right button press state
-#[derive(Component, Clone, Default)]
-struct LeftPressed;
-
-#[derive(Component, Clone, Default)]
-struct RightPressed;
-
-/// Timer components for delayed removal of press states
+/// Visual press flash that self-destructs after a timer
 #[derive(Component)]
-struct LeftPressedTimer(Timer);
+struct VirtualPressed(Timer);
 
-#[derive(Component)]
-struct RightPressedTimer(Timer);
+impl VirtualPressed {
+    fn new() -> Self {
+        Self(Timer::from_seconds(FLASH_MS / 1000., TimerMode::Once))
+    }
+}
+
+/// Component to store spinner left/right button entities
+#[derive(Component, Clone, Default)]
+struct SpinnerButtons {
+    left: Option<Entity>,
+    right: Option<Entity>,
+}
+
+fn register_as_spinner_button<E: Element>(direction: LeftRight) -> impl FnOnce(E) -> E {
+    move |element: E| {
+        element.with_builder(move |builder| {
+            builder.on_spawn_with_system(
+                move |In(entity), child_ofs: Query<&ChildOf>, mut buttons: Query<&mut SpinnerButtons>| {
+                    let parent = child_ofs.get(entity).unwrap().0;
+                    let mut buttons = buttons.get_mut(parent).unwrap();
+                    match direction {
+                        LeftRight::Left => buttons.left = Some(entity),
+                        LeftRight::Right => buttons.right = Some(entity),
+                    }
+                },
+            )
+        })
+    }
+}
 
 const FLASH_MS: f32 = 50.;
 
-fn spinner_press_timer_system(
+fn virtual_pressed_timer_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut left_timers: Query<(Entity, &mut LeftPressedTimer)>,
-    mut right_timers: Query<(Entity, &mut RightPressedTimer)>,
+    mut timers: Query<(Entity, &mut VirtualPressed)>,
 ) {
-    for (entity, mut timer) in left_timers.iter_mut() {
-        timer.0.tick(time.delta());
-        if timer.0.is_finished() {
-            commands.entity(entity).remove::<(LeftPressed, LeftPressedTimer)>();
-        }
-    }
-    for (entity, mut timer) in right_timers.iter_mut() {
-        timer.0.tick(time.delta());
-        if timer.0.is_finished() {
-            commands.entity(entity).remove::<(RightPressed, RightPressedTimer)>();
+    for (entity, mut vp) in timers.iter_mut() {
+        vp.0.tick(time.delta());
+        if vp.0.is_finished() {
+            commands.entity(entity).remove::<VirtualPressed>();
         }
     }
 }
 
 fn spinner_input_observer(
     event: On<MenuInputEvent>,
-    mut spinners: Query<(&mut SpinnerSelection, &SpinnerOptions)>,
+    mut spinners: Query<(&mut SpinnerSelection, &SpinnerOptions, &SpinnerButtons)>,
     mut commands: Commands,
 ) {
-    let (mut selection, num_options) = spinners.get_mut(event.entity).unwrap();
+    let (mut selection, num_options, buttons) = spinners.get_mut(event.entity).unwrap();
     if num_options.0 == 0 {
         return;
     }
     match event.input {
         MenuInput::Left | MenuInput::Right => {
             let up = matches!(event.input, MenuInput::Left);
-            if up {
-                commands.entity(event.entity).insert((
-                    LeftPressed,
-                    LeftPressedTimer(Timer::from_seconds(FLASH_MS / 1000., TimerMode::Once)),
-                ));
+            let button_entity = if up {
+                buttons.left.unwrap()
             } else {
-                commands.entity(event.entity).insert((
-                    RightPressed,
-                    RightPressedTimer(Timer::from_seconds(FLASH_MS / 1000., TimerMode::Once)),
-                ));
-            }
+                buttons.right.unwrap()
+            };
+            commands.entity(button_entity).insert(VirtualPressed::new());
             selection.0 = wrap_index(Some(selection.0), up, num_options.0, None);
         }
         _ => (),
@@ -1021,7 +1032,8 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> Spinner<T> {
     fn on_change<M>(mut self, handler: impl IntoSystem<In<T>, (), M> + Send + Sync + 'static) -> Self {
         let task = signal::from_component_changed::<SpinnerSelection>(self.lazy_entity.clone())
             .map_in(deref_copied)
-            .skip(1) // otherwise, view will thrash between external value signal and widget-internal default, prioritizes external sync
+            .skip(1) // otherwise, view will thrash between external value signal and widget-internal default, prioritizes
+            // external sync
             .dedupe()
             .map_in(clone!((self.options => options) move |i: usize| options.get(i).cloned().unwrap()))
             .map(handler)
@@ -1053,7 +1065,8 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> ElementWrapper for 
             let mut b = builder
                 .lazy_entity(lazy_entity.clone())
                 .insert(SpinnerSelection::default())
-                .insert(SpinnerOptions(num_options));
+                .insert(SpinnerOptions(num_options))
+                .insert(SpinnerButtons::default());
             if let Some(task) = external_sync_task {
                 b = b.hold_tasks([task]);
             }
@@ -1067,11 +1080,7 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> ElementWrapper for 
         .item({
             let num_options = num_options;
             lil_button()
-                .selected_signal(
-                    signal::from_entity(lazy_entity.clone())
-                        .has_component::<LeftPressed>()
-                        .dedupe(),
-                )
+                .apply(register_as_spinner_button(LeftRight::Left))
                 .on_click(
                     clone!((lazy_entity) move |_: In<_>, mut spinners: Query<&mut SpinnerSelection>| {
                         let mut selection = spinners.get_mut(*lazy_entity).unwrap();
@@ -1103,11 +1112,7 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> ElementWrapper for 
         .item({
             let num_options = num_options;
             lil_button()
-                .selected_signal(
-                    signal::from_entity(lazy_entity.clone())
-                        .has_component::<RightPressed>()
-                        .dedupe(),
-                )
+                .apply(register_as_spinner_button(LeftRight::Right))
                 .on_click(
                     clone!((lazy_entity) move |_: In<_>, mut spinners: Query<&mut SpinnerSelection>| {
                         let mut selection = spinners.get_mut(*lazy_entity).unwrap();
@@ -1123,17 +1128,16 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> ElementWrapper for 
 
 impl<T: Display + Clone + PartialEq + Send + Sync + 'static> BuilderPassThrough for Spinner<T> {}
 
-/// Component to store slider value
-#[derive(Component, Clone, Deref)]
-struct SliderValue(f32);
-
-/// Marker component for slider being dragged
-#[derive(Component, Clone, Default)]
-struct SliderDragging;
-
-/// Marker component for slider being controlled by keyboard/gamepad
-#[derive(Component, Clone, Default)]
-struct SliderKeyboardControlled;
+/// Component to store slider value with a generation counter.
+/// The generation is bumped on every user interaction, allowing the external sync
+/// signal to detect and skip stale echo values without marker components.
+///
+/// TODO: mention this pattern for bidirectional syncing in the docs
+#[derive(Component, Clone)]
+struct SliderValue {
+    value: f32,
+    generation: u64,
+}
 
 const SLIDER_WIDTH: f32 = 400.;
 const SLIDER_PADDING: f32 = 5.;
@@ -1159,18 +1163,20 @@ impl Slider {
     fn value_signal(mut self, signal: impl Signal<Item = f32> + Clone + Send + 'static) -> Self {
         let task = signal
             .map(clone!((self.lazy_entity => lazy_entity) move |In(value): In<f32>,
-                // TODO: what in tarnation
-                   dragging: Query<(), Or<(With<SliderDragging>, With<SliderKeyboardControlled>)>>,
-                   mut sliders: Query<&mut SliderValue, (Without<SliderDragging>, Without<SliderKeyboardControlled>)>| {
-                // If slider is being dragged or keyboard controlled, don't overwrite with external value
-                // if dragging.contains(*lazy_entity) {
-                //     return;
-                // }
-                let Ok(mut slider_value) = sliders.get_mut(*lazy_entity) else {
+                   mut sliders: Query<&mut SliderValue>,
+                   mut last_synced_gen: Local<u64>| {
+                let Ok(mut slider) = sliders.get_mut(*lazy_entity) else {
                     return;
                 };
-                if (slider_value.0 - value).abs() > 0.01 {
-                    slider_value.0 = value;
+                if slider.generation != *last_synced_gen {
+                    // User has interacted since our last write; skip the stale echo
+                    // but acknowledge the new generation
+                    *last_synced_gen = slider.generation;
+                    return;
+                }
+                if (slider.value - value).abs() > 0.01 {
+                    slider.value = value;
+                    // Don't bump generation, this is an external sync, not user input
                 }
             }))
             .task();
@@ -1180,8 +1186,9 @@ impl Slider {
 
     fn on_change<M>(mut self, handler: impl IntoSystem<In<f32>, (), M> + Send + Sync + 'static) -> Self {
         let task = signal::from_component_changed::<SliderValue>(self.lazy_entity.clone())
-            .map_in(deref_copied)
-            .skip(1) // otherwise, view will thrash between external value signal and widget-internal default, prioritizes external sync
+            .map_in(|slider| slider.value)
+            .skip(1) // otherwise, view will thrash between external value signal and widget-internal default, prioritizes
+            // external sync
             .dedupe()
             .map(handler)
             .task();
@@ -1211,7 +1218,7 @@ impl ElementWrapper for Slider {
             .with_builder(clone!((lazy_entity) move |builder| {
                 let mut b = builder
                     .lazy_entity(lazy_entity.clone())
-                    .insert(SliderValue(0.));
+                    .insert(SliderValue { value: 0., generation: 0 });
                 if let Some(task) = external_sync_task {
                     b = b.hold_tasks([task]);
                 }
@@ -1223,14 +1230,13 @@ impl ElementWrapper for Slider {
             .observe(
                 clone!((lazy_entity) move |event: On<MenuInputEvent>,
                       time: Res<Time>,
-                      mut sliders: Query<&mut SliderValue>,
-                      mut commands: Commands| {
-                    let mut value = sliders.get_mut(*lazy_entity).unwrap();
+                      mut sliders: Query<&mut SliderValue>| {
+                    let mut slider = sliders.get_mut(*lazy_entity).unwrap();
                     match event.input {
                         MenuInput::Left | MenuInput::Right => {
-                            commands.entity(*lazy_entity).insert(SliderKeyboardControlled);
                             let dir = if matches!(event.input, MenuInput::Left) { -1. } else { 1. };
-                            value.0 = (value.0 + dir * SLIDER_SPEED * time.delta_secs()).clamp(0., 100.);
+                            slider.value = (slider.value + dir * SLIDER_SPEED * time.delta_secs()).clamp(0., 100.);
+                            slider.generation += 1;
                         }
                         _ => (),
                     }
@@ -1242,7 +1248,7 @@ impl ElementWrapper for Slider {
                     .text_font(TextFont::from_font_size(FONT_SIZE))
                     .text_signal(
                         signal::from_component_changed::<SliderValue>(lazy_entity.clone())
-                            .map_in(deref_copied)
+                            .map_in(|slider| slider.value)
                             .map_in(|value| format!("{value:.1}"))
                             .map_in(Text)
                             .map_in(Some),
@@ -1261,7 +1267,7 @@ impl ElementWrapper for Slider {
                         lil_button()
                             .selected_signal(
                                 signal::from_entity(knob_entity.clone())
-                                    .has_component::<SliderDragging>()
+                                    .has_component::<Pressed>()
                                     .dedupe(),
                             )
                             .into_el() // we need lower level access now
@@ -1269,20 +1275,15 @@ impl ElementWrapper for Slider {
                             .insert(Pickable::default())
                             .on_signal_with_node(
                                 signal::from_component_changed::<SliderValue>(lazy_entity.clone())
-                                    .map_in(deref_copied),
+                                    .map_in(|slider| slider.value),
                                 move |mut node, value| node.left = Val::Px(value / 100. * max),
                             )
                             .align(Align::new().center_y())
-                            .on_dragged(clone!((knob_entity, lazy_entity) move |In((_, drag)): In<(Entity, DragData)>, mut sliders: Query<&mut SliderValue>, mut commands: Commands| {
+                            .on_dragged(clone!((lazy_entity) move |In((_, drag)): In<(Entity, DragData)>, mut sliders: Query<&mut SliderValue>| {
                                 if drag.dragged {
-                                    // Mark both knob (for visual) and main entity (for sync blocking)
-                                    commands.entity(*knob_entity).insert(SliderDragging);
-                                    commands.entity(*lazy_entity).insert(SliderDragging);
-                                    let mut value = sliders.get_mut(*lazy_entity).unwrap();
-                                    value.0 = (value.0 + drag.delta.x / max * 100.).clamp(0., 100.);
-                                } else {
-                                    commands.entity(*knob_entity).remove::<SliderDragging>();
-                                    commands.entity(*lazy_entity).remove::<SliderDragging>();
+                                    let mut slider = sliders.get_mut(*lazy_entity).unwrap();
+                                    slider.value = (slider.value + drag.delta.x / max * 100.).clamp(0., 100.);
+                                    slider.generation += 1;
                                 }
                             }))
                     }),
@@ -1681,7 +1682,7 @@ fn quality_dropdown(
 ) -> Dropdown<Quality> {
     Dropdown::new(Quality::iter().collect())
         .selection_signal(
-            signal::from_resource::<GraphicsSettings>()
+            signal::from_resource_changed::<GraphicsSettings>()
                 .map_in(move |settings| get(&settings))
                 .map_in(Some)
                 .dedupe(),
@@ -1849,29 +1850,6 @@ fn gamepad_menu_input_events(
                     input,
                 });
             }
-        }
-    }
-}
-
-fn clear_slider_keyboard_controlled(
-    sliders: Query<Entity, With<SliderKeyboardControlled>>,
-    keys: Res<ButtonInput<KeyCode>>,
-    gamepads: Query<&Gamepad>,
-    mut commands: Commands,
-) {
-    // Check if any movement keys are still pressed
-    let keyboard_active = keys.pressed(KeyCode::ArrowLeft)
-        || keys.pressed(KeyCode::ArrowRight)
-        || keys.pressed(KeyCode::KeyA)
-        || keys.pressed(KeyCode::KeyD);
-
-    let gamepad_active = gamepads
-        .iter()
-        .any(|gamepad| gamepad.pressed(GamepadButton::DPadLeft) || gamepad.pressed(GamepadButton::DPadRight));
-
-    if !keyboard_active && !gamepad_active {
-        for entity in sliders.iter() {
-            commands.entity(entity).remove::<SliderKeyboardControlled>();
         }
     }
 }

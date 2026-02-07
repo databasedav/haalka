@@ -146,7 +146,7 @@ fn clear_button() -> impl Element {
                 .map_in(Some),
         )
         .cursor_disableable_signal(CursorIcon::System(SystemCursorIcon::Pointer), output_empty)
-        .on_click(|_: In<_>, mut output: ResMut<Output>| output.0.clear())
+        .on_click(|In(_), mut output: ResMut<Output>| output.0.clear())
 }
 
 fn ui_root() -> impl Element {

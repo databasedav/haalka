@@ -380,8 +380,7 @@ fn on_grid_size_change(
             let had_food = (0..cur_size).any(|i| {
                 let top_row_i = i;
                 let right_col_i = (i + 1) * cur_size - 1;
-                matches!(guard.get(top_row_i), Some(Cell::Food))
-                    || matches!(guard.get(right_col_i), Some(Cell::Food))
+                matches!(guard.get(top_row_i), Some(Cell::Food)) || matches!(guard.get(right_col_i), Some(Cell::Food))
             });
 
             // Remove right column cells (bottom to top to preserve indices).

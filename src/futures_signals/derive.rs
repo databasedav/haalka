@@ -152,6 +152,7 @@ cfg_if::cfg_if! {
                                 text_layout: TextLayout,
                                 text_font: TextFont,
                                 text_color: TextColor,
+                                text_shadow: TextShadow,
                                 text_node_flags: TextNodeFlags,
                                 content_size: ContentSize,
                                 node: Node,

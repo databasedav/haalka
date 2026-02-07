@@ -9,7 +9,9 @@ use std::{
 
 use apply::Apply;
 use bevy_app::prelude::*;
-use bevy_ecs::{lifecycle::HookContext, prelude::*, system::SystemId, world::DeferredWorld};
+use bevy_ecs::{
+    component::Mutable, lifecycle::HookContext, prelude::*, system::SystemId, world::DeferredWorld,
+};
 use bevy_log::prelude::*;
 use bevy_math::Vec2;
 use bevy_picking::{
@@ -36,23 +38,23 @@ trait PointerDataInternal {
     fn update_from_move(&mut self, hit: HitData, pointer_location: Location);
 }
 
-/// Macro to create a move observer for a specific data type.
-macro_rules! create_move_observer {
-    ($commands:expr, $entity:expr, $data_type:ty) => {{
-        let entity = $entity;
-        $commands
-            .spawn((
-                Observer::new(|move_event: On<Pointer<Move>>, mut datas: Query<&mut $data_type>| {
-                    let entity = move_event.entity;
-                    if let Ok(mut data) = datas.get_mut(entity) {
-                        data.update_from_move(move_event.hit.clone(), move_event.pointer_location.clone());
-                    }
-                })
-                .with_entity(entity),
-                HaalkaObserver,
-            ))
-            .id()
-    }};
+/// Create a move observer for a specific data type that implements [`PointerDataInternal`].
+fn create_move_observer<D: PointerDataInternal + Component<Mutability = Mutable>>(
+    commands: &mut Commands,
+    entity: Entity,
+) -> Entity {
+    commands
+        .spawn((
+            Observer::new(|move_event: On<Pointer<Move>>, mut datas: Query<&mut D>| {
+                let entity = move_event.entity;
+                if let Ok(mut data) = datas.get_mut(entity) {
+                    data.update_from_move(move_event.hit.clone(), move_event.pointer_location.clone());
+                }
+            })
+            .with_entity(entity),
+            HaalkaObserver,
+        ))
+        .id()
 }
 
 /// Component storing signal-based disabling state flags.
@@ -399,7 +401,7 @@ pub trait PointerEventAware: GlobalEventAware {
                                 let pointer_location = enter.pointer_location.clone();
 
                                 let move_observer = (!move_observers.contains(entity)).then(|| {
-                                    create_move_observer!(&mut commands, entity, HoverDataInternal)
+                                    create_move_observer::<HoverDataInternal>(&mut commands, entity)
                                 });
 
                                 if let Ok(mut entity) = commands.get_entity(entity) {
@@ -941,7 +943,7 @@ pub trait PointerEventAware: GlobalEventAware {
                                 let pointer_location = press.pointer_location.clone();
 
                                 let move_observer = (!move_observers.contains(entity)).then(|| {
-                                    create_move_observer!(&mut commands, entity, PressDataInternal)
+                                    create_move_observer::<PressDataInternal>(&mut commands, entity)
                                 });
 
                                 if let Ok(mut entity) = commands.get_entity(entity) {
@@ -1970,8 +1972,6 @@ pub fn hovered_system(mut hovering_query: Query<(Entity, &HoveredSystem), With<H
     }
 }
 
-/// Helper to clean up a move observer: removes the observer component from the entity
-/// and despawns the observer entity if it exists.
 fn cleanup_move_observer<T: Component>(commands: &mut Commands, entity: Entity, observer: Option<Entity>) {
     if let Ok(mut entity_commands) = commands.get_entity(entity) {
         if observer.is_some() {

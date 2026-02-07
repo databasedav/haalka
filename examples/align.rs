@@ -95,7 +95,7 @@ fn alignment_button<R: Resource + Clone + Deref<Target = bool> + DerefMut>(label
                 .map_in(Some)
         })
         .align_content(Align::center())
-        .on_click(|_: In<_>, mut enabled: ResMut<R>| {
+        .on_click(|In(_), mut enabled: ResMut<R>| {
             **enabled = !**enabled;
         })
         .child(

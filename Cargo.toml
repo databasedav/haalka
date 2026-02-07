@@ -50,8 +50,7 @@ paste = { version = "1.0", optional = true }
 document-features = { version = "0.2", optional = true }
 # aalo = { path = "../aalo", version = "0.0", optional = true }
 
-# TODO: use MoonZoon's futures-signals/futures-util extensions directly when it is published as a crate
-haalka_futures_signals_ext = { version = "0.0.3", path = "MoonZoon/crates/futures_signals_ext", optional = false }
+haalka_futures_signals_ext = { version = "0.0.3", path = "MoonZoon/crates/futures_signals_ext", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-io = { version = "2.4", optional = true }
@@ -214,10 +213,13 @@ path = "examples/dragging.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "futures_signals_jonmo_compat"
+path = "examples/futures_signals_jonmo_compat.rs"
+required-features = ["futures_signals_ui"]
+doc-scrape-examples = true
+
+[[example]]
 name = "utils"
 path = "examples/utils.rs"
 doc-scrape-examples = true
 crate-type = ["lib"]
-
-[patch.crates-io]
-jonmo = { path = "../jonmo" }

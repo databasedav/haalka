@@ -1,13 +1,4 @@
 //! Demonstrates that both futures-signals and jonmo signals backends can be used together.
-//!
-//! This example shows two buttons side by side:
-//! - Left button uses the deprecated futures-signals backend (existing code)
-//! - Right button uses the new jonmo-based backend (code being migrated to)
-//!
-//! The UI root uses futures-signals, showing how users can incrementally migrate
-//! from futures-signals to jonmo while keeping both working in tandem.
-//!
-//! Run with: `cargo run --example futures_signals_jonmo_compat --features futures_signals_ui`
 
 mod utils;
 use utils::*;
@@ -18,8 +9,8 @@ use bevy::{prelude::*, ui::Pressed};
 use haalka::{
     futures_signals::prelude::*,
     prelude::{
-        Align as jAlign, Alignable as _, BuilderPassThrough, BuilderWrapper, Column as jColumn, Draggable, Dragged,
-        El as jEl, Element as jElement, Hoverable, Hovered, LazyEntity, Pressable, SignalExt as _, signal,
+        Align as jAlign, Alignable as _, BuilderPassThrough, BuilderWrapper, Draggable, El as jEl,
+        Element as jElement, Hoverable, Hovered, LazyEntity, Pressable, SignalExt as _, signal,
     },
 };
 
@@ -56,7 +47,6 @@ fn futures_signals_button() -> impl Element {
             node.height = Val::Px(65.);
             node.border = UiRect::all(Val::Px(5.0));
         })
-        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .align_content(Align::center())
         .border_color_signal(
             pressed_hovered
@@ -95,17 +85,18 @@ fn futures_signals_button() -> impl Element {
                     font_size: 25.0,
                     ..default()
                 })
+                .text_shadow(TextShadow::default())
                 .text_color(TextColor(Color::srgb(0.9, 0.9, 0.9)))
                 .text_signal(
                     pressed_hovered
                         .signal()
                         .map(|(pressed, hovered)| {
                             if pressed {
-                                "FS Press"
+                                "Press"
                             } else if hovered {
-                                "FS Hover"
+                                "Hover"
                             } else {
-                                "FuturesSignals"
+                                "futures-signals"
                             }
                         })
                         .map(Text::new),
@@ -119,13 +110,10 @@ fn jonmo_button() -> impl jElement {
     let pressed = signal::from_entity(lazy_entity.clone())
         .has_component::<Pressed>()
         .dedupe();
-    let dragged = jonmo::signal::from_entity(lazy_entity.clone())
-        .has_component::<Dragged>()
-        .dedupe();
-    let hovered = jonmo::signal::from_entity(lazy_entity.clone())
+    let hovered = signal::from_entity(lazy_entity.clone())
         .has_component::<Hovered>()
         .dedupe();
-    let pressed_hovered = jonmo::signal::zip!(jonmo::signal::any!(pressed, dragged), hovered).dedupe();
+    let pressed_hovered = signal::zip!(pressed, hovered).dedupe();
 
     jEl::<Node>::new()
         .with_node(|mut node| {
@@ -133,15 +121,16 @@ fn jonmo_button() -> impl jElement {
             node.height = Val::Px(65.);
             node.border = UiRect::all(Val::Px(5.0));
         })
-        .insert((Pickable::default(), Hoverable, Pressable, Draggable, BorderRadius::MAX))
+        .insert((Pickable::default(), Hoverable, Pressable, Draggable))
         .align_content(jAlign::center())
+        .border_radius(BorderRadius::MAX)
         .lazy_entity(lazy_entity)
         .border_color_signal(
             pressed_hovered
                 .clone()
                 .map_in(|(pressed, hovered)| {
                     if pressed {
-                        bevy::color::palettes::basic::BLUE.into()
+                        bevy::color::palettes::basic::RED.into()
                     } else if hovered {
                         Color::WHITE
                     } else {
@@ -169,19 +158,20 @@ fn jonmo_button() -> impl jElement {
         .child(
             jEl::<Text>::new()
                 .text_font(TextFont {
-                    font_size: 25.0,
+                    font_size: 33.0,
                     ..default()
                 })
+                .text_shadow(TextShadow::default())
                 .text_color(TextColor(Color::srgb(0.9, 0.9, 0.9)))
                 .text_signal(
                     pressed_hovered
                         .map_in(|(pressed, hovered)| {
                             if pressed {
-                                "Jonmo Press"
+                                "Press"
                             } else if hovered {
-                                "Jonmo Hover"
+                                "Hover"
                             } else {
-                                "Jonmo"
+                                "jonmo"
                             }
                         })
                         .map_in(Text::new)
@@ -208,28 +198,11 @@ fn ui_root() -> impl Element {
                 .with_node(|mut node| {
                     node.column_gap = Val::Px(50.);
                 })
-                .item(
-                    Column::<Node>::new()
-                        .with_node(|mut node| {
-                            node.row_gap = Val::Px(10.);
-                        })
-                        .align(Align::center())
-                        .item(El::<Text>::new().text(Text::new("futures-signals\n(deprecated)")))
-                        .item(futures_signals_button()),
-                )
-                .item(
-                    Column::<Node>::new()
-                        .with_node(|mut node| {
-                            node.row_gap = Val::Px(10.);
-                        })
-                        .align(Align::center())
-                        .item(El::<Text>::new().text(Text::new("jonmo\n(recommended)")))
-                        .item(El::<Node>::new().update_raw_el(|raw_el| {
-                            raw_el.on_spawn(|world, entity| {
-                                // use jonmo_compat::JonmoBW as _;
-                                let _ = jonmo_button().into_builder().spawn_on_entity(world, entity);
-                            })
-                        })),
-                ),
+                .item(futures_signals_button())
+                .item(El::<Node>::new().update_raw_el(|raw_el| {
+                    raw_el.on_spawn(|world, entity| {
+                        jonmo_button().into_builder().spawn_on_entity(world, entity).unwrap();
+                    })
+                })),
         )
 }
