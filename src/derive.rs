@@ -80,7 +80,7 @@ use super::{column::Column, el::El, element::BuilderWrapper, grid::Grid, row::Ro
 /// #     type EL = El<MyBundle>;
 /// #     fn element_mut(&mut self) -> &mut Self::EL { &mut self.0 }
 /// # }
-///
+/// #
 /// impl_haalka_methods! {
 ///     MyEl {
 ///        my_component_a: MyComponentA,

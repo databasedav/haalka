@@ -17,6 +17,10 @@ pub trait GlobalEventAware: BuilderWrapper {
     /// When an `E` [`Event`] propagates to the [`UiRoot`] node, run a [`System`] which takes
     /// [`In`](`System::In`) this element's [`Entity`] (not the [`UiRoot`]'s) and a
     /// [`GlobalEventData`] with the [`Event`].
+    ///
+    /// # Panics
+    ///
+    /// In debug mode, panics if this element is not a descendant of a [`UiRoot`].
     #[allow(clippy::type_complexity)]
     fn on_global_event<E, const AUTO_PROPAGATE: bool, T, Marker>(
         self,

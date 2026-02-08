@@ -3,7 +3,7 @@
 
 use super::{
     pointer_event_aware::{HoverData, PointerEventAware, disableable_signal_setup, disableable_signal_system},
-    utils::{clamp_scroll_position, clone, observe, register_system, remove_system_holder_on_despawn},
+    utils::{clone, observe, register_system, remove_system_holder_on_despawn},
     viewport_mutable::ViewportMutable,
 };
 use apply::Apply;
@@ -126,9 +126,6 @@ pub trait OnHoverMouseWheelScrollable: MouseWheelScrollable + PointerEventAware 
     /// which takes [`In`](`System::In`) this element's [`Entity`] and the [`MouseWheel`],
     /// reactively controlling whether the handling is disabled with a [`Signal`]. This method
     /// can be called repeatedly to register many such handlers.
-    ///
-    /// Uses [`ScrollDisableableSignalState`] internally to allow multiple calls without
-    /// conflicting disable states.
     fn on_scroll_on_hover_disableable_signal<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, MouseWheel)>, (), Marker> + Send + Sync + 'static,
@@ -172,7 +169,7 @@ fn scroll_system(
 }
 
 #[allow(missing_docs)]
-#[derive(Clone, Copy, PartialEq, Component)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum ScrollDirection {
     Horizontal,
     Vertical,
@@ -270,6 +267,17 @@ impl BasicScrollHandler {
             }
         };
         Box::new(f)
+    }
+}
+
+fn max_scroll_offset(node: &ComputedNode) -> Vec2 {
+    (node.content_size - node.size() + node.scrollbar_size).max(Vec2::ZERO)
+}
+
+fn clamp_scroll_position(position: Vec2, node: Option<&ComputedNode>) -> Vec2 {
+    match node {
+        Some(node) => position.clamp(Vec2::ZERO, max_scroll_offset(node)),
+        None => position.max(Vec2::ZERO),
     }
 }
 

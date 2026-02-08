@@ -9,7 +9,7 @@ use jonmo::prelude::*;
 
 use bevy_ecs::system::IntoObserverSystem;
 
-/// [`Element`]s are types that wrap [`jonmo::Builder`](jonmo::Builder) and can be aligned using
+/// [`Element`]s are types that wrap [`jonmo::Builder`] and can be aligned using
 /// [haalka](crate)'s [simple alignability semantics](super::align::Align) and granted UI-specific
 /// abilities like [pointer event awareness](super::pointer_event_aware::PointerEventAware),
 /// [viewport mutability](super::viewport_mutable::ViewportMutable),
@@ -256,6 +256,7 @@ pub trait BuilderPassThrough: BuilderWrapper {
 /// #[doc = clone_semantics_doc!("El")]
 /// pub struct El<NodeType> { ... }
 /// ```
+#[doc(hidden)]
 #[macro_export]
 macro_rules! clone_semantics_doc {
     ($type_name:literal) => {
@@ -272,6 +273,7 @@ macro_rules! clone_semantics_doc {
 }
 
 /// Generates the base error text for clone documentation (without trailing punctuation).
+#[doc(hidden)]
 #[macro_export]
 macro_rules! clone_error_doc_base {
     ($type_name:literal) => {
@@ -304,6 +306,7 @@ macro_rules! clone_error_doc_base {
 ///     fn clone(&self) -> Self { ... }
 /// }
 /// ```
+#[doc(hidden)]
 #[macro_export]
 macro_rules! clone_error_doc {
     // Without example
@@ -342,6 +345,7 @@ macro_rules! clone_error_doc {
 }
 
 /// Generates the runtime error message for cloning an element type.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! clone_error_msg {
     ($type_name:literal) => {
@@ -375,6 +379,7 @@ macro_rules! clone_error_msg {
 /// ```ignore
 /// impl_element_clone!(simple "AlignabilityFacade", AlignabilityFacade);
 /// ```
+#[doc(hidden)]
 #[macro_export]
 macro_rules! impl_element_clone {
     // Generic element type with builder + _node_type fields and example

@@ -344,8 +344,7 @@ pub trait PointerEventAware: GlobalEventAware {
     /// On frames where this element is hovered or gets unhovered and does not have a `Disabled`
     /// [`Component`], run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`]
     /// and [`HoverData`] containing its current hovered state and the latest [`HitData`].
-    /// While hovered, the handler will be executed every frame. This method can be called
-    /// repeatedly to register many such handlers.
+    /// This method can be called repeatedly to register many such handlers.
     fn on_hovered_disableable<Disabled: Component, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, HoverData)>, (), Marker> + Send + Sync + 'static,
@@ -471,10 +470,9 @@ pub trait PointerEventAware: GlobalEventAware {
     }
 
     /// On frames where this element is hovered or gets unhovered, run a [`System`] which takes
-    /// [`In`](`System::In`) this element's [`Entity`] and [`HoverData`]. While hovered, the
-    /// handler will be executed every frame. Whether hover handling is disabled is reactively
-    /// controlled with a [`Signal`]. This method can be called repeatedly to register many such
-    /// handlers.
+    /// [`In`](`System::In`) this element's [`Entity`] and [`HoverData`]. Whether hover handling is
+    /// disabled is reactively controlled with a [`Signal`]. This method can be called
+    /// repeatedly to register many such handlers.
     ///
     /// # Latency Considerations
     ///
@@ -745,6 +743,10 @@ pub trait PointerEventAware: GlobalEventAware {
     /// [`System`] that takes [`In`](`System::In`) this element's [`Entity`] and the
     /// [`Pointer<Click>`]. Will not function unless this element is a descendant of a [`UiRoot`].
     /// This method can be called repeatedly to register many such handlers.
+    ///
+    /// # Panics
+    ///
+    /// In debug mode, panics if this element is not a descendant of a [`UiRoot`].
     fn on_click_outside_disableable<Disabled: Component, Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, GlobalEventData<Pointer<Click>>)>, (), Marker> + Send + Sync + 'static,
@@ -783,6 +785,10 @@ pub trait PointerEventAware: GlobalEventAware {
     /// or its descendents, run a [`System`] that takes [`In`](`System::In`) this element's
     /// [`Entity`] and the [`Pointer<Click>`]. Will not function unless this element is a descendant
     /// of a [`UiRoot`]. This method can be called repeatedly to register many such handlers.
+    ///
+    /// # Panics
+    ///
+    /// In debug mode, panics if this element is not a descendant of a [`UiRoot`].
     fn on_click_outside<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, GlobalEventData<Pointer<Click>>)>, (), Marker> + Send + Sync + 'static,
@@ -795,6 +801,10 @@ pub trait PointerEventAware: GlobalEventAware {
     /// [`Entity`] and the [`Pointer<Click>`]. Will not function unless this element is a descendant
     /// of a [`UiRoot`]. Whether click outside handling is disabled is reactively controlled with a
     /// [`Signal`]. This method can be called repeatedly to register many such handlers.
+    ///
+    /// # Panics
+    ///
+    /// In debug mode, panics if this element is not a descendant of a [`UiRoot`].
     ///
     /// # Latency Considerations
     ///
@@ -827,6 +837,10 @@ pub trait PointerEventAware: GlobalEventAware {
     /// [`Entity`] and the [`Pointer<Click>`], throttled by `duration` before the handler can run
     /// again. Will not function unless this element is a descendant of a [`UiRoot`]. This method
     /// can be called repeatedly to register many such handlers.
+    ///
+    /// # Panics
+    ///
+    /// In debug mode, panics if this element is not a descendant of a [`UiRoot`].
     fn on_click_outside_throttled<Marker>(
         self,
         handler: impl IntoSystem<In<(Entity, GlobalEventData<Pointer<Click>>)>, (), Marker> + Send + Sync + 'static,
@@ -1918,7 +1932,7 @@ struct DraggedSystem(SystemId<In<Entity>, ()>);
 ///
 /// This system is exposed publicly so users can order their own systems around it
 /// when using [`PointerEventAware::on_pressed_disableable`] with custom `Disabled` components.
-/// Runs in [`Update`].
+/// Runs in [`PreUpdate`].
 #[allow(private_interfaces)]
 pub fn pressed_system(mut interaction_query: Query<(Entity, &PressedSystem), With<Pressed>>, mut commands: Commands) {
     for (entity, &PressedSystem(system)) in &mut interaction_query {
@@ -1930,7 +1944,7 @@ pub fn pressed_system(mut interaction_query: Query<(Entity, &PressedSystem), Wit
 ///
 /// This system is exposed publicly so users can order their own systems around it
 /// when using [`PointerEventAware::on_dragged_disableable`] with custom `Disabled` components.
-/// Runs in [`Update`].
+/// Runs in [`PreUpdate`].
 #[allow(private_interfaces)]
 pub fn dragged_system(mut interaction_query: Query<(Entity, &DraggedSystem), With<Dragged>>, mut commands: Commands) {
     for (entity, &DraggedSystem(system)) in &mut interaction_query {
@@ -1964,7 +1978,7 @@ fn pressable_system(
 ///
 /// This system is exposed publicly so users can order their own systems around it
 /// when using [`PointerEventAware::on_hovered_disableable`] with custom `Disabled` components.
-/// Runs in [`Update`].
+/// Runs in [`PreUpdate`].
 #[allow(private_interfaces)]
 pub fn hovered_system(mut hovering_query: Query<(Entity, &HoveredSystem), With<Hovered>>, mut commands: Commands) {
     for (entity, &HoveredSystem(system)) in &mut hovering_query {
@@ -2034,7 +2048,7 @@ pub struct Cursor(Option<CursorIcon>);
 /// [`Pickable::default()`]).
 pub trait Cursorable: PointerEventAware {
     /// When this [`Element`] receives a [`Pointer<Over>`] event, set the window's cursor to
-    /// [`Some`] [`CursorIcon`] in the [`CursorOnHover`] [`Component`] or hide it if [`None`].
+    /// [`Some`] [`CursorIcon`] in the [`Cursor`] [`Component`] or hide it if [`None`].
     /// If the [`Pointer`] is [`Over`] this element when it is disabled with a `Disabled`
     /// [`Component`], another [`Pointer<Over>`] event will be sent up the hierarchy to trigger
     /// any handlers whose propagation was previously stopped by this [`Element`].
@@ -2136,7 +2150,7 @@ pub trait Cursorable: PointerEventAware {
     }
 
     /// When this [`Element`](super::element::Element) receives a [`Pointer<Over>`] event, set the
-    /// window's cursor to [`Some`] [`CursorIcon`] in the [`CursorOnHover`] [`Component`] or
+    /// window's cursor to [`Some`] [`CursorIcon`] in the [`Cursor`] [`Component`] or
     /// hide it if [`None`].
     fn cursor(self, cursor_option: impl Into<Option<CursorIcon>>) -> Self {
         self.cursor_disableable::<CursorDisabled>(cursor_option)

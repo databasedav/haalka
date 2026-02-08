@@ -8,7 +8,7 @@ use std::{
 
 use super::{
     element::BuilderWrapper,
-    utils::{clone, max_scroll_offset, observe, register_system, remove_system_holder_on_despawn},
+    utils::{clone, observe, register_system, remove_system_holder_on_despawn},
 };
 use apply::Apply;
 use bevy_app::prelude::*;
@@ -292,6 +292,10 @@ fn viewport_location_change_dispatcher(
             dispatch_viewport_location_change(parent, &scene_viewports, &mut commands, &mut checked_viewport_listeners);
         }
     }
+}
+
+fn max_scroll_offset(node: &ComputedNode) -> Vec2 {
+    (node.content_size - node.size() + node.scrollbar_size).max(Vec2::ZERO)
 }
 
 pub(super) fn plugin(app: &mut App) {
