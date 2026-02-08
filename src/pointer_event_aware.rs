@@ -1864,7 +1864,8 @@ fn on_hoverable_add(mut world: DeferredWorld, HookContext { entity, .. }: HookCo
 
 fn on_hoverable_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
     world.commands().queue(move |world: &mut World| {
-        if let Some(&HoverablePropagationStoppers { enter, leave }) = world.get::<HoverablePropagationStoppers>(entity) {
+        if let Some(&HoverablePropagationStoppers { enter, leave }) = world.get::<HoverablePropagationStoppers>(entity)
+        {
             let _ = world.try_despawn(enter);
             let _ = world.try_despawn(leave);
         }
