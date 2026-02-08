@@ -400,7 +400,7 @@ fn key_values(pairs: Pairs) -> Column<Node> {
         })
         .insert(Pickable::default())
         .mutable_viewport(Overflow::scroll_y())
-        .on_scroll(BasicScrollHandler::new().pixels(20.).into_system())
+        .on_scroll_on_hover(BasicScrollHandler::new().pixels(20.).into_system())
         .with_builder(|builder| {
             builder.on_spawn_with_system(|In(entity), window: Single<&Window>, mut commands: Commands| {
                 // Set initial scroll to skip past the top spacer

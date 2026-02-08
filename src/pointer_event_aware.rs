@@ -386,12 +386,10 @@ pub trait PointerEventAware: GlobalEventAware {
                         observe(
                             world,
                             entity,
-                            move |mut enter: On<Pointer<Enter>>,
+                            move |enter: On<Pointer<Enter>>,
                                   disabled: Query<&Disabled>,
                                   move_observers: Query<&HoverMoveObserver>,
                                   mut commands: Commands| {
-                                enter.propagate(false);
-
                                 let entity = enter.entity;
                                 if disabled.contains(entity) {
                                     return;
@@ -433,11 +431,10 @@ pub trait PointerEventAware: GlobalEventAware {
                         observe(
                             world,
                             entity,
-                                move |mut leave: On<Pointer<Leave>>,
+                                move |leave: On<Pointer<Leave>>,
                                     disabled: Query<&Disabled>,
                                     move_observers: Query<&HoverMoveObserver>,
                                     mut commands: Commands| {
-                                leave.propagate(false);
                                 let entity = leave.entity;
 
                                 let hit = leave.hit.clone();
@@ -1736,6 +1733,8 @@ fn update_hover_states(
             }
         });
 
+        let was_hovered = hovered.is_some();
+
         // Keep the cached hit fresh while hovered (self or descendant).
         if let Some(hit) = hit_data_option {
             let should_update_cache = last_subtree_hit.is_none_or(|cached| cached.0 != *hit);
@@ -1749,7 +1748,7 @@ fn update_hover_states(
         // - Left when self AND all descendants are not hovered.
         let is_hovered = hit_data_option.is_some();
 
-        if hovered.is_some() != is_hovered {
+        if was_hovered != is_hovered {
             let Some(location) = pointer_map
                 .get_entity(pointer_id)
                 .and_then(|entity| pointers.get(entity).ok())
@@ -1833,7 +1832,47 @@ struct HoveredSystem(SystemId<In<Entity>, ()>);
 /// and removed when it's no longer hovered. This allows using [`Hovered`] in queries
 /// and signals without needing to use the [`PointerEventAware::on_hovered`] methods.
 #[derive(Component)]
+#[component(on_add = on_hoverable_add, on_remove = on_hoverable_remove)]
 pub struct Hoverable;
+
+/// Stores the observer entities that stop [`Pointer<Enter>`] and [`Pointer<Leave>`] propagation.
+#[derive(Component)]
+struct HoverablePropagationStoppers {
+    enter: Entity,
+    leave: Entity,
+}
+
+fn on_hoverable_add(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    world.commands().queue(move |world: &mut World| {
+        let enter = world
+            .entity_mut(entity)
+            .observe(|mut event: On<Pointer<Enter>>| {
+                event.propagate(false);
+            })
+            .id();
+        let leave = world
+            .entity_mut(entity)
+            .observe(|mut event: On<Pointer<Leave>>| {
+                event.propagate(false);
+            })
+            .id();
+        world
+            .entity_mut(entity)
+            .insert(HoverablePropagationStoppers { enter, leave });
+    });
+}
+
+fn on_hoverable_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    world.commands().queue(move |world: &mut World| {
+        if let Some(&HoverablePropagationStoppers { enter, leave }) = world.get::<HoverablePropagationStoppers>(entity) {
+            let _ = world.try_despawn(enter);
+            let _ = world.try_despawn(leave);
+        }
+        if let Ok(mut entity) = world.get_entity_mut(entity) {
+            entity.remove::<HoverablePropagationStoppers>();
+        }
+    });
+}
 
 /// Marker component that enables press state management for an entity.
 ///
