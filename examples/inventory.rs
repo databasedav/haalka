@@ -20,6 +20,7 @@ use rand::Rng;
 
 fn main() {
     App::new()
+        .add_plugins(HaalkaPlugin::new().with_jonmo(|jonmo| jonmo.with_schedule::<Update>()))
         .add_plugins((examples_plugin, EntropyPlugin::<WyRand>::default()))
         .init_state::<AssetState>()
         .add_loading_state(
@@ -854,29 +855,30 @@ fn ui_root() -> impl Element {
         .align_content(Align::center())
         .layer(inventory())
         // dragging icon
-        .layer_signal(is_dragging().dedupe().map_true_in(move || {
-            let index = signal::from_system(|In(_), dragging: Option<Res<Dragging>>| {
-                dragging.map(|d| d.item.index).unwrap_or(0)
-            })
-            .dedupe();
-            let count = signal::from_system(|In(_), dragging: Option<Res<Dragging>>| {
-                dragging.map(|d| d.item.count).unwrap_or(0)
-            })
-            .dedupe();
-            icon(index, count)
-                .insert(Pickable {
-                    should_block_lower: false, // allows triggering hover states for cells below dragging icon
-                    ..Pickable::default()
+        .layer_signal(
+            is_dragging()
+                .dedupe()
+                .map_true_in(move || {
+                    let dragging = signal::from_resource_changed::<Dragging>();
+                    icon(
+                        dragging.clone().map_in(|dragging| dragging.item.index).dedupe(),
+                        dragging.map_in(|dragging| dragging.item.count).dedupe(),
+                    )
+                    .insert(Pickable {
+                        should_block_lower: false, // allows triggering hover states for cells below dragging icon
+                        ..Pickable::default()
+                    })
+                    .cursor(CursorIcon::System(SystemCursorIcon::Grabbing))
+                    .with_node(|mut node| {
+                        node.width = Val::Px(CELL_WIDTH);
+                        node.height = Val::Px(CELL_WIDTH);
+                        node.position_type = PositionType::Absolute;
+                    })
+                    .global_z_index(GlobalZIndex(1))
+                    .on_signal_with_node(pointer_position_signal(), set_dragging_position)
                 })
-                .cursor(CursorIcon::System(SystemCursorIcon::Grabbing))
-                .with_node(|mut node| {
-                    node.width = Val::Px(CELL_WIDTH);
-                    node.height = Val::Px(CELL_WIDTH);
-                    node.position_type = PositionType::Absolute;
-                })
-                .global_z_index(GlobalZIndex(1))
-                .on_signal_with_node(pointer_position_signal(), set_dragging_position)
-        }))
+                .schedule::<Update>(), // otherwise the 0 index icon will flash at the 0 position for a frame
+        )
 }
 
 fn set_dragging_position(mut node: Mut<Node>, pointer_position: Vec2) {
