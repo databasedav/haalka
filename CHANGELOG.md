@@ -6,6 +6,7 @@ the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### changed
 
+- upgraded to bevy 0.17
 - [jonmo](https://github.com/databasedav/jonmo) is now the default signals backend for haalka, the deprecated futures-signals backend is still available via feature flags
     - to migrate seamlessly:
         - update your haalka installation by disabling default features and adding the appropriate futures-signals feature, likely either `futures_signals_ui` or `futures_signals_text_input`
