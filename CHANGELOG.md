@@ -23,6 +23,7 @@ the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### added
 
 - `Hoverable`, `Pressable`, and `Draggable` marker components for enabling maintaining of `Hovered`, `Pressed`, and `Dragged` components
+- `Stripe` base element, whose flex direction can be set dynamically
 - normalized `PointerEventAware` methods across hovered, clicked, pressed, and dragged, all with `_disableable`, `_disableable_signal`, `_change`, `_change_disableable`, `_change_disableable_signal`, and `_throttled` variants
 - panics/warnings that cloning base `Element` structs is a bug
 
