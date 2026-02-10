@@ -429,7 +429,6 @@ impl_haalka_methods! {
         node: Node,
         background_color: BackgroundColor,
         border_color: BorderColor,
-        border_radius: BorderRadius,
         z_index: ZIndex,
         visibility: Visibility,
     }

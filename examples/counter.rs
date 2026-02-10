@@ -59,10 +59,12 @@ fn ui_root() -> impl Element {
 fn counter_button(counter_holder: LazyEntity, label: &'static str, step: i32) -> impl Element {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
-        .with_node(|mut node| node.width = Val::Px(45.0))
+        .with_node(|mut node| {
+            node.width = Val::Px(45.0);
+            node.border_radius = BorderRadius::MAX;
+        })
         .insert((Pickable::default(), Hoverable))
         .align_content(Align::center())
-        .border_radius(BorderRadius::MAX)
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .lazy_entity(lazy_entity.clone())
         .background_color_signal(
