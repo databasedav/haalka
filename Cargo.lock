@@ -3412,6 +3412,8 @@ dependencies = [
 [[package]]
 name = "jonmo"
 version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49a0f05d1b1211a58e23620f519c243d7919c61b2d5991cde75b4862cd99048a"
 dependencies = [
  "apply",
  "bevy_app",
