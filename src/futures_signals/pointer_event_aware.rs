@@ -28,7 +28,7 @@ use haalka_futures_signals_ext::SignalExtBool;
 
 use super::{
     element::UiRoot,
-    global_event_aware::GlobalEventAware,
+    global_event_aware::{GlobalEventAware, GlobalEventData},
     raw::{observe, register_system, utils::remove_system_holder_on_remove},
     utils::sleep,
 };
@@ -150,7 +150,7 @@ pub trait PointerEventAware: GlobalEventAware {
     #[allow(clippy::type_complexity)]
     fn on_click_outside_with_system<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + 'static,
+        handler: impl IntoSystem<In<(Entity, GlobalEventData<Pointer<Click>>)>, (), Marker> + Send + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         self.update_raw_el(|raw_el| {
@@ -160,8 +160,8 @@ pub trait PointerEventAware: GlobalEventAware {
                 }))
                 .apply(remove_system_holder_on_remove(system_holder.clone()))
         })
-        .on_global_event_with_system::<Pointer<Click>, _>(
-            move |In((entity, click)): In<(Entity, Pointer<Click>)>,
+        .on_global_event_with_system::<Pointer<Click>, _, _, _>(
+            move |In((entity, click)): In<(Entity, GlobalEventData<Pointer<Click>>)>,
                   children: Query<&Children>,
                   child_ofs: Query<&ChildOf>,
                   ui_roots: Query<&UiRoot>,
@@ -471,14 +471,14 @@ fn contains(left: Entity, right: Entity, children_query: &Query<&Children>) -> b
 // ported from moonzoon https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/ability/mouse_event_aware.rs#L158
 fn is_inside_or_removed_from_dom(
     element: Entity,
-    event: &Pointer<Click>,
+    event: &GlobalEventData<Pointer<Click>>,
     ui_root: Entity,
     children_query: &Query<&Children>,
 ) -> bool {
-    if contains(element, event.entity, children_query) {
+    if contains(element, event.original_event_target, children_query) {
         return true;
     }
-    if !contains(ui_root, event.entity, children_query) {
+    if !contains(ui_root, event.original_event_target, children_query) {
         return true;
     }
     false

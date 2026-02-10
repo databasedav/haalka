@@ -19,7 +19,14 @@ fn main() {
     App::new()
         .add_plugins(examples_plugin)
         .add_systems(Startup, (init, camera))
-        .add_systems(Update, (tabber, escaper))
+        .add_systems(
+            Update,
+            (
+                tabber,
+                escaper,
+                initial_scroll.run_if(any_with_component::<NeedsInitialScroll>),
+            ),
+        )
         .run();
 }
 
@@ -49,6 +56,10 @@ struct InputField(KeyValue);
 
 #[derive(Component, Clone, Copy)]
 struct FocusOnSpawn(KeyValue);
+
+/// Keeps correcting scroll until the window height stabilizes (handles web canvas resize).
+#[derive(Component)]
+struct NeedsInitialScroll(f32);
 
 #[derive(Resource, Clone, Deref, DerefMut)]
 struct Pairs(MutableVec<Entity>);
@@ -403,11 +414,13 @@ fn key_values(pairs: Pairs) -> Column<Node> {
         .on_scroll_on_hover(BasicScrollHandler::new().pixels(20.).into_system())
         .with_builder(|builder| {
             builder.on_spawn_with_system(|In(entity), window: Single<&Window>, mut commands: Commands| {
-                // Set initial scroll to skip past the top spacer
+                // Best-effort initial scroll; corrected by initial_scroll system until
+                // the window height stabilizes (handles web canvas resize).
                 let spacer_px = window.height() * VIEWPORT_HEIGHT_VH / 100.;
-                commands
-                    .entity(entity)
-                    .insert(ScrollPosition(Vec2::new(0., spacer_px + ROW_GAP)));
+                commands.entity(entity).insert((
+                    ScrollPosition(Vec2::new(0., spacer_px + ROW_GAP)),
+                    NeedsInitialScroll(0.),
+                ));
             })
         })
         .item(viewport_spacer())
@@ -640,6 +653,26 @@ fn tabber(
 fn escaper(keys: Res<ButtonInput<KeyCode>>, mut input_focus: ResMut<InputFocus>) {
     if keys.just_pressed(KeyCode::Escape) {
         input_focus.0 = None;
+    }
+}
+
+/// Corrects the initial scroll position each frame until the window height stops changing.
+/// On web with `fit_canvas_to_parent`, the canvas resizes after spawn, so the `Val::Vh`-based
+/// spacer ends up a different size than `window.height()` predicted at spawn time.
+fn initial_scroll(
+    mut commands: Commands,
+    window: Single<&Window>,
+    mut query: Query<(Entity, &mut NeedsInitialScroll, &mut ScrollPosition)>,
+) {
+    let height = window.height();
+    let spacer_px = height * VIEWPORT_HEIGHT_VH / 100.;
+    for (entity, mut marker, mut scroll_position) in query.iter_mut() {
+        scroll_position.0.y = spacer_px + ROW_GAP;
+        // Remove once the window height has been the same for two consecutive frames.
+        if (marker.0 - height).abs() < 0.5 && height > 0. {
+            commands.entity(entity).remove::<NeedsInitialScroll>();
+        }
+        marker.0 = height;
     }
 }
 

@@ -37,22 +37,17 @@ trait PointerDataInternal {
 }
 
 /// Create a move observer for a specific data type that implements [`PointerDataInternal`].
-fn create_move_observer<D: PointerDataInternal + Component<Mutability = Mutable>>(
-    commands: &mut Commands,
-    entity: Entity,
-) -> Entity {
-    commands
-        .spawn((
-            Observer::new(|move_event: On<Pointer<Move>>, mut datas: Query<&mut D>| {
-                let entity = move_event.entity;
-                if let Ok(mut data) = datas.get_mut(entity) {
-                    data.update_from_move(move_event.hit.clone(), move_event.pointer_location.clone());
-                }
-            })
-            .with_entity(entity),
-            HaalkaObserver,
-        ))
-        .id()
+fn create_move_observer<D: PointerDataInternal + Component<Mutability = Mutable>>(world: &mut World, entity: Entity) {
+    world.spawn((
+        Observer::new(|move_event: On<Pointer<Move>>, mut datas: Query<&mut D>| {
+            let entity = move_event.entity;
+            if let Ok(mut data) = datas.get_mut(entity) {
+                data.update_from_move(move_event.hit.clone(), move_event.pointer_location.clone());
+            }
+        })
+        .with_entity(entity),
+        HaalkaObserver,
+    ));
 }
 
 /// Component storing signal-based disabling state flags.
@@ -383,12 +378,28 @@ pub trait PointerEventAware: GlobalEventAware {
                         );
                         let _ = hovering_handler_holder.set(hovering_handler_system);
 
+                        // Register the per-frame hovering system in the entity's
+                        // HoveredSystems vec. Multiple handlers each push their own
+                        // system so all of them run every frame while hovered.
+                        if let Some(mut systems) = world.get_mut::<HoveredSystems>(entity) {
+                            systems.0.push(hovering_handler_system);
+                        } else {
+                            world.entity_mut(entity).insert(HoveredSystems(vec![hovering_handler_system]));
+                        }
+
+                        // Spawn the Move observer once per entity using direct world
+                        // access. This prevents multiple observers from being created when
+                        // multiple hover handlers are registered.
+                        if world.get::<HoverMoveObserver>(entity).is_none() {
+                            create_move_observer::<HoverDataInternal>(world, entity);
+                            world.entity_mut(entity).insert(HoverMoveObserver);
+                        }
+
                         observe(
                             world,
                             entity,
                             move |enter: On<Pointer<Enter>>,
                                   disabled: Query<&Disabled>,
-                                  move_observers: Query<&HoverMoveObserver>,
                                   mut commands: Commands| {
                                 let entity = enter.entity;
                                 if disabled.contains(entity) {
@@ -399,10 +410,6 @@ pub trait PointerEventAware: GlobalEventAware {
                                 let pointer_id = enter.pointer_id;
                                 let pointer_location = enter.pointer_location.clone();
 
-                                let move_observer = (!move_observers.contains(entity)).then(|| {
-                                    create_move_observer::<HoverDataInternal>(&mut commands, entity)
-                                });
-
                                 if let Ok(mut entity) = commands.get_entity(entity) {
                                     entity.insert(HoverDataInternal {
                                         hit: hit.clone(),
@@ -410,10 +417,6 @@ pub trait PointerEventAware: GlobalEventAware {
                                         pointer_location: pointer_location.clone(),
                                     });
                                     entity.insert(Hovered);
-                                    entity.insert(HoveredSystem(hovering_handler_system));
-                                    if let Some(move_observer) = move_observer {
-                                        entity.insert(HoverMoveObserver(move_observer));
-                                    }
                                 }
 
                                 commands.run_system_with(
@@ -433,7 +436,6 @@ pub trait PointerEventAware: GlobalEventAware {
                             entity,
                                 move |leave: On<Pointer<Leave>>,
                                     disabled: Query<&Disabled>,
-                                    move_observers: Query<&HoverMoveObserver>,
                                     mut commands: Commands| {
                                 let entity = leave.entity;
 
@@ -450,13 +452,9 @@ pub trait PointerEventAware: GlobalEventAware {
                                     }));
                                 }
 
-                                let move_observer = move_observers.get(entity).ok().map(|o| o.0);
-
                                 if let Ok(mut entity) = commands.get_entity(entity) {
                                     entity.remove::<HoverDataInternal>();
-                                    entity.remove::<HoveredSystem>();
                                 }
-                                cleanup_move_observer::<HoverMoveObserver>(&mut commands, entity, move_observer);
                             },
                         );
                     }),
@@ -936,12 +934,28 @@ pub trait PointerEventAware: GlobalEventAware {
                         );
                         let _ = pressing_handler_holder.set(pressing_handler_system);
 
+                        // Register the per-frame pressing system in the entity's
+                        // PressedSystems vec. Multiple handlers each push their own
+                        // system so all of them run every frame while pressed.
+                        if let Some(mut systems) = world.get_mut::<PressedSystems>(entity) {
+                            systems.0.push(pressing_handler_system);
+                        } else {
+                            world.entity_mut(entity).insert(PressedSystems(vec![pressing_handler_system]));
+                        }
+
+                        // Spawn the Move observer once per entity using direct world
+                        // access. This prevents multiple observers from being created when
+                        // multiple press handlers are registered.
+                        if world.get::<PressMoveObserver>(entity).is_none() {
+                            create_move_observer::<PressDataInternal>(world, entity);
+                            world.entity_mut(entity).insert(PressMoveObserver);
+                        }
+
                         observe(
                             world,
                             entity,
                             move |press: On<Pointer<Press>>,
                                   disabled: Query<&Disabled>,
-                                  move_observers: Query<&PressMoveObserver>,
                                   mut commands: Commands| {
                                 let entity = press.entity;
                                 if disabled.contains(entity) {
@@ -953,10 +967,6 @@ pub trait PointerEventAware: GlobalEventAware {
                                 let pointer_id = press.pointer_id;
                                 let pointer_location = press.pointer_location.clone();
 
-                                let move_observer = (!move_observers.contains(entity)).then(|| {
-                                    create_move_observer::<PressDataInternal>(&mut commands, entity)
-                                });
-
                                 if let Ok(mut entity) = commands.get_entity(entity) {
                                     entity.insert(PressDataInternal {
                                         button,
@@ -964,10 +974,6 @@ pub trait PointerEventAware: GlobalEventAware {
                                         pointer_id,
                                         pointer_location: pointer_location.clone(),
                                     });
-                                    entity.insert(PressedSystem(pressing_handler_system));
-                                    if let Some(move_observer) = move_observer {
-                                        entity.insert(PressMoveObserver(move_observer));
-                                    }
                                 }
 
                                 commands.run_system_with(
@@ -988,7 +994,6 @@ pub trait PointerEventAware: GlobalEventAware {
                             entity,
                                 move |release: On<Pointer<Release>>,
                                     disabled: Query<&Disabled>,
-                                    move_observers: Query<&PressMoveObserver>,
                                     press_datas: Query<&PressDataInternal>,
                                     mut commands: Commands| {
                                 let entity = release.entity;
@@ -1006,8 +1011,6 @@ pub trait PointerEventAware: GlobalEventAware {
                                 let pointer_id = release.pointer_id;
                                 let pointer_location = release.pointer_location.clone();
 
-                                let move_observer = move_observers.get(entity).ok().map(|o| o.0);
-
                                 if !disabled.contains(entity) {
                                     commands.run_system_with(press_handler_system, (entity, PressData {
                                         pressed: false,
@@ -1020,9 +1023,7 @@ pub trait PointerEventAware: GlobalEventAware {
 
                                 if let Ok(mut entity) = commands.get_entity(entity) {
                                     entity.remove::<PressDataInternal>();
-                                    entity.remove::<PressedSystem>();
                                 }
-                                cleanup_move_observer::<PressMoveObserver>(&mut commands, entity, move_observer);
                             },
                         );
                     }),
@@ -1030,20 +1031,13 @@ pub trait PointerEventAware: GlobalEventAware {
                 .apply(remove_system_holder_on_despawn(press_handler_holder))
                 .apply(remove_system_holder_on_despawn(pressing_handler_holder))
         })
-        .on_hovered_change(
-            |In((entity, data)): In<(Entity, HoverData)>,
-             move_observers: Query<&PressMoveObserver>,
-             mut commands: Commands| {
-                if !data.hovered {
-                    let move_observer = move_observers.get(entity).ok().map(|o| o.0);
-                    if let Ok(mut entity) = commands.get_entity(entity) {
-                        entity.remove::<PressDataInternal>();
-                        entity.remove::<PressedSystem>();
-                    }
-                    cleanup_move_observer::<PressMoveObserver>(&mut commands, entity, move_observer);
-                }
-            },
-        )
+        .on_hovered_change(|In((entity, data)): In<(Entity, HoverData)>, mut commands: Commands| {
+            if !data.hovered
+                && let Ok(mut entity) = commands.get_entity(entity)
+            {
+                entity.remove::<PressDataInternal>();
+            }
+        })
     }
 
     /// On frames where this element is pressed or gets unpressed, run a [`System`] which takes
@@ -1298,19 +1292,16 @@ pub trait PointerEventAware: GlobalEventAware {
                             world,
                             move |In(entity): In<Entity>,
                                   disabled: Query<&Disabled>,
-                                  mut drag_datas: Query<&mut DragDataInternal>,
+                                  drag_datas: Query<&DragDataInternal>,
                                   mut commands: Commands| {
                                 if disabled.contains(entity) {
                                     return;
                                 }
-                                if let Ok(mut drag_data) = drag_datas.get_mut(entity) {
+                                if let Ok(drag_data) = drag_datas.get(entity) {
                                     if !drag_data.has_new_delta {
                                         return;
                                     }
-                                    drag_data.has_new_delta = false;
-                                    // Extract accumulated delta and reset for next frame
                                     let delta = drag_data.delta;
-                                    drag_data.delta = Vec2::ZERO;
                                     commands.run_system_with(
                                         drag_handler_system,
                                         (
@@ -1330,13 +1321,47 @@ pub trait PointerEventAware: GlobalEventAware {
                         );
                         let _ = dragging_handler_holder.set(dragging_handler_system);
 
+                        // Register the per-frame dragging system in the entity's
+                        // DraggedSystems vec. Multiple handlers each push their own
+                        // system so all of them run every frame while dragged.
+                        if let Some(mut systems) = world.get_mut::<DraggedSystems>(entity) {
+                            systems.0.push(dragging_handler_system);
+                        } else {
+                            world.entity_mut(entity).insert(DraggedSystems(vec![dragging_handler_system]));
+                        }
+
+                        // Spawn the Drag move observer once per entity using direct world
+                        // access. This prevents multiple observers from being created when
+                        // multiple drag handlers are registered, which would cause the
+                        // accumulated delta to be multiplied.
+                        if world.get::<DragMoveObserver>(entity).is_none() {
+                            world.spawn((
+                                Observer::new(
+                                    move |drag_event: On<Pointer<Drag>>,
+                                          mut drag_datas: Query<&mut DragDataInternal>| {
+                                        let entity = drag_event.entity;
+                                        if let Ok(mut drag_data) = drag_datas.get_mut(entity)
+                                            && drag_data.button == drag_event.button
+                                        {
+                                            drag_data.pointer_location =
+                                                drag_event.pointer_location.clone();
+                                            // Accumulate deltas to handle multiple events per frame
+                                            drag_data.delta += drag_event.delta;
+                                            drag_data.has_new_delta = true;
+                                        }
+                                    },
+                                )
+                                .with_entity(entity),
+                                HaalkaObserver,
+                            ));
+                            world.entity_mut(entity).insert(DragMoveObserver);
+                        }
+
                         observe(
                             world,
                             entity,
                             move |drag_start: On<Pointer<DragStart>>,
                                   disabled: Query<&Disabled>,
-                                  drag_observers: Query<&DragMoveObserver>,
-                                  dragged_systems: Query<&DraggedSystem>,
                                   mut commands: Commands| {
                                 let entity = drag_start.entity;
                                 if disabled.contains(entity) {
@@ -1348,30 +1373,6 @@ pub trait PointerEventAware: GlobalEventAware {
                                 let pointer_id = drag_start.pointer_id;
                                 let pointer_location = drag_start.pointer_location.clone();
 
-                                let drag_observer = (!drag_observers.contains(entity)).then(|| {
-                                    commands
-                                        .spawn((
-                                            Observer::new(
-                                                move |drag_event: On<Pointer<Drag>>,
-                                                      mut drag_datas: Query<&mut DragDataInternal>| {
-                                                    let entity = drag_event.entity;
-                                                    if let Ok(mut drag_data) = drag_datas.get_mut(entity)
-                                                        && drag_data.button == drag_event.button
-                                                    {
-                                                        drag_data.pointer_location =
-                                                            drag_event.pointer_location.clone();
-                                                        // Accumulate deltas to handle multiple events per frame
-                                                        drag_data.delta += drag_event.delta;
-                                                        drag_data.has_new_delta = true;
-                                                    }
-                                                },
-                                            )
-                                            .with_entity(entity),
-                                            HaalkaObserver,
-                                        ))
-                                        .id()
-                                });
-
                                 if let Ok(mut entity) = commands.get_entity(entity) {
                                     entity.insert(DragDataInternal {
                                         button,
@@ -1382,12 +1383,6 @@ pub trait PointerEventAware: GlobalEventAware {
                                         has_new_delta: false,
                                     });
                                     entity.insert(Dragged);
-                                    if let Some(drag_observer) = drag_observer {
-                                        entity.insert(DragMoveObserver(drag_observer));
-                                    }
-                                    if !dragged_systems.contains(entity.id()) {
-                                        entity.insert(DraggedSystem(dragging_handler_system));
-                                    }
                                 }
 
                                 commands.run_system_with(
@@ -1409,7 +1404,6 @@ pub trait PointerEventAware: GlobalEventAware {
                             entity,
                             move |drag_end: On<Pointer<DragEnd>>,
                                 disabled: Query<&Disabled>,
-                                drag_observers: Query<&DragMoveObserver>,
                                 drag_datas: Query<&DragDataInternal>,
                                 mut commands: Commands| {
                                 let entity = drag_end.entity;
@@ -1427,8 +1421,6 @@ pub trait PointerEventAware: GlobalEventAware {
                                 let pointer_id = drag_end.pointer_id;
                                 let pointer_location = drag_end.pointer_location.clone();
 
-                                let drag_observer = drag_observers.get(entity).ok().map(|o| o.0);
-
                                 if !disabled.contains(entity) {
                                     commands.run_system_with(drag_handler_system, (entity, DragData {
                                         dragged: false,
@@ -1443,9 +1435,7 @@ pub trait PointerEventAware: GlobalEventAware {
                                 if let Ok(mut entity) = commands.get_entity(entity) {
                                     entity.remove::<DragDataInternal>();
                                     entity.remove::<Dragged>();
-                                    entity.remove::<DraggedSystem>();
                                 }
-                                cleanup_move_observer::<DragMoveObserver>(&mut commands, entity, drag_observer);
                             },
                         );
                     }),
@@ -1803,7 +1793,7 @@ impl PointerDataInternal for PressDataInternal {
 }
 
 #[derive(Component, Clone, Copy)]
-struct PressMoveObserver(Entity);
+struct PressMoveObserver;
 
 #[derive(Component, Clone)]
 struct HoverDataInternal {
@@ -1820,10 +1810,10 @@ impl PointerDataInternal for HoverDataInternal {
 }
 
 #[derive(Component, Clone, Copy)]
-struct HoverMoveObserver(Entity);
+struct HoverMoveObserver;
 
-#[derive(Component, Clone, Copy)]
-struct HoveredSystem(SystemId<In<Entity>, ()>);
+#[derive(Component, Clone, Default)]
+struct HoveredSystems(Vec<SystemId<In<Entity>, ()>>);
 
 /// Marker component that enables hover state management for an entity.
 ///
@@ -1942,8 +1932,8 @@ fn on_draggable_remove(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
     });
 }
 
-#[derive(Component)]
-struct PressedSystem(SystemId<In<Entity>, ()>);
+#[derive(Component, Clone, Default)]
+struct PressedSystems(Vec<SystemId<In<Entity>, ()>>);
 
 #[derive(Component, Clone)]
 struct DragDataInternal {
@@ -1963,10 +1953,10 @@ impl PointerDataInternal for DragDataInternal {
 }
 
 #[derive(Component, Clone, Copy)]
-struct DragMoveObserver(Entity);
+struct DragMoveObserver;
 
-#[derive(Component, Clone, Copy)]
-struct DraggedSystem(SystemId<In<Entity>, ()>);
+#[derive(Component, Clone, Default)]
+struct DraggedSystems(Vec<SystemId<In<Entity>, ()>>);
 
 /// System that runs registered press handlers for pressed entities.
 ///
@@ -1974,9 +1964,11 @@ struct DraggedSystem(SystemId<In<Entity>, ()>);
 /// when using [`PointerEventAware::on_pressed_disableable`] with custom `Disabled` components.
 /// Runs in [`PreUpdate`].
 #[allow(private_interfaces)]
-pub fn pressed_system(mut interaction_query: Query<(Entity, &PressedSystem), With<Pressed>>, mut commands: Commands) {
-    for (entity, &PressedSystem(system)) in &mut interaction_query {
-        commands.run_system_with(system, entity);
+pub fn pressed_system(mut interaction_query: Query<(Entity, &PressedSystems), With<Pressed>>, mut commands: Commands) {
+    for (entity, systems) in &mut interaction_query {
+        for &system in &systems.0 {
+            commands.run_system_with(system, entity);
+        }
     }
 }
 
@@ -1986,9 +1978,22 @@ pub fn pressed_system(mut interaction_query: Query<(Entity, &PressedSystem), Wit
 /// when using [`PointerEventAware::on_dragged_disableable`] with custom `Disabled` components.
 /// Runs in [`PreUpdate`].
 #[allow(private_interfaces)]
-pub fn dragged_system(mut interaction_query: Query<(Entity, &DraggedSystem), With<Dragged>>, mut commands: Commands) {
-    for (entity, &DraggedSystem(system)) in &mut interaction_query {
-        commands.run_system_with(system, entity);
+pub fn dragged_system(mut interaction_query: Query<(Entity, &DraggedSystems), With<Dragged>>, mut commands: Commands) {
+    for (entity, systems) in &mut interaction_query {
+        for &system in &systems.0 {
+            commands.run_system_with(system, entity);
+        }
+    }
+}
+
+/// Resets accumulated drag delta after all per-frame drag handler systems have
+/// read it. Runs chained after [`dragged_system`] so that commands flush first.
+fn reset_drag_data(mut drag_datas: Query<&mut DragDataInternal, With<Dragged>>) {
+    for mut drag_data in &mut drag_datas {
+        if drag_data.has_new_delta {
+            drag_data.has_new_delta = false;
+            drag_data.delta = Vec2::ZERO;
+        }
     }
 }
 
@@ -2020,20 +2025,11 @@ fn pressable_system(
 /// when using [`PointerEventAware::on_hovered_disableable`] with custom `Disabled` components.
 /// Runs in [`PreUpdate`].
 #[allow(private_interfaces)]
-pub fn hovered_system(mut hovering_query: Query<(Entity, &HoveredSystem), With<Hovered>>, mut commands: Commands) {
-    for (entity, &HoveredSystem(system)) in &mut hovering_query {
-        commands.run_system_with(system, entity);
-    }
-}
-
-fn cleanup_move_observer<T: Component>(commands: &mut Commands, entity: Entity, observer: Option<Entity>) {
-    if let Ok(mut entity_commands) = commands.get_entity(entity)
-        && observer.is_some()
-    {
-        entity_commands.remove::<T>();
-    }
-    if let Some(observer_entity) = observer {
-        commands.entity(observer_entity).despawn();
+pub fn hovered_system(mut hovering_query: Query<(Entity, &HoveredSystems), With<Hovered>>, mut commands: Commands) {
+    for (entity, systems) in &mut hovering_query {
+        for &system in &systems.0 {
+            commands.run_system_with(system, entity);
+        }
     }
 }
 
@@ -2309,10 +2305,12 @@ pub(super) fn plugin(app: &mut App) {
         (
             (
                 pressable_system.run_if(any_with_component::<Pressable>),
-                pressed_system.run_if(any_with_component::<PressedSystem>),
+                pressed_system.run_if(any_with_component::<PressedSystems>),
             )
                 .chain(),
-            dragged_system.run_if(any_with_component::<DraggedSystem>),
+            (dragged_system, reset_drag_data)
+                .chain()
+                .run_if(any_with_component::<DraggedSystems>),
             (
                 update_hover_states.run_if(
                     any_with_component::<Hoverable>
@@ -2321,7 +2319,7 @@ pub(super) fn plugin(app: &mut App) {
                         .and(resource_exists_and_changed::<HoverMap>)
                         .and(not(resource_exists::<UpdateHoverStatesDisabled>)),
                 ),
-                hovered_system.run_if(any_with_component::<HoveredSystem>),
+                hovered_system.run_if(any_with_component::<HoveredSystems>),
             )
                 .chain(),
             consume_queued_cursor.run_if(resource_removed::<CursorableDisabled>),

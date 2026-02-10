@@ -81,7 +81,7 @@ const DEFAULT_BUTTON_HEIGHT: f32 = 65.;
 const TEXT_BUTTON_WIDTH: f32 = 200.;
 const BASE_BORDER_WIDTH: f32 = 5.;
 const MENU_ITEM_HEIGHT: f32 = DEFAULT_BUTTON_HEIGHT + BASE_PADDING;
-const LIL_BABY_BUTTON_SIZE: f32 = 30.;
+const LIL_BUTTON_SIZE: f32 = 30.;
 const SLIDER_SPEED: f32 = 50.;
 
 fn menu() -> impl Element {
@@ -444,6 +444,9 @@ impl Button {
         let virtual_pressed = signal::from_entity(lazy_entity.clone())
             .has_component::<VirtualPressed>()
             .dedupe();
+        let dragged = signal::from_entity(lazy_entity.clone())
+            .has_component::<Dragged>()
+            .dedupe();
         let mouse_hovered = signal::from_entity(lazy_entity.clone())
             .has_component::<Hovered>()
             .dedupe();
@@ -454,7 +457,7 @@ impl Button {
             .has_component::<Selected>()
             .dedupe();
         let selected_hovered = signal::zip!(
-            signal::any!(selected.clone(), pressed, virtual_pressed).dedupe(),
+            signal::any!(selected.clone(), pressed, virtual_pressed, dragged).dedupe(),
             signal::any!(mouse_hovered, virtual_hovered).dedupe()
         )
         .dedupe();
@@ -463,12 +466,21 @@ impl Button {
             el: {
                 El::<Node>::new()
                     .lazy_entity(lazy_entity.clone())
-                    .insert((Pickable::default(), Hoverable, Pressable))
+                    .insert((Pickable::default(), Hoverable, Pressable, Draggable))
                     .with_node(|mut node| {
                         node.height = Val::Px(DEFAULT_BUTTON_HEIGHT);
                         node.border = UiRect::all(Val::Px(BASE_BORDER_WIDTH));
                     })
                     .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
+                    .on_dragged_change(
+                        |In((_, dragged_data)): In<(Entity, DragData)>, mut commands: Commands| {
+                            if dragged_data.dragged {
+                                commands.insert_resource(CursorableDisabled);
+                            } else {
+                                commands.remove_resource::<CursorableDisabled>();
+                            }
+                        },
+                    )
                     .align_content(Align::center())
                     .border_color_signal(
                         selected_hovered
@@ -592,8 +604,8 @@ fn menu_base(width: f32, height: f32, title: &str) -> Column<Node> {
 
 fn lil_button() -> Button {
     Button::new().with_node(|mut node| {
-        node.width = Val::Px(LIL_BABY_BUTTON_SIZE);
-        node.height = Val::Px(LIL_BABY_BUTTON_SIZE);
+        node.width = Val::Px(LIL_BUTTON_SIZE);
+        node.height = Val::Px(LIL_BUTTON_SIZE);
     })
 }
 
@@ -1141,7 +1153,7 @@ struct SliderValue {
 
 const SLIDER_WIDTH: f32 = 400.;
 const SLIDER_PADDING: f32 = 5.;
-const SLIDER_MAX: f32 = SLIDER_WIDTH - SLIDER_PADDING - LIL_BABY_BUTTON_SIZE - BASE_BORDER_WIDTH;
+const SLIDER_MAX: f32 = SLIDER_WIDTH - SLIDER_PADDING - LIL_BUTTON_SIZE - BASE_BORDER_WIDTH;
 
 struct Slider {
     el: Row<Node>,
@@ -1720,7 +1732,6 @@ fn closeable_sub_menu(element: impl Element) -> impl Element + Clone {
             node.width = Val::Px(SUB_MENU_WIDTH);
             node.height = Val::Px(SUB_MENU_HEIGHT);
         })
-        .align(Align::center())
         .layer(element.align(Align::center()))
         .layer(
             x_button()
