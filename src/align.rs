@@ -54,7 +54,7 @@ pub enum AlignY {
 /// Component for self-alignment of an element within its parent. Applied to children and processed
 /// based on the parent's [`AlignmentHandler`].
 #[derive(Component, Clone, Copy, Default, PartialEq, Eq, Debug)]
-#[component(on_remove = on_alignment_remove)]
+#[component(on_insert = on_alignment_insert, on_remove = on_alignment_remove)]
 pub struct Alignment {
     /// Horizontal alignment.
     pub x: AlignX,
@@ -65,7 +65,7 @@ pub struct Alignment {
 /// Component for content alignment (how a parent aligns its children). Applied to parents to
 /// control default alignment of all children.
 #[derive(Component, Clone, Copy, Default, PartialEq, Eq, Debug)]
-#[component(on_remove = on_content_alignment_remove)]
+#[component(on_insert = on_content_alignment_insert, on_remove = on_content_alignment_remove)]
 pub struct ContentAlignment {
     /// Horizontal content alignment.
     pub x: AlignX,
@@ -375,6 +375,20 @@ fn apply_self_alignment_on_parent_change(
     }
 }
 
+/// Hook called when Alignment component is inserted, immediately applying alignment.
+fn on_alignment_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    let handler = world
+        .get::<ChildOf>(entity)
+        .and_then(|child_of| world.get::<AlignmentHandler>(child_of.parent()).copied());
+
+    if let Some(handler) = handler {
+        let alignment = world.get::<Alignment>(entity).copied().unwrap();
+        if let Some(mut node) = world.get_mut::<Node>(entity) {
+            (handler.apply)(&mut node, &alignment);
+        }
+    }
+}
+
 /// Hook called when Alignment component is removed, resetting node properties.
 fn on_alignment_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
     let handler = world
@@ -400,6 +414,17 @@ fn apply_content_alignment(
 ) {
     for (content_alignment, handler, mut node) in &mut data {
         (handler.apply)(&mut node, content_alignment);
+    }
+}
+
+/// Hook called when ContentAlignment component is inserted, immediately applying content alignment.
+fn on_content_alignment_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    let handler = world.get::<ContentAlignmentHandler>(entity).copied();
+    if let Some(handler) = handler {
+        let content_alignment = world.get::<ContentAlignment>(entity).copied().unwrap();
+        if let Some(mut node) = world.get_mut::<Node>(entity) {
+            (handler.apply)(&mut node, &content_alignment);
+        }
     }
 }
 
