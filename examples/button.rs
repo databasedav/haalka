@@ -3,7 +3,7 @@
 mod utils;
 use utils::*;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, ui::Pressed};
 use haalka::prelude::*;
 
 fn main() {
@@ -26,62 +26,70 @@ const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
 const PRESSED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
 
 fn button() -> impl Element {
-    let (pressed, pressed_signal) = Mutable::new_and_signal(false);
-    let (hovered, hovered_signal) = Mutable::new_and_signal(false);
-    let pressed_hovered_broadcaster =
-        map_ref!(pressed_signal, hovered_signal => (*pressed_signal, *hovered_signal)).broadcast();
-    let border_color_signal = {
-        pressed_hovered_broadcaster
-            .signal()
-            .map(|(pressed, hovered)| {
-                if pressed {
-                    bevy::color::palettes::basic::RED.into()
-                } else if hovered {
-                    Color::WHITE
-                } else {
-                    Color::BLACK
-                }
-            })
-            .map(BorderColor)
-    };
-    let background_color_signal = {
-        pressed_hovered_broadcaster
-            .signal()
-            .map(|(pressed, hovered)| {
-                if pressed {
-                    PRESSED_BUTTON
-                } else if hovered {
-                    HOVERED_BUTTON
-                } else {
-                    NORMAL_BUTTON
-                }
-            })
-            .map(BackgroundColor)
-    };
+    let lazy_entity = LazyEntity::new();
+
+    let pressed = signal::from_entity(lazy_entity.clone())
+        .has_component::<Pressed>()
+        .dedupe();
+    let dragged = signal::from_entity(lazy_entity.clone())
+        .has_component::<Dragged>()
+        .dedupe();
+    let hovered = signal::from_entity(lazy_entity.clone())
+        .has_component::<Hovered>()
+        .dedupe();
+    let pressed_hovered = signal::zip!(signal::any!(pressed, dragged), hovered).dedupe();
+
     El::<Node>::new()
         .with_node(|mut node| {
             node.width = Val::Px(150.0);
             node.height = Val::Px(65.);
             node.border = UiRect::all(Val::Px(5.0));
         })
-        .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
+        .insert((Pickable::default(), Hoverable, Pressable, Draggable))
         .align_content(Align::center())
-        .border_color_signal(border_color_signal)
-        .background_color_signal(background_color_signal)
         .border_radius(BorderRadius::MAX)
-        .hovered_sync(hovered)
-        .pressed_sync(pressed)
+        .lazy_entity(lazy_entity)
+        .border_color_signal(
+            pressed_hovered
+                .clone()
+                .map_in(|(pressed, hovered)| {
+                    if pressed {
+                        bevy::color::palettes::basic::RED.into()
+                    } else if hovered {
+                        Color::WHITE
+                    } else {
+                        Color::BLACK
+                    }
+                })
+                .map_in(BorderColor::all)
+                .map_in(Some),
+        )
+        .background_color_signal(
+            pressed_hovered
+                .clone()
+                .map_in(|(pressed, hovered)| {
+                    if pressed {
+                        PRESSED_BUTTON
+                    } else if hovered {
+                        HOVERED_BUTTON
+                    } else {
+                        NORMAL_BUTTON
+                    }
+                })
+                .map_in(BackgroundColor)
+                .map_in(Some),
+        )
         .child(
             El::<Text>::new()
                 .text_font(TextFont {
                     font_size: 33.0,
                     ..default()
                 })
+                .text_shadow(TextShadow::default())
                 .text_color(TextColor(Color::srgb(0.9, 0.9, 0.9)))
                 .text_signal(
-                    pressed_hovered_broadcaster
-                        .signal()
-                        .map(|(pressed, hovered)| {
+                    pressed_hovered
+                        .map_in(|(pressed, hovered)| {
                             if pressed {
                                 "Press"
                             } else if hovered {
@@ -90,7 +98,8 @@ fn button() -> impl Element {
                                 "Button"
                             }
                         })
-                        .map(Text::new),
+                        .map_in(Text::new)
+                        .map_in(Some),
                 ),
         )
 }
@@ -105,7 +114,7 @@ fn ui_root() -> impl Element {
             node.width = Val::Percent(100.);
             node.height = Val::Percent(100.);
         })
-        .cursor(CursorIcon::default())
+        .insert(Pickable::default())
         .align_content(Align::center())
         .child(button())
 }

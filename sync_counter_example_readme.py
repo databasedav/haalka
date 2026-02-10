@@ -4,14 +4,17 @@ import re
 with open('examples/counter.rs', 'r') as file:
     lines = file.readlines()
 
-# Remove the first 6 lines
-lines = lines[6:]
+# Remove the first 5 lines
+lines = lines[5:]
 
 # Join the lines into a single string
 content = ''.join(lines)
 
-# Replace `example_plugin` with `((DefaultPlugins, HaalkaPlugin))`
-content = re.sub(r'examples_plugin', '(DefaultPlugins, HaalkaPlugin)', content)
+# Replace `example_plugin` with `((DefaultPlugins, HaalkaPlugin::new()))`
+content = re.sub(r'examples_plugin', '(DefaultPlugins, HaalkaPlugin::new())', content)
+
+# Remove `#[rustfmt::skip]` lines
+content = re.sub(r'#\[rustfmt::skip\]\n', '', content)
 
 # Read the content of README.md
 with open('README.md', 'r') as file:

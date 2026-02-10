@@ -1,6 +1,6 @@
 //! Low level reactive entity management ported from [Dominator](https://github.com/Pauan/rust-dominator)'s [`DomBuilder`](https://docs.rs/dominator/latest/dominator/struct.DomBuilder.html).
 
-use std::sync::{Arc, Mutex, OnceLock};
+use bevy_platform::sync::{Arc, Mutex, OnceLock};
 
 use super::utils::{clone, spawn};
 use apply::Apply;

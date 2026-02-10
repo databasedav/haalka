@@ -1,34 +1,38 @@
 use bevy_ecs::prelude::*;
 use bevy_picking::prelude::*;
 use bevy_ui::prelude::*;
-use futures_signals::{
+use jonmo::{
     signal::{Signal, SignalExt},
     signal_vec::{SignalVec, SignalVecExt},
 };
 
 use super::{
-    align::{AddRemove, AlignHolder, Alignable, Aligner, Alignment, ChildAlignable},
-    element::{IntoOptionElement, Nameable, UiRootable},
+    align::{Alignable, LayoutDirection},
+    element::{BuilderPassThrough, BuilderWrapper, IntoOptionElement, Nameable, UiRootable},
     global_event_aware::GlobalEventAware,
     mouse_wheel_scrollable::MouseWheelScrollable,
-    pointer_event_aware::{CursorOnHoverable, PointerEventAware},
-    raw::{RawElWrapper, RawHaalkaEl},
-    row::Row,
+    pointer_event_aware::{Cursorable, PointerEventAware},
     viewport_mutable::ViewportMutable,
 };
+use crate::{clone_semantics_doc, impl_element_clone};
 
-/// [`Element`](super::element::Element) with children stacked on directly on top of each other (e.g. along the z-axis), with siblings ordered youngest to oldest, top to bottom. Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Stack`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/element/stack.rs).
+/// [`Element`](super::element::Element) with children stacked on directly on top of each other
+/// (e.g. along the z-axis), with siblings ordered youngest to oldest, top to bottom.
+///
+/// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Stack`](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/element/stack.rs).
+#[doc = clone_semantics_doc!("Stack")]
 #[derive(Default)]
 pub struct Stack<NodeType> {
-    raw_el: RawHaalkaEl,
-    align: Option<AlignHolder>,
+    builder: jonmo::Builder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
 
-impl<NodeType: Bundle> From<RawHaalkaEl> for Stack<NodeType> {
-    fn from(value: RawHaalkaEl) -> Self {
+impl_element_clone!("Stack", Stack<NodeType>, my_stack, ".layer(El::new().name(label))");
+
+impl<NodeType: Bundle> From<jonmo::Builder> for Stack<NodeType> {
+    fn from(builder: jonmo::Builder) -> Self {
         Self {
-            raw_el: value
+            builder: builder
                 .with_component::<Node>(|mut node| {
                     node.display = Display::Grid;
                     node.grid_auto_columns =
@@ -36,16 +40,9 @@ impl<NodeType: Bundle> From<RawHaalkaEl> for Stack<NodeType> {
                     node.grid_auto_rows =
                         GridTrack::minmax(MinTrackSizingFunction::Px(0.), MaxTrackSizingFunction::Auto);
                 })
-                .insert(Pickable::IGNORE),
-            align: None,
+                .insert((LayoutDirection::Grid, Pickable::IGNORE)),
             _node_type: std::marker::PhantomData,
         }
-    }
-}
-
-impl<NodeType: Bundle> From<NodeType> for Stack<NodeType> {
-    fn from(node_bundle: NodeType) -> Self {
-        RawHaalkaEl::from(node_bundle).into()
     }
 }
 
@@ -55,17 +52,18 @@ impl<NodeType: Bundle + Default> Stack<NodeType> {
     /// # Notes
     /// [`Bundle`]s without the [`Node`] component will not behave as expected.
     pub fn new() -> Self {
-        Self::from(NodeType::default())
+        Self::from(jonmo::Builder::from(NodeType::default()))
     }
 }
 
-impl<NodeType: Bundle> RawElWrapper for Stack<NodeType> {
-    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
-        &mut self.raw_el
+impl<NodeType> BuilderWrapper for Stack<NodeType> {
+    fn builder_mut(&mut self) -> &mut jonmo::Builder {
+        &mut self.builder
     }
 }
 
-impl<NodeType: Bundle> CursorOnHoverable for Stack<NodeType> {}
+impl<NodeType: Bundle> Alignable for Stack<NodeType> {}
+impl<NodeType: Bundle> Cursorable for Stack<NodeType> {}
 impl<NodeType: Bundle> GlobalEventAware for Stack<NodeType> {}
 impl<NodeType: Bundle> Nameable for Stack<NodeType> {}
 impl<NodeType: Bundle> PointerEventAware for Stack<NodeType> {}
@@ -73,134 +71,91 @@ impl<NodeType: Bundle> MouseWheelScrollable for Stack<NodeType> {}
 impl<NodeType: Bundle> UiRootable for Stack<NodeType> {}
 impl<NodeType: Bundle> ViewportMutable for Stack<NodeType> {}
 
+impl<NodeType: Bundle> BuilderPassThrough for Stack<NodeType> {}
+
+/// Marker component for Stack children to place them in the same grid cell.
+#[derive(Component, Clone, Copy, Default)]
+pub struct StackChild;
+
 impl<NodeType: Bundle> Stack<NodeType> {
     /// Declare a static z-axis stacked child, e.g. subsequent calls to [`.layer`][Stack::layer]s
     /// will be stacked on top of this one.
-    pub fn layer<IOE: IntoOptionElement>(mut self, layer_option: IOE) -> Self {
-        let apply_alignment = self.apply_alignment_wrapper();
-        self.raw_el = self.raw_el.child(
-            layer_option
-                .into_option_element()
-                .map(|layer| Self::align_child(layer, apply_alignment)),
-        );
-        self
+    pub fn layer<IOE: IntoOptionElement>(self, layer_option: IOE) -> Self {
+        if let Some(layer) = layer_option.into_option_element() {
+            self.with_builder(|builder| builder.child(Self::setup_stack_child(layer.into_builder())))
+        } else {
+            self
+        }
     }
 
     /// Declare a reactive z-axis stacked child. When the [`Signal`] outputs [`None`], the child is
     /// removed.
-    pub fn layer_signal<IOE: IntoOptionElement + 'static, S: Signal<Item = IOE> + Send + 'static>(
-        mut self,
+    pub fn layer_signal<IOE: IntoOptionElement + 'static, S: Signal<Item = IOE> + Send + Sync + 'static>(
+        self,
         layer_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(layer_option_signal) = layer_option_signal_option.into() {
-            let apply_alignment = self.apply_alignment_wrapper();
-            self.raw_el = self.raw_el.child_signal(layer_option_signal.map(move |layer_option| {
-                layer_option
-                    .into_option_element()
-                    .map(|layer| Self::align_child(layer, apply_alignment))
-            }));
+            self.with_builder(|builder| {
+                builder.child_signal(layer_option_signal.map_in(move |layer_option: IOE| {
+                    layer_option
+                        .into_option_element()
+                        .map(|layer| Self::setup_stack_child(layer.into_builder()))
+                }))
+            })
+        } else {
+            self
         }
-        self
     }
 
     /// Declare static z-axis stacked children.
     pub fn layers<IOE: IntoOptionElement + 'static, I: IntoIterator<Item = IOE>>(
-        mut self,
+        self,
         layers_options_option: impl Into<Option<I>>,
     ) -> Self
     where
         I::IntoIter: Send + 'static,
     {
         if let Some(layers_options) = layers_options_option.into() {
-            let apply_alignment = self.apply_alignment_wrapper();
-            self.raw_el = self
-                .raw_el
-                .children(layers_options.into_iter().map(move |layer_option| {
+            self.with_builder(|builder| {
+                builder.children(layers_options.into_iter().filter_map(move |layer_option| {
                     layer_option
                         .into_option_element()
-                        .map(|layer| Self::align_child(layer, apply_alignment))
-                }));
+                        .map(|layer| Self::setup_stack_child(layer.into_builder()))
+                }))
+            })
+        } else {
+            self
         }
-        self
     }
 
     /// Declare reactive z-axis stacked children.
-    pub fn layers_signal_vec<IOE: IntoOptionElement + 'static, S: SignalVec<Item = IOE> + Send + 'static>(
-        mut self,
+    pub fn layers_signal_vec<
+        IOE: IntoOptionElement + Clone + Send + Sync + 'static,
+        S: SignalVec<Item = IOE> + Send + Sync + 'static,
+    >(
+        self,
         layers_options_signal_vec_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(layers_options_signal_vec) = layers_options_signal_vec_option.into() {
-            let apply_alignment = self.apply_alignment_wrapper();
-            self.raw_el = self
-                .raw_el
-                .children_signal_vec(layers_options_signal_vec.map(move |layer_option| {
+            self.with_builder(|builder| {
+                builder.children_signal_vec(layers_options_signal_vec.filter_map(move |In(layer_option): In<IOE>| {
                     layer_option
                         .into_option_element()
-                        .map(|layer| Self::align_child(layer, apply_alignment))
-                }));
+                        .map(|layer| Self::setup_stack_child(layer.into_builder()))
+                }))
+            })
+        } else {
+            self
         }
-        self
-    }
-}
-
-impl<NodeType: Bundle> Alignable for Stack<NodeType> {
-    fn aligner(&mut self) -> Option<Aligner> {
-        Some(Aligner::Stack)
     }
 
-    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
-        &mut self.align
-    }
-
-    fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
-        Row::<NodeType>::apply_content_alignment(node, alignment, action)
-    }
-}
-
-impl<NodeType: Bundle> ChildAlignable for Stack<NodeType> {
-    fn update_node(mut node: Mut<Node>) {
-        node.grid_column = GridPlacement::start_end(1, 1);
-        node.grid_row = GridPlacement::start_end(1, 1);
-    }
-
-    fn apply_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
-        match alignment {
-            Alignment::Top => {
-                node.align_self = match action {
-                    AddRemove::Add => AlignSelf::Start,
-                    AddRemove::Remove => AlignSelf::DEFAULT,
-                }
-            }
-            Alignment::Bottom => {
-                node.align_self = match action {
-                    AddRemove::Add => AlignSelf::End,
-                    AddRemove::Remove => AlignSelf::DEFAULT,
-                }
-            }
-            Alignment::Left => {
-                node.justify_self = match action {
-                    AddRemove::Add => JustifySelf::Start,
-                    AddRemove::Remove => JustifySelf::DEFAULT,
-                }
-            }
-            Alignment::Right => {
-                node.justify_self = match action {
-                    AddRemove::Add => JustifySelf::End,
-                    AddRemove::Remove => JustifySelf::DEFAULT,
-                }
-            }
-            Alignment::CenterX => {
-                node.justify_self = match action {
-                    AddRemove::Add => JustifySelf::Center,
-                    AddRemove::Remove => JustifySelf::DEFAULT,
-                }
-            }
-            Alignment::CenterY => {
-                node.align_self = match action {
-                    AddRemove::Add => AlignSelf::Center,
-                    AddRemove::Remove => AlignSelf::DEFAULT,
-                }
-            }
-        }
+    /// Set up a child to be placed in the stack's single grid cell.
+    fn setup_stack_child(builder: jonmo::Builder) -> jonmo::Builder {
+        builder
+            .with_component::<Node>(|mut node| {
+                node.grid_column = GridPlacement::start_end(1, 1);
+                node.grid_row = GridPlacement::start_end(1, 1);
+            })
+            .insert(StackChild)
     }
 }

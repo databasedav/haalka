@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Simple counter.
 
 mod utils;
@@ -22,47 +21,63 @@ fn main() {
         .run();
 }
 
-#[derive(Component)]
-struct Counter(Mutable<i32>);
+#[derive(Component, Clone, Deref, DerefMut)]
+struct Counter(i32);
 
+#[rustfmt::skip]
 fn ui_root() -> impl Element {
-    let counter = Mutable::new(0);
+    let counter_holder = LazyEntity::new();
     El::<Node>::new()
         .with_node(|mut node| {
             node.height = Val::Percent(100.);
             node.width = Val::Percent(100.);
         })
+        .insert(Pickable::default())
         .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(
             Row::<Node>::new()
                 .with_node(|mut node| node.column_gap = Val::Px(15.0))
-                .item(counter_button(counter.clone(), "-", -1))
+                .insert(Counter(0))
+                .lazy_entity(counter_holder.clone())
+                .item(counter_button(counter_holder.clone(), "-", -1))
                 .item(
                     El::<Text>::new()
                         .text_font(TextFont::from_font_size(25.))
-                        .text_signal(counter.signal_ref(ToString::to_string).map(Text)),
+                        .text_signal(
+                            signal::from_component_changed::<Counter>(counter_holder.clone())
+                                .map_in(deref_copied)
+                                .map_in_ref(ToString::to_string)
+                                .map_in(Text)
+                                .map_in(Some),
+                        ),
                 )
-                .item(counter_button(counter.clone(), "+", 1))
-                .update_raw_el(move |raw_el| raw_el.insert(Counter(counter))),
+                .item(counter_button(counter_holder.clone(), "+", 1)),
         )
 }
 
-fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element {
-    let hovered = Mutable::new(false);
+fn counter_button(counter_holder: LazyEntity, label: &'static str, step: i32) -> impl Element {
+    let lazy_entity = LazyEntity::new();
     El::<Node>::new()
         .with_node(|mut node| node.width = Val::Px(45.0))
+        .insert((Pickable::default(), Hoverable))
         .align_content(Align::center())
         .border_radius(BorderRadius::MAX)
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
+        .lazy_entity(lazy_entity.clone())
         .background_color_signal(
-            hovered
-                .signal()
-                .map_bool(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
-                .map(BackgroundColor),
+            signal::from_entity(lazy_entity)
+                .has_component::<Hovered>()
+                .dedupe()
+                .map_bool_in(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
+                .map_in(BackgroundColor)
+                .map_in(Some),
         )
-        .hovered_sync(hovered)
-        .on_click(move || *counter.lock_mut() += step)
+        .on_click(move |_: In<_>, mut counters: Query<&mut Counter>| {
+            if let Ok(mut counter) = counters.get_mut(*counter_holder) {
+                **counter += step;
+            }
+        })
         .child(
             El::<Text>::new()
                 .text_font(TextFont::from_font_size(25.))

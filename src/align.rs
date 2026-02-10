@@ -1,405 +1,579 @@
-//! Simple alignment semantics ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`align`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/node/align.rs) and [`align_content`](https://github.com/MoonZoon/MoonZoon/blob/main/crates/zoon/src/node/align_content.rs).
+//! Simple alignment semantics ported from [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`align`](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/style/align.rs) and [`align_content`](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/style/align_content.rs)
 //!
 //! An [`Element`](`super::element::Element`) can be aligned in nine different areas in relation to
 //! its parent: top left, top center, top right, center left, center, center right, bottom left,
-//! bottom center, and bottom right. This provides a simple and clear to way to declare alignment as
-//! a thin layer on top of bevy_ui's flexbox implementation.
+//! bottom center, and bottom right. This provides a simple and clear way to declare alignment as
+//! a thin layer on top of bevy_ui's flexbox and grid implementations.
 //!
 //! [`Align`]s can be specified on individual elements using [`.align`](`Alignable::align`) and
 //! [`.align_signal`](`Alignable::align_signal`) or to all children using
 //! [`.align_content`](`Alignable::align_content`) and
 //! [`.align_content_signal`](`Alignable::align_content_signal`). See the [align](https://github.com/databasedav/haalka/blob/main/examples/align.rs)
-//! example for how each [`Align`] behaves for each built-in alignable type: [`El`], [`Column`],
-//! [`Row`], [`Stack`], and [`Grid`].
-//!
-//! # Notes
-//! [`Stack`] and [`Grid`] children (read: children that are either a [`Stack`] or a [`Grid`], not
-//! the children *of* [`Stack`]s or [`Grid`]s) do not behave as expected when aligned with a
-//! parent's [`.align_content`](`Alignable::align_content`) or
-//! [`.align_content_signal`](`Alignable::align_content_signal`); this is a known issue and one can
-//! simply align the [`Stack`] or [`Grid`] themselves as workaround.
+//! example for how each [`Align`] behaves for each built-in alignable type: [`El`](super::el::El),
+//! [`Column`](super::column::Column), [`Row`](super::row::Row), [`Stripe`](super::stripe::Stripe),
+//! [`Stack`](super::stack::Stack), and [`Grid`](super::grid::Grid).
 
-use std::{collections::BTreeSet, ops::Not};
-
-use bevy_ecs::prelude::*;
+use bevy_app::prelude::*;
+use bevy_ecs::{lifecycle::HookContext, prelude::*, world::DeferredWorld};
 use bevy_ui::prelude::*;
-use futures_signals::signal::{BoxSignal, Signal, SignalExt};
-
-use super::{
-    column::Column,
-    el::El,
-    element::ElementWrapper,
-    grid::Grid,
-    raw::{RawElWrapper, RawHaalkaEl},
-    row::Row,
-    stack::Stack,
+use jonmo::{
+    SignalProcessing,
+    signal::{Signal, SignalExt},
 };
 
-// TODO: replace moonzoon github links with docs.rs links once moonzoon crate published
-// TODO: create and link issue for Stack and Grid content alignment behavior
+use super::element::BuilderWrapper;
 
-/// Holder of composable [`Alignment`]s.
-#[derive(Clone, Default)]
-pub struct Align {
-    alignments: BTreeSet<Alignment>,
+/// Horizontal alignment axis.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug, Hash)]
+pub enum AlignX {
+    /// No horizontal alignment constraint (use default layout behavior).
+    #[default]
+    None,
+    /// Align to the left.
+    Left,
+    /// Align to the horizontal center.
+    Center,
+    /// Align to the right.
+    Right,
 }
 
-#[allow(missing_docs)]
+/// Vertical alignment axis.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug, Hash)]
+pub enum AlignY {
+    /// No vertical alignment constraint (use default layout behavior).
+    #[default]
+    None,
+    /// Align to the top.
+    Top,
+    /// Align to the vertical center.
+    Center,
+    /// Align to the bottom.
+    Bottom,
+}
+
+/// Component for self-alignment of an element within its parent. Applied to children and processed
+/// based on the parent's [`AlignmentHandler`].
+#[derive(Component, Clone, Copy, Default, PartialEq, Eq, Debug)]
+#[component(on_insert = on_alignment_insert, on_remove = on_alignment_remove)]
+pub struct Alignment {
+    /// Horizontal alignment.
+    pub x: AlignX,
+    /// Vertical alignment.
+    pub y: AlignY,
+}
+
+/// Component for content alignment (how a parent aligns its children). Applied to parents to
+/// control default alignment of all children.
+#[derive(Component, Clone, Copy, Default, PartialEq, Eq, Debug)]
+#[component(on_insert = on_content_alignment_insert, on_remove = on_content_alignment_remove)]
+pub struct ContentAlignment {
+    /// Horizontal content alignment.
+    pub x: AlignX,
+    /// Vertical content alignment.
+    pub y: AlignY,
+}
+
+/// Function signature for applying self-alignment to a child node.
+pub type ApplyAlignmentFn = fn(&mut Node, &Alignment);
+
+/// Function signature for applying content alignment to a parent node.
+pub type ApplyContentAlignmentFn = fn(&mut Node, &ContentAlignment);
+
+/// Function signature for resetting alignment styles when the component is removed.
+pub type ResetAlignmentFn = fn(&mut Node);
+
+/// Handler component that defines how self-alignment is applied to a child node.
+///
+/// This is the low-level component that drives alignment behavior. Users typically
+/// don't interact with this directly, instead use [`LayoutDirection`] which
+/// automatically installs the appropriate handlers.
+#[derive(Component, Clone, Copy)]
+pub struct AlignmentHandler {
+    /// Function to apply alignment to the node.
+    pub apply: ApplyAlignmentFn,
+    /// Function to reset alignment styles when [`Alignment`] is removed.
+    pub reset: ResetAlignmentFn,
+}
+
+/// Handler component that defines how content alignment is applied to a parent node.
+///
+/// This is the low-level component that drives content alignment behavior. Users typically
+/// don't interact with this directly, instead use [`LayoutDirection`] which
+/// automatically installs the appropriate handlers.
+#[derive(Component, Clone, Copy)]
+pub struct ContentAlignmentHandler {
+    /// Function to apply content alignment to the node.
+    pub apply: ApplyContentAlignmentFn,
+    /// Function to reset content alignment styles when [`ContentAlignment`] is removed.
+    pub reset: ResetAlignmentFn,
+}
+
+/// Simple, [haalka](crate)-managed layout direction options for container elements.
+///
+/// When inserted, it automatically installs the appropriate [`AlignmentHandler`] and
+/// [`ContentAlignmentHandler`] components via a component hook.
+///
+/// For custom alignment behavior, either:
+/// - Insert handlers directly without using this enum
+/// - Insert this enum, then replace the desired handlers with custom ones
+#[derive(Component, Clone, Copy, Default, PartialEq, Eq, Debug, Hash)]
+#[component(on_insert = on_layout_direction_insert)]
+pub enum LayoutDirection {
+    /// Vertical stacking layout (like [`Column`](super::column::Column)).
+    ///
+    /// - X-axis alignment uses `align_self`
+    /// - Y-axis alignment uses `margin.top`/`margin.bottom`
+    /// - Content X uses `align_items`, content Y uses `justify_content`
+    #[default]
+    Column,
+    /// Horizontal stacking layout (like [`Row`](super::row::Row)).
+    ///
+    /// - X-axis alignment uses `margin.left`/`margin.right`
+    /// - Y-axis alignment uses `align_self`
+    /// - Content X uses `justify_content`, content Y uses `align_items`
+    Row,
+    /// Grid/Stack layout (children can overlap in same cell).
+    ///
+    /// - X-axis alignment uses `justify_self`
+    /// - Y-axis alignment uses `align_self`
+    /// - Content uses same semantics as row
+    Grid,
+}
+
+/// Hook that installs appropriate handlers when [`LayoutDirection`] is inserted.
+fn on_layout_direction_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    // Reset children's alignment using the previous handler before installing the new one
+    if let Some(old_handler) = world.get::<AlignmentHandler>(entity).copied() {
+        let children: Vec<Entity> = world
+            .get::<Children>(entity)
+            .map(|c| c.iter().collect())
+            .unwrap_or_default();
+        for child in children {
+            if world.get::<Alignment>(child).is_some()
+                && let Some(mut node) = world.get_mut::<Node>(child)
+            {
+                (old_handler.reset)(&mut node);
+            }
+        }
+    }
+
+    let direction = world.get::<LayoutDirection>(entity).copied().unwrap();
+
+    let (alignment_handler, content_alignment_handler) = match direction {
+        LayoutDirection::Column => (
+            AlignmentHandler {
+                apply: column::apply_alignment,
+                reset: column::reset_alignment,
+            },
+            ContentAlignmentHandler {
+                apply: column::apply_content_alignment,
+                reset: column::reset_content_alignment,
+            },
+        ),
+        LayoutDirection::Row => (
+            AlignmentHandler {
+                apply: row::apply_alignment,
+                reset: row::reset_alignment,
+            },
+            ContentAlignmentHandler {
+                apply: row::apply_content_alignment,
+                reset: row::reset_content_alignment,
+            },
+        ),
+        LayoutDirection::Grid => (
+            AlignmentHandler {
+                apply: grid::apply_alignment,
+                reset: grid::reset_alignment,
+            },
+            ContentAlignmentHandler {
+                // Grid uses row semantics for content alignment
+                apply: row::apply_content_alignment,
+                reset: row::reset_content_alignment,
+            },
+        ),
+    };
+
+    world
+        .commands()
+        .entity(entity)
+        .insert((alignment_handler, content_alignment_handler));
+}
+
+/// Composable alignment builder. Used with [`.align`](`Alignable::align`) and related methods.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+pub struct Align {
+    x: AlignX,
+    y: AlignY,
+}
+
 impl Align {
+    /// Create a new empty alignment.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Center on both axes.
     pub fn center() -> Self {
-        Self::default().center_x().center_y()
+        Self {
+            x: AlignX::Center,
+            y: AlignY::Center,
+        }
     }
 
+    /// Center horizontally.
     pub fn center_x(mut self) -> Self {
-        self.alignments.insert(Alignment::CenterX);
-        self.alignments.remove(&Alignment::Left);
-        self.alignments.remove(&Alignment::Right);
+        self.x = AlignX::Center;
         self
     }
 
+    /// Center vertically.
     pub fn center_y(mut self) -> Self {
-        self.alignments.insert(Alignment::CenterY);
-        self.alignments.remove(&Alignment::Top);
-        self.alignments.remove(&Alignment::Bottom);
+        self.y = AlignY::Center;
         self
     }
 
+    /// Align to top.
     pub fn top(mut self) -> Self {
-        self.alignments.insert(Alignment::Top);
-        self.alignments.remove(&Alignment::CenterY);
-        self.alignments.remove(&Alignment::Bottom);
+        self.y = AlignY::Top;
         self
     }
 
+    /// Align to bottom.
     pub fn bottom(mut self) -> Self {
-        self.alignments.insert(Alignment::Bottom);
-        self.alignments.remove(&Alignment::CenterY);
-        self.alignments.remove(&Alignment::Top);
+        self.y = AlignY::Bottom;
         self
     }
 
+    /// Align to left.
     pub fn left(mut self) -> Self {
-        self.alignments.insert(Alignment::Left);
-        self.alignments.remove(&Alignment::CenterX);
-        self.alignments.remove(&Alignment::Right);
+        self.x = AlignX::Left;
         self
     }
 
+    /// Align to right.
     pub fn right(mut self) -> Self {
-        self.alignments.insert(Alignment::Right);
-        self.alignments.remove(&Alignment::CenterX);
-        self.alignments.remove(&Alignment::Left);
+        self.x = AlignX::Right;
         self
     }
-}
 
-/// Composable alignment variants. See [`Align`].
-#[allow(missing_docs)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub enum Alignment {
-    Top,
-    Bottom,
-    Left,
-    Right,
-    CenterX,
-    CenterY,
-}
-
-/// Holder for [`Align`] data. See [`Alignable`] and [`ChildAlignable`].
-pub enum AlignHolder {
-    /// Static
-    Align(Align),
-    /// Reactive
-    AlignSignal(BoxSignal<'static, Option<Align>>),
-}
-
-/// Whether to add or remove an [`Alignment`]. See [`Alignable`] and [`ChildAlignable`].
-#[allow(missing_docs)]
-pub enum AddRemove {
-    Add,
-    Remove,
-}
-
-fn register_align_signal<REW: RawElWrapper>(
-    element: REW,
-    align_signal: impl Signal<Item = Option<Vec<Alignment>>> + Send + 'static,
-    apply_alignment: fn(&mut Node, Alignment, AddRemove),
-) -> REW {
-    let mut last_alignments_option: Option<Vec<Alignment>> = None;
-    element.update_raw_el(|raw_el| {
-        raw_el.on_signal_with_component::<Option<Vec<Alignment>>, Node>(align_signal, move |mut node, aligns_option| {
-            if let Some(alignments) = aligns_option {
-                // TODO: confirm that this last alignment removal strategy is working as intended
-                if let Some(mut last_alignments) = last_alignments_option.take() {
-                    last_alignments.retain(|align| !alignments.contains(align));
-                    for alignment in last_alignments {
-                        apply_alignment(&mut node, alignment, AddRemove::Remove)
-                    }
-                }
-                for alignment in &alignments {
-                    apply_alignment(&mut node, *alignment, AddRemove::Add)
-                }
-                last_alignments_option = alignments.is_empty().not().then_some(alignments);
-            } else if let Some(last_aligns) = last_alignments_option.take() {
-                for align in last_aligns {
-                    apply_alignment(&mut node, align, AddRemove::Remove)
-                }
-            }
-        })
-    })
-}
-
-/// [`Alignable`] types can align themselves (although application of self alignment is managed by
-/// [`ChildAlignable`]) and their children.
-pub trait Alignable: RawElWrapper {
-    /// The [`Aligner`] of this type. Used for indirection in [`AlignabilityFacade`].
-    fn aligner(&mut self) -> Option<Aligner> {
-        None
+    /// Convert to the marker component representation.
+    fn to_alignment(self) -> Alignment {
+        Alignment { x: self.x, y: self.y }
     }
 
-    /// Mutable reference to the [`Align`] data of this type.
-    fn align_mut(&mut self) -> &mut Option<AlignHolder>;
+    /// Convert to the content alignment marker component representation.
+    fn to_content_alignment(self) -> ContentAlignment {
+        ContentAlignment { x: self.x, y: self.y }
+    }
+}
 
-    /// Statically align this element, itself. See [`Align`].
-    fn align(mut self, align_option: impl Into<Option<Align>>) -> Self
-    where
-        Self: Sized,
-    {
+/// Trait for elements that can be aligned and can align their content.
+///
+/// # Requirements
+/// For alignment methods to function:
+/// - **Self-alignment** ([`align`](Alignable::align), [`align_signal`](Alignable::align_signal)):
+///   The **parent** entity must have an [`AlignmentHandler`] component.
+/// - **Content alignment** ([`align_content`](Alignable::align_content),
+///   [`align_content_signal`](Alignable::align_content_signal)): The entity itself must have a
+///   [`ContentAlignmentHandler`] component.
+///
+/// The built-in element types ([`El`](super::el::El), [`Column`](super::column::Column),
+/// [`Row`](super::row::Row), [`Stack`](super::stack::Stack), [`Grid`](super::grid::Grid))
+/// automatically insert the appropriate handlers via their [`LayoutDirection`] component. For
+/// custom elements, either insert [`LayoutDirection`] or manually insert the handler components.
+pub trait Alignable: BuilderWrapper + Sized {
+    /// Statically align this element within its parent.
+    fn align(self, align_option: impl Into<Option<Align>>) -> Self {
         if let Some(align) = align_option.into() {
-            *self.align_mut() = Some(AlignHolder::Align(align));
+            let alignment = align.to_alignment();
+            self.with_builder(|builder| builder.insert(alignment))
+        } else {
+            self
         }
-        self
     }
 
-    /// Reactively align this element, itself. See [`Align`].
-    fn align_signal<S: Signal<Item = Option<Align>> + Send + Sync + 'static>(
-        mut self,
-        align_option_signal_option: impl Into<Option<S>>,
-    ) -> Self
+    /// Reactively align this element within its parent.
+    fn align_signal<S>(self, align_option_signal_option: impl Into<Option<S>>) -> Self
     where
-        Self: Sized,
+        S: Signal<Item = Option<Align>> + Send + Sync + 'static,
     {
         if let Some(align_option_signal) = align_option_signal_option.into() {
-            *self.align_mut() = Some(AlignHolder::AlignSignal(align_option_signal.boxed()));
+            self.with_builder(|builder| {
+                builder.component_signal(
+                    align_option_signal.map_in(|align_option| align_option.map(|align| align.to_alignment())),
+                )
+            })
+        } else {
+            self
         }
-        self
     }
 
-    /// Allows implementor to override the content alignment processing function. The `&self` can
-    /// be used to alter the alignment strategy based on data on the type itself. See
-    /// [`AlignabilityFacade::apply_alignment_wrapper`] for an example.
-    fn apply_content_alignment_wrapper(&self) -> fn(&mut Node, Alignment, AddRemove) {
-        Self::apply_content_alignment
-    }
-
-    /// How to modify the [`Node`] of this element given a content alignment and whether to add or
-    /// remove it.
-    fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove);
-
-    /// Statically align the children of this element. See [`Align`].
-    ///
-    /// # Notes
-    /// [`Stack`] and [`Grid`] children (read: children that are either a [`Stack`] or a [`Grid`],
-    /// not the children *of* [`Stack`]s or [`Grid`]s) do not behave as expected when aligned
-    /// with a parent's [`.align_content`](`Alignable::align_content`) or
-    /// [`.align_content_signal`](`Alignable::align_content_signal`); this is a known issue and one
-    /// can simply align the [`Stack`] or [`Grid`] themselves as workaround.
-    fn align_content(mut self, align_option: impl Into<Option<Align>>) -> Self {
+    /// Statically align the children of this element.
+    fn align_content(self, align_option: impl Into<Option<Align>>) -> Self {
         if let Some(align) = align_option.into() {
-            let apply_content_alignment = self.apply_content_alignment_wrapper();
-            self = self.update_raw_el(move |raw_el| {
-                raw_el.with_component::<Node>(move |mut node| {
-                    for alignment in align.alignments {
-                        apply_content_alignment(&mut node, alignment, AddRemove::Add);
-                    }
-                })
-            });
+            let content_alignment = align.to_content_alignment();
+            self.with_builder(|builder| builder.insert(content_alignment))
+        } else {
+            self
         }
-        self
     }
 
-    /// Reactively align the children of this element. See [`Align`].
-    ///
-    /// # Notes
-    /// [`Stack`] and [`Grid`] children (read: children that are either a [`Stack`] or a [`Grid`],
-    /// not the children *of* [`Stack`]s or [`Grid`]s) do not behave as expected when aligned
-    /// with a parent's [`.align_content`](`Alignable::align_content`) or
-    /// [`.align_content_signal`](`Alignable::align_content_signal`); this is a known issue and one
-    /// can simply align the [`Stack`] or [`Grid`] themselves as workaround.
-    fn align_content_signal<S: Signal<Item = Option<Align>> + Send + 'static>(
-        mut self,
-        align_option_signal_option: impl Into<Option<S>>,
-    ) -> Self {
+    /// Reactively align the children of this element.
+    fn align_content_signal<S>(self, align_option_signal_option: impl Into<Option<S>>) -> Self
+    where
+        S: Signal<Item = Option<Align>> + Send + Sync + 'static,
+    {
         if let Some(align_option_signal) = align_option_signal_option.into() {
-            let apply_content_alignment = self.apply_content_alignment_wrapper();
-            self = register_align_signal(
-                self,
-                align_option_signal
-                    .map(|align_option| align_option.map(|align| align.alignments.into_iter().collect())),
-                apply_content_alignment,
-            );
+            self.with_builder(|builder| {
+                builder.component_signal(
+                    align_option_signal.map_in(|align_option| align_option.map(|align| align.to_content_alignment())),
+                )
+            })
+        } else {
+            self
         }
-        self
     }
 }
 
-/// [`ChildAlignable`] types process and apply the [`Align`] data that their children specify to self align. This is an emulation of the [CSS child combinator](https://developer.mozilla.org/en-US/docs/Web/CSS/Child_combinator).
-pub trait ChildAlignable
-where
-    Self: 'static,
-{
-    /// Static [`Node`] modifications for children of this type.
-    fn update_node(_node: Mut<Node>) {} // only some require base updates
+/// Plugin that adds the alignment systems.
+pub fn plugin(app: &mut App) {
+    app.add_systems(
+        PostUpdate,
+        (
+            apply_self_alignment,
+            apply_self_alignment_on_parent_change,
+            apply_content_alignment,
+        )
+            .after(SignalProcessing),
+    );
+}
 
-    /// Allows implementor to override the self alignment processing function. The `&self`
-    /// can be used to alter the alignment strategy based on data on the type itself. See
-    /// [`AlignabilityFacade::apply_alignment_wrapper`] for an example.
-    fn apply_alignment_wrapper(&self) -> fn(&mut Node, Alignment, AddRemove) {
-        Self::apply_alignment
+/// System that applies self-alignment based on parent's alignment handler.
+#[allow(clippy::type_complexity)]
+fn apply_self_alignment(
+    mut data: Query<(&Alignment, &ChildOf, &mut Node), Or<(Changed<Alignment>, Added<Alignment>, Added<ChildOf>)>>,
+    handlers: Query<&AlignmentHandler>,
+) {
+    for (alignment, child_of, mut node) in &mut data {
+        if let Ok(handler) = handlers.get(child_of.parent()) {
+            (handler.apply)(&mut node, alignment);
+        }
     }
+}
 
-    /// How to modify the [`Node`] of children of this element given a self alignment and whether to
-    /// add or remove it.
-    fn apply_alignment(node: &mut Node, align: Alignment, action: AddRemove);
-
-    /// Align child based on its [`Align`] data and processing defined by the type of its parent.
-    fn align_child<Child: RawElWrapper + Alignable>(
-        mut child: Child,
-        apply_alignment: fn(&mut Node, Alignment, AddRemove),
-    ) -> Child {
-        child = child.update_raw_el(|raw_el| raw_el.with_component::<Node>(Self::update_node));
-        // TODO: this .take means that child can't be passed around parents without losing align
-        // info, but this can be easily added if desired
-        if let Some(align) = child.align_mut().take() {
-            match align {
-                AlignHolder::Align(align) => {
-                    child = child.update_raw_el(|raw_el| {
-                        raw_el.with_component::<Node>(move |mut node| {
-                            for align in align.alignments {
-                                apply_alignment(&mut node, align, AddRemove::Add)
-                            }
-                        })
-                    })
-                }
-                AlignHolder::AlignSignal(align_option_signal) => {
-                    child = register_align_signal(
-                        child,
-                        {
-                            align_option_signal
-                                .map(|align_option| align_option.map(|align| align.alignments.into_iter().collect()))
-                        },
-                        apply_alignment,
-                    )
-                }
+/// System that re-applies self-alignment when parent's alignment handler changes.
+fn apply_self_alignment_on_parent_change(
+    mut children_query: Query<(&Alignment, &mut Node)>,
+    changed_parents: Query<(&AlignmentHandler, &Children), Changed<AlignmentHandler>>,
+) {
+    for (handler, children) in &changed_parents {
+        for &child in children {
+            if let Ok((alignment, mut node)) = children_query.get_mut(child) {
+                (handler.apply)(&mut node, alignment);
             }
         }
-        child
     }
 }
 
-impl<EW: ElementWrapper> Alignable for EW {
-    fn aligner(&mut self) -> Option<Aligner> {
-        self.element_mut().aligner()
-    }
+/// Hook called when Alignment component is inserted, immediately applying alignment.
+fn on_alignment_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    let handler = world
+        .get::<ChildOf>(entity)
+        .and_then(|child_of| world.get::<AlignmentHandler>(child_of.parent()).copied());
 
-    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
-        self.element_mut().align_mut()
-    }
-
-    fn apply_content_alignment(node: &mut Node, alignment: Alignment, action: AddRemove) {
-        EW::EL::apply_content_alignment(node, alignment, action);
-    }
-}
-
-impl<EW: ElementWrapper + 'static> ChildAlignable for EW {
-    fn update_node(node: Mut<Node>) {
-        EW::EL::update_node(node);
-    }
-
-    fn apply_alignment(node: &mut Node, align: Alignment, action: AddRemove) {
-        EW::EL::apply_alignment(node, align, action);
-    }
-}
-
-/// Exhaustive variants of alignable definitions; used for type indirection in
-/// [`AlignabilityFacade`].
-#[derive(Clone, Copy)]
-pub enum Aligner {
-    /// [`El`](`super::el::El`)
-    El,
-    /// [`Column`](`super::column::Column`)
-    Column,
-    /// [`Row`](`super::row::Row`)
-    Row,
-    /// [`Stack`](`super::stack::Stack`)
-    Stack,
-    /// [`Grid`](`super::grid::Grid`)
-    Grid,
-    // TODO: allow specifying custom alignment functions
-}
-
-/// Provides type indirection for built-in alignable types, enabling simple "type erasure" via
-/// [`TypeEraseable::type_erase`](`super::element::TypeEraseable::type_erase`).
-pub struct AlignabilityFacade {
-    raw_el: RawHaalkaEl,
-    align: Option<AlignHolder>,
-    aligner: Aligner,
-}
-
-impl<NodeType: Bundle> From<NodeType> for AlignabilityFacade {
-    fn from(node_bundle: NodeType) -> Self {
-        AlignabilityFacade::new(RawHaalkaEl::from(node_bundle), None, Aligner::El)
-    }
-}
-
-impl AlignabilityFacade {
-    pub(crate) fn new(raw_el: RawHaalkaEl, align: Option<AlignHolder>, aligner: Aligner) -> Self {
-        Self { raw_el, align, aligner }
-    }
-}
-
-impl RawElWrapper for AlignabilityFacade {
-    fn raw_el_mut(&mut self) -> &mut RawHaalkaEl {
-        &mut self.raw_el
-    }
-}
-
-impl Alignable for AlignabilityFacade {
-    fn aligner(&mut self) -> Option<Aligner> {
-        Some(self.aligner)
-    }
-
-    fn align_mut(&mut self) -> &mut Option<AlignHolder> {
-        &mut self.align
-    }
-
-    fn apply_content_alignment_wrapper(&self) -> fn(&mut Node, Alignment, AddRemove) {
-        match self.aligner {
-            Aligner::El => El::<Node>::apply_content_alignment,
-            Aligner::Column => Column::<Node>::apply_content_alignment,
-            Aligner::Row => Row::<Node>::apply_content_alignment,
-            Aligner::Stack => Stack::<Node>::apply_content_alignment,
-            Aligner::Grid => Grid::<Node>::apply_content_alignment,
+    if let Some(handler) = handler {
+        let alignment = world.get::<Alignment>(entity).copied().unwrap();
+        if let Some(mut node) = world.get_mut::<Node>(entity) {
+            (handler.apply)(&mut node, &alignment);
         }
     }
-
-    fn apply_content_alignment(_node: &mut Node, _alignment: Alignment, _action: AddRemove) {}
 }
 
-impl ChildAlignable for AlignabilityFacade {
-    fn apply_alignment_wrapper(&self) -> fn(&mut Node, Alignment, AddRemove) {
-        match self.aligner {
-            Aligner::El => El::<Node>::apply_alignment,
-            Aligner::Column => Column::<Node>::apply_alignment,
-            Aligner::Row => Row::<Node>::apply_alignment,
-            Aligner::Stack => Stack::<Node>::apply_alignment,
-            Aligner::Grid => Grid::<Node>::apply_alignment,
+/// Hook called when Alignment component is removed, resetting node properties.
+fn on_alignment_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    let handler = world
+        .get::<ChildOf>(entity)
+        .and_then(|child_of| world.get::<AlignmentHandler>(child_of.parent()).copied());
+
+    if let (Some(handler), Some(mut node)) = (handler, world.get_mut::<Node>(entity)) {
+        (handler.reset)(&mut node);
+    }
+}
+
+/// System that applies content alignment to parent nodes.
+#[allow(clippy::type_complexity)]
+fn apply_content_alignment(
+    mut data: Query<
+        (&ContentAlignment, &ContentAlignmentHandler, &mut Node),
+        Or<(
+            Changed<ContentAlignment>,
+            Added<ContentAlignment>,
+            Changed<ContentAlignmentHandler>,
+        )>,
+    >,
+) {
+    for (content_alignment, handler, mut node) in &mut data {
+        (handler.apply)(&mut node, content_alignment);
+    }
+}
+
+/// Hook called when ContentAlignment component is inserted, immediately applying content alignment.
+fn on_content_alignment_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    let handler = world.get::<ContentAlignmentHandler>(entity).copied();
+    if let Some(handler) = handler {
+        let content_alignment = world.get::<ContentAlignment>(entity).copied().unwrap();
+        if let Some(mut node) = world.get_mut::<Node>(entity) {
+            (handler.apply)(&mut node, &content_alignment);
         }
     }
+}
 
-    fn apply_alignment(_node: &mut Node, _align: Alignment, _action: AddRemove) {}
+/// Hook called when ContentAlignment component is removed, resets node properties.
+fn on_content_alignment_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    let handler = world.get::<ContentAlignmentHandler>(entity).copied();
+
+    if let (Some(handler), Some(mut node)) = (handler, world.get_mut::<Node>(entity)) {
+        (handler.reset)(&mut node);
+    }
+}
+
+/// Column alignment implementations.
+pub mod column {
+    use super::*;
+
+    /// Apply column-style self-alignment to a child node.
+    ///
+    /// X-axis uses `align_self`, Y-axis uses `margin.top`/`margin.bottom`.
+    pub fn apply_alignment(node: &mut Node, alignment: &Alignment) {
+        node.align_self = match alignment.x {
+            AlignX::None => AlignSelf::DEFAULT,
+            AlignX::Left => AlignSelf::Start,
+            AlignX::Center => AlignSelf::Center,
+            AlignX::Right => AlignSelf::End,
+        };
+
+        (node.margin.top, node.margin.bottom) = match alignment.y {
+            AlignY::None => (Val::ZERO, Val::ZERO),
+            AlignY::Top => (Val::ZERO, Val::Auto),
+            AlignY::Center => (Val::Auto, Val::Auto),
+            AlignY::Bottom => (Val::Auto, Val::ZERO),
+        };
+    }
+
+    /// Apply column-style content alignment to a parent node.
+    ///
+    /// X-axis uses `align_items`, Y-axis uses `justify_content`.
+    pub fn apply_content_alignment(node: &mut Node, content_alignment: &ContentAlignment) {
+        node.align_items = match content_alignment.x {
+            AlignX::None => AlignItems::DEFAULT,
+            AlignX::Left => AlignItems::Start,
+            AlignX::Center => AlignItems::Center,
+            AlignX::Right => AlignItems::End,
+        };
+        node.justify_content = match content_alignment.y {
+            AlignY::None => JustifyContent::DEFAULT,
+            AlignY::Top => JustifyContent::Start,
+            AlignY::Center => JustifyContent::Center,
+            AlignY::Bottom => JustifyContent::End,
+        };
+    }
+
+    /// Reset column-style alignment on a child node.
+    pub fn reset_alignment(node: &mut Node) {
+        node.align_self = AlignSelf::DEFAULT;
+        node.margin.top = Val::ZERO;
+        node.margin.bottom = Val::ZERO;
+    }
+
+    /// Reset column-style content alignment on a parent node.
+    pub fn reset_content_alignment(node: &mut Node) {
+        node.align_items = AlignItems::DEFAULT;
+        node.justify_content = JustifyContent::DEFAULT;
+    }
+}
+
+/// Row alignment implementations.
+pub mod row {
+    use super::*;
+
+    /// Apply row-style self-alignment to a child node.
+    ///
+    /// X-axis uses `margin.left`/`margin.right`, Y-axis uses `align_self`.
+    pub fn apply_alignment(node: &mut Node, alignment: &Alignment) {
+        (node.margin.left, node.margin.right) = match alignment.x {
+            AlignX::None => (Val::ZERO, Val::ZERO),
+            AlignX::Left => (Val::ZERO, Val::Auto),
+            AlignX::Center => (Val::Auto, Val::Auto),
+            AlignX::Right => (Val::Auto, Val::ZERO),
+        };
+
+        node.align_self = match alignment.y {
+            AlignY::None => AlignSelf::DEFAULT,
+            AlignY::Top => AlignSelf::Start,
+            AlignY::Center => AlignSelf::Center,
+            AlignY::Bottom => AlignSelf::End,
+        };
+    }
+
+    /// Apply row-style content alignment to a parent node.
+    ///
+    /// X-axis uses `justify_content`, Y-axis uses `align_items`.
+    pub fn apply_content_alignment(node: &mut Node, content_alignment: &ContentAlignment) {
+        node.justify_content = match content_alignment.x {
+            AlignX::None => JustifyContent::DEFAULT,
+            AlignX::Left => JustifyContent::Start,
+            AlignX::Center => JustifyContent::Center,
+            AlignX::Right => JustifyContent::End,
+        };
+        node.align_items = match content_alignment.y {
+            AlignY::None => AlignItems::DEFAULT,
+            AlignY::Top => AlignItems::Start,
+            AlignY::Center => AlignItems::Center,
+            AlignY::Bottom => AlignItems::End,
+        };
+    }
+
+    /// Reset row-style alignment on a child node.
+    pub fn reset_alignment(node: &mut Node) {
+        node.margin.left = Val::ZERO;
+        node.margin.right = Val::ZERO;
+        node.align_self = AlignSelf::DEFAULT;
+    }
+
+    /// Reset row-style content alignment on a parent node.
+    pub fn reset_content_alignment(node: &mut Node) {
+        node.justify_content = JustifyContent::DEFAULT;
+        node.align_items = AlignItems::DEFAULT;
+    }
+}
+
+/// Grid alignment implementations.
+pub mod grid {
+    use super::*;
+
+    /// Apply grid-style self-alignment to a child node.
+    ///
+    /// X-axis uses `justify_self`, Y-axis uses `align_self`.
+    pub fn apply_alignment(node: &mut Node, alignment: &Alignment) {
+        node.justify_self = match alignment.x {
+            AlignX::None => JustifySelf::DEFAULT,
+            AlignX::Left => JustifySelf::Start,
+            AlignX::Center => JustifySelf::Center,
+            AlignX::Right => JustifySelf::End,
+        };
+        node.align_self = match alignment.y {
+            AlignY::None => AlignSelf::DEFAULT,
+            AlignY::Top => AlignSelf::Start,
+            AlignY::Center => AlignSelf::Center,
+            AlignY::Bottom => AlignSelf::End,
+        };
+    }
+
+    /// Reset grid-style alignment on a child node.
+    pub fn reset_alignment(node: &mut Node) {
+        node.justify_self = JustifySelf::DEFAULT;
+        node.align_self = AlignSelf::DEFAULT;
+    }
+
+    // Grid uses row semantics for content alignment, so no separate functions needed.
 }

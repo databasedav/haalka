@@ -4,6 +4,33 @@ the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## unreleased
 
+### changed
+
+- upgraded to bevy 0.17
+- [jonmo](https://github.com/databasedav/jonmo) is now the default signals backend for haalka, the deprecated futures-signals backend is still available via feature flags
+    - to migrate seamlessly:
+        - update your haalka installation by disabling default features and adding the appropriate futures-signals feature, likely either `futures_signals_ui` or `futures_signals_text_input`
+        - replace `HaalkaPlugin` with `HaalkaFuturesSignalsPlugin`
+        - replace your haalka imports with `haalka::futures_signals`, e.g. `use haalka::prelude::*` should become `use haalka::futures_signals::prelude::*`
+        - once your application is functional again with the bevy 0.16 to 0.17 changes, re-add `HaalkaPlugin` and migrate your application logic to jonmo signals, which are semantically identical to futures-signals but use ECS components and systems as data sources; for example, all of your `Mutable`s will become `Component`s or `Resource`s; see the examples' diffs for reference migrations and the `futures_signals_jonmo_compat` example for how to integrate both signals backends; finally, feel free to ask questions in the [discord](https://discord.com/channels/691052431525675048/1343672205233360999)
+        - remove the futures-signals features and re-enable default features if desired
+- component and system based alignment management instead of baking it into alignable structs at compile time, high level API unchanged, see `align.rs`
+- `NodeBuilder` and `RawHaalkaEl` consolidated into jonmo's `jonmo::Builder`, `.update_raw_el` becomes `.with_builder`
+- `CursorOnHover` renamed to `Cursor`
+- `PointerEventAware`, `Cursor`, and `UiRootable` methods no longer insert `Pickable::default()` into the element, it must now be managed by the user
+- `PointerEventAware` systems run in `PreUpdate` after `PickingSystems::Last` instead of original `Update`
+
+### added
+
+- `Hoverable`, `Pressable`, and `Draggable` marker components for enabling maintaining of `Hovered`, `Pressed`, and `Dragged` components
+- `Stripe` base element, whose flex direction can be set dynamically
+- normalized `PointerEventAware` methods across hovered, clicked, pressed, and dragged, all with `_disableable`, `_disableable_signal`, `_change`, `_change_disableable`, `_change_disableable_signal`, and `_throttled` variants
+- panics/warnings that cloning base `Element` structs is a bug
+
+### removed
+
+- `impl_haalka_methods!` call for `Button` node type
+
 # 0.5.1 (2025-07-05)
 
 ### fixed

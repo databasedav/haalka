@@ -19,35 +19,60 @@ fn main() {
             ),
         )
         .add_systems(Update, shifter)
+        .insert_resource(Shifted(false))
         .run();
 }
 
 const LETTER_SIZE: f32 = 54.167; // 65 / 1.2
-const COMPUTED_SIZE: f32 = 66.; // TODO: how/y tho ?
+const CELL_SIZE: f32 = 66.;
+const NUM_VISIBLE_COLUMNS: usize = 5;
 
-static SHIFTED: LazyLock<Mutable<bool>> = LazyLock::new(default);
+#[derive(Resource, Clone, Copy, Deref, DerefMut)]
+struct Shifted(bool);
 
 fn letter(letter: String, color: Color) -> impl Element {
-    El::<Text>::new()
-        .text_font(TextFont::from_font_size(LETTER_SIZE))
-        .text_color(TextColor(color))
-        .text(Text::new(letter))
+    El::<Node>::new()
+        .with_node(|mut node| {
+            node.width = Val::Px(CELL_SIZE);
+            node.height = Val::Px(CELL_SIZE);
+        })
+        .align_content(Align::center())
+        .child(
+            El::<Text>::new()
+                .text_font(TextFont::from_font_size(LETTER_SIZE))
+                .text_color(TextColor(color))
+                .text(Text::new(letter)),
+        )
 }
 
 fn letter_column(rotate: usize, color: Color) -> impl Element {
-    let hovered = Mutable::new(false);
+    let lazy_entity = LazyEntity::new();
+    let hovered = signal::from_entity(lazy_entity.clone())
+        .has_component::<Hovered>()
+        .dedupe();
+    let shifted = signal::from_resource_changed::<Shifted>().map_in(deref_copied);
     Column::<Node>::new()
-        .with_node(|mut node| node.height = Val::Px(5. * COMPUTED_SIZE))
-        .mutable_viewport(haalka::prelude::Axis::Vertical)
-        .on_scroll_with_system_disableable_signal(
+        .lazy_entity(lazy_entity)
+        .insert((Pickable::default(), Hoverable))
+        .with_node(|mut node| {
+            node.width = Val::Px(CELL_SIZE);
+            node.height = Val::Px(5. * CELL_SIZE);
+        })
+        .mutable_viewport(Overflow::scroll_y())
+        .on_scroll_disableable_signal(
             BasicScrollHandler::new()
                 .direction(ScrollDirection::Vertical)
-                .pixels(COMPUTED_SIZE)
+                .pixels(CELL_SIZE)
                 .into_system(),
-            signal::or(signal::not(hovered.signal()), SHIFTED.signal()),
+            signal::any!(hovered.not(), shifted.clone()),
         )
-        .with_scroll_position(move |mut scroll_position| scroll_position.offset_y = COMPUTED_SIZE * rotate as f32)
-        .hovered_sync(hovered)
+        .cursor_signal(
+            shifted
+                .map_bool_in(|| SystemCursorIcon::EwResize, || SystemCursorIcon::NsResize)
+                .map_in(CursorIcon::System)
+                .dedupe(),
+        )
+        .with_scroll_position(move |mut scroll_position| scroll_position.y = CELL_SIZE * rotate as f32)
         .items(
             "abcdefghijklmnopqrstuvwxyz"
                 .chars()
@@ -56,30 +81,41 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
 }
 
 fn ui_root() -> impl Element {
-    let hovered = Mutable::new(false);
+    let lazy_entity = LazyEntity::new();
+    let hovered = signal::from_entity(lazy_entity.clone())
+        .has_component::<Hovered>()
+        .dedupe();
+    let shifted = signal::from_resource_changed::<Shifted>().map_in(deref_copied);
     El::<Node>::new()
         .with_node(|mut node| {
             node.width = Val::Percent(100.);
             node.height = Val::Percent(100.);
         })
+        .insert(Pickable::default())
+        .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(
             Row::<Node>::new()
+                .lazy_entity(lazy_entity)
+                .insert((Pickable::default(), Hoverable))
                 .with_node(|mut node| {
-                    node.width = Val::Px(300.);
-                    node.column_gap = Val::Px(30.);
-                    node.padding = UiRect::horizontal(Val::Px(7.5));
+                    node.width = Val::Px(CELL_SIZE * NUM_VISIBLE_COLUMNS as f32);
                 })
-                .mutable_viewport(haalka::prelude::Axis::Horizontal)
-                .on_scroll_with_system_disableable_signal(
+                .mutable_viewport(Overflow::scroll_x())
+                .on_scroll_disableable_signal(
                     BasicScrollHandler::new()
                         .direction(ScrollDirection::Horizontal)
                         // TODO: special handler for auto discrete like rectray https://github.com/mintlu8/bevy-rectray/blob/main/examples/scroll_discrete.rs
-                        .pixels(63.)
+                        .pixels(CELL_SIZE)
                         .into_system(),
-                    signal::not(signal::and(hovered.signal(), SHIFTED.signal())),
+                    signal::all!(hovered, shifted.clone()).not(),
                 )
-                .hovered_sync(hovered)
+                .cursor_signal(
+                    shifted
+                        .map_bool_in(|| SystemCursorIcon::EwResize, || SystemCursorIcon::NsResize)
+                        .map_in(CursorIcon::System)
+                        .dedupe(),
+                )
                 .items(
                     [
                         bevy::color::palettes::css::RED,
@@ -97,11 +133,11 @@ fn ui_root() -> impl Element {
         )
 }
 
-fn shifter(keys: Res<ButtonInput<KeyCode>>) {
+fn shifter(keys: Res<ButtonInput<KeyCode>>, mut shifted: ResMut<Shifted>) {
     if keys.just_pressed(KeyCode::ShiftLeft) || keys.just_pressed(KeyCode::ShiftRight) {
-        SHIFTED.set_neq(true);
+        **shifted = true;
     } else if keys.just_released(KeyCode::ShiftLeft) || keys.just_released(KeyCode::ShiftRight) {
-        SHIFTED.set_neq(false);
+        **shifted = false;
     }
 }
 

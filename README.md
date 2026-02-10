@@ -2,7 +2,7 @@
 
 [![Crates.io Version](https://img.shields.io/crates/v/haalka?style=for-the-badge)](https://crates.io/crates/haalka)
 [![Docs.rs](https://img.shields.io/docsrs/haalka?style=for-the-badge)](https://docs.rs/haalka)
-[![Following released Bevy versions](https://img.shields.io/badge/Bevy%20tracking-released%20version-lightblue?style=for-the-badge)](https://bevyengine.org/learn/quick-start/plugin-development/#main-branch-tracking)
+[![Following released Bevy versions](https://img.shields.io/badge/Bevy%20tracking-0.16-lightblue?style=for-the-badge)](https://bevyengine.org/learn/quick-start/plugin-development/#main-branch-tracking)
 
 ```text
 in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "easy"
@@ -46,7 +46,7 @@ use haalka::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins, HaalkaPlugin))
+        .add_plugins((DefaultPlugins, HaalkaPlugin::new()))
         .add_systems(
             Startup,
             (
@@ -59,47 +59,62 @@ fn main() {
         .run();
 }
 
-#[derive(Component)]
-struct Counter(Mutable<i32>);
+#[derive(Component, Clone, Deref, DerefMut)]
+struct Counter(i32);
 
 fn ui_root() -> impl Element {
-    let counter = Mutable::new(0);
+    let counter_holder = LazyEntity::new();
     El::<Node>::new()
         .with_node(|mut node| {
             node.height = Val::Percent(100.);
             node.width = Val::Percent(100.);
         })
+        .insert(Pickable::default())
         .cursor(CursorIcon::default())
         .align_content(Align::center())
         .child(
             Row::<Node>::new()
                 .with_node(|mut node| node.column_gap = Val::Px(15.0))
-                .item(counter_button(counter.clone(), "-", -1))
+                .insert(Counter(0))
+                .lazy_entity(counter_holder.clone())
+                .item(counter_button(counter_holder.clone(), "-", -1))
                 .item(
                     El::<Text>::new()
                         .text_font(TextFont::from_font_size(25.))
-                        .text_signal(counter.signal_ref(ToString::to_string).map(Text)),
+                        .text_signal(
+                            signal::from_component_changed::<Counter>(counter_holder.clone())
+                                .map_in(deref_copied)
+                                .map_in_ref(ToString::to_string)
+                                .map_in(Text)
+                                .map_in(Some),
+                        ),
                 )
-                .item(counter_button(counter.clone(), "+", 1))
-                .update_raw_el(move |raw_el| raw_el.insert(Counter(counter))),
+                .item(counter_button(counter_holder.clone(), "+", 1)),
         )
 }
 
-fn counter_button(counter: Mutable<i32>, label: &str, step: i32) -> impl Element {
-    let hovered = Mutable::new(false);
+fn counter_button(counter_holder: LazyEntity, label: &'static str, step: i32) -> impl Element {
+    let lazy_entity = LazyEntity::new();
     El::<Node>::new()
         .with_node(|mut node| node.width = Val::Px(45.0))
+        .insert((Pickable::default(), Hoverable))
         .align_content(Align::center())
         .border_radius(BorderRadius::MAX)
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
+        .lazy_entity(lazy_entity.clone())
         .background_color_signal(
-            hovered
-                .signal()
-                .map_bool(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
-                .map(BackgroundColor),
+            signal::from_entity(lazy_entity)
+                .has_component::<Hovered>()
+                .dedupe()
+                .map_bool_in(|| Color::hsl(300., 0.75, 0.85), || Color::hsl(300., 0.75, 0.75))
+                .map_in(BackgroundColor)
+                .map_in(Some),
         )
-        .hovered_sync(hovered)
-        .on_click(move || *counter.lock_mut() += step)
+        .on_click(move |_: In<_>, mut counters: Query<&mut Counter>| {
+            if let Ok(mut counter) = counters.get_mut(*counter_holder) {
+                **counter += step;
+            }
+        })
         .child(
             El::<Text>::new()
                 .text_font(TextFont::from_font_size(25.))
@@ -122,11 +137,11 @@ All examples are compiled to wasm for both webgl2 and webgpu (check [compatibili
 
 - [**`button`**](https://github.com/databasedav/haalka/blob/main/examples/button.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/button/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/button/)
 
-    a basic button, port of <https://github.com/bevyengine/bevy/blob/main/examples/ui/button.rs>
+    a basic button, port of <https://github.com/bevyengine/bevy/blob/b176e1888c04b6c37035b85c115ad3a1266c22dd/examples/ui/button.rs>
 
 - [**`align`**](https://github.com/databasedav/haalka/blob/main/examples/align.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/align/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/align/)
 
-    alignment API demo, port of <https://github.com/MoonZoon/MoonZoon/tree/main/examples/align> and <https://github.com/MoonZoon/MoonZoon/tree/main/examples/align_content>
+    alignment API demo, port of <https://github.com/MoonZoon/MoonZoon/tree/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/examples/align> and <https://github.com/MoonZoon/MoonZoon/tree/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/examples/align_content>
 
 - [**`scroll`**](https://github.com/databasedav/haalka/blob/main/examples/scroll.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/scroll/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/scroll/)
 

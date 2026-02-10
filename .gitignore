@@ -7,3 +7,5 @@ rust-toolchain.toml
 .cargo
 examples/test.rs
 repo_prompt_input.md
+*.code-workspace
+scripts/
