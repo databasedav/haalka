@@ -2,6 +2,8 @@ use bevy_camera::visibility::*;
 #[allow(unused_imports)]
 use bevy_ecs::prelude::*;
 #[allow(unused_imports)]
+use bevy_text::LineHeight;
+#[allow(unused_imports)]
 use futures_signals::signal::Signal;
 #[allow(unused_imports)]
 use paste::paste;
@@ -152,6 +154,7 @@ cfg_if::cfg_if! {
                                 text_color: TextColor,
                                 text_shadow: TextShadow,
                                 text_node_flags: TextNodeFlags,
+                                line_height: LineHeight,
                                 content_size: ContentSize,
                                 node: Node,
                                 computed_node: ComputedNode,
