@@ -41,10 +41,8 @@ pub struct Viewport {
 }
 
 // TODO: should not fire when scrolling doesn't actually change the viewport
-/// [`Component`] for holding the [`Scene`] and [`Viewport`]. Also an [`Event`] which is
-/// [`Trigger`]ed when the [`Viewport`] or [`Scene`] of a [`MutableViewport`] changes; only entities
-/// with the [`OnViewportLocationChange`] component receive this event.
-#[derive(Component, Event, Default)]
+/// [`Component`] for holding the [`Scene`] and [`Viewport`].
+#[derive(Component, Default)]
 pub struct MutableViewport {
     #[allow(missing_docs)]
     pub scene: Scene,
@@ -52,13 +50,17 @@ pub struct MutableViewport {
     pub viewport: Viewport,
 }
 
+/// [`EntityEvent`] triggered when the [`Viewport`] or [`Scene`] of a [`MutableViewport`] changes;
+/// only entities with the [`OnViewportLocationChange`] component receive this event.
 #[derive(EntityEvent)]
-struct MutableViewportEvent {
-    entity: Entity,
-    mutable_viewport: MutableViewport,
+pub struct MutableViewportEvent {
+    /// The entity whose viewport changed.
+    pub entity: Entity,
+    /// The updated viewport data.
+    pub mutable_viewport: MutableViewport,
 }
 
-/// [`MutableViewport`]s with this [`Component`] receive [`MutableViewport`] events.
+/// [`MutableViewport`]s with this [`Component`] receive [`MutableViewportEvent`] events.
 #[derive(Component)]
 pub struct OnViewportLocationChange;
 

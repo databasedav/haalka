@@ -8,14 +8,10 @@
 in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "easy"
 ```
 
-[haalka](https://github.com/databasedav/haalka) is an ergonomic reactive [Bevy](https://github.com/bevyengine/bevy) UI library powered by the incredible [FRP](https://en.wikipedia.org/wiki/Functional_reactive_programming) signals of [futures-signals](https://github.com/Pauan/rust-signals) and the convenient async ECS of [bevy-async-ecs](https://github.com/dlom/bevy-async-ecs) with API ported from web UI libraries [MoonZoon](https://github.com/MoonZoon/MoonZoon) and [Dominator](https://github.com/Pauan/rust-dominator).
-
-While haalka is primarily targeted at UI and provides high level UI abstractions as such, its [core abstraction](https://docs.rs/haalka/latest/haalka/struct.RawHaalkaEl.html) can be used to manage signals-powered reactivity for any entity, not just [`bevy_ui` nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs).
+[haalka](https://github.com/databasedav/haalka) is an ergonomic reactive [Bevy](https://github.com/bevyengine/bevy) UI library powered by the [FRP](https://en.wikipedia.org/wiki/Functional_reactive_programming) signals of [jonmo](https://github.com/databasedav/jonmo) with API ported from web UI libraries [MoonZoon](https://github.com/MoonZoon/MoonZoon) and [Dominator](https://github.com/Pauan/rust-dominator).
 
 ## assorted features
 
-- signals integration for all entities, components, and children
-    - constant time reactive updates for collections via futures-signals' [`MutableVec`](https://docs.rs/futures-signals/latest/futures_signals/signal_vec/struct.MutableVec.html) and [`MutableBTreeMap`](https://docs.rs/futures-signals/latest/futures_signals/signal_map/struct.MutableBTreeMap.html)
 - simple high-level alignment semantics ported from MoonZoon (see [align example](https://databasedav.github.io/haalka/examples/webgl2/align/) below)
 - pointer event handling methods
     - hovered change methods (including web-style [`Enter`](https://docs.rs/haalka/latest/haalka/pointer_event_aware/struct.Enter.html) and [`Leave`](https://docs.rs/haalka/latest/haalka/pointer_event_aware/struct.Leave.html) events)
@@ -96,10 +92,12 @@ fn ui_root() -> impl Element {
 fn counter_button(counter_holder: LazyEntity, label: &'static str, step: i32) -> impl Element {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
-        .with_node(|mut node| node.width = Val::Px(45.0))
+        .with_node(|mut node| {
+            node.width = Val::Px(45.0);
+            node.border_radius = BorderRadius::MAX;
+        })
         .insert((Pickable::default(), Hoverable))
         .align_content(Align::center())
-        .border_radius(BorderRadius::MAX)
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .lazy_entity(lazy_entity.clone())
         .background_color_signal(
@@ -195,6 +193,10 @@ All examples are compiled to wasm for both webgl2 and webgpu (check [compatibili
 
     scrollable buttons, mutable viewport, text input reactivity
 
+- [**`futures_signals_jonmo_compat`**](https://github.com/databasedav/haalka/blob/main/examples/futures_signals_jonmo_compat.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/futures_signals_jonmo_compat/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/futures_signals_jonmo_compat/)
+
+    demonstrates that both futures-signals and jonmo signals backends can be used together
+
 Or run them locally with `cargo`.
 ```bash
 cargo run --example counter
@@ -214,6 +216,7 @@ cargo run --example inventory
 cargo run --example healthbar
 cargo run --example responsive_menu
 cargo run --example character_editor
+cargo run --example futures_signals_jonmo_compat --features futures_signals_ui
 ```
 Or with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 

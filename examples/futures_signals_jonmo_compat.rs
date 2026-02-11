@@ -46,6 +46,7 @@ fn futures_signals_button() -> impl Element {
             node.width = Val::Px(150.0);
             node.height = Val::Px(65.);
             node.border = UiRect::all(Val::Px(5.0));
+            node.border_radius = BorderRadius::MAX;
         })
         .align_content(Align::center())
         .border_color_signal(
@@ -76,7 +77,6 @@ fn futures_signals_button() -> impl Element {
                 })
                 .map(BackgroundColor),
         )
-        .border_radius(BorderRadius::MAX)
         .hovered_sync(hovered)
         .pressed_sync(pressed)
         .child(
@@ -120,10 +120,10 @@ fn jonmo_button() -> impl jElement {
             node.width = Val::Px(150.0);
             node.height = Val::Px(65.);
             node.border = UiRect::all(Val::Px(5.0));
+            node.border_radius = BorderRadius::MAX;
         })
         .insert((Pickable::default(), Hoverable, Pressable, Draggable))
         .align_content(jAlign::center())
-        .border_radius(BorderRadius::MAX)
         .lazy_entity(lazy_entity)
         .border_color_signal(
             pressed_hovered

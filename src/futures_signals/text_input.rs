@@ -9,7 +9,7 @@ use bevy_ui::prelude::*;
 use bevy_utils::prelude::*;
 use bevy_app::prelude::*;
 use bevy_picking::prelude::*;
-use bevy_text::{TextColor, TextFont};
+use bevy_text::{TextColor, TextFont, LineHeight};
 use cosmic_text::{Edit, Selection};
 
 use crate::impl_haalka_methods_futures_signals as impl_haalka_methods;
@@ -325,6 +325,7 @@ impl_haalka_methods! {
         text_color: TextColor,
         text_input_prompt: TextInputPrompt,
         text_input_queue: TextInputQueue,
+        line_height: LineHeight,
     }
 }
 

@@ -138,12 +138,12 @@ fn text_input(data_entity: Entity, field: KeyValue) -> impl Element {
         .map_in(clone!((text_input) move |focus| focus.0 == Some(*text_input)));
 
     El::<Node>::new()
-        .insert(BorderRadius::all(Val::Px(10.)))
         .insert(Pickable::default())
         .with_node(|mut node| {
             node.height = Val::Px(INPUT_HEIGHT);
             node.width = Val::Px(INPUT_WIDTH);
             node.overflow = Overflow::clip();
+            node.border_radius = BorderRadius::all(Val::Px(10.));
         })
         .background_color_signal(
             focused
@@ -319,11 +319,11 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
         .item_signal(selected.clone().map_true_in(sort_by_text_element))
         .item(
             El::<Node>::new()
-                .insert(BorderRadius::all(Val::Px(20.)))
                 .insert((Pickable::default(), Hoverable))
                 .with_node(|mut node| {
                     node.width = Val::Px(200.);
                     node.height = Val::Px(80.);
+                    node.border_radius = BorderRadius::all(Val::Px(20.));
                 })
                 .cursor_disableable_signal(CursorIcon::System(SystemCursorIcon::Pointer), selected.clone())
                 .lazy_entity(lazy_entity.clone())
@@ -460,11 +460,11 @@ struct Index(usize);
 fn x_button() -> impl Element + PointerEventAware {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
-        .insert(BorderRadius::all(Val::Px(10.)))
         .insert((Pickable::default(), Hoverable))
         .with_node(|mut node| {
             node.width = Val::Px(INPUT_HEIGHT);
             node.height = Val::Px(INPUT_HEIGHT);
+            node.border_radius = BorderRadius::all(Val::Px(10.));
         })
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .lazy_entity(lazy_entity.clone())
@@ -495,11 +495,11 @@ fn sort_buttons() -> Column<Node> {
 fn add_button() -> impl Element {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
-        .insert(BorderRadius::all(Val::Px(10.)))
         .insert((Pickable::default(), Hoverable))
         .with_node(|mut node| {
             node.width = Val::Px(INPUT_WIDTH);
             node.height = Val::Px(INPUT_HEIGHT);
+            node.border_radius = BorderRadius::all(Val::Px(10.));
         })
         .cursor(CursorIcon::System(SystemCursorIcon::Pointer))
         .lazy_entity(lazy_entity.clone())

@@ -2,6 +2,8 @@ use bevy_camera::visibility::*;
 #[allow(unused_imports)]
 use bevy_ecs::prelude::*;
 #[allow(unused_imports)]
+use bevy_text::LineHeight;
+#[allow(unused_imports)]
 use futures_signals::signal::Signal;
 #[allow(unused_imports)]
 use paste::paste;
@@ -111,7 +113,6 @@ cfg_if::cfg_if! {
                                 computed_node: ComputedNode,
                                 background_color: BackgroundColor,
                                 border_color: BorderColor,
-                                border_radius: BorderRadius,
                                 box_shadow: BoxShadow,
                                 focus_policy: FocusPolicy,
                                 scroll_position: ScrollPosition,
@@ -133,7 +134,6 @@ cfg_if::cfg_if! {
                                 computed_node: ComputedNode,
                                 background_color: BackgroundColor,
                                 border_color: BorderColor,
-                                border_radius: BorderRadius,
                                 box_shadow: BoxShadow,
                                 focus_policy: FocusPolicy,
                                 scroll_position: ScrollPosition,
@@ -154,12 +154,12 @@ cfg_if::cfg_if! {
                                 text_color: TextColor,
                                 text_shadow: TextShadow,
                                 text_node_flags: TextNodeFlags,
+                                line_height: LineHeight,
                                 content_size: ContentSize,
                                 node: Node,
                                 computed_node: ComputedNode,
                                 background_color: BackgroundColor,
                                 border_color: BorderColor,
-                                border_radius: BorderRadius,
                                 box_shadow: BoxShadow,
                                 focus_policy: FocusPolicy,
                                 scroll_position: ScrollPosition,
@@ -179,7 +179,6 @@ cfg_if::cfg_if! {
                                 computed_node: ComputedNode,
                                 background_color: BackgroundColor,
                                 border_color: BorderColor,
-                                border_radius: BorderRadius,
                                 box_shadow: BoxShadow,
                                 focus_policy: FocusPolicy,
                                 scroll_position: ScrollPosition,

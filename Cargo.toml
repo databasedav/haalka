@@ -15,33 +15,33 @@ repository = "https://github.com/databasedav/haalka"
 documentation = "https://docs.rs/haalka"
 
 [dependencies]
-bevy_app = { version = "0.17", default-features = false }
-bevy_camera = { version = "0.17", optional = true, default-features = false }
-bevy_color = { version = "0.17", optional = true, default-features = false }
-bevy_dev_tools = { version = "0.17", default-features = false, optional = true }
-bevy_derive = { version = "0.17", default-features = false }
-bevy_ecs = { version = "0.17", default-features = false, features = ["multi_threaded"] }
-bevy_input = { version = "0.17", default-features = false }
-bevy_input_focus = { version = "0.17", optional = true, default-features = false }
-bevy_log = { version = "0.17", default-features = false }
-bevy_math = { version = "0.17", default-features = false }
-bevy_picking = { version = "0.17", default-features = false }
-bevy_platform = { version = "0.17", default-features = false }
-bevy_reflect = { version = "0.17", default-features = false }
-bevy_render = { version = "0.17", default-features = false, features = ["webgl"] }
-bevy_tasks = { version = "0.17", default-features = false, features = ["multi_threaded"] }
-bevy_text = { version = "0.17", default-features = false }
-bevy_time = { version = "0.17", default-features = false }
-bevy_transform = { version = "0.17", default-features = false }
-bevy_ui = { version = "0.17", default-features = false }
-bevy_ui_render = { version = "0.17", optional = true, default-features = false }
-bevy_utils = { version = "0.17", default-features = false }
-bevy_window = { version = "0.17", default-features = false }
-bevy_winit = { version = "0.17", default-features = false, features = ["x11"] }
-bevy_ui_text_input = { version = "0.6", default-features = false, optional = true }
-bevy-async-ecs = { version = "0.9", optional = true }
-jonmo = "0.6"
-cosmic-text = "0.14.2"
+bevy_app = { version = "0.18", default-features = false }
+bevy_camera = { version = "0.18", optional = true, default-features = false }
+bevy_color = { version = "0.18", optional = true, default-features = false }
+bevy_dev_tools = { version = "0.18", default-features = false, optional = true }
+bevy_derive = { version = "0.18", default-features = false }
+bevy_ecs = { version = "0.18", default-features = false, features = ["multi_threaded"] }
+bevy_input = { version = "0.18", default-features = false }
+bevy_input_focus = { version = "0.18", optional = true, default-features = false }
+bevy_log = { version = "0.18", default-features = false }
+bevy_math = { version = "0.18", default-features = false }
+bevy_picking = { version = "0.18", default-features = false }
+bevy_platform = { version = "0.18", default-features = false }
+bevy_reflect = { version = "0.18", default-features = false }
+bevy_render = { version = "0.18", default-features = false, features = ["webgl"] }
+bevy_tasks = { version = "0.18", default-features = false, features = ["multi_threaded"] }
+bevy_text = { version = "0.18", default-features = false }
+bevy_time = { version = "0.18", default-features = false }
+bevy_transform = { version = "0.18", default-features = false }
+bevy_ui = { version = "0.18", default-features = false }
+bevy_ui_render = { version = "0.18", optional = true, default-features = false }
+bevy_utils = { version = "0.18", default-features = false }
+bevy_window = { version = "0.18", default-features = false }
+bevy_winit = { version = "0.18", default-features = false, features = ["x11"] }
+bevy_ui_text_input = { version = "0.7", default-features = false, optional = true }
+bevy-async-ecs = { version = "0.10", optional = true }
+jonmo = "0.7"
+cosmic-text = "0.16"  # should match the version bevy_ui_text_input uses
 apply = "0.3"
 cfg-if = "1.0"
 enclose = "1.2"
@@ -58,12 +58,12 @@ async-io = { version = "2.4", optional = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 gloo-timers = { version = "0.3", features = ["futures"], optional = true }
 send_wrapper = { version = "0.6", features = ["futures"], optional = true }
-bevy_winit = { version = "0.17", optional = true }
-bevy_audio = { version = "0.17", optional = true, features = ["android_shared_stdcxx"] }
-bevy_core_pipeline = { version = "0.17", optional = true, default-features = false, features = ["webgl"] }
-bevy_pbr = { version = "0.17", optional = true, default-features = false, features = ["webgl"] }
-bevy_gizmos = { version = "0.17", optional = true, default-features = false, features = ["webgl"] }
-bevy_sprite = { version = "0.17", optional = true, default-features = false}
+bevy_winit = { version = "0.18", optional = true }
+bevy_audio = { version = "0.18", optional = true, features = ["android_shared_stdcxx"] }
+bevy_core_pipeline = { version = "0.18", optional = true, default-features = false, features = ["webgl"] }
+bevy_pbr = { version = "0.18", optional = true, default-features = false, features = ["webgl"] }
+bevy_gizmos = { version = "0.18", optional = true, default-features = false }
+bevy_sprite = { version = "0.18", optional = true, default-features = false}
 
 [features]
 default = [
@@ -94,8 +94,8 @@ futures_signals_text_input = ["futures_signals_ui", "bevy_color", "bevy_input_fo
 deployed_wasm_example = []
 
 [dev-dependencies]
-bevy = "0.17"
-bevy_asset_loader = { version = "0.24", features = ["2d"] }
+bevy = "0.18"
+bevy_asset_loader = { version = "0.25", features = ["2d"] }
 # TODO version 0.8 breaks valid html colors ?
 colorgrad = "0.7"
 rand = "0.9"
@@ -105,11 +105,11 @@ calc = { version = "0.4", default-features = false }
 rust_decimal = "1.39"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.bevy_rand]
-version = "0.12"
+version = "0.13"
 features = ["wyrand"]
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies.bevy_rand]
-version = "0.12"
+version = "0.13"
 features = ["wyrand", "wasm_js"]
 
 [package.metadata.cargo-all-features]

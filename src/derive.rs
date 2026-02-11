@@ -1,6 +1,6 @@
 use bevy_camera::visibility::*;
 use bevy_ecs::prelude::*;
-use bevy_text::prelude::*;
+use bevy_text::{LineHeight, prelude::*};
 use bevy_transform::prelude::*;
 use bevy_ui::{prelude::*, widget::*, *};
 use jonmo::signal::Signal;
@@ -154,7 +154,6 @@ macro_rules! impl_haalka_methods_for_aligners_and_node_bundles {
                         computed_node: ComputedNode,
                         background_color: BackgroundColor,
                         border_color: BorderColor,
-                        border_radius: BorderRadius,
                         box_shadow: BoxShadow,
                         focus_policy: FocusPolicy,
                         scroll_position: ScrollPosition,
@@ -177,7 +176,6 @@ macro_rules! impl_haalka_methods_for_aligners_and_node_bundles {
                         computed_node: ComputedNode,
                         background_color: BackgroundColor,
                         border_color: BorderColor,
-                        border_radius: BorderRadius,
                         box_shadow: BoxShadow,
                         focus_policy: FocusPolicy,
                         scroll_position: ScrollPosition,
@@ -198,13 +196,13 @@ macro_rules! impl_haalka_methods_for_aligners_and_node_bundles {
                         text_color: TextColor,
                         text_shadow: TextShadow,
                         text_node_flags: TextNodeFlags,
+                        line_height: LineHeight,
                         #[skip_signal]
                         content_size: ContentSize,
                         node: Node,
                         computed_node: ComputedNode,
                         background_color: BackgroundColor,
                         border_color: BorderColor,
-                        border_radius: BorderRadius,
                         box_shadow: BoxShadow,
                         focus_policy: FocusPolicy,
                         scroll_position: ScrollPosition,
