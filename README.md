@@ -8,14 +8,10 @@
 in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "easy"
 ```
 
-[haalka](https://github.com/databasedav/haalka) is an ergonomic reactive [Bevy](https://github.com/bevyengine/bevy) UI library powered by the incredible [FRP](https://en.wikipedia.org/wiki/Functional_reactive_programming) signals of [futures-signals](https://github.com/Pauan/rust-signals) and the convenient async ECS of [bevy-async-ecs](https://github.com/dlom/bevy-async-ecs) with API ported from web UI libraries [MoonZoon](https://github.com/MoonZoon/MoonZoon) and [Dominator](https://github.com/Pauan/rust-dominator).
-
-While haalka is primarily targeted at UI and provides high level UI abstractions as such, its [core abstraction](https://docs.rs/haalka/latest/haalka/struct.RawHaalkaEl.html) can be used to manage signals-powered reactivity for any entity, not just [`bevy_ui` nodes](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ui/src/node_bundles.rs).
+[haalka](https://github.com/databasedav/haalka) is an ergonomic reactive [Bevy](https://github.com/bevyengine/bevy) UI library powered by the [FRP](https://en.wikipedia.org/wiki/Functional_reactive_programming) signals of [jonmo](https://github.com/databasedav/jonmo) with API ported from web UI libraries [MoonZoon](https://github.com/MoonZoon/MoonZoon) and [Dominator](https://github.com/Pauan/rust-dominator).
 
 ## assorted features
 
-- signals integration for all entities, components, and children
-    - constant time reactive updates for collections via futures-signals' [`MutableVec`](https://docs.rs/futures-signals/latest/futures_signals/signal_vec/struct.MutableVec.html) and [`MutableBTreeMap`](https://docs.rs/futures-signals/latest/futures_signals/signal_map/struct.MutableBTreeMap.html)
 - simple high-level alignment semantics ported from MoonZoon (see [align example](https://databasedav.github.io/haalka/examples/webgl2/align/) below)
 - pointer event handling methods
     - hovered change methods (including web-style [`Enter`](https://docs.rs/haalka/latest/haalka/pointer_event_aware/struct.Enter.html) and [`Leave`](https://docs.rs/haalka/latest/haalka/pointer_event_aware/struct.Leave.html) events)
