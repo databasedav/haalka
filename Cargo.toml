@@ -105,11 +105,11 @@ calc = { version = "0.4", default-features = false }
 rust_decimal = "1.39"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.bevy_rand]
-version = "0.13"
+version = "0.14"
 features = ["wyrand"]
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies.bevy_rand]
-version = "0.13"
+version = "0.14"
 features = ["wyrand", "wasm_js"]
 
 [package.metadata.cargo-all-features]

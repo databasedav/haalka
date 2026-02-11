@@ -193,6 +193,10 @@ All examples are compiled to wasm for both webgl2 and webgpu (check [compatibili
 
     scrollable buttons, mutable viewport, text input reactivity
 
+- [**`futures_signals_jonmo_compat`**](https://github.com/databasedav/haalka/blob/main/examples/futures_signals_jonmo_compat.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/futures_signals_jonmo_compat/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/futures_signals_jonmo_compat/)
+
+    demonstrates that both futures-signals and jonmo signals backends can be used together
+
 Or run them locally with `cargo`.
 ```bash
 cargo run --example counter
@@ -212,6 +216,7 @@ cargo run --example inventory
 cargo run --example healthbar
 cargo run --example responsive_menu
 cargo run --example character_editor
+cargo run --example futures_signals_jonmo_compat --features futures_signals_ui
 ```
 Or with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 
