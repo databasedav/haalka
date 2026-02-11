@@ -2,7 +2,7 @@
 
 [![Crates.io Version](https://img.shields.io/crates/v/haalka?style=for-the-badge)](https://crates.io/crates/haalka)
 [![Docs.rs](https://img.shields.io/docsrs/haalka?style=for-the-badge)](https://docs.rs/haalka)
-[![Following released Bevy versions](https://img.shields.io/badge/Bevy%20tracking-0.17-lightblue?style=for-the-badge)](https://bevyengine.org/learn/quick-start/plugin-development/#main-branch-tracking)
+[![Following released Bevy versions](https://img.shields.io/badge/Bevy%20tracking-0.18-lightblue?style=for-the-badge)](https://bevyengine.org/learn/quick-start/plugin-development/#main-branch-tracking)
 
 ```text
 in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "easy"
@@ -16,7 +16,7 @@ in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "
 - pointer event handling methods
     - hovered change methods (including web-style [`Enter`](https://docs.rs/haalka/latest/haalka/pointer_event_aware/struct.Enter.html) and [`Leave`](https://docs.rs/haalka/latest/haalka/pointer_event_aware/struct.Leave.html) events)
     - on click and on-click-outside methods
-    - on pressing methods, with throttle-ability
+    - on pressed methods, with throttle-ability
 - cursor-on-hover management
 - global event handling methods
 - mouse wheel scroll handling methods
@@ -24,10 +24,6 @@ in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "
 - viewport mutation handling methods
 - simple grid layout model ported from MoonZoon
 - macro rules for adding signal helper methods to custom element structs
-
-## considerations
-
-- Reactive updates done by haalka are [**eventually consistent**](https://en.wikipedia.org/wiki/Eventual_consistency), that is, once some ECS world state has been updated, any downstream reactions should not be expected to run in the same frame. This is due to the indirection involved with using an async signals library, which dispatches Bevy commands after polling by the async runtime. The resulting "lag" should not be noticeable in most popular cases, e.g. reacting to hover/click state or synchronizing UI (one can run the examples to evaluate this themselves), but in cases where frame perfect responsiveness is critical, one should simply use Bevy-native systems directly.
 
 ## [feature flags](https://docs.rs/haalka/latest/haalka/#feature-flags-1)
 
@@ -223,6 +219,7 @@ Or with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 ## Bevy compatibility
 |bevy|haalka|
 |-|-|
+|`0.18`|`0.7`|
 |`0.17`|`0.6`|
 |`0.16`|`0.5`|
 |`0.15`|`0.4`|
