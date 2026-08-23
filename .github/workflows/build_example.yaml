@@ -36,7 +36,7 @@ jobs:
     - name: install binstall
       uses: cargo-bins/cargo-binstall@main
     - name: install build dependencies
-      run: cargo binstall --no-confirm --continue-on-failure wasm-bindgen-cli wasm-opt trunk
+      run: cargo binstall --locked --no-confirm --continue-on-failure wasm-bindgen-cli wasm-opt trunk
     - if: ${{ inputs.api == 'webgl2' }}
       name: build example
       run: just build_wasm_example haalka ${{ inputs.example }} true

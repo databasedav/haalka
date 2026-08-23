@@ -46,7 +46,7 @@ fun library has_assets build_wasm_webgpu_features =>
             binstall,
             {
               name = "install build dependencies",
-              run = "cargo binstall --no-confirm --continue-on-failure wasm-bindgen-cli wasm-opt trunk",
+              run = "cargo binstall --locked --no-confirm --continue-on-failure wasm-bindgen-cli wasm-opt trunk",
             },
             {
               name = "build example",
