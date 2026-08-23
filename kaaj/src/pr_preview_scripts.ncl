@@ -18,7 +18,6 @@ let { active_deploy_review_helper, deploy_permission_helper, .. } = import "pr_p
         run_id: runId,
         per_page: 100,
       },
-      response => response.data.artifacts,
     );
     return artifacts.filter(artifact => !artifact.expired);
   }
