@@ -9,9 +9,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
   env = cargo_build_env |> uppercase_fields,
 
   jobs =
-    {
-      assert_nickels_synced_ = assert_nickels_synced,
-    }
+    { include assert_nickels_synced }
     & (
       {
         test = {
@@ -83,7 +81,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
           ]
         }
       }
-      |> std.record.map_values (fun record => record & { needs = "assert_nickels_synced_" })
+      |> std.record.map_values (fun record => record & { needs = "assert_nickels_synced" })
     )
     |> sync_name_field
     |> std.record.map_values run_on_ubuntu_latest

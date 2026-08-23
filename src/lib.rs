@@ -36,6 +36,7 @@ pub mod utils;
 /// Use jonmo-based reactivity instead for new code.
 #[cfg(feature = "futures_signals")]
 #[allow(deprecated)]
+#[allow(clippy::all)]
 pub mod futures_signals;
 
 /// Includes the plugins and systems required for [haalka](crate) to function.

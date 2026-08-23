@@ -2,13 +2,30 @@
 env:
   PR: ${{ github.event.pull_request.number }}
 jobs:
+  cancel_deployments:
+    concurrency:
+      cancel-in-progress: true
+      group: pr-preview-${{ github.event.pull_request.number }}
+    name: cancel deployments
+    permissions: {}
+    runs-on: ubuntu-latest
+    steps:
+    - name: cancel in-progress preview deployments
+      run: 'true'
   cleanup:
+    concurrency:
+      cancel-in-progress: true
+      group: pr-preview-cleanup-${{ github.event.pull_request.number }}
     name: cleanup
+    needs: cancel_deployments
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
     - name: checkout repo
       uses: actions/checkout@v4
       with:
+        persist-credentials: false
         submodules: true
     - name: make empty dir
       run: mkdir -p empty_dir
@@ -20,10 +37,8 @@ jobs:
         folder: empty_dir
         single-commit: true
         target-folder: pr_previews/${{ env.PR }}
-name: cleanup_pr_previews
+name: cleanup pr previews
 on:
   pull_request_target:
     types:
     - closed
-permissions:
-  contents: write

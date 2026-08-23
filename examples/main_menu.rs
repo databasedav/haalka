@@ -1407,10 +1407,8 @@ fn dropdown_input_observer(
                 commands.entity(entity).remove::<DropdownShowing>();
             }
         }
-        MenuInput::Delete => {
-            if is_clearable {
-                selection.0 = None;
-            }
+        MenuInput::Delete if is_clearable => {
+            selection.0 = None;
         }
         _ => (),
     }

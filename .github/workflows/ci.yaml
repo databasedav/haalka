@@ -4,13 +4,14 @@ env:
   RUSTDOCFLAGS: --deny warnings
   RUSTFLAGS: --deny warnings
 jobs:
-  assert_nickels_synced_:
-    name: assert_nickels_synced_
+  assert_nickels_synced:
+    name: assert nickels synced
     runs-on: ubuntu-latest
     steps:
     - name: checkout repo
       uses: actions/checkout@v4
       with:
+        persist-credentials: false
         submodules: true
     - name: install nickel
       run: |-
@@ -24,16 +25,17 @@ jobs:
       uses: extractions/setup-just@v2
     - name: assert nickels synced
       run: |-
-        just sync_nickels
+        just format_nickels sync_nickels
         [[ -n $(git status --porcelain) ]] && echo 'nickels are not synced; run `just format_nickels sync_nickels`' && exit 1 || exit 0
   check_all_features:
-    name: check_all_features
-    needs: assert_nickels_synced_
+    name: check all features
+    needs: assert_nickels_synced
     runs-on: ubuntu-latest
     steps:
     - name: checkout repo
       uses: actions/checkout@v4
       with:
+        persist-credentials: false
         submodules: true
     - name: install rust toolchain
       uses: dtolnay/rust-toolchain@master
@@ -56,12 +58,13 @@ jobs:
       run: just check_all_features
   clippy:
     name: clippy
-    needs: assert_nickels_synced_
+    needs: assert_nickels_synced
     runs-on: ubuntu-latest
     steps:
     - name: checkout repo
       uses: actions/checkout@v4
       with:
+        persist-credentials: false
         submodules: true
     - name: install rust toolchain
       uses: dtolnay/rust-toolchain@master
@@ -81,12 +84,13 @@ jobs:
       run: just clippy
   docs:
     name: docs
-    needs: assert_nickels_synced_
+    needs: assert_nickels_synced
     runs-on: ubuntu-latest
     steps:
     - name: checkout repo
       uses: actions/checkout@v4
       with:
+        persist-credentials: false
         submodules: true
     - name: install rust toolchain
       uses: dtolnay/rust-toolchain@master
@@ -105,12 +109,13 @@ jobs:
       run: just doc
   format:
     name: format
-    needs: assert_nickels_synced_
+    needs: assert_nickels_synced
     runs-on: ubuntu-latest
     steps:
     - name: checkout repo
       uses: actions/checkout@v4
       with:
+        persist-credentials: false
         submodules: true
     - name: install rust toolchain
       uses: dtolnay/rust-toolchain@master
@@ -123,12 +128,13 @@ jobs:
       run: just format -- --check
   test:
     name: test
-    needs: assert_nickels_synced_
+    needs: assert_nickels_synced
     runs-on: ubuntu-latest
     steps:
     - name: checkout repo
       uses: actions/checkout@v4
       with:
+        persist-credentials: false
         submodules: true
     - name: install rust toolchain
       uses: dtolnay/rust-toolchain@master

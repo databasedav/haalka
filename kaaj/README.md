@@ -21,14 +21,16 @@ dependencies = {
 then add the desired targets to your `.ncl`, for example
 
 ```ncl
-let { build_example, ci, cleanup_pr_previews, examples_on_main, pr_previews, release, wasm_example_index_template, .. } = import kaaj in
+let { build_example, ci, cleanup_pr_previews, deploy_reviewed_pr_preview, examples_on_main, pr_previews, release, reviewed_pr_preview, wasm_example_index_template, .. } = import kaaj in
 let REPO = "https://github.com/databasedav/haalka" in
 let GITHUB_PAGES_URL = "https://databasedav.github.io/haalka" in
 {
     build_example_ = build_example "webgpu",
     ci_ = ci,
     cleanup_pr_previews_ = cleanup_pr_previews REPO,
-    pr_previews_ = pr_previews REPO GITHUB_PAGES_URL,
+    pr_previews_ = pr_previews,
+    reviewed_pr_preview_ = reviewed_pr_preview,
+    deploy_reviewed_pr_preview_ = deploy_reviewed_pr_preview REPO GITHUB_PAGES_URL,
     examples_on_main_ = examples_on_main REPO,
     release_ = release,
 }
@@ -47,10 +49,12 @@ import? 'kaaj.just'
 
 exclude_examples := '"example1", "example2"'
 
-export_nickels := "ci build_example pr_previews examples_on_main cleanup_pr_previews release"
+export_nickels := "ci build_example pr_previews reviewed_pr_preview deploy_reviewed_pr_preview examples_on_main cleanup_pr_previews release"
 ```
 
 and finally, generate the github actions workflows with just
 ```
 just sync_nickels
 ```
+
+Pull request previews are deployed after a maintainer submits a `/deploy` comment review from the pull request's **Files changed → Review changes** dialog. This applies to both fork and same-repository pull requests. The review is bound to the exact reviewed commit; if the pull request changes before deployment, a new `/deploy` review is required. Submitting a newer `/deploy` review cancels the older preview build or deployment for that pull request. New commits also cancel older in-progress preview workflows for the same PR, and new pushes to `main` cancel older in-progress example deployments.
