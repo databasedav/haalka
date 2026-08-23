@@ -2,11 +2,7 @@ let { GITHUB_PAGES_DEPLOY_ACTION_VERSION, GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIM
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 fun repo =>
   {
-    name = "cleanup_pr_previews",
-
-    permissions = {
-      contents = "write"
-    },
+    name = "cleanup pr previews",
 
     on = {
       pull_request_target = {
@@ -20,7 +16,28 @@ fun repo =>
 
     jobs =
       {
+        cancel_deployments = {
+          concurrency = {
+            group = "pr-preview-${{ github.event.pull_request.number }}",
+            cancel-in-progress = true,
+          },
+          permissions = {},
+          steps = [
+            {
+              name = "cancel in-progress preview deployments",
+              run = "true",
+            },
+          ]
+        },
         cleanup = {
+          needs = "cancel_deployments",
+          concurrency = {
+            group = "pr-preview-cleanup-${{ github.event.pull_request.number }}",
+            cancel-in-progress = true,
+          },
+          permissions = {
+            contents = "write",
+          },
           steps = [
             checkout,
             {

@@ -7,6 +7,9 @@ jobs:
     - name: checkout repo
       uses: actions/checkout@v4
       with:
+        persist-credentials: false
+        ref: ${{ inputs.ref || github.sha }}
+        repository: ${{ inputs.repository || github.repository }}
         submodules: true
     - name: install rust toolchain
       uses: dtolnay/rust-toolchain@master
@@ -45,7 +48,7 @@ jobs:
       with:
         name: ${{ inputs.api }}_${{ inputs.example }}
         path: dist
-name: build_example
+name: build example
 on:
   workflow_call:
     inputs:
@@ -54,4 +57,10 @@ on:
         type: string
       example:
         required: true
+        type: string
+      ref:
+        required: false
+        type: string
+      repository:
+        required: false
         type: string

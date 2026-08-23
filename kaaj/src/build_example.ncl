@@ -2,7 +2,7 @@ let { checkout, rust_toolchain, bevy_dependencies, cached_target_populate, just,
 let { sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 fun library has_assets build_wasm_webgpu_features =>
   {
-    name = "build_example",
+    name = "build example",
 
     on = {
       workflow_call = {
@@ -15,6 +15,14 @@ fun library has_assets build_wasm_webgpu_features =>
             required = true,
             type = "string"
           },
+          repository = {
+            required = false,
+            type = "string"
+          },
+          ref = {
+            required = false,
+            type = "string"
+          },
         }
       }
     },
@@ -23,7 +31,13 @@ fun library has_assets build_wasm_webgpu_features =>
       {
         build = {
           steps = [
-            checkout,
+            checkout
+            & {
+              with = {
+                repository = "${{ inputs.repository || github.repository }}",
+                ref = "${{ inputs.ref || github.sha }}",
+              }
+            },
             rust_toolchain & { with = { targets = "wasm32-unknown-unknown" } },
             bevy_dependencies,
             cached_target_populate,

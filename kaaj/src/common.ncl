@@ -1,4 +1,4 @@
-let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, name_id, .. } = import "utils.ncl" in
+let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "utils.ncl" in
 
 let CHECKOUT_VERSION = "v4" in
 let DEFAULT_RUST_TOOLCHAIN_VERSION = "stable" in
@@ -10,9 +10,10 @@ let BEVY_DEPENDENCIES = [
 ]
 in
 let CARGO_CACHE_VERSION = "2" in
+let GITHUB_SCRIPT_VERSION = "7" in
 let SETUP_JUST_VERSION = "2" in
 let NICKEL_VERSION = "1.12.2" in
-let install_nickel_ = {
+let install_nickel = {
   name = "install nickel",
   run = m%"
     OUT="$HOME/.local/bin/nickel"
@@ -22,16 +23,22 @@ let install_nickel_ = {
     echo "$(dirname "$OUT")" >> "$GITHUB_PATH"
     nickel --version
   "%
-} in
+}
+in
 {
+  include install_nickel,
   GITHUB_PAGES_DEPLOY_ACTION_VERSION = "4.7.3",
   GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT = 100,
   checkout = {
     name = "checkout repo",
     uses = "actions/checkout@%{ CHECKOUT_VERSION }",
     with = {
-      submodules = true
+      submodules = true,
+      persist-credentials = false,
     }
+  },
+  github_script = {
+    uses = "actions/github-script@v%{ GITHUB_SCRIPT_VERSION }",
   },
   rust_toolchain = {
     name = "install rust toolchain",
@@ -65,18 +72,16 @@ let install_nickel_ = {
     name = "install binstall",
     uses = "cargo-bins/cargo-binstall@main"
   },
-  install_nickel = install_nickel_,
   assert_nickels_synced =
     {
       steps = [
         checkout,
-        install_nickel_,
+        install_nickel,
         just,
         {
           name = "assert nickels synced",
-          # TODO: re add format_nickels
           run = m%"
-            just sync_nickels
+            just format_nickels sync_nickels
             [[ -n $(git status --porcelain) ]] && echo 'nickels are not synced; run `just format_nickels sync_nickels`' && exit 1 || exit 0
           "%
         }
@@ -92,21 +97,47 @@ let install_nickel_ = {
         checkout,
         just,
         {
-          name = "output_examples",
+          id = "output_examples",
+          name = "list examples",
           run = m%"
             examples=$(just list_examples)
             echo "examples=$examples"
             echo "examples=$examples" >> $GITHUB_OUTPUT
           "%
         }
-        |> name_id
+      ]
+    }
+    |> run_on_ubuntu_latest,
+  get_examples_for = fun source_repository source_ref =>
+    {
+      outputs = {
+        examples = "${{ steps.output_examples.outputs.examples }}"
+      },
+      steps = [
+        checkout
+        & {
+          with = {
+            repository = source_repository,
+            ref = source_ref,
+          }
+        },
+        just,
+        {
+          id = "output_examples",
+          name = "list examples",
+          run = m%"
+            examples=$(just list_examples)
+            echo "examples=$examples"
+            echo "examples=$examples" >> $GITHUB_OUTPUT
+          "%
+        }
       ]
     }
     |> run_on_ubuntu_latest,
   build_examples = {
     strategy = {
       matrix = {
-        example = "${{ fromJson(needs.get_examples_.outputs.examples) }}",
+        example = "${{ fromJson(needs.get_examples.outputs.examples) }}",
         api = ["webgl2", "webgpu"],
       }
     },
@@ -116,7 +147,23 @@ let install_nickel_ = {
       example = "${{ matrix.example }}",
     },
   },
-  deploy_examples = fun repo pr =>
+  build_examples_for = fun source_repository source_ref =>
+    {
+      strategy = {
+        matrix = {
+          example = "${{ fromJson(needs.get_examples.outputs.examples) }}",
+          api = ["webgl2", "webgpu"],
+        }
+      },
+      uses = "./.github/workflows/build_example.yaml",
+      with = {
+        api = "${{ matrix.api }}",
+        example = "${{ matrix.example }}",
+        repository = source_repository,
+        ref = source_ref,
+      },
+    },
+  deploy_examples = fun repo =>
     {
       permissions = {
         contents = "write",
@@ -153,8 +200,8 @@ let install_nickel_ = {
           with = {
             folder = "pages",
             attempt-limit = GITHUB_PAGES_DEPLOY_ACTION_ATTEMPT_LIMIT,
-            target-folder = if pr != "" then "pr_previews/%{ pr }" else "examples",
-            commit-message = if pr != "" then "%{ repo }/pull/%{ pr }/commits/${{ github.event.pull_request.head.sha }}" else "%{ repo }/commit/${{ github.sha }}",
+            target-folder = "examples",
+            commit-message = "%{ repo }/commit/${{ github.sha }}",
             single-commit = true,
           }
         },
