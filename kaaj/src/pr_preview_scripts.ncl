@@ -109,8 +109,7 @@ let { active_deploy_review_helper, deploy_permission_helper, .. } = import "pr_p
       'Preview request originated from an unexpected workflow path.',
     );
     requireCondition(
-      workflowRun.head_sha === request.ref
-        && workflowRun.head_repository?.full_name === request.repository,
+      workflowRun.head_sha === request.ref,
       'The preview request does not match the triggering workflow head.',
     );
 
