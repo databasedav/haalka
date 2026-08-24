@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0; background-color: #2b2c2f;">
+
+<head>
+    <meta charset="utf-8" />
+    <title>haalka dot_counter example</title>
+    
+    
+<script type="module">
+import init, * as bindings from './haalka-24a581eb47a87198.js';
+const wasm = await init({ module_or_path: './haalka-24a581eb47a87198_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+<link rel="modulepreload" href="./haalka-24a581eb47a87198.js" crossorigin="anonymous" integrity="sha384-w0nMQEzrg7yFgc8oO8T5u3WmqF/UDotc0ti1V/449a6lrN/UZEpCaKMUJePKLac5"><link rel="preload" href="./haalka-24a581eb47a87198_bg.wasm" crossorigin="anonymous" integrity="sha384-cC46GCr/A7ziJk23A7XkBACDpHh/8hyTK5yRFmtUF0/p1yh1UApj2w5dPvIJpTlM" as="fetch" type="application/wasm"></head>
+
+<body style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
+    <div id="game" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0; display: flex;">
+        <canvas id="bevy">
+            js and canvas support is required
+        </canvas>
+    </div>
+</body>
+
+</html>

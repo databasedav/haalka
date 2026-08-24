@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0; background-color: #2b2c2f;">
+
+<head>
+    <meta charset="utf-8" />
+    <title>haalka nested_lists example</title>
+    
+    
+<script type="module">
+import init, * as bindings from './haalka-7f8fe0a71b42e279.js';
+const wasm = await init({ module_or_path: './haalka-7f8fe0a71b42e279_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+<link rel="modulepreload" href="./haalka-7f8fe0a71b42e279.js" crossorigin="anonymous" integrity="sha384-E1nOEDdqDbRCmXhJWiaKsp3FEwU8u830n4aVN2RbKnO0Y20jL6uRTCJV54BhK+io"><link rel="preload" href="./haalka-7f8fe0a71b42e279_bg.wasm" crossorigin="anonymous" integrity="sha384-QoSy9vXkl1cFXWjfGn8EbBVlyyAdeQVkLYUYW5pYSizxWs3B7jTn+N8Q4osHCZ11" as="fetch" type="application/wasm"></head>
+
+<body style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0;">
+    <div id="game" style="height: 100%; width: 100%; margin: 0; padding: 0; border: 0; display: flex;">
+        <canvas id="bevy">
+            js and canvas support is required
+        </canvas>
+    </div>
+</body>
+
+</html>
