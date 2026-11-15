@@ -2,7 +2,7 @@
 
 [![Crates.io Version](https://img.shields.io/crates/v/haalka?style=for-the-badge)](https://crates.io/crates/haalka)
 [![Docs.rs](https://img.shields.io/docsrs/haalka?style=for-the-badge)](https://docs.rs/haalka)
-[![Following released Bevy versions](https://img.shields.io/badge/Bevy%20tracking-0.19-lightblue?style=for-the-badge)](https://bevyengine.org/learn/quick-start/plugin-development/#main-branch-tracking)
+[![Following released Bevy versions](https://img.shields.io/badge/Bevy%20tracking-0.20-lightblue?style=for-the-badge)](https://bevyengine.org/learn/quick-start/plugin-development/#main-branch-tracking)
 
 ```text
 in bengali, haalka means "light" (e.g. not heavy) and can also be used to mean "easy"
@@ -214,6 +214,7 @@ Or with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 ## Bevy compatibility
 |bevy|haalka|
 |-|-|
+|`0.20`|`0.10`|
 |`0.19`|`0.9`|
 |`0.18`|`0.7–0.8`|
 |`0.17`|`0.6`|

@@ -4,12 +4,12 @@
 use apply::Apply;
 use bevy_app::prelude::*;
 use bevy_ecs::{prelude::*, system::*};
-use bevy_input_focus::{FocusCause, InputFocus};
+use bevy_input_focus::{FocusCause, InputFocus, pointer_focus::PointerFocusPlugin, tab_navigation::TabIndex};
 use bevy_picking::prelude::*;
 use bevy_platform::sync::{Arc, OnceLock};
 use bevy_text::{EditableText, LineHeight, TextColor, TextCursorStyle, TextEdit, TextFont, TextLayout};
 use bevy_ui::prelude::*;
-use bevy_ui_widgets::EditableTextInputPlugin;
+use bevy_ui_widgets::{TextInput as BevyTextInput, TextInputPlugin};
 use jonmo::signal::{Signal, SignalExt};
 use paste::paste;
 
@@ -54,7 +54,9 @@ impl TextInput {
     pub fn new() -> Self {
         let el = El::<Node>::new().with_builder(|builder| {
             builder.insert((
+                BevyTextInput,
                 EditableText::default(),
+                TabIndex::default(),
                 TextLayout::no_wrap(),
                 TextCursorStyle::default(),
                 Pickable::default(),
@@ -273,8 +275,11 @@ impl_haalka_methods! {
 }
 
 pub(super) fn plugin(app: &mut App) {
-    if !app.is_plugin_added::<EditableTextInputPlugin>() {
-        app.add_plugins(EditableTextInputPlugin);
+    if !app.is_plugin_added::<TextInputPlugin>() {
+        app.add_plugins(TextInputPlugin);
+    }
+    if !app.is_plugin_added::<PointerFocusPlugin>() {
+        app.add_plugins(PointerFocusPlugin);
     }
     app.add_systems(
         Update,

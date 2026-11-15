@@ -1545,7 +1545,7 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> ElementWrapper for 
                                     .on_click(clone!((lazy_entity) move |_: In<_>, mut selections: Query<&mut DropdownSelectionIndex>| {
                                         selections.get_mut(*lazy_entity).unwrap().0 = None;
                                     }))
-                                    .observe(|mut click: On<Pointer<Click>>| click.propagate(false))
+                                    .observe(|mut click: On<PointerClick>| click.propagate(false))
                                 }));
                             let mut el = Row::<Node>::new()
                                 .with_node(|mut node| node.column_gap = Val::Px(BASE_PADDING))

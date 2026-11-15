@@ -7,7 +7,7 @@ use bevy_ecs::{component::*, lifecycle::HookContext, prelude::*, system::RunSyst
 use bevy_log::warn;
 use jonmo::prelude::*;
 
-use bevy_ecs::system::IntoObserverSystem;
+use bevy_ecs::observer::IntoEntityObserver;
 
 /// [`Element`]s are types that wrap [`jonmo::Builder`] and can be aligned using
 /// [haalka](crate)'s [simple alignability semantics](super::align::Align) and granted UI-specific
@@ -233,10 +233,7 @@ pub trait BuilderPassThrough: BuilderWrapper {
     }
 
     /// Pass-through for [`jonmo::Builder::observe`].
-    fn observe<E: EntityEvent, B: Bundle, Marker>(
-        self,
-        observer: impl IntoObserverSystem<E, B, Marker> + Sync,
-    ) -> Self {
+    fn observe<Marker>(self, observer: impl IntoEntityObserver<Marker> + Sync) -> Self {
         self.with_builder(|builder| builder.observe(observer))
     }
 

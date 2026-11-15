@@ -130,12 +130,12 @@ fn square(i: usize) -> impl Element {
         .lazy_entity(lazy_entity.clone())
         .insert((Pickable::default(), Hoverable, Pressable, DragOffset::default()))
         .observe(
-            |click: On<Pointer<Press>>,
+            |click: On<PointerPress>,
              max_z_index: ResMut<MaxZIndex>,
              z_indices: Query<&mut GlobalZIndex>,
              drag_offsets: Query<&mut DragOffset>,
              nodes: Query<&Node>| {
-                calculate_and_set_drag_offset(click.entity, click.pointer_location.position, &nodes, drag_offsets);
+                calculate_and_set_drag_offset(click.entity, click.pointer.position, &nodes, drag_offsets);
                 update_z_index(click.entity, max_z_index, z_indices);
             },
         )

@@ -28,7 +28,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
         clippy = {
           steps = [
             checkout,
-            rust_toolchain & { with = { toolchain = "stable", components = "clippy" } },
+            rust_toolchain & { with = { toolchain = "nightly", components = "clippy" } },
             bevy_dependencies,
             cached_target_populate,
             just,
@@ -52,7 +52,7 @@ let { uppercase_fields, sync_name_field, run_on_ubuntu_latest, .. } = import "ut
         docs = {
           steps = [
             checkout,
-            rust_toolchain & { with = { toolchain = "stable" } },
+            rust_toolchain & { with = { toolchain = "nightly" } },
             bevy_dependencies,
             cached_target_populate,
             just,

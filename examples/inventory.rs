@@ -378,7 +378,7 @@ fn cell(insertable: bool) -> impl Element + BuilderPassThrough + PointerEventAwa
 
         if insertable {
             el.on_click_disableable::<BlockClick, _>(
-                |In((entity, click)): In<(Entity, Pointer<Click>)>,
+                |In((entity, click)): In<(Entity, PointerClick)>,
                  dragging: Option<ResMut<Dragging>>,
                  mut commands: Commands,
                  mut contents: Query<&mut CellContent>| {
@@ -856,8 +856,8 @@ fn ui_root() -> impl Element {
             )
         })
         .insert(Pickable::default())
-        .observe(|move_: On<Pointer<Move>>, mut pointer: ResMut<PointerPosition>| {
-            pointer.0 = move_.pointer_location.position;
+        .observe(|move_: On<PointerMove>, mut pointer: ResMut<PointerPosition>| {
+            pointer.0 = move_.pointer.position;
         })
         .align_content(Align::center())
         .layer(inventory())

@@ -36,12 +36,12 @@ pub trait MouseWheelScrollable: ViewportMutable {
             let system_holder = Arc::new(OnceLock::new());
             builder
                 .insert(ScrollEnabled)
-                .observe(|event: On<Add, Disabled>, mut commands: Commands| {
+                .observe(|event: On<Add<Disabled>>, mut commands: Commands| {
                     if let Ok(mut entity) = commands.get_entity(event.event().entity) {
                         entity.remove::<ScrollEnabled>();
                     }
                 })
-                .observe(move |event: On<Remove, Disabled>, mut commands: Commands| {
+                .observe(move |event: On<Remove<Disabled>>, mut commands: Commands| {
                     if let Ok(mut entity) = commands.get_entity(event.event().entity) {
                         entity.try_insert(ScrollEnabled);
                     }
