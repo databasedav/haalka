@@ -162,7 +162,9 @@ pub mod prelude {
     #[doc(inline)]
     pub use super::text_input::TextInput;
     #[cfg(feature = "text_input")]
-    pub use bevy_ui_text_input;
+    pub use bevy_text::{EditableText, EditableTextFilter, TextCursorStyle, TextEdit};
+    #[cfg(feature = "text_input")]
+    pub use bevy_ui_widgets::SelectAllOnFocus;
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "derive")] {

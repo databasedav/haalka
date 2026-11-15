@@ -16,7 +16,7 @@ use bevy::{
 use bevy_asset_loader::prelude::*;
 use bevy_rand::prelude::*;
 use haalka::prelude::*;
-use rand::Rng;
+use rand::RngExt;
 
 fn main() {
     App::new()
@@ -528,7 +528,7 @@ fn tooltip(cell_entity: LazyEntity) -> impl Element {
             El::<Text>::new()
                 .align(Align::center())
                 .text_font(TextFont::from_font_size(41.67))
-                .text_layout(TextLayout::new_with_no_wrap())
+                .text_layout(TextLayout::no_wrap())
                 .text_signal(
                     signal::from_component_changed::<CellContent>(cell_entity)
                         .map_in(|CellContent(cell_data_option)| cell_data_option.map(|cell_data| cell_data.index))
@@ -541,7 +541,7 @@ fn tooltip(cell_entity: LazyEntity) -> impl Element {
         )
 }
 
-fn random_cell_data(rng: &mut impl Rng) -> CellData {
+fn random_cell_data(rng: &mut impl RngExt) -> CellData {
     CellData {
         index: rng.random_range(0..ITEM_NAMES.len()),
         count: rng.random_range(1..=64),

@@ -2316,8 +2316,8 @@ pub(super) fn plugin(app: &mut App) {
                     any_with_component::<Hoverable>
                         // TODO: apparently this updates every frame no matter what, if so, remove this condition
                         // TODO: remove when native `Enter` and `Leave` available
-                        .and(resource_exists_and_changed::<HoverMap>)
-                        .and(not(resource_exists::<UpdateHoverStatesDisabled>)),
+                        .and_then(resource_exists_and_changed::<HoverMap>)
+                        .and_then(not(resource_exists::<UpdateHoverStatesDisabled>)),
                 ),
                 hovered_system.run_if(any_with_component::<HoveredSystems>),
             )

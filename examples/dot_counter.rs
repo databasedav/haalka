@@ -8,10 +8,14 @@ use std::{
     time::Duration,
 };
 
-use bevy::{camera::visibility::RenderLayers, ecs::lifecycle::HookContext, prelude::*};
+use bevy::{
+    camera::visibility::RenderLayers,
+    ecs::{component::Mutable, lifecycle::HookContext},
+    prelude::*,
+};
 use bevy_rand::prelude::*;
 use haalka::prelude::*;
-use rand::prelude::{IteratorRandom, Rng};
+use rand::prelude::{IteratorRandom, RngExt};
 
 fn main() {
     App::new()
@@ -182,7 +186,7 @@ fn category_count(category: ColorCategory, count: impl Signal<Item = i32> + 'sta
 // like serde
 fn incrde_button<T: Component, R>(step: f32) -> impl Element
 where
-    R: Resource + Clone + Copy + Deref<Target = f32> + DerefMut,
+    R: Resource<Mutability = Mutable> + Clone + Copy + Deref<Target = f32> + DerefMut,
 {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
@@ -222,7 +226,7 @@ where
 
 fn rate_element<T: Component, R>(rate_signal: impl Signal<Item = f32> + 'static) -> impl Element
 where
-    R: Resource + Clone + Copy + Deref<Target = f32> + DerefMut,
+    R: Resource<Mutability = Mutable> + Clone + Copy + Deref<Target = f32> + DerefMut,
 {
     Row::<Node>::new()
         .with_node(|mut node| node.column_gap = Val::Px(15.0))

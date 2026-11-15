@@ -8,8 +8,11 @@ use utils::*;
 
 use std::cmp::Ordering;
 
-use bevy::{input_focus::InputFocus, platform::sync::LazyLock, prelude::*};
-use bevy_ui_text_input::TextInputMode;
+use bevy::{
+    input_focus::{FocusCause, InputFocus},
+    platform::sync::LazyLock,
+    prelude::*,
+};
 use haalka::{
     prelude::*,
     viewport_mutable::{LogicalRect, MutableViewport},
@@ -135,7 +138,7 @@ fn init(world: &mut World) {
 fn text_input(data_entity: Entity, field: KeyValue) -> impl Element {
     let text_input = LazyEntity::new();
     let focused = signal::from_resource_changed::<InputFocus>()
-        .map_in(clone!((text_input) move |focus| focus.0 == Some(*text_input)))
+        .map_in(clone!((text_input) move |focus| focus.get() == Some(*text_input)))
         .broadcast();
 
     El::<Node>::new()
@@ -155,11 +158,11 @@ fn text_input(data_entity: Entity, field: KeyValue) -> impl Element {
         )
         .cursor(CursorIcon::System(SystemCursorIcon::Text))
         .on_click(clone!((text_input) move |In(_), mut input_focus: ResMut<InputFocus>| {
-            input_focus.0 = Some(*text_input);
+            input_focus.set(*text_input, FocusCause::Pressed);
         }))
         .on_click_outside(clone!((text_input) move |In(_), mut input_focus: ResMut<InputFocus>| {
-            if input_focus.0 == Some(*text_input) {
-                input_focus.0 = None;
+            if input_focus.get() == Some(*text_input) {
+                input_focus.clear();
             }
         }))
         .child(
@@ -180,18 +183,13 @@ fn text_input(data_entity: Entity, field: KeyValue) -> impl Element {
                     node.width = Val::Px(INPUT_WIDTH - PADDING * 2.);
                     node.height = Val::Px(INPUT_HEIGHT - PADDING * 2. + 5.);
                 })
-                .with_text_input_node(|mut node| {
-                    node.mode = TextInputMode::SingleLine;
-                    // TODO: https://github.com/ickshonpe/bevy_ui_text_input/issues/10
-                    // node.justification = JustifyText::Center;
-                })
                 .with_builder(move |builder| {
                     builder.on_spawn(move |world: &mut World, entity: Entity| {
                         if world
                             .get::<FocusOnSpawn>(data_entity)
                             .is_some_and(|focus| focus.0 == field)
                         {
-                            world.resource_mut::<InputFocus>().0 = Some(entity);
+                            world.resource_mut::<InputFocus>().set(entity, FocusCause::Navigated);
                             world.entity_mut(data_entity).remove::<FocusOnSpawn>();
                         }
                     })
@@ -298,7 +296,7 @@ fn text_input(data_entity: Entity, field: KeyValue) -> impl Element {
                             guard.move_item(old_index, new_index);
 
                             // Adjust scroll to keep focused input visually stationary
-                            if input_focus.0 == Some(entity) {
+                            if input_focus.get() == Some(entity) {
                                 let delta = (new_index as f32 - old_index as f32) * ROW_STEP;
                                 scroll_position.0.y += delta;
                             }
@@ -588,7 +586,7 @@ fn tabber(
 
     let rows = pairs.0.read(&vec_datas);
 
-    let focused_data = focused_option.0.and_then(|focused| {
+    let focused_data = focused_option.get().and_then(|focused| {
         inputs.get(focused).ok().and_then(|(_, data, field)| {
             let index = rows.iter().position(|e| *e == data.0)?;
             Some((index, field.0))
@@ -619,7 +617,7 @@ fn tabber(
         };
         for (entity, data, input_field) in inputs.iter() {
             if data.0 == data_entity && input_field.0 == field {
-                focused_option.0 = Some(entity);
+                focused_option.set(entity, FocusCause::Navigated);
                 break;
             }
         }
@@ -644,7 +642,7 @@ fn tabber(
         };
         for (entity, data, input_field) in inputs.iter() {
             if data.0 == data_entity && input_field.0 == field {
-                focused_option.0 = Some(entity);
+                focused_option.set(entity, FocusCause::Navigated);
                 break;
             }
         }
@@ -653,7 +651,7 @@ fn tabber(
 
 fn escaper(keys: Res<ButtonInput<KeyCode>>, mut input_focus: ResMut<InputFocus>) {
     if keys.just_pressed(KeyCode::Escape) {
-        input_focus.0 = None;
+        input_focus.clear();
     }
 }
 

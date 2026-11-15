@@ -1109,7 +1109,7 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> ElementWrapper for 
             let options = options.clone();
             let mut text_el = El::<Text>::new()
                 .with_node(|mut node| node.top = Val::Px(2.))
-                .text_layout(TextLayout::new_with_justify(Justify::Center))
+                .text_layout(TextLayout::justify(Justify::Center))
                 .text_font(TextFont::from_font_size(FONT_SIZE))
                 .text_signal(
                     signal::from_component_changed::<SpinnerSelection>(lazy_entity.clone())

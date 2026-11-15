@@ -83,7 +83,7 @@ fn setup(mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<Standard
     ));
     commands.spawn((
         PointLight {
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             intensity: 1_500_000.,
             range: 100.,
             ..default()

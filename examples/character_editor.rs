@@ -10,8 +10,11 @@
 mod utils;
 use utils::*;
 
-use bevy::{input_focus::InputFocus, prelude::*, ui::Pressed};
-use bevy_ui_text_input::{TextInputMode, TextInputPrompt};
+use bevy::{
+    input_focus::{FocusCause, InputFocus},
+    prelude::*,
+    ui::Pressed,
+};
 use haalka::prelude::*;
 use strum::{self, IntoEnumIterator};
 
@@ -151,10 +154,10 @@ fn name_input(shape_buttons: LazyEntity) -> impl Element {
         .insert((BackgroundColor(NORMAL_BUTTON), Pickable::default()))
         .cursor(CursorIcon::System(SystemCursorIcon::Text))
         .with_node(|mut node| node.height = Val::Px(BUTTON_HEIGHT))
-        .on_click(
-            clone!((text_input) move |In(_), mut input_focus: ResMut<InputFocus>| input_focus.0 = Some(*text_input)),
-        )
-        .on_click_outside(|In(_), mut input_focus: ResMut<InputFocus>| input_focus.0 = None)
+        .on_click(clone!((text_input) move |In(_), mut input_focus: ResMut<InputFocus>| {
+            input_focus.set(*text_input, FocusCause::Pressed);
+        }))
+        .on_click_outside(|In(_), mut input_focus: ResMut<InputFocus>| input_focus.clear())
         .child(
             TextInput::new()
                 .with_node(|mut node| {
@@ -163,17 +166,7 @@ fn name_input(shape_buttons: LazyEntity) -> impl Element {
                     node.width = Val::Px(BUTTON_WIDTH - 10.);
                 })
                 .align(Align::new().center_y())
-                .with_text_input_node(|mut node| {
-                    node.mode = TextInputMode::SingleLine;
-                    // TODO: https://github.com/ickshonpe/bevy_ui_text_input/issues/10
-                    // node.justification = Justify::Center;
-                })
                 .text_color(TextColor(Color::WHITE))
-                .text_input_prompt(TextInputPrompt {
-                    text: "name".to_string(),
-                    color: Some(bevy::color::palettes::basic::GRAY.into()),
-                    ..default()
-                })
                 .lazy_entity(text_input.clone())
                 .on_change(clone!((shape_buttons) move |In((_, text)),
                     mut scroll_positions: Query<&mut ScrollPosition>,
@@ -236,7 +229,7 @@ fn setup(mut commands: Commands) {
     commands.spawn((
         PointLight {
             intensity: 1_500_000.,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::from_xyz(0., 8., 0.),
