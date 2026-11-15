@@ -6,6 +6,7 @@ the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### changed
 
+- upgraded to Bevy `0.20` and `jonmo` `0.8`
 - upgraded to Bevy `0.19` and `jonmo` `0.7`
 - **breaking:** migrated `TextInput` from `bevy_ui_text_input` to Bevy's native `EditableText` (`TextInput::with_buffer` and `TextInput::on_signal_with_buffer` now pass `Mut<EditableText>`)
 - **breaking:** upgraded `jonmo` to `0.6` (move-first linear `Signal`, `SignalVec`, `SignalMap`, and `jonmo::Builder`; explicit `.broadcast()` for fan-out and `.cache()` for dynamic replay)

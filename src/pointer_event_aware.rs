@@ -28,7 +28,7 @@ use jonmo::prelude::*;
 use super::{
     element::UiRoot,
     global_event_aware::{GlobalEventAware, GlobalEventData},
-    utils::{HaalkaObserver, clone, observe, register_system, remove_system_holder_on_despawn},
+    utils::{clone, observe, register_system, remove_system_holder_on_despawn},
 };
 
 /// Helper trait for internal data components that track pointer state.
@@ -38,16 +38,16 @@ trait PointerDataInternal {
 
 /// Create a move observer for a specific data type that implements [`PointerDataInternal`].
 fn create_move_observer<D: PointerDataInternal + Component<Mutability = Mutable>>(world: &mut World, entity: Entity) {
-    world.spawn((
-        Observer::new(|move_event: On<Pointer<Move>>, mut datas: Query<&mut D>| {
+    observe(
+        world,
+        entity,
+        |move_event: On<PointerMove>, mut datas: Query<&mut D>| {
             let entity = move_event.entity;
             if let Ok(mut data) = datas.get_mut(entity) {
-                data.update_from_move(move_event.hit.clone(), move_event.pointer_location.clone());
+                data.update_from_move(move_event.hit.clone(), move_event.pointer.location());
             }
-        })
-        .with_entity(entity),
-        HaalkaObserver,
-    ));
+        },
+    );
 }
 
 /// Component storing signal-based disabling state flags.
@@ -398,7 +398,7 @@ pub trait PointerEventAware: GlobalEventAware {
                         observe(
                             world,
                             entity,
-                            move |enter: On<Pointer<Enter>>,
+                            move |enter: On<Enter>,
                                   disabled: Query<&Disabled>,
                                   mut commands: Commands| {
                                 let entity = enter.entity;
@@ -407,8 +407,8 @@ pub trait PointerEventAware: GlobalEventAware {
                                 }
 
                                 let hit = enter.hit.clone();
-                                let pointer_id = enter.pointer_id;
-                                let pointer_location = enter.pointer_location.clone();
+                                let pointer_id = enter.pointer.id;
+                                let pointer_location = enter.pointer.location();
 
                                 if let Ok(mut entity) = commands.get_entity(entity) {
                                     entity.insert(HoverDataInternal {
@@ -434,14 +434,14 @@ pub trait PointerEventAware: GlobalEventAware {
                         observe(
                             world,
                             entity,
-                                move |leave: On<Pointer<Leave>>,
-                                    disabled: Query<&Disabled>,
-                                    mut commands: Commands| {
+                            move |leave: On<Leave>,
+                                  disabled: Query<&Disabled>,
+                                  mut commands: Commands| {
                                 let entity = leave.entity;
 
                                 let hit = leave.hit.clone();
-                                let pointer_id = leave.pointer_id;
-                                let pointer_location = leave.pointer_location.clone();
+                                let pointer_id = leave.pointer.id;
+                                let pointer_location = leave.pointer.location();
 
                                 if !disabled.contains(entity) {
                                     commands.run_system_with(hover_handler_system, (entity, HoverData {
@@ -580,7 +580,7 @@ pub trait PointerEventAware: GlobalEventAware {
 
     /// On frames where this element is clicked and does not have a `Disabled` [`Component`],
     /// run a [`System`] which takes [`In`](`System::In`) this element's [`Entity`] and
-    /// [`Pointer<Click>`]. This method can be called repeatedly to register many such handlers.
+    /// [`PointerClick`]. This method can be called repeatedly to register many such handlers.
     ///
     /// Click event propagation cannot be stopped through this method (yet); if this is needed, use
     /// a separate observer, e.g.
@@ -595,13 +595,13 @@ pub trait PointerEventAware: GlobalEventAware {
     ///     .on_click_disableable::<Disabled, _>(|In((_entity, _click))| {
     ///         // handle click
     ///     })
-    ///     .observe(|mut click: On<Pointer<Click>>| {
+    ///     .observe(|mut click: On<PointerClick>| {
     ///         click.propagate(false);
     ///     });
     /// ```
     fn on_click_disableable<Disabled: Component, Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, PointerClick)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
         self.with_builder(|builder| {
             let system_holder = Arc::new(OnceLock::new());
@@ -609,7 +609,7 @@ pub trait PointerEventAware: GlobalEventAware {
                 .on_spawn(clone!((system_holder) move |world, entity| {
                     let system = register_system(world, handler);
                     let _ = system_holder.set(system);
-                    observe(world, entity, move |click: On<Pointer<Click>>, disabled: Query<&Disabled>, mut commands: Commands| {
+                    observe(world, entity, move |click: On<PointerClick>, disabled: Query<&Disabled>, mut commands: Commands| {
                         if disabled.contains(click.entity) {
                             return;
                         }
@@ -633,13 +633,13 @@ pub trait PointerEventAware: GlobalEventAware {
     ///     .on_click(|In((_entity, _click))| {
     ///         // handle click
     ///     })
-    ///     .observe(|mut click: On<Pointer<Click>>| {
+    ///     .observe(|mut click: On<PointerClick>| {
     ///         click.propagate(false);
     ///     });
     /// ```
     fn on_click<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, PointerClick)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
         self.on_click_disableable::<ClickHandlingDisabled, _>(handler)
     }
@@ -661,7 +661,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///         },
     ///         signal::once(false),
     ///     )
-    ///     .observe(|mut click: On<Pointer<Click>>| {
+    ///     .observe(|mut click: On<PointerClick>| {
     ///         click.propagate(false);
     ///     });
     /// ```
@@ -675,7 +675,7 @@ pub trait PointerEventAware: GlobalEventAware {
     /// [`PointerEventAware::on_click_disableable`] with a custom `Disabled` component.
     fn on_click_disableable_signal<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, PointerClick)>, (), Marker> + Send + Sync + 'static,
         disabled: impl Signal<Item = bool> + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
@@ -702,13 +702,13 @@ pub trait PointerEventAware: GlobalEventAware {
     ///     .on_click_throttled(|In((_entity, _click))| {
     ///         // handle click (throttled)
     ///     }, std::time::Duration::from_millis(100))
-    ///     .observe(|mut click: On<Pointer<Click>>| {
+    ///     .observe(|mut click: On<PointerClick>| {
     ///         click.propagate(false);
     ///     });
     /// ```
     fn on_click_throttled<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, Pointer<Click>)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, PointerClick)>, (), Marker> + Send + Sync + 'static,
         duration: Duration,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
@@ -719,7 +719,7 @@ pub trait PointerEventAware: GlobalEventAware {
                     let system = register_system(world, handler);
                     let _ = system_holder.set(system);
                     let _ = timer_id.set(add_throttle_timer_ready(world, entity, duration));
-                    observe(world, entity, move |click: On<Pointer<Click>>,
+                    observe(world, entity, move |click: On<PointerClick>,
                                                  time: Res<Time>,
                                                  mut collections: Query<&mut ThrottleTimers>,
                                                  mut commands: Commands| {
@@ -733,10 +733,10 @@ pub trait PointerEventAware: GlobalEventAware {
         })
     }
 
-    /// When a [`Pointer<Click>`] is received outside this [`Element`](super::element::Element)
+    /// When a [`PointerClick`] is received outside this [`Element`](super::element::Element)
     /// or its descendents and the element does not have a `Disabled` [`Component`], run a
     /// [`System`] that takes [`In`](`System::In`) this element's [`Entity`] and the
-    /// [`Pointer<Click>`]. Will not function unless this element is a descendant of a [`UiRoot`].
+    /// [`PointerClick`]. Will not function unless this element is a descendant of a [`UiRoot`].
     /// This method can be called repeatedly to register many such handlers.
     ///
     /// # Panics
@@ -744,7 +744,7 @@ pub trait PointerEventAware: GlobalEventAware {
     /// In debug mode, panics if this element is not a descendant of a [`UiRoot`].
     fn on_click_outside_disableable<Disabled: Component, Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, GlobalEventData<Pointer<Click>>)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, GlobalEventData<PointerClick>)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
         self.with_builder(|builder| {
@@ -754,8 +754,8 @@ pub trait PointerEventAware: GlobalEventAware {
                 }))
                 .apply(remove_system_holder_on_despawn(system_holder.clone()))
         })
-        .on_global_event::<Pointer<Click>, _, _, _>(
-            move |In((entity, click)): In<(Entity, GlobalEventData<Pointer<Click>>)>,
+        .on_global_event::<PointerClick, _, _, _>(
+            move |In((entity, click)): In<(Entity, GlobalEventData<PointerClick>)>,
                   childrens: Query<&Children>,
                   child_ofs: Query<&ChildOf>,
                   ui_roots: Query<&UiRoot>,
@@ -776,9 +776,9 @@ pub trait PointerEventAware: GlobalEventAware {
         )
     }
 
-    /// When a [`Pointer<Click>`] is received outside this [`Element`](super::element::Element)
+    /// When a [`PointerClick`] is received outside this [`Element`](super::element::Element)
     /// or its descendents, run a [`System`] that takes [`In`](`System::In`) this element's
-    /// [`Entity`] and the [`Pointer<Click>`]. Will not function unless this element is a descendant
+    /// [`Entity`] and the [`PointerClick`]. Will not function unless this element is a descendant
     /// of a [`UiRoot`]. This method can be called repeatedly to register many such handlers.
     ///
     /// # Panics
@@ -786,14 +786,14 @@ pub trait PointerEventAware: GlobalEventAware {
     /// In debug mode, panics if this element is not a descendant of a [`UiRoot`].
     fn on_click_outside<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, GlobalEventData<Pointer<Click>>)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, GlobalEventData<PointerClick>)>, (), Marker> + Send + Sync + 'static,
     ) -> Self {
         self.on_click_outside_disableable::<ClickOutsideHandlingDisabled, _>(handler)
     }
 
-    /// When a [`Pointer<Click>`] is received outside this [`Element`](super::element::Element)
+    /// When a [`PointerClick`] is received outside this [`Element`](super::element::Element)
     /// or its descendents, run a [`System`] that takes [`In`](`System::In`) this element's
-    /// [`Entity`] and the [`Pointer<Click>`]. Will not function unless this element is a descendant
+    /// [`Entity`] and the [`PointerClick`]. Will not function unless this element is a descendant
     /// of a [`UiRoot`]. Whether click outside handling is disabled is reactively controlled with a
     /// [`Signal`]. This method can be called repeatedly to register many such handlers.
     ///
@@ -810,7 +810,7 @@ pub trait PointerEventAware: GlobalEventAware {
     /// [`PointerEventAware::on_click_outside_disableable`] with a custom `Disabled` component.
     fn on_click_outside_disableable_signal<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, GlobalEventData<Pointer<Click>>)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, GlobalEventData<PointerClick>)>, (), Marker> + Send + Sync + 'static,
         disabled: impl Signal<Item = bool> + 'static,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
@@ -827,9 +827,9 @@ pub trait PointerEventAware: GlobalEventAware {
         ))
     }
 
-    /// When a [`Pointer<Click>`] is received outside this [`Element`](super::element::Element)
+    /// When a [`PointerClick`] is received outside this [`Element`](super::element::Element)
     /// or its descendents, run a [`System`] that takes [`In`](`System::In`) this element's
-    /// [`Entity`] and the [`Pointer<Click>`], throttled by `duration` before the handler can run
+    /// [`Entity`] and the [`PointerClick`], throttled by `duration` before the handler can run
     /// again. Will not function unless this element is a descendant of a [`UiRoot`]. This method
     /// can be called repeatedly to register many such handlers.
     ///
@@ -838,7 +838,7 @@ pub trait PointerEventAware: GlobalEventAware {
     /// In debug mode, panics if this element is not a descendant of a [`UiRoot`].
     fn on_click_outside_throttled<Marker>(
         self,
-        handler: impl IntoSystem<In<(Entity, GlobalEventData<Pointer<Click>>)>, (), Marker> + Send + Sync + 'static,
+        handler: impl IntoSystem<In<(Entity, GlobalEventData<PointerClick>)>, (), Marker> + Send + Sync + 'static,
         duration: Duration,
     ) -> Self {
         let system_holder = Arc::new(OnceLock::new());
@@ -851,8 +851,8 @@ pub trait PointerEventAware: GlobalEventAware {
                 }))
                 .apply(remove_system_holder_on_despawn(system_holder.clone()))
         })
-        .on_global_event::<Pointer<Click>, _, _, _>(
-            move |In((entity, click)): In<(Entity, GlobalEventData<Pointer<Click>>)>,
+        .on_global_event::<PointerClick, _, _, _>(
+            move |In((entity, click)): In<(Entity, GlobalEventData<PointerClick>)>,
                   childrens: Query<&Children>,
                   child_ofs: Query<&ChildOf>,
                   ui_roots: Query<&UiRoot>,
@@ -891,7 +891,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///     .on_pressed_disableable::<Disabled, _>(|In((_entity, _press))| {
     ///         // handle press
     ///     })
-    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///     .observe(|mut press: On<PointerPress>| {
     ///         press.propagate(false);
     ///     });
     /// ```
@@ -954,7 +954,7 @@ pub trait PointerEventAware: GlobalEventAware {
                         observe(
                             world,
                             entity,
-                            move |press: On<Pointer<Press>>,
+                            move |press: On<PointerPress>,
                                   disabled: Query<&Disabled>,
                                   mut commands: Commands| {
                                 let entity = press.entity;
@@ -964,8 +964,8 @@ pub trait PointerEventAware: GlobalEventAware {
 
                                 let button = press.button;
                                 let hit = press.hit.clone();
-                                let pointer_id = press.pointer_id;
-                                let pointer_location = press.pointer_location.clone();
+                                let pointer_id = press.pointer.id;
+                                let pointer_location = press.pointer.location();
 
                                 if let Ok(mut entity) = commands.get_entity(entity) {
                                     entity.insert(PressDataInternal {
@@ -992,10 +992,10 @@ pub trait PointerEventAware: GlobalEventAware {
                         observe(
                             world,
                             entity,
-                                move |release: On<Pointer<Release>>,
-                                    disabled: Query<&Disabled>,
-                                    press_datas: Query<&PressDataInternal>,
-                                    mut commands: Commands| {
+                            move |release: On<PointerRelease>,
+                                  disabled: Query<&Disabled>,
+                                  press_datas: Query<&PressDataInternal>,
+                                  mut commands: Commands| {
                                 let entity = release.entity;
 
                                 if let Ok(press_data) = press_datas.get(entity) {
@@ -1008,8 +1008,8 @@ pub trait PointerEventAware: GlobalEventAware {
 
                                 let button = release.button;
                                 let hit = release.hit.clone();
-                                let pointer_id = release.pointer_id;
-                                let pointer_location = release.pointer_location.clone();
+                                let pointer_id = release.pointer.id;
+                                let pointer_location = release.pointer.location();
 
                                 if !disabled.contains(entity) {
                                     commands.run_system_with(press_handler_system, (entity, PressData {
@@ -1058,7 +1058,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///         },
     ///         signal::once(false),
     ///     )
-    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///     .observe(|mut press: On<PointerPress>| {
     ///         press.propagate(false);
     ///     });
     /// ```
@@ -1101,7 +1101,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///     .on_pressed(|In((_entity, _press))| {
     ///         // handle press
     ///     })
-    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///     .observe(|mut press: On<PointerPress>| {
     ///         press.propagate(false);
     ///     });
     /// ```
@@ -1129,7 +1129,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///     .on_pressed_change_disableable::<Disabled, _>(|In((_entity, _press))| {
     ///         // handle pressed state changes
     ///     })
-    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///     .observe(|mut press: On<PointerPress>| {
     ///         press.propagate(false);
     ///     });
     /// ```
@@ -1160,7 +1160,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///         },
     ///         signal::once(false),
     ///     )
-    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///     .observe(|mut press: On<PointerPress>| {
     ///         press.propagate(false);
     ///     });
     /// ```
@@ -1206,7 +1206,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///     .on_pressed_change(|In((_entity, _press))| {
     ///         // handle pressed state changes
     ///     })
-    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///     .observe(|mut press: On<PointerPress>| {
     ///         press.propagate(false);
     ///     });
     /// ```
@@ -1233,7 +1233,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///     .on_pressed_throttled(|In((_entity, _press))| {
     ///         // handle pressing (throttled)
     ///     }, std::time::Duration::from_millis(100))
-    ///     .observe(|mut press: On<Pointer<Press>>| {
+    ///     .observe(|mut press: On<PointerPress>| {
     ///         press.propagate(false);
     ///     });
     /// ```
@@ -1270,7 +1270,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///     .on_dragged_disableable::<Disabled, _>(|In((_entity, _drag))| {
     ///         // handle drag start/end
     ///     })
-    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///     .observe(|mut drag_start: On<PointerDragStart>| {
     ///         drag_start.propagate(false);
     ///     });
     /// ```
@@ -1335,32 +1335,29 @@ pub trait PointerEventAware: GlobalEventAware {
                         // multiple drag handlers are registered, which would cause the
                         // accumulated delta to be multiplied.
                         if world.get::<DragMoveObserver>(entity).is_none() {
-                            world.spawn((
-                                Observer::new(
-                                    move |drag_event: On<Pointer<Drag>>,
-                                          mut drag_datas: Query<&mut DragDataInternal>| {
-                                        let entity = drag_event.entity;
-                                        if let Ok(mut drag_data) = drag_datas.get_mut(entity)
-                                            && drag_data.button == drag_event.button
-                                        {
-                                            drag_data.pointer_location =
-                                                drag_event.pointer_location.clone();
-                                            // Accumulate deltas to handle multiple events per frame
-                                            drag_data.delta += drag_event.delta;
-                                            drag_data.has_new_delta = true;
-                                        }
-                                    },
-                                )
-                                .with_entity(entity),
-                                HaalkaObserver,
-                            ));
+                            observe(
+                                world,
+                                entity,
+                                move |drag_event: On<PointerDrag>,
+                                      mut drag_datas: Query<&mut DragDataInternal>| {
+                                    let entity = drag_event.entity;
+                                    if let Ok(mut drag_data) = drag_datas.get_mut(entity)
+                                        && drag_data.button == drag_event.button
+                                    {
+                                        drag_data.pointer_location = drag_event.pointer.location();
+                                        // Accumulate deltas to handle multiple events per frame
+                                        drag_data.delta += drag_event.delta;
+                                        drag_data.has_new_delta = true;
+                                    }
+                                },
+                            );
                             world.entity_mut(entity).insert(DragMoveObserver);
                         }
 
                         observe(
                             world,
                             entity,
-                            move |drag_start: On<Pointer<DragStart>>,
+                            move |drag_start: On<PointerDragStart>,
                                   disabled: Query<&Disabled>,
                                   mut commands: Commands| {
                                 let entity = drag_start.entity;
@@ -1370,8 +1367,8 @@ pub trait PointerEventAware: GlobalEventAware {
 
                                 let button = drag_start.button;
                                 let hit = drag_start.hit.clone();
-                                let pointer_id = drag_start.pointer_id;
-                                let pointer_location = drag_start.pointer_location.clone();
+                                let pointer_id = drag_start.pointer.id;
+                                let pointer_location = drag_start.pointer.location();
 
                                 if let Ok(mut entity) = commands.get_entity(entity) {
                                     entity.insert(DragDataInternal {
@@ -1402,10 +1399,10 @@ pub trait PointerEventAware: GlobalEventAware {
                         observe(
                             world,
                             entity,
-                            move |drag_end: On<Pointer<DragEnd>>,
-                                disabled: Query<&Disabled>,
-                                drag_datas: Query<&DragDataInternal>,
-                                mut commands: Commands| {
+                            move |drag_end: On<PointerDragEnd>,
+                                  disabled: Query<&Disabled>,
+                                  drag_datas: Query<&DragDataInternal>,
+                                  mut commands: Commands| {
                                 let entity = drag_end.entity;
 
                                 let stored_hit = if let Ok(drag_data) = drag_datas.get(entity) {
@@ -1418,8 +1415,8 @@ pub trait PointerEventAware: GlobalEventAware {
                                 };
 
                                 let button = drag_end.button;
-                                let pointer_id = drag_end.pointer_id;
-                                let pointer_location = drag_end.pointer_location.clone();
+                                let pointer_id = drag_end.pointer.id;
+                                let pointer_location = drag_end.pointer.location();
 
                                 if !disabled.contains(entity) {
                                     commands.run_system_with(drag_handler_system, (entity, DragData {
@@ -1463,7 +1460,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///         },
     ///         signal::once(false),
     ///     )
-    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///     .observe(|mut drag_start: On<PointerDragStart>| {
     ///         drag_start.propagate(false);
     ///     });
     /// ```
@@ -1506,7 +1503,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///     .on_dragged(|In((_entity, _drag))| {
     ///         // handle drag
     ///     })
-    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///     .observe(|mut drag_start: On<PointerDragStart>| {
     ///         drag_start.propagate(false);
     ///     });
     /// ```
@@ -1534,7 +1531,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///     .on_dragged_change_disableable::<Disabled, _>(|In((_entity, _drag))| {
     ///         // handle dragged state changes
     ///     })
-    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///     .observe(|mut drag_start: On<PointerDragStart>| {
     ///         drag_start.propagate(false);
     ///     });
     /// ```
@@ -1565,7 +1562,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///         },
     ///         signal::once(false),
     ///     )
-    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///     .observe(|mut drag_start: On<PointerDragStart>| {
     ///         drag_start.propagate(false);
     ///     });
     /// ```
@@ -1608,7 +1605,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///     .on_dragged_change(|In((_entity, _drag))| {
     ///         // handle dragged state changes
     ///     })
-    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///     .observe(|mut drag_start: On<PointerDragStart>| {
     ///         drag_start.propagate(false);
     ///     });
     /// ```
@@ -1635,7 +1632,7 @@ pub trait PointerEventAware: GlobalEventAware {
     ///     .on_dragged_throttled(|In((_entity, _drag))| {
     ///         // handle dragging (throttled)
     ///     }, std::time::Duration::from_millis(100))
-    ///     .observe(|mut drag_start: On<Pointer<DragStart>>| {
+    ///     .observe(|mut drag_start: On<PointerDragStart>| {
     ///         drag_start.propagate(false);
     ///     });
     /// ```
@@ -1679,16 +1676,24 @@ struct ClickHandlingDisabled;
 #[derive(Component, Default, Clone)]
 struct ClickOutsideHandlingDisabled;
 
-/// Fires when a the pointer crosses into the bounds of the `target` entity, ignoring children.
-#[derive(Clone, PartialEq, Debug, Reflect, Event)]
+/// Fires when the pointer crosses into the bounds of `entity` (including its descendants).
+#[derive(EntityEvent, Clone, PartialEq, Debug, Reflect)]
 pub struct Enter {
+    /// The target entity.
+    pub entity: Entity,
+    /// The pointer that triggered this event.
+    pub pointer: Pointer,
     /// Information about the picking intersection.
     pub hit: HitData,
 }
 
-/// Fires when a the pointer crosses out of the bounds of the `target` entity, excluding children.
-#[derive(Clone, PartialEq, Debug, Reflect, Event)]
+/// Fires when the pointer crosses out of the bounds of `entity` (and all of its descendants).
+#[derive(EntityEvent, Clone, PartialEq, Debug, Reflect)]
 pub struct Leave {
+    /// The target entity.
+    pub entity: Entity,
+    /// The pointer that triggered this event.
+    pub pointer: Pointer,
     /// Information about the latest prior picking intersection.
     pub hit: HitData,
 }
@@ -1753,7 +1758,11 @@ fn update_hover_states(
             };
 
             if let Some(hit) = hit_data_option.cloned() {
-                commands.trigger(Pointer::new(pointer_id, location, Enter { hit }, entity));
+                commands.trigger(Enter {
+                    entity,
+                    pointer: Pointer::new(pointer_id, location),
+                    hit,
+                });
                 if let Ok(mut entity_commands) = commands.get_entity(entity) {
                     entity_commands.try_insert(Hovered);
                 }
@@ -1761,7 +1770,11 @@ fn update_hover_states(
             }
 
             if let Some(hit) = last_subtree_hit.map(|h| h.0.clone()) {
-                commands.trigger(Pointer::new(pointer_id, location, Leave { hit }, entity));
+                commands.trigger(Leave {
+                    entity,
+                    pointer: Pointer::new(pointer_id, location),
+                    hit,
+                });
             } else {
                 debug!(
                     "Unable to get cached subtree hit for pointer {:?} leave on {:?}",
@@ -1822,48 +1835,7 @@ struct HoveredSystems(Vec<SystemId<In<Entity>, ()>>);
 /// and removed when it's no longer hovered. This allows using [`Hovered`] in queries
 /// and signals without needing to use the [`PointerEventAware::on_hovered`] methods.
 #[derive(Component)]
-#[component(on_add = on_hoverable_add, on_remove = on_hoverable_remove)]
 pub struct Hoverable;
-
-/// Stores the observer entities that stop [`Pointer<Enter>`] and [`Pointer<Leave>`] propagation.
-#[derive(Component)]
-struct HoverablePropagationStoppers {
-    enter: Entity,
-    leave: Entity,
-}
-
-fn on_hoverable_add(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
-    world.commands().queue(move |world: &mut World| {
-        let enter = world
-            .entity_mut(entity)
-            .observe(|mut event: On<Pointer<Enter>>| {
-                event.propagate(false);
-            })
-            .id();
-        let leave = world
-            .entity_mut(entity)
-            .observe(|mut event: On<Pointer<Leave>>| {
-                event.propagate(false);
-            })
-            .id();
-        world
-            .entity_mut(entity)
-            .insert(HoverablePropagationStoppers { enter, leave });
-    });
-}
-
-fn on_hoverable_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
-    world.commands().queue(move |world: &mut World| {
-        if let Some(&HoverablePropagationStoppers { enter, leave }) = world.get::<HoverablePropagationStoppers>(entity)
-        {
-            let _ = world.try_despawn(enter);
-            let _ = world.try_despawn(leave);
-        }
-        if let Ok(mut entity) = world.get_entity_mut(entity) {
-            entity.remove::<HoverablePropagationStoppers>();
-        }
-    });
-}
 
 /// Marker component that enables press state management for an entity.
 ///
@@ -1895,7 +1867,7 @@ fn on_draggable_add(mut world: DeferredWorld, HookContext { entity, .. }: HookCo
     world.commands().queue(move |world: &mut World| {
         let drag_start = world
             .entity_mut(entity)
-            .observe(|drag_start: On<Pointer<DragStart>>, mut commands: Commands| {
+            .observe(|drag_start: On<PointerDragStart>, mut commands: Commands| {
                 if let Ok(mut entity) = commands.get_entity(drag_start.entity) {
                     entity.insert(Dragged);
                 }
@@ -1903,7 +1875,7 @@ fn on_draggable_add(mut world: DeferredWorld, HookContext { entity, .. }: HookCo
             .id();
         let drag_end = world
             .entity_mut(entity)
-            .observe(|drag_end: On<Pointer<DragEnd>>, mut commands: Commands| {
+            .observe(|drag_end: On<PointerDragEnd>, mut commands: Commands| {
                 if let Ok(mut entity) = commands.get_entity(drag_end.entity) {
                     entity.remove::<Dragged>();
                 }
@@ -2041,7 +2013,7 @@ fn contains(left: Entity, right: Entity, childrens: &Query<&Children>) -> bool {
 // ported from moonzoon https://github.com/MoonZoon/MoonZoon/blob/fc73b0d90bf39be72e70fdcab4f319ea5b8e6cfc/crates/zoon/src/element/ability/mouse_event_aware.rs#L158
 fn is_inside_or_removed_from_dom(
     element: Entity,
-    event: &GlobalEventData<Pointer<Click>>,
+    event: &GlobalEventData<PointerClick>,
     ui_root: Entity,
     childrens: &Query<&Children>,
 ) -> bool {
@@ -2062,7 +2034,7 @@ struct CursorDisabled;
 
 /// When this [`Resource`] exists in the [`World`], [`Cursorable`]
 /// [`Element`]s will not trigger updates to the window's cursor when they
-/// receive a [`Pointer<Over>`] event. When this [`Resource`] is removed, the last
+/// receive a [`PointerOver`] event. When this [`Resource`] is removed, the last
 /// [`Option<CursorIcon>`] queued by a [`Cursorable`] [`Element`] will be set as the window's
 /// cursor. Adding this [`Resource`] to the [`World`] will *not* unset any [`Option<CursorIcon>`]s
 /// previously set by a [`Cursorable`] [`Element`].
@@ -2072,21 +2044,21 @@ struct CursorDisabled;
 pub struct CursorableDisabled;
 
 /// A [`Component`] which stores the [`Option<CursorIcon>`] to set the window's cursor to when an
-/// [`Element`](super::element::Element) receives a [`Pointer<Over>`] event; when [`None`], the
+/// [`Element`](super::element::Element) receives a [`PointerOver`] event; when [`None`], the
 /// cursor will be hidden.
 #[derive(Component, Clone)]
 pub struct Cursor(Option<CursorIcon>);
 
 /// Enables managing the window's [`CursorIcon`] when a [`Pickable`]
-/// [`Element`](super::element::Element) receives an [`Pointer<Over>`] event.
+/// [`Element`](super::element::Element) receives an [`PointerOver`] event.
 ///
 /// **Note:** These methods will only function for [`Pickable`] entities (e.g., those with
 /// [`Pickable::default()`]).
 pub trait Cursorable: PointerEventAware {
-    /// When this [`Element`] receives a [`Pointer<Over>`] event, set the window's cursor to
+    /// When this [`Element`] receives a [`PointerOver`] event, set the window's cursor to
     /// [`Some`] [`CursorIcon`] in the [`Cursor`] [`Component`] or hide it if [`None`].
-    /// If the [`Pointer`] is [`Over`] this element when it is disabled with a `Disabled`
-    /// [`Component`], another [`Pointer<Over>`] event will be sent up the hierarchy to trigger
+    /// If the [`Pointer`] is over this element when it is disabled with a `Disabled`
+    /// [`Component`], another [`PointerOver`] event will be sent up the hierarchy to trigger
     /// any handlers whose propagation was previously stopped by this [`Element`].
     ///
     /// [`Element`]: super::element::Element
@@ -2096,7 +2068,7 @@ pub trait Cursorable: PointerEventAware {
             builder
                 .insert(CursorOverPropagationStopped)
                 .observe(
-                    |event: On<Insert, CursorOver>,
+                    |event: On<Insert<CursorOver>>,
                      cursor_on_hovers: Query<&Cursor>,
                      disabled: Query<&Disabled>,
                      cursor_over_disabled_option: Option<Res<CursorableDisabled>>,
@@ -2114,7 +2086,7 @@ pub trait Cursorable: PointerEventAware {
                     },
                 )
                 .observe(
-                    |event: On<Insert, Cursor>, cursor_overs: Query<&CursorOver>, mut commands: Commands| {
+                    |event: On<Insert<Cursor>>, cursor_overs: Query<&CursorOver>, mut commands: Commands| {
                         let entity = event.entity;
                         if cursor_overs.contains(entity)
                             && let Ok(mut entity) = commands.get_entity(entity)
@@ -2125,7 +2097,7 @@ pub trait Cursorable: PointerEventAware {
                 )
                 .insert(Cursor(cursor_option))
                 .observe(
-                    move |event: On<Insert, Disabled>,
+                    move |event: On<Insert<Disabled>>,
                           cursor_over: Query<&CursorOver>,
                           pointer_map: Res<PointerMap>,
                           pointers: Query<&PointerLocation>,
@@ -2148,12 +2120,16 @@ pub trait Cursorable: PointerEventAware {
                                 .zip(child_ofs.get(entity).ok())
                             && let Some(hit) = hover_map.get(&entity).cloned()
                         {
-                            commands.trigger(Pointer::new(PointerId::Mouse, location, Over { hit }, parent));
+                            commands.trigger(PointerOver {
+                                entity: parent,
+                                pointer: Pointer::new(PointerId::Mouse, location),
+                                hit,
+                            });
                         }
                     },
                 )
                 .observe(
-                    move |event: On<Remove, Disabled>, cursor_over: Query<&CursorOver>, mut commands: Commands| {
+                    move |event: On<Remove<Disabled>>, cursor_over: Query<&CursorOver>, mut commands: Commands| {
                         let entity = event.event().entity;
                         if let Ok(mut entity) = commands.get_entity(entity) {
                             entity.try_insert(CursorOverPropagationStopped);
@@ -2164,7 +2140,7 @@ pub trait Cursorable: PointerEventAware {
                     },
                 )
                 .observe(
-                    |mut over: On<Pointer<Over>>,
+                    |mut over: On<PointerOver>,
                      propagation_stopped: Query<&CursorOverPropagationStopped>,
                      mut commands: Commands| {
                         let entity = over.entity;
@@ -2176,7 +2152,7 @@ pub trait Cursorable: PointerEventAware {
                         }
                     },
                 )
-                .observe(|mut out: On<Pointer<Out>>, mut commands: Commands| {
+                .observe(|mut out: On<PointerOut>, mut commands: Commands| {
                     out.propagate(false);
                     if let Ok(mut entity) = commands.get_entity(out.entity) {
                         entity.remove::<CursorOver>();
@@ -2185,17 +2161,17 @@ pub trait Cursorable: PointerEventAware {
         })
     }
 
-    /// When this [`Element`](super::element::Element) receives a [`Pointer<Over>`] event, set the
+    /// When this [`Element`](super::element::Element) receives a [`PointerOver`] event, set the
     /// window's cursor to [`Some`] [`CursorIcon`] in the [`Cursor`] [`Component`] or
     /// hide it if [`None`].
     fn cursor(self, cursor_option: impl Into<Option<CursorIcon>>) -> Self {
         self.cursor_disableable::<CursorDisabled>(cursor_option)
     }
 
-    /// When this [`Element`] receives a [`Pointer<Over>`] event, set the window's cursor to
+    /// When this [`Element`] receives a [`PointerOver`] event, set the window's cursor to
     /// [`Some`] [`CursorIcon`] output by the [`Signal`] or hide it if [`None`]. If the
-    /// [`Pointer`] is [`Over`] this element when it is disabled with a `Disabled`
-    /// [`Component`], another [`Pointer<Over>`] event will be sent up the hierarchy to trigger
+    /// [`Pointer`] is over this element when it is disabled with a `Disabled`
+    /// [`Component`], another [`PointerOver`] event will be sent up the hierarchy to trigger
     /// any handlers whose propagation was previously stopped by this [`Element`].
     ///
     /// [`Element`]: super::element::Element
@@ -2211,10 +2187,10 @@ pub trait Cursorable: PointerEventAware {
         .cursor_disableable::<Disabled>(None)
     }
 
-    /// When this [`Element`] receives a [`Pointer<Over>`] event, set the window's cursor to
+    /// When this [`Element`] receives a [`PointerOver`] event, set the window's cursor to
     /// [`Some`] [`CursorIcon`] output by the [`Signal`] or hide it if [`None`]. If the
-    /// [`Pointer`] is [`Over`] this element when it is disabled with the `disabled` [`Signal`]
-    /// outputting `true`, another [`Pointer<Over>`] event will be sent up the hierarchy to
+    /// [`Pointer`] is over this element when it is disabled with the `disabled` [`Signal`]
+    /// outputting `true`, another [`PointerOver`] event will be sent up the hierarchy to
     /// trigger any handlers whose propagation was previously stopped by this [`Element`].
     ///
     /// [`Element`]: super::element::Element
@@ -2228,7 +2204,7 @@ pub trait Cursorable: PointerEventAware {
             .cursor_signal_disableable::<CursorDisabled>(cursor_option_signal)
     }
 
-    /// When this [`Element`](super::element::Element) receives a [`Pointer<Over>`] event, set the
+    /// When this [`Element`](super::element::Element) receives a [`PointerOver`] event, set the
     /// window's cursor to [`Some`] [`CursorIcon`] output by the [`Signal`] or hide it if
     /// [`None`].
     fn cursor_signal<S: Signal<Item = impl Into<Option<CursorIcon>> + 'static> + Send + Sync + 'static>(
@@ -2241,10 +2217,10 @@ pub trait Cursorable: PointerEventAware {
         self
     }
 
-    /// When this [`Element`] receives a [`Pointer<Over>`] event, set the window's cursor to
-    /// [`Some`] [`CursorIcon`] or hide it if [`None`]. If the [`Pointer`] is [`Over`] this
+    /// When this [`Element`] receives a [`PointerOver`] event, set the window's cursor to
+    /// [`Some`] [`CursorIcon`] or hide it if [`None`]. If the [`Pointer`] is over this
     /// element when it is disabled with the `disabled` [`Signal`] outputting `true`, another
-    /// [`Pointer<Over>`] event will be sent up the hierarchy to trigger any handlers whose
+    /// [`PointerOver`] event will be sent up the hierarchy to trigger any handlers whose
     /// propagation was previously stopped by this [`Element`].
     ///
     /// [`Element`]: super::element::Element

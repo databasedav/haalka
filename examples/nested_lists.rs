@@ -79,7 +79,7 @@ fn list_item_box(
                     .text(Text::from("-")),
             )
             .on_click(
-                move |In((entity, _)): In<(Entity, Pointer<Click>)>,
+                move |In((entity, _)): In<(Entity, PointerClick)>,
                       indices: Query<&Index>,
                       mut vec_datas: Query<&mut MutableVecData<Lists>>| {
                     let index = **indices.get(entity).unwrap();
