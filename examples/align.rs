@@ -5,7 +5,7 @@ use utils::*;
 
 use std::ops::{Deref, DerefMut};
 
-use bevy::{color::palettes, prelude::*};
+use bevy::{color::palettes, ecs::component::Mutable, prelude::*};
 use haalka::prelude::*;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
@@ -74,7 +74,9 @@ struct RectangleSelfAlignment(Option<RectangleAlignment>);
 #[derive(Resource, Clone, Copy, Default, Deref, DerefMut)]
 struct RectangleContentAlignment(Option<RectangleAlignment>);
 
-fn alignment_button<R: Resource + Clone + Deref<Target = bool> + DerefMut>(label: &str) -> impl Element {
+fn alignment_button<R: Resource<Mutability = Mutable> + Clone + Deref<Target = bool> + DerefMut>(
+    label: &str,
+) -> impl Element {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
         .insert((Pickable::default(), Hoverable))
@@ -331,7 +333,7 @@ fn rectangles() -> Vec<impl Element> {
 
 fn alignment_switcher<R>(rectangle_alignment: RectangleAlignment) -> impl Element
 where
-    R: Resource + Clone + Copy + Deref<Target = Option<RectangleAlignment>> + DerefMut,
+    R: Resource<Mutability = Mutable> + Clone + Copy + Deref<Target = Option<RectangleAlignment>> + DerefMut,
 {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()

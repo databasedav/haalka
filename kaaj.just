@@ -2,16 +2,16 @@ format *extras:
   cargo +nightly fmt {{ extras }}
 
 doc *extras:
-  cargo +nightly doc --all-features -Zunstable-options -Zrustdoc-scrape-examples --locked {{ extras }}
+  cargo +stable doc --all-features --no-deps --locked {{ extras }}
 
 doctest:
-  cargo test --doc --all-features --locked
+  cargo +stable test --doc --all-features --locked
 
 # TODO: unit tests
 test: doctest
 
 clippy *extras:
-  cargo +nightly clippy --all-features --all-targets --locked --no-deps {{ extras }} -- --deny warnings
+  cargo +stable clippy --all-features --all-targets --locked --no-deps {{ extras }} -- --deny warnings
 
 # TODO: --all-features flag doesn't work because examples shenanigans
 check_all_features:

@@ -84,7 +84,7 @@ fn button() -> impl Element {
         .child(
             El::<Text>::new()
                 .text_font(TextFont {
-                    font_size: 33.0,
+                    font_size: FontSize::Px(33.0),
                     ..default()
                 })
                 .text_shadow(TextShadow::default())

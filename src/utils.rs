@@ -75,7 +75,7 @@ cfg_if::cfg_if! {
 
         fn toggle_overlay(
             input: Res<ButtonInput<KeyCode>>,
-            mut options: ResMut<UiDebugOptions>,
+            mut options: ResMut<GlobalUiDebugOptions>,
         ) {
             if input.just_pressed(OVERLAY_TOGGLE_KEY) {
                 options.toggle();

@@ -97,7 +97,7 @@ fn square(i: usize) -> impl Element {
                  mut rng: Single<&mut WyRand, With<GlobalRng>>,
                  mut backgrounds: Query<&mut BackgroundColor>| {
                     if let Ok(mut bg) = backgrounds.get_mut(entity) {
-                        *bg = BackgroundColor(random_color(rng.as_mut()));
+                        *bg = BackgroundColor(random_color(&mut rng));
                     }
                 },
             )
