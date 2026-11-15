@@ -34,7 +34,7 @@ in
     uses = "actions/checkout@%{ CHECKOUT_VERSION }",
     with = {
       submodules = true,
-      persist-credentials = false,
+      persist-credentials | default = false,
     }
   },
   github_script = {

@@ -424,12 +424,13 @@ fn update_hover_states(
             if let Some(hit) = hit_data_option.cloned() {
                 commands.trigger(Pointer::new(pointer_id, location, Enter { hit }, entity));
             } else {
-                // TODO: children `Leave`s don't trigger with this condition, e.g. in an aalo inspector row
-                // if let Some(hit) = previous_hover_map
+                // TODO: children `Leave`s don't trigger with this condition, e.g. in an aalo
+                // inspector row if let Some(hit) = previous_hover_map
                 // .get(&pointer_id)
                 // .and_then(|map| map.get(&entity).cloned())
                 // {
-                // commands.trigger_targets(Pointer::new(pointer_id, location, entity, Leave { hit }), entity);
+                // commands.trigger_targets(Pointer::new(pointer_id, location, entity, Leave { hit
+                // }), entity);
                 commands.trigger(Pointer::new(pointer_id, location, Leave {}, entity));
                 // }
             }

@@ -27,10 +27,6 @@ example_wasm name *extras:
 release *extras:
   cargo release --unpublished --sign-tag {{ extras }}
 
-# TODO: https://github.com/release-plz/release-plz/issues/1773
-sign_tag tag:
-  GIT_COMMITTER_DATE="$(git log -1 --format=%aD {{ tag }})" git tag {{ tag }} {{ tag }}^{} -f -s && git push --tags --force
-
 list_examples:
   @cargo metadata --no-deps --format-version 1 | jq -c --argjson exclude '[{{ exclude_examples }}]' '[.packages[].targets[] | select(.kind[] == "example" and (.name as $name | $exclude | index($name) | not)) | .name]'
 

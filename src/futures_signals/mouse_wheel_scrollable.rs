@@ -276,16 +276,16 @@ impl BasicScrollHandler {
         let direction = Mutable::new(DEFAULT_SCROLL_DIRECTION);
         let magnitude = Mutable::new(DEFAULT_SCROLL_MAGNITUDE);
         if let Some(direction_signal) = direction_signal_option {
-            // TODO: these "leak" for as long as the source mutable is alive, is this an issue? revert to less
-            // ergonomic task collection strat if so
+            // TODO: these "leak" for as long as the source mutable is alive, is this an issue?
+            // revert to less ergonomic task collection strat if so
             direction_signal
                 .for_each_sync(clone!((direction) move |d| direction.set_neq(d)))
                 .apply(spawn)
                 .detach()
         }
         if let Some(magnitude_signal) = magnitude_signal_option {
-            // TODO: these "leak" for as long as the source mutable is alive, is this an issue? revert to less
-            // ergonomic task collection strat if so
+            // TODO: these "leak" for as long as the source mutable is alive, is this an issue?
+            // revert to less ergonomic task collection strat if so
             magnitude_signal
                 .for_each_sync(clone!((magnitude) move |m| magnitude.set_neq(m)))
                 .apply(spawn)
