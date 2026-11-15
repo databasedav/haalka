@@ -57,8 +57,6 @@ use super::{column::Column, el::El, element::BuilderWrapper, grid::Grid, row::Ro
 ///
 /// # Skipping `_signal` Derivation
 /// Use `#[skip_signal]` before a field to skip generating the `_signal` method for that field.
-/// This is necessary when the component type doesn't implement [`Clone`], which is required for the
-/// `_signal` method.
 ///
 /// ```
 /// # use bevy::prelude::*;
@@ -109,7 +107,7 @@ macro_rules! impl_haalka_methods {
             }
 
             #[doc = concat!("Reactively run a function with mutable access (via [`Mut`]) to this element's [`", stringify!($field_type), "`] [`Component`] and the output of the [`Signal`].")]
-            pub fn [<on_signal_with_ $field>]<T: Clone + Send + Sync + 'static>(
+            pub fn [<on_signal_with_ $field>]<T: 'static>(
                 self,
                 signal: impl Signal<Item = T> + 'static,
                 f: impl FnMut(Mut<$field_type>, T) + Send + Sync + 'static,

@@ -189,10 +189,6 @@ All examples are compiled to wasm for both webgl2 and webgpu (check [compatibili
 
     scrollable buttons, mutable viewport, text input reactivity
 
-- [**`futures_signals_jonmo_compat`**](https://github.com/databasedav/haalka/blob/main/examples/futures_signals_jonmo_compat.rs) [webgl2](https://databasedav.github.io/haalka/examples/webgl2/futures_signals_jonmo_compat/) [webgpu](https://databasedav.github.io/haalka/examples/webgpu/futures_signals_jonmo_compat/)
-
-    demonstrates that both futures-signals and jonmo signals backends can be used together
-
 Or run them locally with `cargo`.
 ```bash
 cargo run --example counter
@@ -212,25 +208,33 @@ cargo run --example inventory
 cargo run --example healthbar
 cargo run --example responsive_menu
 cargo run --example character_editor
-cargo run --example futures_signals_jonmo_compat --features futures_signals_ui
 ```
 Or with [`just`](https://github.com/casey/just), e.g. `just example snake -r`.
 
 ## Bevy compatibility
 |bevy|haalka|
 |-|-|
-|`0.18`|`0.7`|
+|`0.18`|`0.7–0.8`|
 |`0.17`|`0.6`|
 |`0.16`|`0.5`|
 |`0.15`|`0.4`|
 |`0.14`|`0.2`|
 |`0.13`|`0.1`|
 
+## historical releases
+
+Releases through `0.7` retain their original `.gitmodules` file and MoonZoon Gitlink. Reproduce one of those releases in a dedicated conventional Git clone:
+
+```bash
+git clone --recurse-submodules https://github.com/databasedav/haalka.git haalka-legacy
+cd haalka-legacy
+git checkout <old-tag>
+git submodule update --init
+```
+
+GitHub and conventional Git checkouts can initialize the historical submodule at its pinned commit. Jujutsu can see the Gitlink when switching to an old revision, but it does not materialize or update the submodule. Use a separate conventional Git clone as above, or manually maintain a separate MoonZoon checkout at the pinned commit (`97ab0f057ca2c44587f403ef1cc3183095283cdb`); switching a JJ workspace alone is not sufficient.
+
 ## development
-- avoid the gh-pages branch and include submodules when fetching the repo
-    ```bash
-    git clone --single-branch --branch main --recurse-submodules https://github.com/databasedav/haalka.git
-    ```
 - install [just](https://github.com/casey/just?tab=readme-ov-file#installation)
 - install [nickel](https://github.com/tweag/nickel?tab=readme-ov-file#run) for modifying CI configuration (`nickel` must be in your PATH)
 - install [File Watcher](https://marketplace.visualstudio.com/items?itemName=appulate.filewatcher) for automatically syncing nickels

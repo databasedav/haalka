@@ -16,7 +16,6 @@ jobs:
       with:
         fetch-depth: 0
         persist-credentials: true
-        submodules: true
     - name: import release gpg key
       uses: crazy-max/ghaction-import-gpg@v7
       with:

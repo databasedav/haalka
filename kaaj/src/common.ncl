@@ -33,7 +33,6 @@ in
     name = "checkout repo",
     uses = "actions/checkout@%{ CHECKOUT_VERSION }",
     with = {
-      submodules = true,
       persist-credentials | default = false,
     }
   },

@@ -103,7 +103,7 @@ fn menu() -> impl Element {
     )
 }
 
-fn main_menu() -> impl Element + Clone {
+fn main_menu() -> impl Element {
     menu_base(MAIN_MENU_SIDES, MAIN_MENU_SIDES, "main menu")
         .with_node(|mut node| node.row_gap = Val::Px(BASE_PADDING * 2.))
         .item(
@@ -407,7 +407,7 @@ struct Selected;
 struct VirtualHovered;
 
 // core widget, pretty much every other widget uses the `Button`
-#[derive(Default, Clone)]
+#[derive(Default)]
 struct Button {
     el: El<Node>,
 }
@@ -456,10 +456,11 @@ impl Button {
             .has_component::<Selected>()
             .dedupe();
         let selected_hovered = signal::zip!(
-            signal::any!(selected.clone(), pressed, virtual_pressed, dragged).dedupe(),
+            signal::any!(selected, pressed, virtual_pressed, dragged).dedupe(),
             signal::any!(mouse_hovered, virtual_hovered).dedupe()
         )
-        .dedupe();
+        .dedupe()
+        .broadcast();
 
         Self {
             el: {
@@ -519,20 +520,20 @@ impl Button {
         self
     }
 
-    fn selected_signal(mut self, selected: impl Signal<Item = bool> + Clone + 'static) -> Self {
+    fn selected_signal(mut self, selected: impl Signal<Item = bool> + 'static) -> Self {
         self.el = self
             .el
             .component_signal(selected.map_true_in(|| Selected).schedule::<Update>());
         self
     }
 
-    fn hovered_signal(mut self, hovered: impl Signal<Item = bool> + Clone + 'static) -> Self {
+    fn hovered_signal(mut self, hovered: impl Signal<Item = bool> + 'static) -> Self {
         self.el = self.el.component_signal(hovered.map_true_in(|| VirtualHovered));
         self
     }
 }
 
-fn text_button(text_signal: impl Signal<Item = String> + Clone + 'static) -> Button {
+fn text_button(text_signal: impl Signal<Item = String> + 'static) -> Button {
     Button::new()
         .body(
             El::<Text>::new()
@@ -566,14 +567,15 @@ fn focusable_sub_menu_button((index, sub_menu): (usize, SubMenu)) -> El<Node> {
         .component_changed::<FocusedIndex>()
         .map_in::<Option<usize>, _, _>(deref_copied)
         .eq(Some(index))
-        .dedupe();
+        .dedupe()
+        .broadcast();
     El::<Node>::new()
         .lazy_entity(lazy_entity)
         .insert(FocusableItemIndex(index))
         .child(
             sub_menu_button(sub_menu)
                 .hovered_signal(focused.clone())
-                .with_builder(|builder| builder.component_signal(focused.clone().map_true_in(|| Focused))),
+                .with_builder(|builder| builder.component_signal(focused.map_true_in(|| Focused))),
         )
 }
 
@@ -655,7 +657,7 @@ impl Checkbox {
         }
     }
 
-    fn checked_signal(mut self, signal: impl Signal<Item = bool> + Clone + 'static) -> Self {
+    fn checked_signal(mut self, signal: impl Signal<Item = bool> + 'static) -> Self {
         let task = signal
             .map(
                 clone!((self.lazy_entity => lazy_entity) move |In(checked), checkeds: Query<&Checked>, mut commands: Commands| {
@@ -812,7 +814,7 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> RadioGroup<T> {
         }
     }
 
-    fn selection_signal(mut self, signal: impl Signal<Item = Option<T>> + Clone + 'static) -> Self {
+    fn selection_signal(mut self, signal: impl Signal<Item = Option<T>> + 'static) -> Self {
         let task = signal
             .map(
                 clone!((self.lazy_entity => lazy_entity, self.options => options) move |In(selection_option): In<Option<T>>,
@@ -1024,7 +1026,7 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> Spinner<T> {
         self
     }
 
-    fn selection_signal(mut self, signal: impl Signal<Item = T> + Clone + 'static) -> Self {
+    fn selection_signal(mut self, signal: impl Signal<Item = T> + 'static) -> Self {
         let task = signal
             .map(
                 clone!((self.lazy_entity => lazy_entity, self.options => options) move |In(selection): In<T>,
@@ -1171,7 +1173,7 @@ impl Slider {
         }
     }
 
-    fn value_signal(mut self, signal: impl Signal<Item = f32> + Clone + 'static) -> Self {
+    fn value_signal(mut self, signal: impl Signal<Item = f32> + 'static) -> Self {
         let task = signal
             .map(clone!((self.lazy_entity => lazy_entity) move |In(value): In<f32>,
                    mut sliders: Query<&mut SliderValue>,
@@ -1440,7 +1442,7 @@ impl<T: Display + Clone + PartialEq + Send + Sync + 'static> Dropdown<T> {
         self
     }
 
-    fn selection_signal(mut self, signal: impl Signal<Item = Option<T>> + Clone + 'static) -> Self {
+    fn selection_signal(mut self, signal: impl Signal<Item = Option<T>> + 'static) -> Self {
         let task = signal
             .map(
                 clone!((self.lazy_entity => lazy_entity, self.options => options) move |In(selection_option): In<Option<T>>,
@@ -1675,7 +1677,8 @@ fn focusable_menu_item(label: &str, el: impl Element) -> Stack<Node> {
             .map_in(deref_copied)
             .map_in(Some)
     )
-    .dedupe();
+    .dedupe()
+    .broadcast();
     menu_item(
         label,
         el.with_builder(|builder| builder.component_signal(focused.clone().map_true_in(|| Focused))),
@@ -1723,7 +1726,7 @@ fn x_button() -> El<Node> {
         )
 }
 
-fn closeable_sub_menu(element: impl Element) -> impl Element + Clone {
+fn closeable_sub_menu(element: impl Element) -> impl Element {
     Stack::<Node>::new()
         .with_node(|mut node| {
             node.width = Val::Px(SUB_MENU_WIDTH);

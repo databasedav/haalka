@@ -117,7 +117,7 @@ fn nested_lists(child_lists_vec: MutableVec<Lists>) -> Column<Node> {
     Column::<Node>::new()
         .with_node(|mut node| node.row_gap = Val::Px(10.))
         .items_signal_vec(child_lists_vec.signal_vec().enumerate().map(
-            clone!((child_lists_vec) move |In((i, lists)): In<(BoxedSignal<Option<usize>>, Lists)>| {
+            clone!((child_lists_vec) move |In((i, lists)): In<(Broadcast<Option<usize>>, Lists)>| {
                 lists_element(i, lists, Some(child_lists_vec.clone()))
             }),
         ))

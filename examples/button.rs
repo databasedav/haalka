@@ -37,7 +37,9 @@ fn button() -> impl Element {
     let hovered = signal::from_entity(lazy_entity.clone())
         .has_component::<Hovered>()
         .dedupe();
-    let pressed_hovered = signal::zip!(signal::any!(pressed, dragged), hovered).dedupe();
+    let pressed_hovered = signal::zip!(signal::any!(pressed, dragged), hovered)
+        .dedupe()
+        .broadcast();
 
     El::<Node>::new()
         .with_node(|mut node| {

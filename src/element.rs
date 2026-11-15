@@ -208,7 +208,7 @@ pub trait Nameable: BuilderWrapper {
     /// removed.
     fn name_signal<T, S>(mut self, name_option_signal_option: impl Into<Option<S>>) -> Self
     where
-        T: Into<Cow<'static, str>> + Clone + 'static,
+        T: Into<Cow<'static, str>> + 'static,
         S: Signal<Item = Option<T>> + Send + Sync + 'static,
     {
         if let Some(name_option_signal) = name_option_signal_option.into() {
@@ -243,188 +243,10 @@ pub trait BuilderPassThrough: BuilderWrapper {
     /// Pass-through for [`jonmo::Builder::component_signal`].
     fn component_signal<C>(self, signal: impl Signal<Item = Option<C>>) -> Self
     where
-        C: Component + Clone,
+        C: Component,
     {
         self.with_builder(|builder| builder.component_signal(signal))
     }
-}
-
-/// Generates the `# Clone semantics` doc section for element struct documentation.
-///
-/// # Usage
-/// ```ignore
-/// #[doc = clone_semantics_doc!("El")]
-/// pub struct El<NodeType> { ... }
-/// ```
-#[doc(hidden)]
-#[macro_export]
-macro_rules! clone_semantics_doc {
-    ($type_name:literal) => {
-        concat!(
-            "# `Clone` semantics\n\n",
-            "This type implements [`Clone`] **only** to satisfy trait bounds required by signal combinators.\n",
-            "**Cloning `",
-            $type_name,
-            "`s at runtime is a bug.** See [`",
-            $type_name,
-            "::clone`] for details."
-        )
-    };
-}
-
-/// Generates the base error text for clone documentation (without trailing punctuation).
-#[doc(hidden)]
-#[macro_export]
-macro_rules! clone_error_doc_base {
-    ($type_name:literal) => {
-        concat!(
-            "# Error\n\n",
-            "This clone implementation exists **only** to satisfy trait bounds required by signal\n",
-            "combinators. **Cloning `",
-            $type_name,
-            "`s at runtime is a bug and will lead to unexpected behavior.**\n\n",
-            "Clones produce an empty element with no on-spawn hooks.\n\n",
-            "Use factory functions instead if you need reusable UI templates"
-        )
-    };
-}
-
-/// Generates the error docstring for a `Clone::clone` method on element types.
-///
-/// # Usage
-/// ```ignore
-/// impl Clone for MyType {
-///     #[doc = clone_error_doc!("MyType")]
-///     fn clone(&self) -> Self { ... }
-/// }
-/// ```
-///
-/// Or with a code example:
-/// ```ignore
-/// impl Clone for MyType {
-///     #[doc = clone_error_doc!("MyType", my_fn, ".method()")]
-///     fn clone(&self) -> Self { ... }
-/// }
-/// ```
-#[doc(hidden)]
-#[macro_export]
-macro_rules! clone_error_doc {
-    // Without example
-    ($type_name:literal) => {
-        concat!($crate::clone_error_doc_base!($type_name), ".")
-    };
-    // With example
-    ($type_name:literal, $example_fn:ident, $example_method:literal) => {
-        concat!(
-            $crate::clone_error_doc_base!($type_name),
-            ":\n\n",
-            "```ignore\n",
-            "use bevy_ui::prelude::*;\n",
-            "use haalka::prelude::*;\n\n",
-            "fn ",
-            stringify!($example_fn),
-            "(label: &str) -> ",
-            $type_name,
-            "<Node> {\n",
-            "    ",
-            $type_name,
-            "::new()",
-            $example_method,
-            "\n",
-            "}\n\n",
-            "// Correct: each call creates a fresh element\n",
-            "let el1 = ",
-            stringify!($example_fn),
-            "(\"First\");\n",
-            "let el2 = ",
-            stringify!($example_fn),
-            "(\"Second\");\n",
-            "```"
-        )
-    };
-}
-
-/// Generates the runtime error message for cloning an element type.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! clone_error_msg {
-    ($type_name:literal) => {
-        concat!(
-            "Cloning `",
-            $type_name,
-            "` at {} is a bug! Use a factory function instead."
-        )
-    };
-}
-
-/// Implements [`Clone`] for element types with appropriate errors.
-///
-/// This macro generates a `Clone` implementation that:
-/// - Logs an error at runtime when cloned (since cloning elements is typically a bug)
-/// - Has complete documentation explaining the clone semantics
-///
-/// # Forms
-///
-/// ## Generic element types with `builder` and `_node_type` fields:
-/// ```ignore
-/// impl_element_clone! {
-///     "El",
-///     El<NodeType>,
-///     my_el,
-///     ".name(\"my_el\")"
-/// }
-/// ```
-///
-/// ## Non-generic tuple struct wrapping `jonmo::Builder`:
-/// ```ignore
-/// impl_element_clone!(simple "AlignabilityFacade", AlignabilityFacade);
-/// ```
-#[doc(hidden)]
-#[macro_export]
-macro_rules! impl_element_clone {
-    // Generic element type with builder + _node_type fields and example
-    ($type_name:literal, $type:ty, $example_fn:ident, $example_method:literal) => {
-        impl<NodeType> Clone for $type {
-            #[doc = $crate::clone_error_doc!($type_name, $example_fn, $example_method)]
-            #[track_caller]
-            fn clone(&self) -> Self {
-                let msg = format!(
-                    $crate::clone_error_msg!($type_name),
-                    std::panic::Location::caller()
-                );
-                if cfg!(debug_assertions) {
-                    let backtrace = std::backtrace::Backtrace::force_capture();
-                    panic!("{}\nBacktrace:\n{}", msg, backtrace);
-                }
-                bevy_log::error!("{}", msg);
-
-                Self {
-                    builder: self.builder.clone(),
-                    _node_type: std::marker::PhantomData,
-                }
-            }
-        }
-    };
-    // Simple non-generic tuple struct wrapping jonmo::Builder
-    (simple $type_name:literal, $type:ty) => {
-        impl Clone for $type {
-            #[doc = $crate::clone_error_doc!($type_name)]
-            #[track_caller]
-            fn clone(&self) -> Self {
-                let msg = format!(
-                    $crate::clone_error_msg!($type_name),
-                    std::panic::Location::caller()
-                );
-                if cfg!(debug_assertions) {
-                    let backtrace = std::backtrace::Backtrace::force_capture();
-                    panic!("{}\nBacktrace:\n{}", msg, backtrace);
-                }
-                bevy_log::error!("{}", msg);
-
-                Self(self.0.clone())
-            }
-        }
-    };
 }
 
 /// Enables mixing of different types of [`Element`]s.
@@ -451,10 +273,7 @@ impl<T: Alignable> TypeEraseable for T {
 ///
 /// Created via [`TypeEraseable::type_erase`]. The underlying alignment components
 /// are preserved from the original element, so alignment behavior works correctly.
-#[doc = crate::clone_semantics_doc!("AlignabilityFacade")]
 pub struct AlignabilityFacade(jonmo::Builder);
-
-impl_element_clone!(simple "AlignabilityFacade", AlignabilityFacade);
 
 impl BuilderWrapper for AlignabilityFacade {
     fn builder_mut(&mut self) -> &mut jonmo::Builder {
@@ -491,27 +310,6 @@ where
 {
     Left(L),
     Right(R),
-}
-
-impl<L, R> Clone for ElementEither<L, R>
-where
-    L: Element + Clone,
-    R: Element + Clone,
-{
-    #[doc = crate::clone_error_doc!("ElementEither")]
-    #[track_caller]
-    fn clone(&self) -> Self {
-        let msg = format!(crate::clone_error_msg!("ElementEither"), std::panic::Location::caller());
-        if cfg!(debug_assertions) {
-            panic!("{}", msg);
-        }
-        bevy_log::error!("{}", msg);
-
-        match self {
-            Self::Left(left) => Self::Left(left.clone()),
-            Self::Right(right) => Self::Right(right.clone()),
-        }
-    }
 }
 
 impl<L, R> BuilderWrapper for ElementEither<L, R>

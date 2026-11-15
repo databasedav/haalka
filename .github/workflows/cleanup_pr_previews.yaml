@@ -26,7 +26,6 @@ jobs:
       uses: actions/checkout@v4
       with:
         persist-credentials: false
-        submodules: true
     - name: make empty dir
       run: mkdir -p empty_dir
     - name: cleanup

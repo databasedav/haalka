@@ -96,7 +96,7 @@ impl TextInput {
 
     /// Reactively run a function with this input's [`TextInputBuffer`] and the output of the
     /// [`Signal`] with access to [`ResMut<TextInputPipeline>`].
-    pub fn on_signal_with_buffer<T: Clone + Send + Sync + 'static>(
+    pub fn on_signal_with_buffer<T: 'static>(
         self,
         signal: impl Signal<Item = T> + 'static,
         mut f: impl FnMut(Mut<TextInputBuffer>, ResMut<TextInputPipeline>, T) + Send + Sync + 'static,
@@ -125,10 +125,7 @@ impl TextInput {
 
     /// Reactively set the text of this input. If the signal outputs [`None`] the text is set to an
     /// empty string.
-    pub fn text_signal<
-        T: Into<Option<String>> + Clone + Send + Sync + 'static,
-        S: Signal<Item = T> + Send + 'static,
-    >(
+    pub fn text_signal<T: Into<Option<String>> + 'static, S: Signal<Item = T> + Send + 'static>(
         mut self,
         text_option_signal_option: impl Into<Option<S>>,
     ) -> Self {

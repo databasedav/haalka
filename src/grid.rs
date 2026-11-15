@@ -16,20 +16,16 @@ use super::{
     pointer_event_aware::{Cursorable, PointerEventAware},
     viewport_mutable::ViewportMutable,
 };
-use crate::{clone_semantics_doc, impl_element_clone};
 
 /// [`Element`](super::element::Element) with children aligned in a grid using a simple
 /// [`.row_wrap_cell_width`](Grid::row_wrap_cell_width) grid layout model.
 ///
 /// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/element/grid.rs).
-#[doc = clone_semantics_doc!("Grid")]
 #[derive(Default)]
 pub struct Grid<NodeType> {
     builder: jonmo::Builder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
-
-impl_element_clone!("Grid", Grid<NodeType>, my_grid, ".cell(El::new().name(label))");
 
 impl<NodeType: Bundle> From<jonmo::Builder> for Grid<NodeType> {
     fn from(builder: jonmo::Builder) -> Self {
@@ -177,7 +173,7 @@ impl<NodeType: Bundle> Grid<NodeType> {
 
     /// Declare reactive grid children.
     pub fn cells_signal_vec<
-        IOE: IntoOptionElement + Clone + Send + Sync + 'static,
+        IOE: IntoOptionElement + Send + Sync + 'static,
         S: SignalVec<Item = IOE> + Send + Sync + 'static,
     >(
         self,

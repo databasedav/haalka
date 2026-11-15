@@ -50,7 +50,9 @@ fn letter_column(rotate: usize, color: Color) -> impl Element {
     let hovered = signal::from_entity(lazy_entity.clone())
         .has_component::<Hovered>()
         .dedupe();
-    let shifted = signal::from_resource_changed::<Shifted>().map_in(deref_copied);
+    let shifted = signal::from_resource_changed::<Shifted>()
+        .map_in(deref_copied)
+        .broadcast();
     Column::<Node>::new()
         .lazy_entity(lazy_entity)
         .insert((Pickable::default(), Hoverable))
@@ -85,7 +87,9 @@ fn ui_root() -> impl Element {
     let hovered = signal::from_entity(lazy_entity.clone())
         .has_component::<Hovered>()
         .dedupe();
-    let shifted = signal::from_resource_changed::<Shifted>().map_in(deref_copied);
+    let shifted = signal::from_resource_changed::<Shifted>()
+        .map_in(deref_copied)
+        .broadcast();
     El::<Node>::new()
         .with_node(|mut node| {
             node.width = Val::Percent(100.);

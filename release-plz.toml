@@ -7,10 +7,3 @@ git_release_draft = true
 name = "haalka"
 git_tag_name = "v{{ version }}"
 
-[[package]]
-name = "haalka_futures_signals_ext"
-git_tag_enable = false
-
-[[package]]
-name = "haalka_futures_util_ext"
-git_tag_enable = false

@@ -318,10 +318,18 @@ fn color_boxes() -> impl Element {
 }
 
 fn counts_panel() -> impl Element {
-    let blue = signal::from_resource_changed::<BlueDotCount>().map_in(deref_copied);
-    let green = signal::from_resource_changed::<GreenDotCount>().map_in(deref_copied);
-    let red = signal::from_resource_changed::<RedDotCount>().map_in(deref_copied);
-    let yellow = signal::from_resource_changed::<YellowDotCount>().map_in(deref_copied);
+    let blue = signal::from_resource_changed::<BlueDotCount>()
+        .map_in(deref_copied)
+        .broadcast();
+    let green = signal::from_resource_changed::<GreenDotCount>()
+        .map_in(deref_copied)
+        .broadcast();
+    let red = signal::from_resource_changed::<RedDotCount>()
+        .map_in(deref_copied)
+        .broadcast();
+    let yellow = signal::from_resource_changed::<YellowDotCount>()
+        .map_in(deref_copied)
+        .broadcast();
     Stack::<Node>::new()
         .layer(
             Column::<Node>::new()

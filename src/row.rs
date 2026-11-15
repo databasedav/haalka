@@ -14,19 +14,15 @@ use super::{
     pointer_event_aware::{Cursorable, PointerEventAware},
     viewport_mutable::ViewportMutable,
 };
-use crate::{clone_semantics_doc, impl_element_clone};
 
 /// [`Element`](super::element::Element) with horizontally stacked children.
 ///
 /// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Row`](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/element/row.rs).
-#[doc = clone_semantics_doc!("Row")]
 #[derive(Default)]
 pub struct Row<NodeType> {
     builder: jonmo::Builder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
-
-impl_element_clone!("Row", Row<NodeType>, my_row, ".item(El::new().name(label))");
 
 impl<NodeType: Bundle> From<jonmo::Builder> for Row<NodeType> {
     fn from(builder: jonmo::Builder) -> Self {
@@ -124,7 +120,7 @@ impl<NodeType: Bundle> Row<NodeType> {
     /// Declare reactive horizontally stacked children.
     pub fn items_signal_vec<IOE, S>(self, items_options_signal_vec_option: impl Into<Option<S>>) -> Self
     where
-        IOE: IntoOptionElement + Clone + Send + Sync + 'static,
+        IOE: IntoOptionElement + Send + Sync + 'static,
         S: SignalVec<Item = IOE> + Send + Sync + 'static,
     {
         if let Some(items_options_signal_vec) = items_options_signal_vec_option.into() {

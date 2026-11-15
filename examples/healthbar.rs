@@ -146,11 +146,16 @@ fn sync_tracking_healthbar_position(
 fn health_signal() -> impl Signal<Item = u32> + Clone + 'static {
     signal::from_system(|In(_), health: Option<Single<&Health>>| health.map(deref_copied).map(|health| health.0))
         .dedupe()
+        .broadcast()
 }
 
 fn healthbar(max: u32, height: f32, color_gradient: impl Gradient + Send + Sync + 'static) -> Stack<Node> {
     let health = health_signal();
-    let percent_health = health.clone().map_in(move |h: u32| h as f32 / max as f32).dedupe();
+    let percent_health = health
+        .clone()
+        .map_in(move |h: u32| h as f32 / max as f32)
+        .dedupe()
+        .broadcast();
     Stack::<Node>::new()
         .with_node(move |mut node| {
             node.height = Val::Px(height);
@@ -190,7 +195,7 @@ fn healthbar(max: u32, height: f32, color_gradient: impl Gradient + Send + Sync 
 #[derive(Event)]
 struct SpawnPlayer;
 
-fn respawn_button() -> impl Element + Clone {
+fn respawn_button() -> impl Element {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
         .align(Align::center())
@@ -269,7 +274,7 @@ fn bottom_healthbar() -> impl Element {
     })
 }
 
-fn player_ui() -> impl Element + Clone {
+fn player_ui() -> impl Element {
     Stack::<Node>::new()
         .with_node(|mut node| {
             node.width = Val::Percent(100.);

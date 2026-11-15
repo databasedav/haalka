@@ -282,10 +282,12 @@ struct PressHandlingDisabled;
 struct TooltipOrigin(Option<Vec2>);
 
 fn is_dragging() -> impl Signal<Item = bool> + Clone {
-    signal::from_system(|In(_), dragging: Option<Res<Dragging>>| dragging.is_some()).dedupe()
+    signal::from_system(|In(_), dragging: Option<Res<Dragging>>| dragging.is_some())
+        .dedupe()
+        .broadcast()
 }
 
-fn pointer_position_signal() -> impl Signal<Item = Vec2> + Clone {
+fn pointer_position_signal() -> impl Signal<Item = Vec2> {
     signal::from_resource_changed::<PointerPosition>().map_in(deref_copied)
 }
 
@@ -294,9 +296,14 @@ fn cell(insertable: bool) -> impl Element + BuilderPassThrough + PointerEventAwa
     let dragging = is_dragging();
     let hovered = signal::from_entity(lazy_entity.clone())
         .has_component::<Hovered>()
-        .dedupe();
-    let content = signal::from_component_changed::<CellContent>(lazy_entity.clone());
-    let populated = content.clone().map_in(|CellContent(x)| x.is_some()).dedupe();
+        .dedupe()
+        .broadcast();
+    let content = signal::from_component_changed::<CellContent>(lazy_entity.clone()).broadcast();
+    let populated = content
+        .clone()
+        .map_in(|CellContent(x)| x.is_some())
+        .dedupe()
+        .broadcast();
 
     {
         let el = El::<Node>::new()
@@ -475,7 +482,7 @@ fn cell(insertable: bool) -> impl Element + BuilderPassThrough + PointerEventAwa
     })
 }
 
-fn tooltip(cell_entity: LazyEntity) -> impl Element + Clone {
+fn tooltip(cell_entity: LazyEntity) -> impl Element {
     let tooltip_entity = LazyEntity::new();
     El::<Node>::new()
         .lazy_entity(tooltip_entity.clone())
@@ -692,7 +699,7 @@ fn craft_output_cell() -> impl Element {
         .task();
     let output_empty =
         signal::from_system(|In(_), output: Single<&CellContent, With<CraftOutputSlot>>| output.is_none()).dedupe();
-    let press_disabled = signal::any!(is_dragging(), output_empty.clone()).dedupe();
+    let press_disabled = signal::any!(is_dragging(), output_empty).dedupe();
     cell(false)
         .insert(CraftOutputSlot)
         .with_builder(|builder| builder.hold_tasks([outputter]))
@@ -859,7 +866,7 @@ fn ui_root() -> impl Element {
             is_dragging()
                 .dedupe()
                 .map_true_in(move || {
-                    let dragging = signal::from_resource_changed::<Dragging>();
+                    let dragging = signal::from_resource_changed::<Dragging>().broadcast();
                     icon(
                         dragging.clone().map_in(|dragging| dragging.item.index).dedupe(),
                         dragging.map_in(|dragging| dragging.item.count).dedupe(),

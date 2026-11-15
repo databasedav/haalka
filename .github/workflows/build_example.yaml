@@ -10,7 +10,6 @@ jobs:
         persist-credentials: false
         ref: ${{ inputs.ref || github.sha }}
         repository: ${{ inputs.repository || github.repository }}
-        submodules: true
     - name: install rust toolchain
       uses: dtolnay/rust-toolchain@master
       with:

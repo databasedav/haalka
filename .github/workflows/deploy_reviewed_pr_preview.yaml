@@ -16,7 +16,6 @@ jobs:
       uses: actions/checkout@v4
       with:
         persist-credentials: false
-        submodules: true
     - name: remove gitignore
       run: rm -f .gitignore
     - name: download validated preview

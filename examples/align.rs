@@ -225,7 +225,7 @@ fn container(header: impl Element, element: impl Element) -> impl Element {
                             .map_in(deref_copied)
                             .map_some_in(RectangleAlignment::to_align)
                     })
-                    .map_in(signal::option)
+                    .map_in(|option| signal::option(option).cache())
                     .flatten()
                     .map_in(Option::flatten)
                     .dedupe(),
@@ -312,7 +312,7 @@ fn rectangle(index: i32) -> impl Element {
                         .map_in(deref_copied)
                         .map_some_in(RectangleAlignment::to_align)
                 })
-                .map_in(signal::option)
+                .map_in(|option| signal::option(option).cache())
                 .flatten()
                 .map_in(Option::flatten)
                 .dedupe(),
