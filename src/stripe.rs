@@ -18,7 +18,6 @@ use super::{
     pointer_event_aware::{Cursorable, PointerEventAware},
     viewport_mutable::ViewportMutable,
 };
-use crate::{clone_semantics_doc, impl_element_clone};
 
 /// Direction for a [`Stripe`] element.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug, Hash)]
@@ -52,14 +51,11 @@ impl From<Direction> for LayoutDirection {
 /// vertically, with the ability to switch layout direction dynamically.
 ///
 /// Port of [MoonZoon](https://github.com/MoonZoon/MoonZoon)'s [`Stripe`](https://github.com/MoonZoon/MoonZoon/blob/19c6cf6b4d07cd27bee7758977ef1ea4d5b9933d/crates/zoon/src/element/stripe.rs).
-#[doc = clone_semantics_doc!("Stripe")]
 #[derive(Default)]
 pub struct Stripe<NodeType> {
     builder: jonmo::Builder,
     _node_type: std::marker::PhantomData<NodeType>,
 }
-
-impl_element_clone!("Stripe", Stripe<NodeType>, my_stripe, ".item(El::new().name(label))");
 
 impl<NodeType: Bundle> From<jonmo::Builder> for Stripe<NodeType> {
     fn from(builder: jonmo::Builder) -> Self {
@@ -156,7 +152,7 @@ impl<NodeType: Bundle> Stripe<NodeType> {
     /// Declare reactive dynamically directioned items.
     pub fn items_signal_vec<IOE, S>(self, items_options_signal_vec_option: impl Into<Option<S>>) -> Self
     where
-        IOE: IntoOptionElement + Clone + Send + Sync + 'static,
+        IOE: IntoOptionElement + Send + Sync + 'static,
         S: SignalVec<Item = IOE> + Send + Sync + 'static,
     {
         if let Some(items_options_signal_vec) = items_options_signal_vec_option.into() {

@@ -91,7 +91,9 @@ fn button(shape: Shape) -> impl Element {
         .has_component::<Hovered>()
         .dedupe();
 
-    let selected_hovered = signal::zip!(signal::any!(selected, pressed), hovered).dedupe();
+    let selected_hovered = signal::zip!(signal::any!(selected, pressed), hovered)
+        .dedupe()
+        .broadcast();
 
     El::<Node>::new()
         .insert((Pickable::default(), Hoverable, Pressable))

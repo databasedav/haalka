@@ -1,5 +1,4 @@
 [workspace]
-members = ["MoonZoon/crates/*"]
 resolver = "2"
 
 [package]
@@ -8,7 +7,7 @@ version = "0.7.1"
 edition = "2024"
 categories = ["asynchronous", "gui", "game-development"]
 description = "ergonomic reactive Bevy UI library powered by FRP signals"
-exclude = [".github/", ".vscode/", "MoonZoon/"]
+exclude = [".github/", ".vscode/"]
 keywords = ["ui", "reactive", "signals", "gamedev", "bevy"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/databasedav/haalka"
@@ -18,7 +17,6 @@ documentation = "https://docs.rs/haalka"
 bevy_app = { version = "0.18", default-features = false }
 bevy_camera = { version = "0.18", optional = true, default-features = false }
 bevy_color = { version = "0.18", optional = true, default-features = false }
-bevy_dev_tools = { version = "0.18", default-features = false, optional = true }
 bevy_derive = { version = "0.18", default-features = false }
 bevy_ecs = { version = "0.18", default-features = false, features = ["multi_threaded"] }
 bevy_input = { version = "0.18", default-features = false }
@@ -39,25 +37,16 @@ bevy_utils = { version = "0.18", default-features = false }
 bevy_window = { version = "0.18", default-features = false }
 bevy_winit = { version = "0.18", default-features = false, features = ["x11"] }
 bevy_ui_text_input = { version = "0.7", default-features = false, optional = true }
-bevy-async-ecs = { version = "0.10", optional = true }
-jonmo = "0.7"
-cosmic-text = "0.16"  # should match the version bevy_ui_text_input uses
+jonmo = { git = "https://github.com/databasedav/jonmo", rev = "1fcbb77e7c246ec405931c9826581c70df340ace" }
+cosmic-text = { version = "0.16", optional = true } # should match the version bevy_ui_text_input uses
 apply = "0.3"
 cfg-if = "1.0"
 enclose = "1.2"
-futures-signals = { version = "0.3", optional = true }
 paste = { version = "1.0", optional = true }
 document-features = { version = "0.2", optional = true }
 # aalo = { path = "../aalo", version = "0.0", optional = true }
 
-haalka_futures_signals_ext = { version = "0.0.3", path = "MoonZoon/crates/futures_signals_ext", optional = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-async-io = { version = "2.4", optional = true }
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-gloo-timers = { version = "0.3", features = ["futures"], optional = true }
-send_wrapper = { version = "0.6", features = ["futures"], optional = true }
 bevy_winit = { version = "0.18", optional = true }
 bevy_audio = { version = "0.18", optional = true, features = ["android_shared_stdcxx"] }
 bevy_core_pipeline = { version = "0.18", optional = true, default-features = false, features = ["webgl"] }
@@ -73,7 +62,7 @@ default = [
 ]
 
 ## [bevy_ui_text_input](https://github.com/ickshonpe/bevy_ui_text_input) text input widget integrated with signals.
-text_input = ["derive", "bevy_color", "bevy_input_focus", "bevy_ui_text_input"]
+text_input = ["derive", "bevy_color", "bevy_input_focus", "bevy_ui_text_input", "cosmic-text"]
 
 ## Macro ([`impl_haalka_methods!`](https://docs.rs/haalka/latest/haalka/macro.impl_haalka_methods.html)) for deriving convenience methods for modifying components on custom element structs with static values, functions, or signals.
 derive = ["paste", "bevy_camera"]
@@ -81,15 +70,8 @@ derive = ["paste", "bevy_camera"]
 ## Utilities for working with async.
 utils = []
 
-## `DebugUiPlugin` which enables toggling [`bevy_dev_tools::ui_debug_overlay::DebugUiPlugin`](https://docs.rs/bevy/latest/bevy/dev_tools/ui_debug_overlay/struct.DebugUiPlugin.html) with the `F1` key; requires a camera to be marked with the [`IsDefaultCamera`](https://docs.rs/bevy/latest/bevy/prelude/struct.IsDefaultUiCamera.html#) component.
+## `DebugUiPlugin` which toggles Bevy's [`UiDebugOptions`](https://docs.rs/bevy/latest/bevy/ui_render/debug_overlay/struct.UiDebugOptions.html) with the `F1` key; requires a camera marked with [`IsDefaultUiCamera`](https://docs.rs/bevy/latest/bevy/camera/struct.IsDefaultUiCamera.html).
 debug = ["bevy_ui_render/bevy_ui_debug"]
-
-## Deprecated futures-signals based reactive primitives. Use jonmo-based reactivity instead for new code.
-futures_signals = ["futures-signals", "bevy-async-ecs", "haalka_futures_signals_ext", "async-io", "gloo-timers", "send_wrapper"]
-futures_signals_derive = ["paste", "bevy_camera"]
-futures_signals_utils = []
-futures_signals_ui = ["futures_signals", "futures_signals_derive", "futures_signals_utils"]
-futures_signals_text_input = ["futures_signals_ui", "bevy_color", "bevy_input_focus", "bevy_ui_text_input"]
 
 deployed_wasm_example = []
 
@@ -122,7 +104,8 @@ allowlist = [
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-all-features = true
+no-default-features = true
+features = ["text_input", "derive", "utils", "debug", "document-features"]
 
 [lints.rust]
 missing_docs = "warn"
@@ -210,12 +193,6 @@ doc-scrape-examples = true
 [[example]]
 name = "dragging"
 path = "examples/dragging.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "futures_signals_jonmo_compat"
-path = "examples/futures_signals_jonmo_compat.rs"
-required-features = ["futures_signals_ui"]
 doc-scrape-examples = true
 
 [[example]]

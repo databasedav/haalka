@@ -32,13 +32,6 @@ mod derive;
 #[allow(missing_docs)]
 pub mod utils;
 
-/// Deprecated futures-signals based reactive primitives.
-/// Use jonmo-based reactivity instead for new code.
-#[cfg(feature = "futures_signals")]
-#[allow(deprecated)]
-#[allow(clippy::all)]
-pub mod futures_signals;
-
 /// Includes the plugins and systems required for [haalka](crate) to function.
 ///
 /// By default, this plugin adds [`JonmoPlugin`](jonmo::JonmoPlugin) with `PostUpdate` as the

@@ -120,7 +120,7 @@ fn grid(cells: MutableVec<Cell>) -> impl Element {
             node.width = Val::Px(SIDE as f32);
             node.height = Val::Px(SIDE as f32);
         })
-        .row_wrap_cell_width_signal(cell_size.clone())
+        .row_wrap_cell_width_signal(cell_size)
         .cells_signal_vec(
             cells
                 .signal_vec()
@@ -240,7 +240,7 @@ fn ui_root(cells: MutableVec<Cell>) -> impl Element {
         )
 }
 
-fn restart_button() -> impl Element + Clone {
+fn restart_button() -> impl Element {
     let lazy_entity = LazyEntity::new();
     El::<Node>::new()
         .insert((Pickable::default(), Hoverable))

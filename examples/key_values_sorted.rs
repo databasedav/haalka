@@ -135,7 +135,8 @@ fn init(world: &mut World) {
 fn text_input(data_entity: Entity, field: KeyValue) -> impl Element {
     let text_input = LazyEntity::new();
     let focused = signal::from_resource_changed::<InputFocus>()
-        .map_in(clone!((text_input) move |focus| focus.0 == Some(*text_input)));
+        .map_in(clone!((text_input) move |focus| focus.0 == Some(*text_input)))
+        .broadcast();
 
     El::<Node>::new()
         .insert(Pickable::default())
@@ -197,7 +198,6 @@ fn text_input(data_entity: Entity, field: KeyValue) -> impl Element {
                 })
                 .text_color_signal(
                     focused
-                        .clone()
                         .map_bool_in(|| Color::BLACK, || Color::WHITE)
                         .map_in(TextColor)
                         .map_in(Some),
@@ -313,7 +313,7 @@ fn sort_button(sort_by: KeyValue) -> impl Element {
     let hovered = signal::from_entity(lazy_entity.clone())
         .has_component::<Hovered>()
         .dedupe();
-    let selected = signal::from_resource_changed::<KeyValue>().eq(sort_by);
+    let selected = signal::from_resource_changed::<KeyValue>().eq(sort_by).broadcast();
     Row::<Node>::new()
         .with_node(|mut node| node.column_gap = Val::Px(35.))
         .align(Align::new().right())
@@ -426,7 +426,7 @@ fn key_values(pairs: Pairs) -> Column<Node> {
         })
         .item(viewport_spacer())
         .items_signal_vec(pairs.0.signal_vec().enumerate().map(
-            |In((index_signal, data_entity)): In<(BoxedSignal<Option<usize>>, _)>| {
+            |In((index_signal, data_entity)): In<(Broadcast<Option<usize>>, _)>| {
                 Row::<Node>::new()
                     .with_node(|mut node| {
                         node.column_gap = Val::Px(10.);

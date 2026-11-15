@@ -105,8 +105,10 @@ fn nine_slice_button() -> impl Element {
 }
 
 fn menu() -> impl Element {
-    let width = signal::from_resource_changed::<Width>().map_in(deref_copied);
-    let is_wide = width.clone().map_in(|width| width > 400.).dedupe();
+    let width = signal::from_resource_changed::<Width>()
+        .map_in(deref_copied)
+        .broadcast();
+    let is_wide = width.clone().map_in(|width| width > 400.).dedupe().broadcast();
     let image_el = || {
         El::<ImageNode>::new().with_builder(|builder| {
             builder.on_spawn_with_system(

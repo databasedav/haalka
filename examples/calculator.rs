@@ -123,7 +123,8 @@ fn clear_button() -> impl Element {
     let lazy_entity = LazyEntity::new();
     let output_empty = signal::from_resource_changed::<Output>()
         .map_in(deref_cloned)
-        .map_in_ref(String::is_empty);
+        .map_in_ref(String::is_empty)
+        .broadcast();
     let hovered = signal::from_entity(lazy_entity.clone())
         .has_component::<Hovered>()
         .dedupe();

@@ -87,7 +87,6 @@ jobs:
         persist-credentials: false
         ref: ${{ needs.authorize.outputs.ref }}
         repository: ${{ needs.authorize.outputs.repository }}
-        submodules: true
     - name: install just
       uses: extractions/setup-just@v2
     - id: output_examples

@@ -4,6 +4,16 @@ the format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## unreleased
 
+### changed
+
+- **breaking:** upgraded `jonmo` to `0.6` (move-first linear `Signal`, `SignalVec`, `SignalMap`, and `jonmo::Builder`; explicit `.broadcast()` for fan-out and `.cache()` for dynamic replay)
+- relaxed `Clone` bounds on reactive element, `TextInput`, and `impl_haalka_methods!` builder methods
+
+### removed
+
+- **breaking:** removed panicking `Clone` implementations on `El`, `Column`, `Row`, `Stack`, `Grid`, `Stripe`, `AlignabilityFacade`, and `ElementEither`; cloning elements is now a compile-time error
+- **breaking:** removed the deprecated `futures_signals` backend (`haalka::futures_signals`, `futures_signals*` feature flags, `MoonZoon` submodule, and `futures_signals_jonmo_compat` example); use `haalka` `0.7` to migrate legacy applications
+
 # 0.7.0 (2026-02-10)
 
 ### changed

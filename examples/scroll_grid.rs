@@ -83,7 +83,9 @@ struct LetterColorComponent(LetterColor);
 
 fn letter((x, y): (usize, usize), initial: LetterColor) -> impl Element {
     let lazy_entity = LazyEntity::new();
-    let letter_color = signal::from_component_changed::<LetterColorComponent>(lazy_entity.clone()).map_in(deref_cloned);
+    let letter_color = signal::from_component_changed::<LetterColorComponent>(lazy_entity.clone())
+        .map_in(deref_cloned)
+        .broadcast();
     let letter = letter_color
         .clone()
         .map_in(|LetterColor { letter, .. }| letter)
