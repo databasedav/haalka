@@ -12,5 +12,5 @@ name = "haalka_futures_signals_ext"
 git_tag_enable = false
 
 [[package]]
-name = "haalka_futures_signals_ext"
+name = "haalka_futures_util_ext"
 git_tag_enable = false

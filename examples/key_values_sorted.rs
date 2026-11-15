@@ -287,7 +287,8 @@ fn text_input(data_entity: Entity, field: KeyValue) -> impl Element {
                                 KeyValue::Value => value_strings.get(*other).map(|s| s.as_str()).unwrap(),
                             };
                             let cmp = cmp_text(other_str, moved_str);
-                            // For stable sorting: count items that are Less, or Equal but originally before us
+                            // For stable sorting: count items that are Less, or Equal but
+                            // originally before us
                             if cmp == Ordering::Less || (cmp == Ordering::Equal && i < old_index) {
                                 new_index += 1;
                             }

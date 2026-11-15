@@ -383,8 +383,8 @@ impl RawHaalkaEl {
         component_option_signal_option: impl Into<Option<S>>,
     ) -> Self {
         if let Some(component_option_signal) = component_option_signal_option.into() {
-            // TODO: need partial_eq derivations for all the node related components to minimize updates
-            // with .dedupe
+            // TODO: need partial_eq derivations for all the node related components to minimize
+            // updates with .dedupe
             self = self.on_signal_with_entity::<Option<C>>(
                 component_option_signal.map(|into_component_option| into_component_option.into()),
                 move |mut entity, component_option| {
